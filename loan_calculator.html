@@ -106,6 +106,9 @@ tr:nth-child(even) td{background:#fafafa}
 tr.total-row td{background:var(--cream);font-weight:700;border-top:2px solid var(--border);font-family:'Inter',sans-serif}
 tr.extra-row td{background:#f0faf4}
 .amort-toggle{font-size:.75rem;color:var(--navy);font-weight:600;cursor:pointer;border:none;background:none;padding:6px 0;text-decoration:underline;text-underline-offset:3px;margin-top:6px}
+.amort-view-btn{padding:6px 14px;border:none;background:var(--cream);font-size:.75rem;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;transition:.15s}
+.amort-view-btn.active{background:var(--navy);color:#fff}
+.amort-view-btn:first-child{border-right:1.5px solid var(--border)}
 </style>
 </head>
 <body>
@@ -318,7 +321,13 @@ tr.extra-row td{background:#f0faf4}
     </div>
 
     <div class="card">
-      <div class="card-title">Amortisation Schedule</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div class="card-title" style="margin-bottom:0">Amortisation Schedule</div>
+        <div style="display:flex;gap:0;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+          <button id="viewAnnual" class="amort-view-btn active" onclick="setAmortView('annual')">Annual</button>
+          <button id="viewMonthly" class="amort-view-btn" onclick="setAmortView('monthly')">Monthly</button>
+        </div>
+      </div>
       <div class="amort-wrap" id="amortWrap"></div>
       <button class="amort-toggle" id="amortToggle" onclick="toggleAmort()">Show full schedule ▾</button>
     </div>
@@ -330,6 +339,8 @@ let loanType = 'personal';
 let extraType = 'monthly';
 let showFullAmort = false;
 let extraOpen = false;
+let amortView = 'annual';
+let showFullMonthly = false;
 
 // ── UI toggles ──
 function setLoanType(type, btn) {
@@ -379,24 +390,25 @@ function simulate(P, r, PMT, maxPeriods, extraPerPeriod, lumpAmt, lumpAtPeriod) 
   let period = 0;
   let totalInterest = 0;
   let totalPaid = 0;
-  const rows = []; // annual buckets
+  const rows = [];        // annual buckets
+  const monthlyRows = []; // per-period rows
   let yearPrincipal=0, yearInterest=0;
 
   while(balance > 0.01 && period < maxPeriods * 2) {
     period++;
     const intCharge   = balance * r;
-    let payment       = Math.min(PMT + extraPerPeriod, balance + intCharge);
-    // Apply lump sum at the specified period
-    if(lumpAmt > 0 && period === lumpAtPeriod) {
-      payment = Math.min(payment + lumpAmt, balance + intCharge);
-    }
+    const isLump      = lumpAmt > 0 && period === lumpAtPeriod;
+    let payment       = Math.min(PMT + extraPerPeriod + (isLump ? lumpAmt : 0), balance + intCharge);
     const princCharge = payment - intCharge;
     balance          -= princCharge;
+    if(balance < 0.01) balance = 0;
     totalInterest    += intCharge;
     totalPaid        += payment;
     yearPrincipal    += princCharge;
     yearInterest     += intCharge;
-    if(balance < 0.01) balance = 0;
+
+    // Per-period row for monthly view
+    monthlyRows.push({ period, payment, principal: princCharge, interest: intCharge, balance: Math.max(0,balance), isLump });
 
     // Bucket into years (based on freq)
     const freq = parseInt(document.getElementById('frequency').value);
@@ -406,7 +418,7 @@ function simulate(P, r, PMT, maxPeriods, extraPerPeriod, lumpAmt, lumpAtPeriod) 
       yearPrincipal=0; yearInterest=0;
     }
   }
-  return { periods: period, totalInterest, totalPaid, rows };
+  return { periods: period, totalInterest, totalPaid, rows, monthlyRows };
 }
 
 // ── Main calculate ──
@@ -495,31 +507,81 @@ function calculate() {
     totalPrincipal: amortRows.reduce((s,r)=>s+r.paidPrincipal,0),
     totalInterest:  amortRows.reduce((s,r)=>s+r.paidInterest,0),
   };
-  window._amortRows   = amortRows;
-  window._amortTotals = amortTotals;
-  window._amortHasLump = lumpAmt > 0;
-  renderAmort(showFullAmort);
+  // Store the active simulation's monthly rows too
+  const activeSim = extra || base;
+  window._amortRows        = amortRows;
+  window._amortMonthlyRows = activeSim.monthlyRows;
+  window._amortTotals      = amortTotals;
+  window._amortHasLump     = lumpAmt > 0;
+  window._amortFreq        = freq;
+  showFullAmort   = false;
+  showFullMonthly = false;
+  renderAmort(false);
 
   document.getElementById('results').classList.add('show');
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function setAmortView(view) {
+  amortView = view;
+  document.getElementById('viewAnnual').classList.toggle('active', view==='annual');
+  document.getElementById('viewMonthly').classList.toggle('active', view==='monthly');
+  showFullAmort   = false;
+  showFullMonthly = false;
+  renderAmort(false);
+}
+
 function renderAmort(full) {
-  const rows    = window._amortRows || [];
   const t       = window._amortTotals || {};
   const hasLump = window._amortHasLump;
-  const display = full ? rows : rows.slice(0,5);
+  const freq    = window._amortFreq || 12;
+  const freqLabel = freq===12?'Month':freq===26?'Fortnight':'Week';
 
-  document.getElementById('amortWrap').innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Year</th>
-          <th>Principal Paid</th>
-          <th>Interest Paid</th>
-          <th>Balance Remaining</th>
+  let html = '';
+  const toggle = document.getElementById('amortToggle');
+
+  if(amortView === 'monthly') {
+    const mrows   = window._amortMonthlyRows || [];
+    const display = (full ? mrows : mrows.slice(0, 12));
+    const mTotal  = mrows.reduce((a,r)=>({payment:a.payment+r.payment, principal:a.principal+r.principal, interest:a.interest+r.interest}),{payment:0,principal:0,interest:0});
+    html = `<table>
+      <thead><tr>
+        <th>${freqLabel} #</th>
+        <th>Payment</th>
+        <th>Principal</th>
+        <th>Interest</th>
+        <th>Balance</th>
+      </tr></thead>
+      <tbody>
+        ${display.map(r=>`
+          <tr${r.isLump?' class="extra-row"':''}>
+            <td>${r.period}${r.isLump?' 💰':''}</td>
+            <td>${fmtShort(r.payment)}</td>
+            <td>${fmtShort(r.principal)}</td>
+            <td style="color:var(--red)">${fmtShort(r.interest)}</td>
+            <td>${fmtShort(r.balance)}</td>
+          </tr>`).join('')}
+        <tr class="total-row">
+          <td>Total</td>
+          <td>${fmtShort(mTotal.payment)}</td>
+          <td>${fmtShort(mTotal.principal)}</td>
+          <td style="color:var(--red)">${fmtShort(mTotal.interest)}</td>
+          <td>0.00</td>
         </tr>
-      </thead>
+      </tbody>
+    </table>`;
+    if(mrows.length<=12){ toggle.style.display='none'; }
+    else { toggle.style.display=''; toggle.textContent = full?'Show less ▴':`Show all ${mrows.length} ${freqLabel.toLowerCase()}s ▾`; }
+  } else {
+    const rows    = window._amortRows || [];
+    const display = full ? rows : rows.slice(0,5);
+    html = `<table>
+      <thead><tr>
+        <th>Year</th>
+        <th>Principal Paid</th>
+        <th>Interest Paid</th>
+        <th>Balance Remaining</th>
+      </tr></thead>
       <tbody>
         ${display.map(r=>`
           <tr${r.hasLump?' class="extra-row"':''}>
@@ -536,15 +598,21 @@ function renderAmort(full) {
         </tr>
       </tbody>
     </table>`;
+    if(rows.length<=5){ toggle.style.display='none'; }
+    else { toggle.style.display=''; toggle.textContent = full?'Show less ▴':`Show all ${rows.length} years ▾`; }
+  }
 
-  const toggle = document.getElementById('amortToggle');
-  if(rows.length<=5){ toggle.style.display='none'; }
-  else { toggle.style.display=''; toggle.textContent = full?'Show less ▴':`Show all ${rows.length} years ▾`; }
+  document.getElementById('amortWrap').innerHTML = html;
 }
 
 function toggleAmort() {
-  showFullAmort = !showFullAmort;
-  renderAmort(showFullAmort);
+  if(amortView === 'monthly') {
+    showFullMonthly = !showFullMonthly;
+    renderAmort(showFullMonthly);
+  } else {
+    showFullAmort = !showFullAmort;
+    renderAmort(showFullAmort);
+  }
 }
 
 calculate();
