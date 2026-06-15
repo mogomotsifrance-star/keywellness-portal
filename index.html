@@ -214,6 +214,64 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 .spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* ── Notification Bell ── */
+.notif-btn{position:relative;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;transition:.15s;display:flex;align-items:center}
+.notif-btn:hover{background:var(--cream-dark)}
+.notif-badge{position:absolute;top:2px;right:2px;width:16px;height:16px;background:var(--red);border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.notif-badge.hidden{display:none}
+/* ── Notification Panel ── */
+.notif-overlay{position:fixed;inset:0;z-index:900;background:transparent;display:none}
+.notif-overlay.open{display:block}
+.notif-panel{position:fixed;top:0;right:0;width:360px;max-width:100vw;height:100vh;background:var(--white);box-shadow:-8px 0 40px rgba(26,39,68,.18);z-index:901;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .3s cubic-bezier(.4,0,.2,1)}
+.notif-panel.open{transform:translateX(0)}
+.notif-header{padding:20px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.notif-header h3{font-size:16px;font-weight:700}
+.notif-close{background:none;border:none;cursor:pointer;font-size:18px;color:var(--muted);padding:4px;border-radius:6px}
+.notif-close:hover{color:var(--navy)}
+.notif-list{flex:1;overflow-y:auto;padding:10px 0}
+.notif-item{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);transition:.15s;align-items:flex-start}
+.notif-item:hover{background:var(--cream)}
+.notif-item.unread{background:#fffbf2}
+.notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.notif-item-body{flex:1}
+.notif-item-title{font-size:13px;font-weight:600;color:var(--navy);margin-bottom:3px}
+.notif-item-desc{font-size:12px;color:var(--muted);line-height:1.4}
+.notif-item-time{font-size:11px;color:var(--muted);margin-top:4px}
+.notif-dismiss{background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;padding:2px 5px;border-radius:4px;flex-shrink:0}
+.notif-dismiss:hover{color:var(--red)}
+.notif-empty{text-align:center;padding:48px 20px;color:var(--muted);font-size:13px}
+.notif-add-reminder{padding:14px 18px;border-top:1px solid var(--border)}
+.notif-add-reminder input{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;margin-bottom:8px;font-family:'Inter',sans-serif;outline:none;background:var(--cream)}
+.notif-add-reminder input:focus{border-color:var(--gold);background:#fff}
+/* ── Profile Avatar ── */
+.hdr-avatar{width:34px;height:34px;border-radius:50%;border:2px solid var(--border);background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;cursor:pointer;transition:.15s;overflow:hidden;flex-shrink:0}
+.hdr-avatar:hover{border-color:var(--gold)}
+.hdr-avatar img{width:100%;height:100%;object-fit:cover}
+.sb-avatar{width:36px;height:36px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--navy);overflow:hidden;flex-shrink:0}
+.sb-avatar img{width:100%;height:100%;object-fit:cover}
+.sb-footer-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;padding:6px;border-radius:8px;transition:.15s}
+.sb-footer-row:hover{background:rgba(255,255,255,.08)}
+.sb-footer-info{flex:1;min-width:0}
+.sb-footer-name{color:#fff;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* ── My Bookings ── */
+.booking-hist-card{background:var(--cream);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px;border-left:4px solid var(--gold)}
+.booking-hist-card.upcoming{border-left-color:var(--green)}
+.booking-hist-card.past{border-left-color:var(--muted)}
+.bh-service{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:5px}
+.bh-meta{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+.bh-status{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.bh-status.upcoming{background:#f0faf4;color:var(--green)}
+.bh-status.past{background:var(--cream-dark);color:var(--muted)}
+/* ── Video watch btn ── */
+.video-watch-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:6px;font-size:11px;font-weight:700;border:1.5px solid var(--border);background:var(--cream);color:var(--muted);cursor:pointer;transition:.15s;margin-top:6px}
+.video-watch-btn:hover{border-color:var(--gold);color:var(--gold)}
+.video-watch-btn.watched{border-color:var(--green);color:var(--green);background:#f0faf4;cursor:default}
+/* ── Profile Page ── */
+.avatar-upload-wrap{position:relative;width:90px;height:90px;margin:0 auto 18px;cursor:pointer}
+.avatar-upload-wrap .avatar-img{width:90px;height:90px;border-radius:50%;object-fit:cover;border:3px solid var(--border);background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:32px;color:#fff;font-weight:700}
+.avatar-change-overlay{position:absolute;inset:0;border-radius:50%;background:rgba(13,37,69,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:.15s;font-size:11px;font-weight:700;color:#fff;text-align:center}
+.avatar-upload-wrap:hover .avatar-change-overlay{opacity:1}
+
 /* ── Score bands ── */
 .band-red{color:var(--red)} .band-orange{color:var(--orange)} .band-yellow{color:#d4ac0d} .band-green{color:var(--green)}
 
@@ -340,8 +398,14 @@ input[type=range]{width:100%;accent-color:var(--gold)}
   </div>
   <div class="sb-nav" id="sb-nav"></div>
   <div class="sb-footer">
-    <div class="sb-user" id="sb-email"></div>
-    <div class="sb-pts">Points: <span id="sb-pts" class="mono">0</span></div>
+    <div class="sb-footer-row" onclick="go('profile')">
+      <div class="sb-avatar" id="sbAvatar">?</div>
+      <div class="sb-footer-info">
+        <div class="sb-footer-name" id="sb-display-name">My Profile</div>
+        <div class="sb-user" id="sb-email" style="font-size:10px;color:rgba(255,255,255,.4);margin:0;word-break:break-all"></div>
+      </div>
+    </div>
+    <div class="sb-pts">🏅 Points: <span id="sb-pts" class="mono">0</span></div>
     <button class="sb-logout" onclick="doLogout()">Sign Out</button>
   </div>
 </nav>
@@ -349,11 +413,33 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 <!-- ══ BOTTOM NAV ══ -->
 <nav id="bottom-nav" style="display:none"></nav>
 
+<!-- ══ NOTIFICATION PANEL ══ -->
+<div class="notif-overlay" id="notifOverlay" onclick="closeNotifPanel()"></div>
+<div class="notif-panel" id="notifPanel">
+  <div class="notif-header">
+    <h3>🔔 Notifications</h3>
+    <button class="notif-close" onclick="closeNotifPanel()">✕</button>
+  </div>
+  <div class="notif-list" id="notifList"></div>
+  <div class="notif-add-reminder">
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Add Custom Reminder</div>
+    <input type="text" id="reminderText" placeholder="e.g. Review my budget this weekend…" maxlength="80">
+    <button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" onclick="addCustomReminder()">+ Add Reminder</button>
+  </div>
+</div>
+
 <!-- ══ MAIN ══ -->
 <div id="main">
   <div class="page-header">
     <h2 id="page-title">Dashboard</h2>
     <div id="header-actions"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span class="notif-badge hidden" id="notifBadge">0</span>
+      </button>
+      <div class="hdr-avatar" id="hdrAvatar" onclick="go('profile')" title="Edit Profile">?</div>
+    </div>
   </div>
   <div class="page-content" id="page-content">
     <div class="spinner"><div class="spin"></div> Loading your data…</div>
@@ -494,15 +580,17 @@ async function doLogout() {
 //  NAV
 // ══════════════════════════════════════════════════
 const NAV = [
-  { id:'dashboard',  icon:'🏠', label:'Dashboard' },
-  { id:'assessment', icon:'📋', label:'Assessment' },
-  { id:'learn',      icon:'📚', label:'Learn' },
-  { id:'tools',      icon:'🛠️',  label:'Tools' },
-  { id:'emergency',  icon:'🆘', label:'Emergency Fund' },
-  { id:'checkin',    icon:'✅', label:'Check-in' },
-  { id:'progress',   icon:'📈', label:'Progress' },
-  { id:'booking',    icon:'📅', label:'Book Session' },
-  { id:'badges',     icon:'🏆', label:'Badges' },
+  { id:'dashboard',   icon:'🏠', label:'Dashboard' },
+  { id:'assessment',  icon:'📋', label:'Assessment' },
+  { id:'learn',       icon:'📚', label:'Learn' },
+  { id:'tools',       icon:'🛠️',  label:'Tools' },
+  { id:'emergency',   icon:'🆘', label:'Emergency Fund' },
+  { id:'checkin',     icon:'✅', label:'Check-in' },
+  { id:'progress',    icon:'📈', label:'Progress' },
+  { id:'booking',     icon:'📅', label:'Book Session' },
+  { id:'my-bookings', icon:'🗓️', label:'My Bookings' },
+  { id:'badges',      icon:'🏆', label:'Badges' },
+  { id:'profile',     icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
   { id:'dashboard', icon:'🏠', label:'Home' },
@@ -1053,8 +1141,10 @@ VIEWS['learn'] = function (tab) {
       </div>` : `
       <div class="notice notice-gold" style="margin-bottom:18px">🎬 <strong>Video lessons</strong> from the Key Wellness coaching team. New videos added regularly.</div>
       <div class="learn-grid">
-        ${VIDEOS.map((v,i)=>`
-          <div class="learn-card" style="cursor:default">
+        ${VIDEOS.map((v,i)=>{
+          const _watched = JSON.parse(localStorage.getItem('kw_watched')||'[]');
+          const _isWatched = _watched.includes(v.title);
+          return `<div class="learn-card" style="cursor:default">
             <div class="learn-body" style="padding-top:18px">
               <div class="video-tag">${v.cat}</div>
               <div class="learn-title" style="margin-bottom:10px">${v.title}</div>
@@ -1066,9 +1156,15 @@ VIEWS['learn'] = function (tab) {
                     <p>Video will be available soon</p>
                    </div>`
               }
-              <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
+                <button class="video-watch-btn${_isWatched?' watched':''}" onclick="markVideoWatched(this,'${v.title.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')" ${_isWatched?'disabled':''}>
+                  ${_isWatched ? '✓ Watched' : '▶ Mark Watched'}
+                </button>
+              </div>
             </div>
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>`}`;
 };
 
@@ -1446,6 +1542,10 @@ window.submitBooking = async function () {
     fd.append('Wellness Score',state.user?.last_score||'N/A');
     await fetch('https://formspree.io/f/xnjylyaq',{method:'POST',body:fd,headers:{Accept:'application/json'}});
   } catch(e){}
+  // Save booking to local history
+  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  bookings.unshift({id:Date.now(),service,date,time,first,last,created:new Date().toISOString()});
+  localStorage.setItem('kw_bookings', JSON.stringify(bookings));
   awardBadge('booked_session');
   document.getElementById('bk-form').style.display='none';
   document.getElementById('bk-success').style.display='';
@@ -1475,6 +1575,294 @@ VIEWS['badges'] = function () {
 };
 
 // ══════════════════════════════════════════════════
+//  VIEW: MY BOOKINGS
+// ══════════════════════════════════════════════════
+VIEWS['my-bookings'] = function () {
+  const el = document.getElementById('page-content');
+  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  if (!bookings.length) {
+    el.innerHTML = `
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:14px">📅</div>
+        <h3 style="margin-bottom:8px">No bookings yet</h3>
+        <p style="color:var(--muted);margin-bottom:20px">Book a coaching session to get started.</p>
+        <button class="btn btn-primary" onclick="go('booking')">Book a Session →</button>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="notice notice-gold" style="margin-bottom:18px">🗓️ <strong>Your Sessions</strong> — all coaching sessions you have requested.</div>
+    ${bookings.map(b=>{
+      const d = new Date(b.date||b.created);
+      const dateStr = b.date ? new Date(b.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—';
+      const timeStr = b.time || '—';
+      const createdStr = new Date(b.created).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      return `<div class="booking-hist-card">
+        <div class="bh-service">${b.service||'Coaching Session'}</div>
+        <div class="bh-meta">
+          <span>📅 ${dateStr}</span>
+          <span>🕐 ${timeStr}</span>
+          <span>👤 ${b.first||''} ${b.last||''}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div class="bh-status">Requested</div>
+          <div style="font-size:11px;color:var(--muted)">Booked ${createdStr}</div>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="margin-top:20px;text-align:center">
+      <button class="btn btn-primary" onclick="go('booking')">+ Book Another Session</button>
+    </div>`;
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: PROFILE
+// ══════════════════════════════════════════════════
+VIEWS['profile'] = function () {
+  const el = document.getElementById('page-content');
+  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const displayName = prof.displayName || currentUser?.user_metadata?.full_name || '';
+  const phone = prof.phone || '';
+  const avatarB64 = prof.avatarB64 || '';
+
+  el.innerHTML = `
+    <div class="card" style="max-width:480px;margin:0 auto">
+      <h3 style="margin-bottom:20px">👤 My Profile</h3>
+
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:28px">
+        <div class="avatar-upload-wrap" onclick="document.getElementById('avatarInput').click()" title="Click to change photo">
+          ${avatarB64
+            ? `<img class="avatar-img" src="${avatarB64}" alt="Profile">`
+            : `<div class="avatar-img" style="display:flex;align-items:center;justify-content:center;font-size:42px;background:var(--cream)">${(displayName||currentUser?.email||'?')[0].toUpperCase()}</div>`
+          }
+          <div class="avatar-change-overlay">📷<br><span style="font-size:10px">Change</span></div>
+        </div>
+        <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="handleAvatarUpload(this)">
+        <div style="font-size:13px;color:var(--muted);margin-top:8px">Click photo to change</div>
+      </div>
+
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Display Name</label>
+        <input type="text" id="prof-name" class="input" value="${displayName}" placeholder="Your name" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+      </div>
+
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Email</label>
+        <input type="email" class="input" value="${currentUser?.email||''}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
+      </div>
+
+      <div class="field" style="margin-bottom:24px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Phone Number</label>
+        <input type="tel" id="prof-phone" class="input" value="${phone}" placeholder="+267 71 000 000" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+      </div>
+
+      <div id="prof-msg" style="display:none;margin-bottom:14px"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveProfile()">Save Changes</button>
+
+      <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
+        <h4 style="margin-bottom:14px;font-size:14px">🏅 Points & Badges</h4>
+        <div class="stat-grid">
+          <div class="stat-box gold"><div class="stat-val mono">${state.badges.points}</div><div class="stat-lbl">Total Points</div></div>
+          <div class="stat-box"><div class="stat-val">${state.badges.earned.length}/${BADGE_DEFS.length}</div><div class="stat-lbl">Badges Earned</div></div>
+        </div>
+        <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="go('badges')">View All Badges →</button>
+      </div>
+    </div>`;
+};
+
+window.handleAvatarUpload = function (input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2*1024*1024) { alert('Image must be under 2MB'); return; }
+  const reader = new FileReader();
+  reader.onload = function (e) {
+    const b64 = e.target.result;
+    // Save immediately
+    const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+    prof.avatarB64 = b64;
+    localStorage.setItem('kw_profile', JSON.stringify(prof));
+    updateAvatarUI(b64, prof.displayName || '');
+    VIEWS['profile'](); // re-render
+  };
+  reader.readAsDataURL(file);
+};
+
+window.saveProfile = function () {
+  const name = document.getElementById('prof-name').value.trim();
+  const phone = document.getElementById('prof-phone').value.trim();
+  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  prof.displayName = name;
+  prof.phone = phone;
+  localStorage.setItem('kw_profile', JSON.stringify(prof));
+  updateAvatarUI(prof.avatarB64||'', name);
+  const msg = document.getElementById('prof-msg');
+  msg.innerHTML = '<div class="notice notice-green">✓ Profile saved!</div>';
+  msg.style.display = '';
+  setTimeout(()=>{ msg.style.display='none'; }, 2500);
+};
+
+function updateAvatarUI(b64, name) {
+  const initial = (name || currentUser?.email || '?')[0].toUpperCase();
+  ['hdrAvatar','sbAvatar'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (b64) {
+      el.innerHTML = `<img src="${b64}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`;
+    } else {
+      el.textContent = initial;
+    }
+  });
+  const nameEl = document.getElementById('sb-display-name');
+  if (nameEl && name) nameEl.textContent = name;
+}
+
+function initProfileUI() {
+  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  updateAvatarUI(prof.avatarB64||'', prof.displayName||'');
+  const emailEl = document.getElementById('sb-email');
+  if (emailEl && currentUser?.email) emailEl.textContent = currentUser.email;
+}
+
+// ══════════════════════════════════════════════════
+//  VIDEO WATCH POINTS
+// ══════════════════════════════════════════════════
+window.markVideoWatched = function (btn, title) {
+  const watched = JSON.parse(localStorage.getItem('kw_watched')||'[]');
+  if (watched.includes(title)) return;
+  watched.push(title);
+  localStorage.setItem('kw_watched', JSON.stringify(watched));
+  awardBadge('watched_video'); // badge for first video
+  // Award 25 pts manually
+  state.badges.points = (state.badges.points||0) + 25;
+  const bk = JSON.parse(localStorage.getItem('kw_badges')||'{"earned":[],"points":0}');
+  bk.points = state.badges.points;
+  localStorage.setItem('kw_badges', JSON.stringify(bk));
+  document.getElementById('sb-pts').textContent = state.badges.points;
+  // Update button
+  btn.textContent = '✓ Watched';
+  btn.classList.add('watched');
+  btn.disabled = true;
+};
+
+// ══════════════════════════════════════════════════
+//  NOTIFICATIONS
+// ══════════════════════════════════════════════════
+function generateSmartNotifs() {
+  const notifs = [];
+  const now = Date.now();
+
+  // Assessment reminder
+  const ar = JSON.parse(localStorage.getItem('kw_assessment_result')||'null');
+  if (!ar) {
+    notifs.push({id:'n_assess',title:'Complete Your Assessment',desc:'Take the 8-dimension wellness assessment to see your score.',time:'Now',link:'assessment'});
+  } else {
+    const daysSince = Math.floor((now - new Date(ar.date).getTime()) / 86400000);
+    if (daysSince >= 30) {
+      notifs.push({id:'n_reassess',title:'Reassess Your Wellness',desc:`Your last assessment was ${daysSince} days ago. Time for a check-in!`,time:`${daysSince}d ago`,link:'assessment'});
+    }
+  }
+
+  // Emergency fund reminder
+  const ef = JSON.parse(localStorage.getItem('kw_ef_cache')||'null');
+  if (ef && ef.months < 3) {
+    notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${ef.months.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+  }
+
+  // Goals reminder
+  const gd = JSON.parse(localStorage.getItem('kw_goals')||'{}');
+  const goals = gd.goals || [];
+  const behind = goals.filter(g => {
+    if (!g.target || !g.saved) return false;
+    return Number(g.saved) < Number(g.target) * 0.1;
+  });
+  if (behind.length) {
+    notifs.push({id:'n_goals',title:'Goal Progress Needed',desc:`${behind.length} goal(s) are under 10% funded. Open Goal Planner to review.`,time:'Now',link:'tools'});
+  }
+
+  // Stress check-in
+  const sc = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  if (!sc.length) {
+    notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'checkin'});
+  }
+
+  // Booking reminder
+  const bk = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  if (!bk.length) {
+    notifs.push({id:'n_book',title:'Book a Coaching Session',desc:'Work 1-on-1 with a Key Wellness coach to accelerate your goals.',time:'Now',link:'booking'});
+  }
+
+  return notifs;
+}
+
+function loadNotifications() {
+  const smart = generateSmartNotifs();
+  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]');
+  const dismissed = JSON.parse(localStorage.getItem('kw_notifs_dismissed')||'[]');
+  const all = [...custom, ...smart].filter(n => !dismissed.includes(n.id));
+  const list = document.getElementById('notifList');
+  const badge = document.getElementById('notifBadge');
+  if (!list) return;
+  if (!all.length) {
+    list.innerHTML = '<div class="notif-empty">You are all caught up! 🎉</div>';
+    badge.classList.add('hidden');
+    return;
+  }
+  badge.textContent = all.length;
+  badge.classList.remove('hidden');
+  list.innerHTML = all.map(n=>`
+    <div class="notif-item" id="ni_${n.id}">
+      <div class="notif-dot"></div>
+      <div class="notif-item-body">
+        <div class="notif-item-title">${n.title}</div>
+        <div class="notif-item-desc">${n.desc}</div>
+        ${n.link ? `<button class="btn btn-outline btn-sm" style="margin-top:6px;font-size:11px" onclick="closeNotifPanel();go('${n.link}')">Go →</button>` : ''}
+      </div>
+      <button class="notif-dismiss" onclick="dismissNotif('${n.id}')" title="Dismiss">✕</button>
+    </div>`).join('');
+}
+
+window.toggleNotifPanel = function () {
+  const panel = document.getElementById('notifPanel');
+  const overlay = document.getElementById('notifOverlay');
+  const open = panel.classList.contains('open');
+  if (open) {
+    panel.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    loadNotifications();
+    panel.classList.add('open');
+    overlay.classList.add('open');
+  }
+};
+
+window.closeNotifPanel = function () {
+  document.getElementById('notifPanel').classList.remove('open');
+  document.getElementById('notifOverlay').classList.remove('open');
+};
+
+window.dismissNotif = function (id) {
+  const dismissed = JSON.parse(localStorage.getItem('kw_notifs_dismissed')||'[]');
+  if (!dismissed.includes(id)) dismissed.push(id);
+  localStorage.setItem('kw_notifs_dismissed', JSON.stringify(dismissed));
+  // Remove from custom too
+  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]').filter(n=>n.id!==id);
+  localStorage.setItem('kw_notifs', JSON.stringify(custom));
+  loadNotifications();
+};
+
+window.addCustomReminder = function () {
+  const input = document.getElementById('reminderText');
+  const text = input.value.trim();
+  if (!text) return;
+  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]');
+  const id = 'c_' + Date.now();
+  custom.unshift({id, title:'Reminder', desc:text, time:'Just now'});
+  localStorage.setItem('kw_notifs', JSON.stringify(custom));
+  input.value = '';
+  loadNotifications();
+};
+
+// ══════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════
 async function init() {
@@ -1482,11 +1870,15 @@ async function init() {
   currentUser = session?.user ?? null;
 
   if (currentUser) await loadAllData();
+  initProfileUI();
+  loadNotifications();
 
   sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user ?? null;
     if (event === 'SIGNED_IN') {
       await loadAllData();
+      initProfileUI();
+      loadNotifications();
       route();
     } else if (event === 'SIGNED_OUT') {
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
