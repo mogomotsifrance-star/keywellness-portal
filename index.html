@@ -514,11 +514,11 @@ const MOBILE_NAV = [
 
 function buildNav(current) {
   document.getElementById('sb-nav').innerHTML = NAV.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="go('${n.id}')">
+    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="icon">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
-    <div class="bn-item${current===n.id?' active':''}" onclick="go('${n.id}')">
+    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="bn-icon">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('sb-pts').textContent = state.badges.points;
@@ -723,40 +723,8 @@ const QUESTIONS = [
 const Q_OPTS = ['Never / Not at all','Rarely','Sometimes','Often','Always / Completely'];
 
 VIEWS['assessment'] = function () {
-  const el = document.getElementById('page-content');
-  let cur = 0;
-  const ans = new Array(QUESTIONS.length).fill(null);
-
-  function render() {
-    const q = QUESTIONS[cur];
-    el.innerHTML = `
-      <div style="max-width:620px">
-        <div class="notice notice-gold" style="margin-bottom:18px">📋 <strong>Financial Wellness Assessment</strong> — 20 questions across 5 categories. Answer honestly.</div>
-        <div class="q-dots">${QUESTIONS.map((_,i)=>`<div class="q-dot${i<cur?' done':i===cur?' current':''}"></div>`).join('')}</div>
-        <div class="q-card">
-          <div class="q-number">${q.cat} · Q${cur+1} of ${QUESTIONS.length}</div>
-          <div class="q-text">${q.q}</div>
-          <div class="q-options">
-            ${Q_OPTS.map((o,i)=>`<button class="q-opt${ans[cur]===i?' selected':''}" onclick="qSel(${i})">${o}</button>`).join('')}
-          </div>
-          <div style="display:flex;justify-content:space-between;margin-top:22px;gap:12px">
-            ${cur>0?`<button class="btn btn-outline btn-sm" onclick="qPrev()">← Back</button>`:'<span></span>'}
-            <button class="btn btn-primary btn-sm" id="q-next" onclick="qNext()" ${ans[cur]===null?'disabled':''}>
-              ${cur===QUESTIONS.length-1?'See My Score →':'Next →'}
-            </button>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  window.qSel  = function (i) { ans[cur]=i; render(); };
-  window.qPrev = function ()  { if(cur>0){cur--;render();} };
-  window.qNext = function ()  {
-    if (ans[cur]===null) return;
-    if (cur < QUESTIONS.length-1) { cur++; render(); }
-    else { finishAssessment(ans); }
-  };
-  render();
+  // Redirect to the standalone 8-dimension assessment
+  openTool('wellness_assessment.html');
 };
 
 async function finishAssessment(answers) {
@@ -873,7 +841,7 @@ VIEWS['dashboard'] = async function () {
   if (wellScore !== null) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
-    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, click:`go('assessment')` });
+    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -1025,7 +993,7 @@ function showWelcomeVideo(){
 }
 window.closeWelcome = function(){
   document.getElementById('welcome-modal').classList.remove('visible');
-  go('assessment');
+  openTool('wellness_assessment.html');
 };
 
 // ══════════════════════════════════════════════════
@@ -1144,7 +1112,6 @@ VIEWS['tools'] = function () {
     { icon:'🏆', name:'Goal Planner',              desc:'Set SMART financial goals and track progress toward each one.', file:'goal_planner.html' },
     { icon:'💎', name:'Net Worth Tracker',         desc:'Track assets vs liabilities and watch your net worth grow.',    file:'net_worth_tracker.html' },
     { icon:'🧠', name:'Financial Stress Tracker',  desc:'Log your financial stress levels and spot patterns over time.', file:'financial_stress_tracker.html' },
-    { icon:'📋', name:'Wellness Assessment',       desc:'Standalone financial wellness quiz with instant score.',         file:'wellness_assessment.html' },
     { icon:'📅', name:'Book a Coach',              desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
   ];
   el.innerHTML = `
@@ -1357,7 +1324,7 @@ VIEWS['progress'] = function () {
     <div class="card">
       <div class="card-title">📈 Wellness Score History</div>
       ${asc.length<2
-        ? `<div class="notice notice-gold">Complete at least 2 assessments to see your trend. <button class="btn btn-primary btn-sm" onclick="go('assessment')" style="margin-left:8px">Take Assessment</button></div>`
+        ? `<div class="notice notice-gold">Complete at least 2 assessments to see your trend. <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')" style="margin-left:8px">Take Assessment</button></div>`
         : '<div class="chart-wrap"><canvas id="score-chart"></canvas></div>'}
     </div>
     <div class="card">
