@@ -92,9 +92,35 @@ input,select,textarea{font-family:'Inter',sans-serif}
 
 /* ── Stats ── */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:20px}
-.stat-box{background:var(--white);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);text-align:center}
+.stat-box{background:var(--white);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);text-align:center;border-left:4px solid var(--border)}
 .stat-val{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;color:var(--navy)}
 .stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.04em}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .stat-val{color:var(--green)}
+.stat-box.red{border-left-color:var(--red)}.stat-box.red .stat-val{color:var(--red)}
+.stat-box.orange{border-left-color:var(--orange)}.stat-box.orange .stat-val{color:var(--orange)}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .stat-val{color:var(--gold)}
+/* ── Tool Hub ── */
+.tool-hub-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:4px}
+.tool-hub-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:16px 10px;background:var(--cream);border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600;color:var(--navy);transition:.15s;text-align:center;line-height:1.3}
+.tool-hub-btn:hover{border-color:var(--gold);background:#fffbf2;transform:translateY(-1px);box-shadow:0 4px 12px rgba(26,39,68,.12)}
+.tool-hub-btn .th-icon{font-size:26px}
+/* ── Dashboard hub cards ── */
+.hub-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;margin-bottom:18px}
+.hub-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;border-left:4px solid var(--border);cursor:pointer;transition:.15s}
+.hub-card:hover{box-shadow:0 4px 20px rgba(26,39,68,.14);transform:translateY(-1px)}
+.hub-card.green{border-left-color:var(--green)}.hub-card.red{border-left-color:var(--red)}
+.hub-card.orange{border-left-color:var(--orange)}.hub-card.gold{border-left-color:var(--gold)}
+.hub-card.navy{border-left-color:var(--navy)}
+.hub-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px}
+.hub-val{font-family:'DM Mono',monospace;font-size:20px;font-weight:600;color:var(--navy)}
+.hub-sub{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
+.hub-card.green .hub-val{color:var(--green)}.hub-card.red .hub-val{color:var(--red)}
+.hub-card.orange .hub-val{color:var(--orange)}.hub-card.gold .hub-val{color:var(--gold)}
+/* ── Next actions ── */
+.next-action{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--cream);border-radius:var(--radius-sm);margin-bottom:9px;border:1.5px solid var(--border)}
+.na-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.na-title{font-size:13px;font-weight:700;color:var(--navy)}
+.na-desc{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4}
 
 /* ── Badges ── */
 .badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:14px}
@@ -563,6 +589,13 @@ function showToast(msg) {
 }
 
 // ══════════════════════════════════════════════════
+//  OPEN TOOL (standalone HTML files)
+// ══════════════════════════════════════════════════
+function openTool(filename) {
+  window.location.href = filename;
+}
+
+// ══════════════════════════════════════════════════
 //  SCORE HELPERS
 // ══════════════════════════════════════════════════
 function scoreBand(s) {
@@ -755,85 +788,231 @@ async function finishAssessment(answers) {
 }
 
 // ══════════════════════════════════════════════════
-//  VIEW: DASHBOARD
+//  VIEW: DASHBOARD — Financial Hub
 // ══════════════════════════════════════════════════
-VIEWS['dashboard'] = function () {
+VIEWS['dashboard'] = async function () {
   const el = document.getElementById('page-content');
-  const score = state.user?.last_score ?? null;
-  const cats  = state.user?.last_cat_scores ?? null;
+  el.innerHTML = `<div class="spinner"><div class="spin"></div> Loading your financial hub…</div>`;
 
-  if (!score) {
-    el.innerHTML = `
-      <div class="card" style="text-align:center;padding:48px">
-        <div style="font-size:56px;margin-bottom:14px">📋</div>
-        <h3 style="margin-bottom:8px">No assessment yet</h3>
-        <p style="color:var(--muted);font-size:14px;margin-bottom:22px">Complete your financial wellness assessment to see your personalised dashboard.</p>
-        <button class="btn btn-primary" onclick="go('assessment')">Start Assessment →</button>
-      </div>`;
-    return;
-  }
+  // ── Read localStorage tool data ──
+  let budgetSurplus = null, budgetLabel = '';
+  try {
+    const bd = JSON.parse(localStorage.getItem('budget_planner_v2') || '{}');
+    const key = bd.currentKey;
+    if (key && bd.budgets?.[key]) {
+      const b = bd.budgets[key];
+      const totalIncome = (b.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
+      const totalExp    = Object.values(b.expenses || {}).reduce((s, v) => s + Number(v || 0), 0);
+      budgetSurplus = totalIncome - totalExp;
+      budgetLabel   = key;
+    }
+  } catch {}
 
-  const band = scoreBand(score);
-  const topPriorities = cats ? Object.entries(cats).sort((a,b)=>a[1]-b[1]).slice(0,3) : [];
-  const priorityTips = {
-    Budgeting:  'Create a budget using the 50/30/20 rule. Track every pula.',
-    Savings:    'Aim to save at least 10% of income monthly. Automate transfers.',
-    Debt:       'List all debts by interest rate. Target the highest rate first.',
-    Retirement: 'Start contributing to a pension now. Even 5% helps.',
-    Insurance:  'Review your coverage annually. Gaps can be very costly.',
+  let netWorth = null;
+  try {
+    const nw = JSON.parse(localStorage.getItem('kw_networth_v1') || '{}');
+    const assets = (nw.assets || []).reduce((s, a) => s + Number(a.value || 0), 0);
+    const liabs  = (nw.liabilities || []).reduce((s, a) => s + Number(a.value || 0), 0);
+    if (assets || liabs) netWorth = assets - liabs;
+  } catch {}
+
+  let stressScore = null;
+  try {
+    const fs = JSON.parse(localStorage.getItem('financial_stress_v1') || '{}');
+    const entries = fs.entries || [];
+    if (entries.length) stressScore = entries[entries.length - 1].score;
+  } catch {}
+
+  let goalsOnTrack = null, totalGoals = 0;
+  try {
+    const users = JSON.parse(localStorage.getItem('gp_users') || '[]');
+    if (users.length) {
+      const gd = JSON.parse(localStorage.getItem(`gp_data_${users[0].name}`) || '{}');
+      const goals = gd.goals || [];
+      totalGoals = goals.length;
+      goalsOnTrack = goals.filter(g => {
+        if (!g.target || !g.saved) return false;
+        const pct = g.saved / g.target;
+        const months = g.months || 12;
+        const expected = (new Date() - new Date(g.startDate || Date.now())) / (1000 * 60 * 60 * 24 * 30);
+        return pct >= Math.min(expected / months, 1) * 0.8;
+      }).length;
+    }
+  } catch {}
+
+  // ── Wellness score from localStorage (new assessment) or Supabase ──
+  let wellScore = null, wellDate = null, wellDims = null;
+  try {
+    const wr = JSON.parse(localStorage.getItem('kw_assessment_result') || '{}');
+    if (wr.score) { wellScore = wr.score; wellDate = wr.date; wellDims = wr.dims; }
+  } catch {}
+  if (!wellScore) { wellScore = state.user?.last_score ?? null; }
+
+  // ── Emergency fund from Supabase ──
+  let efMonths = null, efTarget = null, efCurrent = null;
+  try {
+    const ef = await loadEF();
+    if (ef) {
+      efTarget  = (ef.monthly || 0) * (ef.target_months || 6);
+      efCurrent = ef.current_savings || 0;
+      efMonths  = ef.monthly > 0 ? efCurrent / ef.monthly : null;
+    }
+  } catch {}
+
+  // ── Helper formatters ──
+  const fmtP = v => {
+    const abs = Math.abs(v);
+    const s = abs >= 1e6 ? (abs/1e6).toFixed(1)+'M' : abs >= 1e3 ? (abs/1e3).toFixed(0)+'K' : abs.toFixed(0);
+    return (v < 0 ? '-' : '') + 'P' + s;
   };
 
+  // ── Build summary hub cards ──
+  const hubCards = [];
+
+  // Wellness score
+  if (wellScore !== null) {
+    const b = scoreBand(wellScore);
+    const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
+    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, click:`go('assessment')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
+  }
+
+  // Budget surplus
+  if (budgetSurplus !== null) {
+    const cls = budgetSurplus >= 0 ? 'green' : 'red';
+    hubCards.push({ cls, lbl:'Budget Surplus', val:fmtP(budgetSurplus), sub:budgetLabel || 'This month', click:`openTool('budget_planner.html')` });
+  } else {
+    hubCards.push({ cls:'gold', lbl:'Budget Surplus', val:'—', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
+  }
+
+  // Net worth
+  if (netWorth !== null) {
+    const cls = netWorth >= 0 ? 'green' : 'red';
+    hubCards.push({ cls, lbl:'Net Worth', val:fmtP(netWorth), sub:netWorth >= 0 ? 'Positive' : 'Negative', click:`openTool('net_worth_tracker.html')` });
+  } else {
+    hubCards.push({ cls:'gold', lbl:'Net Worth', val:'—', sub:'Track your wealth', click:`openTool('net_worth_tracker.html')` });
+  }
+
+  // Emergency fund
+  if (efMonths !== null) {
+    const cls = efMonths >= 6 ? 'green' : efMonths >= 3 ? 'gold' : 'orange';
+    hubCards.push({ cls, lbl:'Emergency Fund', val:`${efMonths.toFixed(1)} mo`, sub:`P${Math.round(efCurrent).toLocaleString()} saved`, click:`go('emergency')` });
+  } else {
+    hubCards.push({ cls:'orange', lbl:'Emergency Fund', val:'—', sub:'Set up your fund', click:`go('emergency')` });
+  }
+
+  // Goals
+  if (totalGoals > 0) {
+    const cls = goalsOnTrack === totalGoals ? 'green' : goalsOnTrack > 0 ? 'gold' : 'orange';
+    hubCards.push({ cls, lbl:'Goals On Track', val:`${goalsOnTrack}/${totalGoals}`, sub:'Financial goals', click:`openTool('goal_planner.html')` });
+  } else {
+    hubCards.push({ cls:'gold', lbl:'Financial Goals', val:'—', sub:'Add your goals', click:`openTool('goal_planner.html')` });
+  }
+
+  // Stress score
+  if (stressScore !== null) {
+    const cls = stressScore <= 3 ? 'green' : stressScore <= 6 ? 'gold' : 'red';
+    const lbl = stressScore <= 3 ? 'Low stress' : stressScore <= 6 ? 'Moderate' : 'High stress';
+    hubCards.push({ cls, lbl:'Financial Stress', val:`${stressScore}/10`, sub:lbl, click:`openTool('financial_stress_tracker.html')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
+  }
+
+  // ── Build "What to do next" actions ──
+  const actions = [];
+  if (!wellScore) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
+  if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
+  if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
+  if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
+  if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
+  if (netWorth === null) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
+  if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your monthly check-in and review your goals.', click:`go('checkin')` });
+
+  // ── Tools grid ──
+  const TOOLS = [
+    { icon:'📊', label:'Budget Planner',      file:'budget_planner.html' },
+    { icon:'🎯', label:'Goal Planner',         file:'goal_planner.html' },
+    { icon:'💰', label:'Net Worth',            file:'net_worth_tracker.html' },
+    { icon:'🆘', label:'Emergency Fund',       view:'emergency' },
+    { icon:'💳', label:'Debt Snowball',        file:'debt_snowball_planner.html' },
+    { icon:'📈', label:'Expense Tracker',      file:'expense_tracker.html' },
+    { icon:'🧮', label:'Debt-to-Income',       file:'dti_calculator.html' },
+    { icon:'🏖️', label:'Retirement Calc',      file:'retirement_calculator.html' },
+    { icon:'😰', label:'Stress Tracker',       file:'financial_stress_tracker.html' },
+    { icon:'📋', label:'Assessment',           file:'wellness_assessment.html' },
+    { icon:'📚', label:'Learn',                view:'learn' },
+    { icon:'📅', label:'Book Session',         view:'booking' },
+  ];
+
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
-      <div class="card" style="text-align:center">
-        <div class="card-title">Financial Wellness Score</div>
-        ${svgGauge(score, band.color)}
-        <div style="font-size:15px;font-weight:700;color:${band.color};margin-top:6px">${band.label}</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px">Last assessed ${fmtDate(state.assessments[0]?.created_at)}</div>
-        <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="go('assessment')">Re-assess</button>
+    <!-- Score + Category row -->
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;margin-bottom:18px;align-items:start">
+      <div class="card" style="text-align:center;min-width:180px">
+        <div class="card-title" style="margin-bottom:10px">Wellness Score</div>
+        ${wellScore !== null ? svgGauge(wellScore, scoreBand(wellScore).color) : `<div style="font-size:42px;padding:20px 0">📋</div>`}
+        ${wellScore !== null
+          ? `<div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
+             <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+             <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-assess</button>`
+          : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Take the assessment<br>to see your score</p>
+             <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>`
+        }
       </div>
-      <div class="card">
-        <div class="card-title">Category Breakdown</div>
-        ${cats ? Object.entries(cats).map(([cat,s])=>`
-          <div style="margin-bottom:12px">
-            <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:3px">
-              <span>${cat}</span><span class="mono" style="color:${scoreBand(s).color}">${s}</span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" style="width:${s}%;background:${scoreBand(s).color}"></div>
-            </div>
-          </div>`).join('') : ''}
+      <div class="card" style="min-height:200px">
+        <div class="card-title" style="margin-bottom:14px">Your Financial Hub</div>
+        <div class="hub-summary">
+          ${hubCards.map(c=>`
+            <div class="hub-card ${c.cls}" onclick="${c.click}" title="Click to open">
+              <div class="hub-lbl">${c.lbl}</div>
+              <div class="hub-val">${c.val}</div>
+              <div class="hub-sub">${c.sub}</div>
+            </div>`).join('')}
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-title">🎯 Top Priorities</div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Focus here for the biggest improvement in your score.</p>
-      ${topPriorities.map(([cat,s],i)=>`
-        <div style="display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--cream);border-radius:var(--radius-sm);margin-bottom:10px">
-          <div style="font-size:22px;font-weight:800;color:var(--gold);width:24px;text-align:center">${i+1}</div>
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:13px">${cat}</div>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">${priorityTips[cat]||''}</div>
+    <!-- What to do next -->
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-title">🧭 What To Do Next</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Personalised based on your live tool data.</p>
+      ${actions.slice(0,4).map(a=>`
+        <div class="next-action" onclick="${a.click}" style="cursor:pointer">
+          <div class="na-dot" style="background:${a.color}"></div>
+          <div>
+            <div class="na-title">${a.title}</div>
+            <div class="na-desc">${a.desc}</div>
           </div>
-          <span style="font-size:12px;font-weight:700;color:${scoreBand(s).color}">${s}/100</span>
         </div>`).join('')}
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
-      <div class="stat-box"><div class="stat-val">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
-      <div class="stat-box"><div class="stat-val">${state.badges.earned.length}</div><div class="stat-lbl">Badges</div></div>
-      <div class="stat-box"><div class="stat-val mono">${state.badges.points}</div><div class="stat-lbl">Points</div></div>
+    <!-- All Tools -->
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-title">🛠️ All Financial Tools</div>
+      <div class="tool-hub-grid">
+        ${TOOLS.map(t=>`
+          <button class="tool-hub-btn" onclick="${t.file ? `openTool('${t.file}')` : `go('${t.view}')`}">
+            <span class="th-icon">${t.icon}</span>${t.label}
+          </button>`).join('')}
+      </div>
     </div>
 
+    <!-- Stats row -->
+    <div class="stat-grid">
+      <div class="stat-box gold"><div class="stat-val">${state.badges.points}</div><div class="stat-lbl">Points</div></div>
+      <div class="stat-box"><div class="stat-val">${state.badges.earned.length}</div><div class="stat-lbl">Badges</div></div>
+      <div class="stat-box"><div class="stat-val">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
+      <div class="stat-box"><div class="stat-val">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
+    </div>
+
+    <!-- Quick actions -->
     <div class="card">
       <div class="card-title">⚡ Quick Actions</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px">
         <button class="btn btn-primary" onclick="go('checkin')">✅ Monthly Check-in</button>
         <button class="btn btn-outline" onclick="go('emergency')">🆘 Emergency Fund</button>
         <button class="btn btn-outline" onclick="go('learn')">📚 Learn</button>
-        <button class="btn btn-navy" onclick="go('booking')">📅 Book Coaching</button>
+        <button class="btn btn-navy"    onclick="go('booking')">📅 Book Coaching</button>
       </div>
     </div>`;
 };

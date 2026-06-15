@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Wellness Assessment – Key Wellness</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:   #0D2545;
+  --navy2:  #163561;
+  --gold:   #C8991A;
+  --gold-lt:#F0C842;
+  --cream:  #F7F4EE;
+  --slate:  #4A5568;
+  --muted:  #8896A8;
+  --border: #D6DDE8;
+  --green:  #1A8C5B;
+  --red:    #C0392B;
+  --orange: #D97706;
+  --blue:   #2563EB;
+  --white:  #FFFFFF;
+  --radius: 10px;
+  --shadow: 0 4px 24px rgba(13,37,69,.12);
+}
+body { font-family:'Inter',sans-serif; background:var(--cream); color:var(--navy); min-height:100vh; }
+.app { max-width:900px; margin:0 auto; padding:28px 18px 80px; }
+.header { display:flex; align-items:center; gap:14px; margin-bottom:32px; flex-wrap:wrap; }
+.header-icon { width:52px; height:52px; background:var(--navy); border-radius:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.header h1 { font-size:1.5rem; font-weight:700; letter-spacing:-.02em; }
+.header p  { font-size:.82rem; color:var(--muted); margin-top:3px; }
+.progress-wrap { margin-bottom:28px; }
+.progress-label { display:flex; justify-content:space-between; font-size:.72rem; font-weight:600; color:var(--muted); margin-bottom:7px; }
+.progress-track { height:6px; background:var(--border); border-radius:99px; overflow:hidden; }
+.progress-fill  { height:100%; background:linear-gradient(90deg,var(--navy),var(--gold)); border-radius:99px; transition:width .5s cubic-bezier(.4,0,.2,1); }
+.step-dots { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
+.step-dot { width:28px; height:4px; border-radius:99px; background:var(--border); transition:background .3s; }
+.step-dot.done    { background:var(--navy); }
+.step-dot.current { background:var(--gold); }
+.card { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); padding:28px 26px; margin-bottom:22px; }
+.card-header { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+.card-icon { width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; flex-shrink:0; }
+.card-title-wrap .card-title { font-size:.68rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); }
+.card-title-wrap h2 { font-size:1.05rem; font-weight:700; color:var(--navy); margin-top:2px; }
+.section-num { font-size:.65rem; font-weight:700; background:var(--navy); color:white; padding:2px 7px; border-radius:99px; margin-left:8px; vertical-align:middle; }
+.form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; }
+.field { margin-bottom:0; }
+.field label { display:block; font-size:.74rem; font-weight:600; color:var(--slate); margin-bottom:6px; letter-spacing:.03em; line-height:1.4; }
+.field .hint  { font-size:.68rem; color:var(--muted); margin-top:4px; line-height:1.4; }
+.input-wrap { display:flex; align-items:center; border:1.5px solid var(--border); border-radius:7px; background:var(--cream); overflow:hidden; transition:border-color .15s; }
+.input-wrap:focus-within { border-color:var(--gold); background:#fff; }
+.input-prefix { padding:0 10px; font-size:.82rem; font-weight:600; color:var(--muted); font-family:'DM Mono',monospace; flex-shrink:0; }
+.input-wrap input { flex:1; border:none; outline:none; background:transparent; padding:10px 8px; font-size:.9rem; font-family:'DM Mono',monospace; color:var(--navy); min-width:0; text-align:right; }
+.input-wrap input::placeholder { color:var(--muted); font-size:.82rem; }
+.mcq-grid { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+.mcq-opt { display:flex; align-items:flex-start; gap:12px; padding:11px 14px; border:1.5px solid var(--border); border-radius:8px; cursor:pointer; transition:all .15s; background:var(--cream); }
+.mcq-opt:hover { border-color:var(--gold); background:#fffbeb; }
+.mcq-opt.selected { border-color:var(--navy); background:#f0f4ff; }
+.mcq-radio { width:16px; height:16px; border-radius:50%; border:2px solid var(--border); flex-shrink:0; margin-top:2px; transition:all .15s; display:flex; align-items:center; justify-content:center; }
+.mcq-opt.selected .mcq-radio { border-color:var(--navy); background:var(--navy); }
+.mcq-radio::after { content:''; width:6px; height:6px; border-radius:50%; background:white; display:none; }
+.mcq-opt.selected .mcq-radio::after { display:block; }
+.mcq-text { flex:1; }
+.mcq-label { font-size:.84rem; font-weight:600; color:var(--navy); }
+.mcq-desc  { font-size:.72rem; color:var(--muted); margin-top:2px; line-height:1.4; }
+.mcq-score-badge { font-size:.65rem; font-weight:700; padding:2px 7px; border-radius:99px; background:var(--cream); color:var(--muted); border:1px solid var(--border); flex-shrink:0; align-self:center; font-family:'DM Mono',monospace; }
+.mcq-opt.selected .mcq-score-badge { background:var(--navy); color:white; border-color:var(--navy); }
+.mcq-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+@media (max-width:560px) { .mcq-grid-2 { grid-template-columns:1fr; } }
+.sub-question { margin-top:18px; padding-top:18px; border-top:1px solid var(--border); }
+.sub-q-label { font-size:.78rem; font-weight:600; color:var(--slate); margin-bottom:10px; }
+.nav-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.btn-primary { display:inline-flex; align-items:center; justify-content:center; gap:7px; padding:11px 24px; background:var(--navy); color:white; border:none; border-radius:8px; font-size:.88rem; font-weight:700; cursor:pointer; letter-spacing:.03em; transition:background .15s, transform .1s; }
+.btn-primary:hover  { background:var(--navy2); }
+.btn-primary:active { transform:scale(.98); }
+.btn-gold   { background:var(--gold); color:var(--navy); }
+.btn-gold:hover { background:#b8870f; }
+.btn-back   { background:var(--cream); color:var(--slate); border:1.5px solid var(--border); }
+.btn-back:hover { border-color:var(--navy); color:var(--navy); background:white; }
+.btn-sm { padding:7px 14px; font-size:.78rem; border-radius:6px; }
+.score-ring-wrap { position:relative; width:180px; height:180px; margin:0 auto 18px; }
+.score-ring-svg  { width:100%; height:100%; transform:rotate(-90deg); }
+.score-ring-bg   { fill:none; stroke:var(--border); stroke-width:14; }
+.score-ring-fill { fill:none; stroke-width:14; stroke-linecap:round; transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1); }
+.score-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.score-number { font-size:2.8rem; font-weight:700; font-family:'DM Mono',monospace; line-height:1; }
+.score-label  { font-size:.72rem; color:var(--muted); margin-top:4px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+.score-grade  { font-size:1.4rem; font-weight:700; margin-top:6px; }
+.score-tagline { font-size:.88rem; color:var(--slate); margin-top:10px; line-height:1.55; max-width:400px; margin-left:auto; margin-right:auto; }
+.dim-grid { display:flex; flex-direction:column; gap:12px; }
+.dim-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; }
+.dim-name  { font-size:.8rem; font-weight:600; color:var(--navy); display:flex; align-items:center; gap:7px; }
+.dim-icon  { font-size:1rem; }
+.dim-score { font-size:.78rem; font-weight:700; font-family:'DM Mono',monospace; }
+.dim-track { height:10px; background:var(--border); border-radius:99px; overflow:hidden; }
+.dim-fill  { height:100%; border-radius:99px; transition:width 1.2s cubic-bezier(.4,0,.2,1); }
+.insight-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:14px; }
+.insight-card { border-radius:9px; padding:16px 18px; border:1.5px solid; }
+.insight-card.green  { background:#f0faf5; border-color:#a7f3d0; }
+.insight-card.orange { background:#fffbeb; border-color:#fde68a; }
+.insight-card.red    { background:#fef2f2; border-color:#fecaca; }
+.insight-card.blue   { background:#eff6ff; border-color:#bfdbfe; }
+.insight-icon  { font-size:1.4rem; margin-bottom:8px; }
+.insight-title { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin-bottom:6px; }
+.insight-card.green  .insight-title { color:var(--green); }
+.insight-card.orange .insight-title { color:var(--orange); }
+.insight-card.red    .insight-title { color:var(--red); }
+.insight-card.blue   .insight-title { color:var(--blue); }
+.insight-text  { font-size:.79rem; color:var(--slate); line-height:1.6; }
+.insight-text strong { color:var(--navy); }
+.action-list { display:flex; flex-direction:column; gap:10px; }
+.action-row  { display:flex; align-items:flex-start; gap:12px; padding:13px 16px; background:var(--cream); border-radius:8px; border:1.5px solid var(--border); }
+.action-priority { font-size:.65rem; font-weight:700; padding:3px 9px; border-radius:99px; flex-shrink:0; margin-top:1px; white-space:nowrap; }
+.priority-high   { background:#fee2e2; color:var(--red); }
+.priority-medium { background:#fef3c7; color:#92400e; }
+.priority-low    { background:#dcfce7; color:var(--green); }
+.action-text { flex:1; }
+.action-title { font-size:.83rem; font-weight:600; color:var(--navy); }
+.action-desc  { font-size:.74rem; color:var(--muted); margin-top:3px; line-height:1.5; }
+.summary-strip { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:14px; margin-bottom:22px; }
+.stat-box { background:var(--white); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px 18px; border-left:4px solid var(--border); }
+.stat-box.gold  { border-color:var(--gold); }
+.stat-box.navy  { border-color:var(--navy); }
+.stat-box.green { border-color:var(--green); }
+.stat-box.red   { border-color:var(--red); }
+.stat-box.orange{ border-color:var(--orange); }
+.stat-label { font-size:.63rem; font-weight:700; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); margin-bottom:4px; }
+.stat-value { font-size:1.05rem; font-weight:700; font-family:'DM Mono',monospace; }
+.stat-sub   { font-size:.67rem; color:var(--muted); margin-top:3px; line-height:1.4; }
+.stat-box.green  .stat-value { color:var(--green); }
+.stat-box.red    .stat-value { color:var(--red); }
+.stat-box.orange .stat-value { color:var(--orange); }
+.stat-box.gold   .stat-value { color:var(--gold); }
+.step { display:none; }
+.step.active { display:block; }
+.field-error { font-size:.72rem; color:var(--red); margin-top:5px; display:none; }
+.input-wrap.error { border-color:var(--red); }
+.save-toast { position:fixed; bottom:24px; right:24px; background:var(--navy); color:white; padding:10px 18px; border-radius:8px; font-size:.78rem; font-weight:600; box-shadow:var(--shadow); opacity:0; transition:opacity .3s; pointer-events:none; z-index:999; display:flex; align-items:center; gap:7px; }
+.save-toast.show { opacity:1; }
+.results-header { background:var(--navy); border-radius:var(--radius); padding:28px 28px 24px; margin-bottom:22px; color:white; }
+.results-header h2 { font-size:1.1rem; font-weight:700; color:var(--gold-lt); margin-bottom:4px; }
+.results-header p  { font-size:.8rem; color:rgba(255,255,255,.65); }
+.restart-btn { background:transparent; border:1.5px solid rgba(255,255,255,.3); color:rgba(255,255,255,.8); padding:7px 16px; border-radius:7px; font-size:.76rem; font-weight:600; cursor:pointer; transition:all .15s; }
+.restart-btn:hover { background:rgba(255,255,255,.1); border-color:white; color:white; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (max-width:520px) {
+  .header h1 { font-size:1.2rem; }
+  .app { padding:16px 12px 60px; }
+  .card { padding:18px 16px; }
+  .score-number { font-size:2.2rem; }
+}
+/* Back to portal link */
+.back-link { display:inline-flex; align-items:center; gap:6px; font-size:.8rem; font-weight:600; color:var(--muted); text-decoration:none; margin-bottom:18px; transition:color .15s; }
+.back-link:hover { color:var(--navy); }
+</style>
+</head>
+<body>
+<div class="save-toast" id="saveToast">
+  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  Progress saved
+</div>
+<div class="app">
+  <!-- Back to portal -->
+  <a class="back-link" href="index.html">
+    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    Back to Portal
+  </a>
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Financial Wellness Assessment</h1>
+      <p>Botswana Pula (BWP) · 8 dimensions · Personalised score &amp; action plan</p>
+    </div>
+  </div>
+  <!-- Progress -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-label">
+      <span id="progressLabel">Section 1 of 8</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="step-dots" id="stepDots"></div>
+  </div>
+
+  <!-- STEP 0 — ABOUT YOU -->
+  <div class="step active" id="step0">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#f0f4ff;">💼</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 1 of 8 <span class="section-num">About You</span></div>
+          <h2>Income &amp; Basic Financial Profile</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Gross Monthly Salary</label>
+          <div class="input-wrap" id="wrap_grossSalary"><span class="input-prefix">P</span>
+            <input type="text" id="grossSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+          </div>
+          <div class="hint">Before tax (PAYE)</div>
+          <div class="field-error" id="err_grossSalary">Please enter your salary.</div>
+        </div>
+        <div class="field">
+          <label>Net Monthly Take-home Pay</label>
+          <div class="input-wrap" id="wrap_netSalary"><span class="input-prefix">P</span>
+            <input type="text" id="netSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+          </div>
+          <div class="hint">After PAYE &amp; statutory deductions</div>
+          <div class="field-error" id="err_netSalary">Please enter your take-home pay.</div>
+        </div>
+        <div class="field">
+          <label>Other Monthly Income</label>
+          <div class="input-wrap"><span class="input-prefix">P</span>
+            <input type="text" id="otherIncome" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+          </div>
+          <div class="hint">Rental, side business, dividends</div>
+        </div>
+        <div class="field">
+          <label>Total Monthly Expenses</label>
+          <div class="input-wrap" id="wrap_expenses"><span class="input-prefix">P</span>
+            <input type="text" id="expenses" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+          </div>
+          <div class="hint">All spending incl. debt payments</div>
+          <div class="field-error" id="err_expenses">Please enter your total expenses.</div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How confident are you in your current income stability?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="incomeStability" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Very stable</div><div class="mcq-desc">Permanent employment or reliable business</div></div></div>
+          <div class="mcq-opt" data-q="incomeStability" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Mostly stable</div><div class="mcq-desc">Fixed contract, some uncertainty</div></div></div>
+          <div class="mcq-opt" data-q="incomeStability" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Somewhat unstable</div><div class="mcq-desc">Freelance, seasonal, or short contract</div></div></div>
+          <div class="mcq-opt" data-q="incomeStability" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Unstable / irregular</div><div class="mcq-desc">Unpredictable or currently between jobs</div></div></div>
+        </div>
+        <div class="field-error" id="err_incomeStability" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row"><button class="btn-primary btn-gold" onclick="nextStep(0)">Next: Savings <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button></div>
+  </div>
+
+  <!-- STEP 1 — SAVINGS -->
+  <div class="step" id="step1">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#f0faf5;">🏦</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 2 of 8 <span class="section-num">Savings</span></div>
+          <h2>Savings Rate &amp; Habits</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Total Savings &amp; Investments (current balance)</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalSavings" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Bank savings, unit trusts, bonds, etc.</div>
+        </div>
+        <div class="field">
+          <label>Amount Saved per Month</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="monthlySavings" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Regular monthly savings contribution</div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Do you save before spending (pay-yourself-first)?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="savingsHabit" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Always</div><div class="mcq-desc">Automatic debit on payday</div></div></div>
+          <div class="mcq-opt" data-q="savingsHabit" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Usually</div><div class="mcq-desc">Most months, manually</div></div></div>
+          <div class="mcq-opt" data-q="savingsHabit" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Sometimes</div><div class="mcq-desc">Only when there's money left over</div></div></div>
+          <div class="mcq-opt" data-q="savingsHabit" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Rarely / Never</div><div class="mcq-desc">I don't save regularly</div></div></div>
+        </div>
+        <div class="field-error" id="err_savingsHabit" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(1)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(1)">Next: Emergency Fund <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 2 — EMERGENCY FUND -->
+  <div class="step" id="step2">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fffbeb;">🛡️</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 3 of 8 <span class="section-num">Emergency Fund</span></div>
+          <h2>Financial Safety Net</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Emergency Fund Balance</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="emergencyFund" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Cash you can access within 48 hours</div>
+        </div>
+        <div class="field">
+          <label>Monthly Essential Expenses</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="essentialExpenses" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Rent, food, transport, utilities</div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">If you lost your income today, how long could you cover living expenses without borrowing?</div>
+        <div class="mcq-grid">
+          <div class="mcq-opt" data-q="emergencyMonths" data-val="4" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">6 months or more</div><div class="mcq-desc">Full emergency fund — excellent resilience</div></div><span class="mcq-score-badge">100</span></div>
+          <div class="mcq-opt" data-q="emergencyMonths" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">3 – 5 months</div><div class="mcq-desc">Good buffer, close to recommended</div></div><span class="mcq-score-badge">75</span></div>
+          <div class="mcq-opt" data-q="emergencyMonths" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">1 – 2 months</div><div class="mcq-desc">Partial fund — some cushion</div></div><span class="mcq-score-badge">40</span></div>
+          <div class="mcq-opt" data-q="emergencyMonths" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Less than 1 month</div><div class="mcq-desc">Vulnerable — priority action needed</div></div><span class="mcq-score-badge">10</span></div>
+        </div>
+        <div class="field-error" id="err_emergencyMonths" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(2)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(2)">Next: Debt <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 3 — DEBT -->
+  <div class="step" id="step3">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fef2f2;">💳</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 4 of 8 <span class="section-num">Debt</span></div>
+          <h2>Debt Load &amp; Management</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Total Monthly Debt Payments</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalDebtPayments" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">All loans, credit cards, HP, store accounts</div>
+        </div>
+        <div class="field">
+          <label>Total Outstanding Debt Balance</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalDebtBalance" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Combined principal still owed</div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How would you describe your debt management?</div>
+        <div class="mcq-grid">
+          <div class="mcq-opt" data-q="debtMgmt" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Debt-free or paying down aggressively</div><div class="mcq-desc">No consumer debt, or actively overpaying to clear faster</div></div></div>
+          <div class="mcq-opt" data-q="debtMgmt" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Paying minimums + a little extra</div><div class="mcq-desc">All payments up to date, making progress</div></div></div>
+          <div class="mcq-opt" data-q="debtMgmt" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Only managing minimums</div><div class="mcq-desc">Payments up to date but balance barely reduces</div></div></div>
+          <div class="mcq-opt" data-q="debtMgmt" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Struggling / behind on payments</div><div class="mcq-desc">Missed payments, default risk, or juggling debt</div></div></div>
+        </div>
+        <div class="field-error" id="err_debtMgmt" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(3)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(3)">Next: Retirement <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 4 — RETIREMENT -->
+  <div class="step" id="step4">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#f0faf5;">🏖️</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 5 of 8 <span class="section-num">Retirement</span></div>
+          <h2>Retirement Readiness</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Pension / Retirement Fund Balance</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="retirementBalance" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">BPOPF, employer fund, private pension</div>
+        </div>
+        <div class="field">
+          <label>Monthly Pension Contribution</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="monthlyPension" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Your share (employee + employer)</div>
+        </div>
+        <div class="field">
+          <label>Your Age</label>
+          <div class="input-wrap"><input type="text" id="age" inputmode="numeric" placeholder="e.g. 32" style="padding-left:14px;" onfocus="this.select()"></div>
+        </div>
+        <div class="field">
+          <label>Planned Retirement Age</label>
+          <div class="input-wrap"><input type="text" id="retireAge" inputmode="numeric" placeholder="e.g. 60" style="padding-left:14px;" onfocus="this.select()"></div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How would you rate your retirement planning engagement?</div>
+        <div class="mcq-grid">
+          <div class="mcq-opt" data-q="retirementEngagement" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Actively planned — I know my target and I'm on track</div><div class="mcq-desc">Regular reviews, topped up voluntarily</div></div></div>
+          <div class="mcq-opt" data-q="retirementEngagement" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Contributing but not closely tracked</div><div class="mcq-desc">Employer fund only, no voluntary additions</div></div></div>
+          <div class="mcq-opt" data-q="retirementEngagement" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Minimal — started late or gaps in contributions</div><div class="mcq-desc">Some fund but likely underfunded</div></div></div>
+          <div class="mcq-opt" data-q="retirementEngagement" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No retirement savings in place</div><div class="mcq-desc">Self-employed with no fund, or not yet started</div></div></div>
+        </div>
+        <div class="field-error" id="err_retirementEngagement" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(4)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(4)">Next: Insurance <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 5 — INSURANCE -->
+  <div class="step" id="step5">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#eff6ff;">🩺</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 6 of 8 <span class="section-num">Insurance</span></div>
+          <h2>Risk Protection &amp; Insurance Coverage</h2>
+        </div>
+      </div>
+      <div class="sub-question" style="padding-top:0;border-top:none;">
+        <div class="sub-q-label" style="margin-bottom:12px;">Which of the following do you currently have? (select all that apply)</div>
+        <div id="insuranceGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
+          <div class="mcq-opt" data-ins="medical" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">🏥 Medical Aid</div><div class="mcq-desc">BOMAID, BPOMAS, Pula, etc.</div></div></div>
+          <div class="mcq-opt" data-ins="life" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">🛡️ Life Insurance</div><div class="mcq-desc">Term or whole life cover</div></div></div>
+          <div class="mcq-opt" data-ins="income" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">💼 Income Protection</div><div class="mcq-desc">Disability / dread disease cover</div></div></div>
+          <div class="mcq-opt" data-ins="vehicle" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">🚗 Vehicle Insurance</div><div class="mcq-desc">Comprehensive cover</div></div></div>
+          <div class="mcq-opt" data-ins="home" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">🏠 Home / Contents</div><div class="mcq-desc">Property or household cover</div></div></div>
+          <div class="mcq-opt" data-ins="funeral" onclick="toggleIns(this)"><div class="mcq-radio" style="border-radius:3px;"></div><div class="mcq-text"><div class="mcq-label">🕊️ Funeral Cover</div><div class="mcq-desc">Own &amp; family funeral policy</div></div></div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How confident are you that your current coverage is adequate for your life stage?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="insuranceConfidence" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Very confident</div><div class="mcq-desc">Regularly reviewed with an advisor</div></div></div>
+          <div class="mcq-opt" data-q="insuranceConfidence" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Mostly covered</div><div class="mcq-desc">Some gaps I'm aware of</div></div></div>
+          <div class="mcq-opt" data-q="insuranceConfidence" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Not sure</div><div class="mcq-desc">Haven't reviewed recently</div></div></div>
+          <div class="mcq-opt" data-q="insuranceConfidence" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Underinsured</div><div class="mcq-desc">I know I need more coverage</div></div></div>
+        </div>
+        <div class="field-error" id="err_insuranceConfidence" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(5)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(5)">Next: Goals <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 6 — GOALS -->
+  <div class="step" id="step6">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#fef3c7;">🎯</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 7 of 8 <span class="section-num">Goals</span></div>
+          <h2>Financial Goals &amp; Planning</h2>
+        </div>
+      </div>
+      <div class="sub-question" style="padding-top:0;border-top:none;">
+        <div class="sub-q-label">Do you have written or clearly defined financial goals?</div>
+        <div class="mcq-grid">
+          <div class="mcq-opt" data-q="goalsClarity" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes — specific, written goals with timelines and amounts</div></div></div>
+          <div class="mcq-opt" data-q="goalsClarity" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Somewhat — I have goals in mind but not fully documented</div></div></div>
+          <div class="mcq-opt" data-q="goalsClarity" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Vague — I know I want to save but no clear targets</div></div></div>
+          <div class="mcq-opt" data-q="goalsClarity" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No financial goals currently set</div></div></div>
+        </div>
+        <div class="field-error" id="err_goalsClarity" style="display:none;">Please select an option.</div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Are you actively tracking progress toward your financial goals?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="goalsTracking" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes, monthly or more</div></div></div>
+          <div class="mcq-opt" data-q="goalsTracking" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Occasionally (quarterly)</div></div></div>
+          <div class="mcq-opt" data-q="goalsTracking" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Rarely</div></div></div>
+          <div class="mcq-opt" data-q="goalsTracking" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Not tracking</div></div></div>
+        </div>
+        <div class="field-error" id="err_goalsTracking" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(6)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary btn-gold" onclick="nextStep(6)">Next: Spending &amp; Net Worth <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+  </div>
+
+  <!-- STEP 7 — SPENDING & NET WORTH -->
+  <div class="step" id="step7">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#f5f3ff;">📊</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Section 8 of 8 <span class="section-num">Spending &amp; Net Worth</span></div>
+          <h2>Spending Habits &amp; Overall Net Worth</h2>
+        </div>
+      </div>
+      <div class="form-grid" style="margin-bottom:20px;">
+        <div class="field">
+          <label>Total Assets (market value)</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalAssets" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Property, vehicles, savings, investments, pension</div>
+        </div>
+        <div class="field">
+          <label>Total Liabilities (what you owe)</label>
+          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalLiabilities" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
+          <div class="hint">Mortgage, loans, credit cards, store accounts</div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How would you describe your monthly spending habits?</div>
+        <div class="mcq-grid">
+          <div class="mcq-opt" data-q="spendingHabits" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">I budget carefully and rarely overspend</div><div class="mcq-desc">Intentional, tracked spending with surplus most months</div></div></div>
+          <div class="mcq-opt" data-q="spendingHabits" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">I'm roughly aware but don't track closely</div><div class="mcq-desc">End-of-month balance is usually small but positive</div></div></div>
+          <div class="mcq-opt" data-q="spendingHabits" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">I sometimes overspend and dip into savings</div><div class="mcq-desc">Occasional overdraft or borrowing between paydays</div></div></div>
+          <div class="mcq-opt" data-q="spendingHabits" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">I regularly spend more than I earn</div><div class="mcq-desc">Consistent deficit, relying on credit</div></div></div>
+        </div>
+        <div class="field-error" id="err_spendingHabits" style="display:none;">Please select an option.</div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">How often do you review your overall financial position (net worth)?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="netWorthReview" data-val="3" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Quarterly or more often</div></div></div>
+          <div class="mcq-opt" data-q="netWorthReview" data-val="2" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Annually</div></div></div>
+          <div class="mcq-opt" data-q="netWorthReview" data-val="1" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Rarely / informally</div></div></div>
+          <div class="mcq-opt" data-q="netWorthReview" data-val="0" onclick="selectMCQ(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Never reviewed</div></div></div>
+        </div>
+        <div class="field-error" id="err_netWorthReview" style="display:none;">Please select an option.</div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="prevStep(7)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary" onclick="calculateWellness()" style="background:var(--navy);gap:8px;">
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+        View My Wellness Score
+      </button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="step" id="stepResults">
+    <div id="emailBanner" style="display:none;border-radius:8px;padding:12px 16px;margin-bottom:16px;align-items:center;gap:10px;font-size:.8rem;font-weight:600;"></div>
+    <div class="results-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
+        <div>
+          <h2>Your Financial Wellness Report</h2>
+          <p>Botswana Pula · <span id="reportDate"></span></p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="restart-btn" onclick="restartAssessment()">Retake Assessment</button>
+          <button class="btn-primary btn-sm" onclick="window.location.href='index.html'" style="background:rgba(255,255,255,.15);border:1.5px solid rgba(255,255,255,.3);">← Portal</button>
+          <button class="btn-primary btn-sm btn-gold" onclick="exportPDF()" style="display:flex;align-items:center;gap:6px;">
+            <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Export PDF
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:center;justify-content:center;">
+        <div class="score-ring-wrap">
+          <svg class="score-ring-svg" viewBox="0 0 180 180">
+            <circle class="score-ring-bg" cx="90" cy="90" r="76"/>
+            <circle class="score-ring-fill" id="scoreRing" cx="90" cy="90" r="76" stroke-dasharray="477.5" stroke-dashoffset="477.5"/>
+          </svg>
+          <div class="score-overlay">
+            <div class="score-number" id="scoreNumber" style="color:var(--navy)">—</div>
+            <div class="score-label">out of 100</div>
+          </div>
+        </div>
+        <div style="flex:1;min-width:220px;text-align:left;">
+          <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:6px;">Overall Wellness Grade</div>
+          <div class="score-grade" id="scoreGrade"></div>
+          <div class="score-tagline" id="scoreTagline" style="margin-left:0;text-align:left;margin-top:8px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="summary-strip" id="summaryStrip"></div>
+    <div class="card" style="margin-bottom:22px;">
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:18px;">Score Breakdown by Dimension</div>
+      <div class="dim-grid" id="dimGrid"></div>
+    </div>
+    <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--navy);margin-bottom:12px;">Key Insights</div>
+    <div class="insight-grid" id="insightGrid" style="margin-bottom:22px;"></div>
+    <div class="card">
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:16px;">Personalised Action Plan</div>
+      <div class="action-list" id="actionList"></div>
+    </div>
+    <div style="text-align:center;margin-top:28px;">
+      <a href="index.html" class="btn-primary" style="text-decoration:none;display:inline-flex;">← Return to Portal</a>
+    </div>
+  </div>
+</div>
+<script>
+const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
+const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
+const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+const REPORT_RECIPIENT    = 'wellness@keywellness.co.bw';
+
+const fmt  = v => 'P ' + v.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtK = v => { if(v>=1e6) return 'P '+(v/1e6).toFixed(2)+'M'; if(v>=1e3) return 'P '+(v/1e3).toFixed(1)+'K'; return fmt(v); };
+function fmtInput(el) {
+  let raw=el.value.replace(/[^0-9.]/g,'');
+  const parts=raw.split('.');
+  parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  if(parts.length>2) parts.splice(2);
+  if(parts[1]!==undefined) parts[1]=parts[1].slice(0,2);
+  el.value=parts.join('.');
+}
+function finalizeInput(el){
+  const n=parseFloat(el.value.replace(/,/g,''));
+  if(!isNaN(n)) el.value=n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function pf(id){ return parseFloat(document.getElementById(id)?.value.replace(/,/g,'')||'0')||0; }
+function pfi(id){ return parseInt(document.getElementById(id)?.value||'0')||0; }
+function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
+
+const TOTAL_STEPS = 8;
+let answers = {};
+let insuranceSet = new Set();
+const LS_KEY = 'kw_assessment_v2';
+
+function selectMCQ(el) {
+  const q = el.dataset.q, val = parseFloat(el.dataset.val);
+  document.querySelectorAll(`.mcq-opt[data-q="${q}"]`).forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  answers[q] = val;
+  const errEl = document.getElementById('err_'+q);
+  if(errEl) errEl.style.display='none';
+  saveDraft();
+}
+function toggleIns(el) {
+  const ins = el.dataset.ins;
+  if(insuranceSet.has(ins)) { insuranceSet.delete(ins); el.classList.remove('selected'); }
+  else { insuranceSet.add(ins); el.classList.add('selected'); }
+  saveDraft();
+}
+
+let currentStep = 0;
+function showStep(n) {
+  document.querySelectorAll('.step').forEach((s,i)=>{
+    s.classList.toggle('active', i===n || (n===TOTAL_STEPS && s.id==='stepResults'));
+  });
+  if(n===TOTAL_STEPS) { document.getElementById('progressWrap').style.display='none'; return; }
+  document.getElementById('progressWrap').style.display='block';
+  updateProgress(n);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function updateProgress(n) {
+  const pct = Math.round((n / TOTAL_STEPS)*100);
+  document.getElementById('progressFill').style.width = pct+'%';
+  document.getElementById('progressLabel').textContent = `Section ${n+1} of ${TOTAL_STEPS}`;
+  document.getElementById('progressPct').textContent = pct+'%';
+  const dots = document.getElementById('stepDots');
+  if(!dots.children.length) for(let i=0;i<TOTAL_STEPS;i++){const d=document.createElement('div');d.className='step-dot';dots.appendChild(d);}
+  [...dots.children].forEach((d,i)=>{ d.className='step-dot'+(i<n?' done':i===n?' current':''); });
+}
+function nextStep(from) { if(!validateStep(from)) return; currentStep=from+1; saveDraft(); showStep(currentStep); }
+function prevStep(from) { currentStep=from-1; showStep(currentStep); }
+
+const STEP_REQUIRED = {
+  0:{fields:['grossSalary','netSalary','expenses'],questions:['incomeStability']},
+  1:{fields:[],questions:['savingsHabit']},
+  2:{fields:[],questions:['emergencyMonths']},
+  3:{fields:[],questions:['debtMgmt']},
+  4:{fields:[],questions:['retirementEngagement']},
+  5:{fields:[],questions:['insuranceConfidence']},
+  6:{fields:[],questions:['goalsClarity','goalsTracking']},
+  7:{fields:[],questions:['spendingHabits','netWorthReview']},
+};
+function validateStep(n) {
+  const req=STEP_REQUIRED[n]; let ok=true;
+  (req.fields||[]).forEach(id=>{
+    const wrap=document.getElementById('wrap_'+id),el=document.getElementById(id),errEl=document.getElementById('err_'+id);
+    const val=parseFloat((el?.value||'').replace(/,/g,''));
+    if(!val||val<=0){if(wrap)wrap.classList.add('error');if(errEl)errEl.style.display='block';ok=false;}
+    else{if(wrap)wrap.classList.remove('error');if(errEl)errEl.style.display='none';}
+  });
+  (req.questions||[]).forEach(q=>{
+    const errEl=document.getElementById('err_'+q);
+    if(answers[q]===undefined){if(errEl)errEl.style.display='block';ok=false;}
+    else{if(errEl)errEl.style.display='none';}
+  });
+  if(!ok){const card=document.querySelector(`#step${n} .card`);if(card)card.scrollIntoView({behavior:'smooth',block:'center'});}
+  return ok;
+}
+
+let toastTimer;
+function showToast(){const t=document.getElementById('saveToast');t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800);}
+function saveDraft(){
+  const fields=['grossSalary','netSalary','otherIncome','expenses','totalSavings','monthlySavings','emergencyFund','essentialExpenses','totalDebtPayments','totalDebtBalance','retirementBalance','monthlyPension','age','retireAge','totalAssets','totalLiabilities'];
+  const vals={};
+  fields.forEach(id=>{const el=document.getElementById(id);if(el)vals[id]=el.value;});
+  localStorage.setItem(LS_KEY,JSON.stringify({answers,insurance:[...insuranceSet],step:currentStep,vals}));
+  showToast();
+}
+function loadDraft(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);if(!raw)return;
+    const d=JSON.parse(raw);
+    answers=d.answers||{};insuranceSet=new Set(d.insurance||[]);
+    if(d.vals)Object.entries(d.vals).forEach(([id,v])=>{const el=document.getElementById(id);if(el)el.value=v;});
+    Object.entries(answers).forEach(([q,v])=>{const el=document.querySelector(`.mcq-opt[data-q="${q}"][data-val="${v}"]`);if(el)el.classList.add('selected');});
+    insuranceSet.forEach(ins=>{const el=document.querySelector(`.mcq-opt[data-ins="${ins}"]`);if(el)el.classList.add('selected');});
+    if(d.step&&d.step<TOTAL_STEPS){currentStep=d.step;showStep(currentStep);}
+  }catch{}
+}
+
+function calculateWellness(){
+  if(!validateStep(7))return;
+  const gross=pf('grossSalary'),net=pf('netSalary'),other=pf('otherIncome'),expenses=pf('expenses');
+  const totalIncome=gross+other;
+  const monthlySavings=pf('monthlySavings'),emergencyFund=pf('emergencyFund');
+  const essentialExp=pf('essentialExpenses')||expenses*0.6;
+  const totalDebtPayments=pf('totalDebtPayments'),totalDebtBalance=pf('totalDebtBalance');
+  const retirementBal=pf('retirementBalance'),monthlyPension=pf('monthlyPension');
+  const age=pfi('age')||30,retireAge=pfi('retireAge')||60;
+  const totalAssets=pf('totalAssets'),totalLiabilities=pf('totalLiabilities');
+  const netWorth=totalAssets-totalLiabilities;
+
+  const surplusRatio=totalIncome>0?Math.max(0,totalIncome-expenses)/totalIncome:0;
+  const incomeScore=clamp(Math.round((surplusRatio*0.6+(answers.incomeStability??0)/3*0.4)*100),0,100);
+
+  const savingsRate=totalIncome>0?monthlySavings/totalIncome:0;
+  const savingsRateScore=clamp(Math.round((Math.min(savingsRate/0.20,1)*0.6+(answers.savingsHabit??0)/3*0.4)*100),0,100);
+
+  const emMonths=essentialExp>0?emergencyFund/essentialExp:0;
+  const emScore=clamp(Math.round((Math.min(emMonths/6,1)*0.5+(answers.emergencyMonths??0)/4*0.5)*100),0,100);
+
+  const dti=totalIncome>0?totalDebtPayments/totalIncome:0;
+  const dtiRatio=clamp(1-dti/0.65,0,1);
+  const debtScore=clamp(Math.round((dtiRatio*0.6+(answers.debtMgmt??0)/3*0.4)*100),0,100);
+
+  const yrsToRetire=Math.max(1,retireAge-age),targetFund=gross*12*10;
+  const r=0.06/12,n=yrsToRetire*12;
+  const projFund=retirementBal*Math.pow(1+r,n)+monthlyPension*(Math.pow(1+r,n)-1)/r;
+  const fundRatio=targetFund>0?Math.min(projFund/targetFund,1):0;
+  const retScore=clamp(Math.round((fundRatio*0.5+(answers.retirementEngagement??0)/3*0.5)*100),0,100);
+
+  const insCount=insuranceSet.size,insCovScore=Math.min(insCount/4,1);
+  const insScore=clamp(Math.round((insCovScore*0.5+(answers.insuranceConfidence??0)/3*0.5)*100),0,100);
+
+  const goalsScore=clamp(Math.round(((answers.goalsClarity??0)/3*0.6+(answers.goalsTracking??0)/3*0.4)*100),0,100);
+
+  const netWorthRatio=totalAssets>0?clamp(netWorth/totalAssets,0,1):(netWorth>0?0.5:0);
+  const spendScore=clamp(Math.round((netWorthRatio*0.3+(answers.spendingHabits??0)/3*0.5+(answers.netWorthReview??0)/3*0.2)*100),0,100);
+
+  const dims=[
+    {id:'income',label:'Income & Cash Flow',icon:'💼',score:incomeScore,w:12.5},
+    {id:'savings',label:'Savings Rate',icon:'🏦',score:savingsRateScore,w:12.5},
+    {id:'emergency',label:'Emergency Fund',icon:'🛡️',score:emScore,w:12.5},
+    {id:'debt',label:'Debt Management',icon:'💳',score:debtScore,w:12.5},
+    {id:'retirement',label:'Retirement Readiness',icon:'🏖️',score:retScore,w:12.5},
+    {id:'insurance',label:'Risk Protection',icon:'🩺',score:insScore,w:12.5},
+    {id:'goals',label:'Financial Goals',icon:'🎯',score:goalsScore,w:12.5},
+    {id:'spending',label:'Spending & Net Worth',icon:'📊',score:spendScore,w:12.5},
+  ];
+  const totalScore=Math.round(dims.reduce((s,d)=>s+d.score*d.w/100,0));
+
+  // Save result to localStorage for dashboard sync
+  localStorage.setItem('kw_assessment_result', JSON.stringify({
+    score: totalScore,
+    dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})),
+    date: new Date().toISOString(),
+    savingsRate: savingsRate*100,
+    dti: dti*100,
+    emMonths,
+    netWorth,
+    insCount
+  }));
+
+  const grade=totalScore>=85?{label:'Excellent 🌟',tagline:'You are in outstanding financial health. Continue your disciplined habits and focus on optimising your wealth strategy.',color:'var(--green)'}
+    :totalScore>=70?{label:'Good 👍',tagline:'Your financial foundation is solid. A few targeted improvements will move you to excellent.',color:'var(--green)'}
+    :totalScore>=55?{label:'Fair ⚠️',tagline:'You have a reasonable base but clear gaps. Follow the action plan below to strengthen your position.',color:'var(--orange)'}
+    :totalScore>=40?{label:'Needs Work 🔧',tagline:'Several important areas require attention. Focus on the high-priority actions first.',color:'var(--orange)'}
+    :{label:'Critical 🚨',tagline:'Your financial wellness is at risk. Start with emergency fund and debt — small steps now create big change.',color:'var(--red)'};
+
+  currentStep=TOTAL_STEPS; showStep(TOTAL_STEPS);
+  document.getElementById('reportDate').textContent=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+
+  const circumference=477.5,offset=circumference-(totalScore/100)*circumference;
+  const ringColor=totalScore>=70?'var(--green)':totalScore>=50?'var(--orange)':'var(--red)';
+  const ring=document.getElementById('scoreRing');
+  ring.style.stroke=ringColor; ring.style.strokeDashoffset=circumference;
+  setTimeout(()=>{ring.style.strokeDashoffset=offset;},100);
+  document.getElementById('scoreNumber').textContent=totalScore;
+  document.getElementById('scoreNumber').style.color=ringColor;
+  document.getElementById('scoreGrade').textContent=grade.label;
+  document.getElementById('scoreGrade').style.color=grade.color;
+  document.getElementById('scoreTagline').textContent=grade.tagline;
+
+  const dti_pct=totalIncome>0?(totalDebtPayments/totalIncome*100):0;
+  const savRate=totalIncome>0?(monthlySavings/totalIncome*100):0;
+  document.getElementById('summaryStrip').innerHTML=`
+    <div class="stat-box navy"><div class="stat-label">Wellness Score</div><div class="stat-value" style="color:${ringColor}">${totalScore}/100</div><div class="stat-sub">${grade.label}</div></div>
+    <div class="stat-box gold"><div class="stat-label">Savings Rate</div><div class="stat-value">${savRate.toFixed(1)}%</div><div class="stat-sub">Ideal ≥ 20% of gross</div></div>
+    <div class="stat-box ${dti_pct<=35?'green':dti_pct<=50?'orange':'red'}"><div class="stat-label">Debt-to-Income</div><div class="stat-value">${dti_pct.toFixed(1)}%</div><div class="stat-sub">Botswana norm ≤ 35%</div></div>
+    <div class="stat-box ${netWorth>=0?'green':'red'}"><div class="stat-label">Net Worth</div><div class="stat-value">${fmtK(Math.abs(netWorth))}</div><div class="stat-sub">${netWorth>=0?'Positive':'Negative'}</div></div>
+    <div class="stat-box ${emMonths>=6?'green':emMonths>=3?'orange':'red'}"><div class="stat-label">Emergency Cover</div><div class="stat-value">${emMonths.toFixed(1)} mo</div><div class="stat-sub">Target: 6 months</div></div>
+    <div class="stat-box navy"><div class="stat-label">Insurance Items</div><div class="stat-value">${insCount} / 6</div><div class="stat-sub">Covers held</div></div>`;
+
+  const dimColor=s=>s>=70?'var(--green)':s>=50?'var(--orange)':'var(--red)';
+  document.getElementById('dimGrid').innerHTML=dims.map(d=>`
+    <div class="dim-row">
+      <div class="dim-header">
+        <div class="dim-name"><span class="dim-icon">${d.icon}</span>${d.label}</div>
+        <div class="dim-score" style="color:${dimColor(d.score)}">${d.score}/100</div>
+      </div>
+      <div class="dim-track"><div class="dim-fill" style="width:0%;background:${dimColor(d.score)}" data-target="${d.score}%"></div></div>
+    </div>`).join('');
+  setTimeout(()=>{document.querySelectorAll('.dim-fill').forEach(el=>{el.style.width=el.dataset.target;});},120);
+
+  const insights=buildInsights(dims,{gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,insCount});
+  document.getElementById('insightGrid').innerHTML=insights.map(i=>`
+    <div class="insight-card ${i.cls}"><div class="insight-icon">${i.icon}</div><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div>`).join('');
+
+  const actions=buildActions(dims,{gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,essentialExp,insCount});
+  document.getElementById('actionList').innerHTML=actions.map(a=>`
+    <div class="action-row">
+      <span class="action-priority ${a.priority==='High'?'priority-high':a.priority==='Medium'?'priority-medium':'priority-low'}">${a.priority}</span>
+      <div class="action-text"><div class="action-title">${a.title}</div><div class="action-desc">${a.desc}</div></div>
+    </div>`).join('');
+
+  window._wellnessResult={totalScore,grade,dims,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,insCount,totalDebtBalance,totalDebtPayments};
+  sendReport(window._wellnessResult);
+}
+
+function buildInsights(dims,d){
+  const ins=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
+  if(d.gross>0&&d.expenses>0){const surplus=d.totalIncome-d.expenses;if(surplus>0)ins.push({icon:'💚',cls:'green',title:'Positive Cash Flow',text:`You have a monthly surplus of <strong>${fmt(surplus)}</strong>. Direct this toward savings or debt reduction.`});else ins.push({icon:'⚠️',cls:'red',title:'Spending Exceeds Income',text:`Your expenses exceed income by <strong>${fmt(Math.abs(surplus))}</strong>/mo. This is unsustainable — review discretionary spending immediately.`});}
+  if(d.savRate<10)ins.push({icon:'💡',cls:'orange',title:'Low Savings Rate',text:`Your savings rate of <strong>${d.savRate.toFixed(1)}%</strong> is below the recommended 20%. Even increasing by 2–3% per month makes a significant long-term difference.`});
+  else if(d.savRate>=20)ins.push({icon:'🌟',cls:'green',title:'Excellent Savings Rate',text:`Saving <strong>${d.savRate.toFixed(1)}%</strong> of income puts you ahead of most. Ensure savings are in growth-oriented instruments.`});
+  if(d.emMonths<3)ins.push({icon:'🚨',cls:'red',title:'Emergency Fund Gap',text:`With only <strong>${d.emMonths.toFixed(1)} months</strong> of cover, a job loss or medical emergency could force you into debt. Build to 6 months of essential expenses.`});
+  else if(d.emMonths>=6)ins.push({icon:'🛡️',cls:'green',title:'Strong Emergency Fund',text:`Your emergency fund covers <strong>${d.emMonths.toFixed(1)} months</strong> — well above the 6-month target. You are resilient to short-term shocks.`});
+  if(d.dti_pct>50)ins.push({icon:'🔴',cls:'red',title:'High Debt Burden',text:`Your DTI of <strong>${d.dti_pct.toFixed(1)}%</strong> exceeds NBFIRA and bank benchmarks. New credit applications are likely to be declined.`});
+  else if(d.dti_pct<=20&&d.totalDebtBalance===0)ins.push({icon:'🎉',cls:'green',title:'Low or No Consumer Debt',text:`Your debt load is minimal. This frees capital for investing and building wealth.`});
+  if(d.netWorth<0)ins.push({icon:'📉',cls:'orange',title:'Negative Net Worth',text:`You currently owe more than you own. Focus on growing assets and reducing liabilities to turn this positive.`});
+  else ins.push({icon:'📈',cls:'blue',title:`Net Worth: ${fmtK(d.netWorth)}`,text:`Your net worth is positive. Track this number quarterly — a growing net worth is the ultimate measure of financial progress.`});
+  if(d.insCount<3)ins.push({icon:'🩺',cls:'orange',title:'Insurance Gaps',text:`You hold only <strong>${d.insCount}</strong> of 6 recommended covers. Medical aid and life/income protection are the highest priorities.`});
+  return ins.slice(0,6);
+}
+
+function buildActions(dims,d){
+  const actions=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
+  if(d.emMonths<3)actions.push({priority:'High',title:'Build your emergency fund first',desc:`Target: ${fmt(d.essentialExp*6)}. Open a separate notice account and auto-debit even P200/month. This is your financial safety net.`});
+  if(d.dti_pct>50)actions.push({priority:'High',title:'Reduce debt-to-income ratio below 35%',desc:`You need to free ${fmt(d.totalIncome*(d.dti_pct/100-0.35))}/mo. Contact lenders for consolidation options or accelerate repayments on the highest-interest accounts first.`});
+  if(d.savRate<10)actions.push({priority:'High',title:'Increase savings rate to at least 10%',desc:`That's ${fmt(d.gross*0.10)}/mo. Set up an automatic debit on payday. Even P500 more per month compounds significantly over 10 years.`});
+  if(d.insCount<2)actions.push({priority:'High',title:'Secure medical aid and income protection',desc:'These two covers protect against the most financially devastating risks: illness and loss of income. Get quotes this month.'});
+  if(d.emMonths>=3&&d.emMonths<6)actions.push({priority:'Medium',title:'Top up emergency fund to 6 months',desc:`You need ${fmt((6-d.emMonths)*d.essentialExp)} more. Keep it in an accessible savings account separate from daily spending.`});
+  if(d.savRate>=10&&d.savRate<20)actions.push({priority:'Medium',title:'Grow savings rate toward 20%',desc:'Consider unit trusts, Stanbic savings bonds, or a TFSA-equivalent for tax-efficient compounding.'});
+  if(dimMap.retirement<50)actions.push({priority:'Medium',title:'Increase pension/retirement contributions',desc:'Voluntary additional contributions (VACs) to your employer fund or a private retirement annuity are the most tax-efficient way to save.'});
+  if(dimMap.goals<50)actions.push({priority:'Medium',title:'Set and document 3 specific financial goals',desc:'Write down each goal with a target amount, timeline, and monthly savings needed. Use the Goal Planner tool to track them.'});
+  if(d.dti_pct>20&&d.dti_pct<=50)actions.push({priority:'Medium',title:'Accelerate debt repayment',desc:'Apply the avalanche method: pay minimums on all debts, then direct extra cash to the highest-interest balance first.'});
+  if(d.netWorth<0)actions.push({priority:'Medium',title:'Focus on growing assets',desc:'Consider low-cost investments: BSE-listed unit trusts, stokvels, or a small rental income property if you can afford the deposit.'});
+  if(dimMap.spending<60)actions.push({priority:'Low',title:'Implement a monthly spending review',desc:'Spend 20 minutes on the last day of each month reviewing bank statements. Categorise spending and identify areas to reduce.'});
+  if(d.insCount>=2&&d.insCount<5)actions.push({priority:'Low',title:'Review and fill remaining insurance gaps',desc:`You have ${d.insCount} of 6 recommended covers. Next priority: life insurance or income protection.`});
+  actions.push({priority:'Low',title:'Schedule an annual financial review',desc:'Once a year, review your net worth, goals progress, insurance adequacy, and investment allocation. Consider a fee-based financial advisor.'});
+  return actions.slice(0,8);
+}
+
+function showEmailBanner(state,msg){
+  const b=document.getElementById('emailBanner');b.style.display='flex';
+  if(state==='sending'){b.style.background='#f0f4ff';b.style.border='1.5px solid #bfdbfe';b.style.color='#1e40af';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0;animation:spin 1s linear infinite"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span>${msg}</span>`;}
+  else if(state==='success'){b.style.background='#f0faf5';b.style.border='1.5px solid #a7f3d0';b.style.color='#065f46';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>${msg}</span>`;}
+  else{b.style.background='#fef2f2';b.style.border='1.5px solid #fecaca';b.style.color='#991b1b';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span>${msg}</span>`;}
+}
+
+function sendReport(r){
+  if(EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){showEmailBanner('error','Email not configured — add EmailJS credentials to enable automatic report sending.');return;}
+  showEmailBanner('sending',`Sending report to ${REPORT_RECIPIENT}…`);
+  emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
+  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+  const dimensionsText=r.dims.map(d=>`${d.label}: ${d.score}/100`).join('\n');
+  const actionsArr=buildActions(r.dims,{...r,essentialExp:1});
+  const actionsText=actionsArr.slice(0,6).map((a,i)=>`${i+1}. [${a.priority}] ${a.title}\n   ${a.desc}`).join('\n\n');
+  emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
+    to_email:REPORT_RECIPIENT,report_date:today,score:String(r.totalScore),
+    grade:r.grade.label.replace(/[^\w\s]/g,'').trim(),tagline:r.grade.tagline,
+    savings_rate:r.savRate.toFixed(1)+'%',dti:r.dti_pct.toFixed(1)+'%',
+    emergency_months:r.emMonths.toFixed(1)+' months',
+    net_worth:fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (negative)':''),
+    insurance_count:r.insCount+' of 6',dimensions:dimensionsText,actions:actionsText,
+  }).then(()=>showEmailBanner('success',`Report sent to ${REPORT_RECIPIENT}`))
+    .catch(err=>{console.error(err);showEmailBanner('error',`Could not send report — ${err?.text||'check EmailJS credentials'}.`);});
+}
+
+function exportPDF(){
+  const r=window._wellnessResult;if(!r)return;
+  const{jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],GREEN=[26,140,91],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
+  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+  const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+  doc.setFillColor(...NAVY);doc.rect(0,0,pageW,28,'F');
+  doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,12);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,19);
+  const scoreColor=r.totalScore>=70?[26,140,91]:r.totalScore>=50?[217,119,6]:[192,57,43];
+  doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,4,34,20,3,3,'F');
+  doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
+  doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});
+  doc.setTextColor(...NAVY);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(r.grade.label.replace(/[^\w\s]/g,'').trim(),14,38);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...SLATE);
+  const tagLines=doc.splitTextToSize(r.grade.tagline,pageW-28);doc.text(tagLines,14,44);
+  let y=44+tagLines.length*5+8;
+  const stats=[['Savings Rate',r.savRate.toFixed(1)+'%'],['Debt-to-Income',r.dti_pct.toFixed(1)+'%'],['Emergency Cover',r.emMonths.toFixed(1)+' months'],['Net Worth',fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (neg)':'')],['Insurance Covers',r.insCount+' / 6']];
+  const sw=(pageW-28)/stats.length;
+  stats.forEach((s,i)=>{const x=14+i*sw;doc.setFillColor(...CREAM);doc.roundedRect(x,y,sw-2,16,2,2,'F');doc.setFillColor(...NAVY);doc.roundedRect(x,y,2,16,1,1,'F');doc.setTextColor(...SLATE);doc.setFontSize(5.5);doc.setFont('helvetica','bold');doc.text(s[0].toUpperCase(),x+4,y+5.5);doc.setTextColor(...NAVY);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.text(s[1],x+4,y+12);});
+  y+=22;
+  doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('SCORE BY DIMENSION',14,y);y+=3;
+  doc.setDrawColor(...GOLD);doc.setLineWidth(.35);doc.line(14,y,pageW-14,y);y+=5;
+  r.dims.forEach(d=>{
+    const barW=(pageW-28-50),sc=d.score,c=sc>=70?GREEN:sc>=50?ORANGE:RED;
+    doc.setTextColor(...SLATE);doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.text(' '+d.label,14,y);
+    doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.setTextColor(...c);doc.text(sc+'/100',pageW-14,y,{align:'right'});
+    doc.setFillColor(214,221,232);doc.roundedRect(50,y-4,barW,4,1,1,'F');
+    doc.setFillColor(...c);doc.roundedRect(50,y-4,barW*sc/100,4,1,1,'F');y+=8;
+  });
+  y+=4;
+  doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('ACTION PLAN',14,y);y+=3;
+  doc.setDrawColor(...GOLD);doc.line(14,y,pageW-14,y);y+=5;
+  const actions=buildActions(r.dims,{...r,essentialExp:1});
+  actions.slice(0,6).forEach(a=>{
+    if(y>pageH-18){doc.addPage();y=18;}
+    const pc=a.priority==='High'?RED:a.priority==='Medium'?ORANGE:GREEN;
+    doc.setFillColor(...pc);doc.roundedRect(14,y-3.5,12,5,1,1,'F');doc.setTextColor(...WHITE);doc.setFontSize(5);doc.setFont('helvetica','bold');doc.text(a.priority.toUpperCase(),20,y,{align:'center'});
+    doc.setTextColor(...NAVY);doc.setFontSize(7.5);doc.setFont('helvetica','bold');doc.text(a.title,28,y);y+=5;
+    doc.setTextColor(...SLATE);doc.setFontSize(7);doc.setFont('helvetica','normal');const descLines=doc.splitTextToSize(a.desc,pageW-32);doc.text(descLines,28,y);y+=descLines.length*4.5+4;
+  });
+  const pages=doc.internal.getNumberOfPages();
+  for(let p=1;p<=pages;p++){doc.setPage(p);doc.setFillColor(...NAVY);doc.rect(0,pageH-9,pageW,9,'F');doc.setTextColor(180,190,205);doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('Key Wellness Financial Assessment  ·  Botswana Pula  ·  For planning purposes only',14,pageH-3.5);doc.text('Page '+p+' of '+pages,pageW-14,pageH-3.5,{align:'right'});}
+  doc.save('key_wellness_assessment.pdf');
+}
+
+function restartAssessment(){
+  if(!confirm('Start a new assessment? Your current results will be cleared.'))return;
+  answers={};insuranceSet=new Set();localStorage.removeItem(LS_KEY);
+  document.querySelectorAll('input[type=text]').forEach(el=>el.value='');
+  document.querySelectorAll('.mcq-opt').forEach(el=>el.classList.remove('selected'));
+  currentStep=0;showStep(0);document.getElementById('progressWrap').style.display='block';
+}
+
+updateProgress(0);
+loadDraft();
+</script>
+</body>
+</html>
