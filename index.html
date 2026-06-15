@@ -779,8 +779,8 @@ VIEWS['dashboard'] = async function () {
   let netWorth = null;
   try {
     const nw = JSON.parse(localStorage.getItem('kw_networth_v1') || '{}');
-    const assets = (nw.assets || []).reduce((s, a) => s + Number(a.value || 0), 0);
-    const liabs  = (nw.liabilities || []).reduce((s, a) => s + Number(a.value || 0), 0);
+    const assets = (nw.assets || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
+    const liabs  = (nw.liabilities || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
     if (assets || liabs) netWorth = assets - liabs;
   } catch {}
 
@@ -793,17 +793,18 @@ VIEWS['dashboard'] = async function () {
 
   let goalsOnTrack = null, totalGoals = 0;
   try {
-    const users = JSON.parse(localStorage.getItem('gp_users') || '[]');
-    if (users.length) {
-      const gd = JSON.parse(localStorage.getItem(`gp_data_${users[0].name}`) || '{}');
-      const goals = gd.goals || [];
-      totalGoals = goals.length;
+    const gd = JSON.parse(localStorage.getItem('kw_goals') || '{}');
+    const goals = gd.goals || [];
+    totalGoals = goals.length;
+    if (totalGoals > 0) {
       goalsOnTrack = goals.filter(g => {
         if (!g.target || !g.saved) return false;
         const pct = g.saved / g.target;
         const months = g.months || 12;
-        const expected = (new Date() - new Date(g.startDate || Date.now())) / (1000 * 60 * 60 * 24 * 30);
-        return pct >= Math.min(expected / months, 1) * 0.8;
+        const startDate = g.startDate ? new Date(g.startDate) : new Date();
+        const elapsed = (Date.now() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+        const expectedPct = months > 0 ? Math.min(elapsed / months, 1) : 0;
+        return pct >= expectedPct * 0.8 || pct >= 1;
       }).length;
     }
   } catch {}

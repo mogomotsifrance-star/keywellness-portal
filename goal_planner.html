@@ -189,39 +189,9 @@
     .goal-card-header { gap: 10px; }
   }
 
-  /* ── Login overlay ── */
-  .login-overlay { position: fixed; inset: 0; background: var(--cream); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
-  .login-overlay.hidden { display: none; }
-  .login-card { background: var(--white); border-radius: 16px; box-shadow: 0 8px 48px rgba(13,37,69,.18); padding: 40px 36px 36px; width: 100%; max-width: 420px; }
-  .login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
-  .login-brand-icon { width: 44px; height: 44px; background: var(--navy); border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .login-brand h2 { font-size: 1.1rem; font-weight: 700; color: var(--navy); line-height: 1.2; }
-  .login-brand p  { font-size: .72rem; color: var(--muted); margin-top: 2px; }
-  .login-tabs { display: flex; gap: 0; border: 1.5px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
-  .login-tab { flex: 1; padding: 9px; text-align: center; font-size: .8rem; font-weight: 600; cursor: pointer; background: var(--cream); color: var(--muted); border: none; transition: all .15s; }
-  .login-tab.active { background: var(--navy); color: white; }
-  .login-field { margin-bottom: 16px; }
-  .login-field label { display: block; font-size: .74rem; font-weight: 600; color: var(--slate); margin-bottom: 6px; }
-  .login-input { width: 100%; border: 1.5px solid var(--border); border-radius: 7px; padding: 10px 13px; font-size: .9rem; font-family: 'Inter', sans-serif; color: var(--navy); background: var(--cream); outline: none; transition: border-color .15s; }
-  .login-input:focus { border-color: var(--gold); background: #fff; }
-  .login-input.pin-input { letter-spacing: .4em; font-size: 1.2rem; font-family: 'DM Mono', monospace; text-align: center; }
-  .login-btn { width: 100%; padding: 12px; background: var(--navy); color: white; border: none; border-radius: 8px; font-size: .9rem; font-weight: 700; cursor: pointer; margin-top: 4px; transition: background .15s; letter-spacing: .03em; }
-  .login-btn:hover { background: var(--navy2); }
-  .login-error { font-size: .76rem; color: var(--red); margin-top: 8px; min-height: 18px; }
-  .login-hint  { font-size: .72rem; color: var(--muted); margin-top: 10px; text-align: center; line-height: 1.5; }
-  .saved-users { margin-bottom: 18px; }
-  .saved-users-label { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 8px; }
-  .saved-user-chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; background: var(--cream); border: 1.5px solid var(--border); border-radius: 99px; font-size: .8rem; font-weight: 600; color: var(--navy); cursor: pointer; margin: 0 6px 6px 0; transition: all .15s; }
-  .saved-user-chip:hover { border-color: var(--gold); background: #fffbeb; }
-  .saved-user-chip .chip-avatar { width: 20px; height: 20px; background: var(--navy); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .65rem; font-weight: 700; color: white; flex-shrink: 0; }
-
-  /* ── User badge in header ── */
-  .user-badge { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
-  .user-avatar { width: 32px; height: 32px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: var(--navy); flex-shrink: 0; }
-  .user-name   { font-size: .82rem; font-weight: 600; color: var(--navy); }
-  .user-sub    { font-size: .67rem; color: var(--muted); }
-  .btn-logout  { padding: 6px 13px; background: var(--cream); border: 1.5px solid var(--border); border-radius: 7px; font-size: .75rem; font-weight: 600; color: var(--slate); cursor: pointer; transition: all .15s; white-space: nowrap; }
-  .btn-logout:hover { border-color: var(--red); color: var(--red); background: #fef2f2; }
+  /* ── Back link ── */
+  .back-link { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: var(--muted); text-decoration: none; margin-left: auto; flex-shrink: 0; transition: color .15s; padding: 7px 13px; border: 1.5px solid var(--border); border-radius: 7px; background: var(--cream); }
+  .back-link:hover { color: var(--navy); border-color: var(--navy); }
 
   /* ── Save indicator ── */
   .save-toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy); color: white; padding: 10px 18px; border-radius: 8px; font-size: .78rem; font-weight: 600; box-shadow: var(--shadow); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; display: flex; align-items: center; gap: 7px; }
@@ -230,80 +200,13 @@
 </head>
 <body>
 
-<!-- ══ LOGIN OVERLAY ══ -->
-<div class="login-overlay" id="loginOverlay">
-  <div class="login-card">
-    <div class="login-brand">
-      <div class="login-brand-icon">
-        <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-      </div>
-      <div>
-        <h2>Goal Planner</h2>
-        <p>Botswana Pula &middot; Your goals are saved here</p>
-      </div>
-    </div>
-
-    <div id="savedUsersSection" style="display:none;">
-      <div class="saved-users">
-        <div class="saved-users-label">Continue as</div>
-        <div id="savedUserChips"></div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-        <span style="font-size:.72rem;color:var(--muted);white-space:nowrap;">or sign in / create account</span>
-        <div style="flex:1;height:1px;background:var(--border);"></div>
-      </div>
-    </div>
-
-    <div class="login-tabs">
-      <button class="login-tab active" id="tabSignIn" onclick="switchTab('signin')">Sign In</button>
-      <button class="login-tab"        id="tabCreate"  onclick="switchTab('create')">New Account</button>
-    </div>
-
-    <!-- Sign In -->
-    <div id="panelSignIn">
-      <div class="login-field">
-        <label>Your Name</label>
-        <input class="login-input" id="siName" type="text" placeholder="Enter your name" autocomplete="off" onkeydown="if(event.key==='Enter')doSignIn()">
-      </div>
-      <div class="login-field" id="siPinField" style="display:none;">
-        <label>PIN (4 digits)</label>
-        <input class="login-input pin-input" id="siPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" onkeydown="if(event.key==='Enter')doSignIn()">
-      </div>
-      <button class="login-btn" onclick="doSignIn()">Sign In</button>
-      <div class="login-error" id="siError"></div>
-      <p class="login-hint">No account yet? Switch to <strong>New Account</strong> above.</p>
-    </div>
-
-    <!-- Create account -->
-    <div id="panelCreate" style="display:none;">
-      <div class="login-field">
-        <label>Your Name</label>
-        <input class="login-input" id="crName" type="text" placeholder="e.g. Mogomotsi" autocomplete="off" onkeydown="if(event.key==='Enter')doCreate()">
-      </div>
-      <div class="login-field">
-        <label>PIN (4 digits) <span style="color:var(--muted);font-weight:400;">— optional</span></label>
-        <input class="login-input pin-input" id="crPin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" onkeydown="if(event.key==='Enter')doCreate()">
-      </div>
-      <div class="login-field">
-        <label>Confirm PIN</label>
-        <input class="login-input pin-input" id="crPin2" type="password" inputmode="numeric" maxlength="4" placeholder="••••" onkeydown="if(event.key==='Enter')doCreate()">
-      </div>
-      <button class="login-btn" onclick="doCreate()">Create Account &amp; Start Planning</button>
-      <div class="login-error" id="crError"></div>
-    </div>
-  </div>
-</div>
-
 <!-- ══ SAVE TOAST ══ -->
 <div class="save-toast" id="saveToast">
   <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
   Goals saved
 </div>
 
-<div class="app" id="mainApp" style="display:none;">
+<div class="app" id="mainApp">
 
   <!-- ══ HEADER ══ -->
   <div class="header">
@@ -316,14 +219,10 @@
       <h1>Goal-Based Financial Planner</h1>
       <p>Botswana Pula (BWP) &middot; Track multiple goals &middot; Monthly savings needed &middot; Real value adjusted</p>
     </div>
-    <div class="user-badge">
-      <div>
-        <div class="user-name" id="headerUserName"></div>
-        <div class="user-sub">Your goals are auto-saved</div>
-      </div>
-      <div class="user-avatar" id="headerUserAvatar"></div>
-      <button class="btn-logout" onclick="logout()">Sign Out</button>
-    </div>
+    <a class="back-link" href="index.html">
+      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      Back to Portal
+    </a>
   </div>
 
   <!-- ══ GLOBAL SETTINGS ══ -->
@@ -519,26 +418,11 @@ function finalizeInput(el) {
 function parseInput(id) { return parseFloat(document.getElementById(id).value.replace(/,/g,'')) || 0; }
 
 // ──────────────────────────────────────────────
-// Storage helpers
+// Storage helpers — fixed key, no login required
 // ──────────────────────────────────────────────
-const LS_CURRENT  = 'gp_current_user';
-const LS_USERS    = 'gp_users';          // JSON array of { name, pin (hashed) }
-const LS_DATA     = u => `gp_data_${u.toLowerCase().replace(/\s+/g,'_')}`;
-
-function hashPin(pin) {
-  // Simple deterministic hash (not cryptographic — just prevents casual shoulder-surfing)
-  let h = 0;
-  for (let i = 0; i < pin.length; i++) { h = (Math.imul(31, h) + pin.charCodeAt(i)) | 0; }
-  return h.toString(36);
-}
-
-function getUsers() {
-  try { return JSON.parse(localStorage.getItem(LS_USERS) || '[]'); } catch { return []; }
-}
-function saveUsers(users) { localStorage.setItem(LS_USERS, JSON.stringify(users)); }
+const LS_KEY = 'kw_goals';
 
 function saveGoals() {
-  if (!currentUser) return;
   const data = {
     goals, nextId,
     settings: {
@@ -547,13 +431,13 @@ function saveGoals() {
       income:    document.getElementById('monthlyIncome').value,
     }
   };
-  localStorage.setItem(LS_DATA(currentUser), JSON.stringify(data));
+  localStorage.setItem(LS_KEY, JSON.stringify(data));
   showToast();
 }
 
-function loadGoals(username) {
+function loadGoals() {
   try {
-    const raw = localStorage.getItem(LS_DATA(username));
+    const raw = localStorage.getItem(LS_KEY);
     if (!raw) return;
     const data = JSON.parse(raw);
     goals  = data.goals  || [];
@@ -575,119 +459,6 @@ function showToast() {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
 }
 
-// ──────────────────────────────────────────────
-// Login / Auth
-// ──────────────────────────────────────────────
-let currentUser = null;
-
-function switchTab(tab) {
-  document.getElementById('panelSignIn').style.display = tab === 'signin' ? 'block' : 'none';
-  document.getElementById('panelCreate').style.display = tab === 'create' ? 'block' : 'none';
-  document.getElementById('tabSignIn').classList.toggle('active', tab === 'signin');
-  document.getElementById('tabCreate').classList.toggle('active', tab === 'create');
-}
-
-function renderSavedUserChips() {
-  const users = getUsers();
-  const section = document.getElementById('savedUsersSection');
-  const chips   = document.getElementById('savedUserChips');
-  if (!users.length) { section.style.display = 'none'; return; }
-  section.style.display = 'block';
-  chips.innerHTML = users.map(u =>
-    `<span class="saved-user-chip" onclick="quickLogin('${u.name.replace(/'/g,"\\'")}')">
-      <span class="chip-avatar">${u.name.charAt(0).toUpperCase()}</span>
-      ${u.name}
-    </span>`
-  ).join('');
-}
-
-function quickLogin(name) {
-  document.getElementById('siName').value = name;
-  const users = getUsers();
-  const user  = users.find(u => u.name.toLowerCase() === name.toLowerCase());
-  document.getElementById('siPinField').style.display = user?.pin ? 'block' : 'none';
-  switchTab('signin');
-  if (!user?.pin) doSignIn();
-}
-
-function doSignIn() {
-  const name = document.getElementById('siName').value.trim();
-  const pin  = document.getElementById('siPin').value;
-  const err  = document.getElementById('siError');
-  err.textContent = '';
-  if (!name) { err.textContent = 'Please enter your name.'; return; }
-
-  const users = getUsers();
-  const user  = users.find(u => u.name.toLowerCase() === name.toLowerCase());
-
-  if (!user) {
-    // Show PIN field to ask if they want to create — guide them to New Account
-    err.textContent = `No account found for "${name}". Use New Account to register.`;
-    return;
-  }
-  if (user.pin && hashPin(pin) !== user.pin) {
-    err.textContent = 'Incorrect PIN. Try again.';
-    document.getElementById('siPin').value = '';
-    return;
-  }
-  if (user.pin && !pin) {
-    document.getElementById('siPinField').style.display = 'block';
-    err.textContent = 'This account has a PIN — please enter it.';
-    return;
-  }
-
-  loginAs(user.name);
-}
-
-function doCreate() {
-  const name  = document.getElementById('crName').value.trim();
-  const pin   = document.getElementById('crPin').value;
-  const pin2  = document.getElementById('crPin2').value;
-  const err   = document.getElementById('crError');
-  err.textContent = '';
-
-  if (!name) { err.textContent = 'Please enter a name.'; return; }
-  if (pin && pin.length !== 4) { err.textContent = 'PIN must be exactly 4 digits.'; return; }
-  if (pin && !/^\d{4}$/.test(pin)) { err.textContent = 'PIN must be 4 numbers.'; return; }
-  if (pin && pin !== pin2) { err.textContent = 'PINs do not match.'; return; }
-
-  const users = getUsers();
-  if (users.find(u => u.name.toLowerCase() === name.toLowerCase())) {
-    err.textContent = `Account "${name}" already exists. Sign in instead.`;
-    return;
-  }
-
-  users.push({ name, pin: pin ? hashPin(pin) : null });
-  saveUsers(users);
-  loginAs(name);
-}
-
-function loginAs(name) {
-  currentUser = name;
-  localStorage.setItem(LS_CURRENT, name);
-  document.getElementById('loginOverlay').classList.add('hidden');
-  document.getElementById('mainApp').style.display = 'block';
-  document.getElementById('headerUserName').textContent = name;
-  document.getElementById('headerUserAvatar').textContent = name.charAt(0).toUpperCase();
-  loadGoals(name);
-}
-
-function logout() {
-  if (!confirm('Sign out? Your goals are saved and will be here when you return.')) return;
-  currentUser = null;
-  localStorage.removeItem(LS_CURRENT);
-  goals  = [];
-  nextId = 1;
-  document.getElementById('mainApp').style.display = 'none';
-  document.getElementById('loginOverlay').classList.remove('hidden');
-  document.getElementById('siName').value = '';
-  document.getElementById('siPin').value  = '';
-  document.getElementById('siPinField').style.display = 'none';
-  document.getElementById('siError').textContent = '';
-  document.getElementById('emptyState').style.display   = 'block';
-  document.getElementById('goalsSection').style.display = 'none';
-  renderSavedUserChips();
-}
 
 // ──────────────────────────────────────────────
 // State
@@ -1335,31 +1106,10 @@ document.getElementById('globalInflation').addEventListener('input', () => { if 
 document.getElementById('globalReturn').addEventListener('input',    () => { if (goals.length) { renderAll(); saveGoals(); } });
 document.getElementById('monthlyIncome').addEventListener('blur',    () => { if (goals.length) { renderAll(); saveGoals(); } });
 
-// Pre-fill sign-in name field on name input to auto-show PIN if needed
-document.getElementById('siName').addEventListener('blur', () => {
-  const name  = document.getElementById('siName').value.trim();
-  const users = getUsers();
-  const user  = users.find(u => u.name.toLowerCase() === name.toLowerCase());
-  document.getElementById('siPinField').style.display = user?.pin ? 'block' : 'none';
-});
-
 // ── Init ──────────────────────────────────────
 (function init() {
-  renderSavedUserChips();
   document.getElementById('goalName').value = TYPE_META['home'].label;
-
-  // Auto-login if a session was already active
-  const saved = localStorage.getItem(LS_CURRENT);
-  if (saved) {
-    const users = getUsers();
-    const user  = users.find(u => u.name === saved);
-    if (user) {
-      loginAs(user.name);
-      return;
-    }
-    // Stale reference — clear it
-    localStorage.removeItem(LS_CURRENT);
-  }
+  loadGoals();
 })();
 </script>
 </body>
