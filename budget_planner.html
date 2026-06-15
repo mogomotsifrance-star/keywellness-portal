@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Planner – Botswana Pula</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
+  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
+.app{max-width:1100px;margin:0 auto;padding:28px 18px 80px;}
+
+/* ── Header ─────────────────────── */
+.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
+.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
+.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
+.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+/* ── Month bar ───────────────────── */
+.month-bar{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:14px 18px;margin-bottom:22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.month-nav-btn{width:32px;height:32px;border-radius:50%;border:1.5px solid var(--border);background:var(--cream);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.month-nav-btn:hover{border-color:var(--navy);background:var(--navy);}
+.month-nav-btn:hover svg{stroke:white;}
+.month-nav-btn svg{pointer-events:none;}
+.month-label{font-size:1.05rem;font-weight:700;min-width:160px;text-align:center;}
+.month-pill-list{display:flex;gap:6px;flex:1;overflow-x:auto;padding-bottom:2px;}
+.month-pill{flex-shrink:0;padding:6px 13px;border-radius:99px;border:1.5px solid var(--border);background:var(--cream);font-size:.76rem;font-weight:700;cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px;}
+.month-pill:hover{border-color:var(--navy);}
+.month-pill.active{background:var(--navy);color:white;border-color:var(--navy);}
+.month-pill-dot{width:6px;height:6px;border-radius:50%;}
+
+/* ── Layout ─────────────────────── */
+.layout{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;}
+@media(max-width:900px){.layout{grid-template-columns:1fr;}}
+
+/* ── Card ───────────────────────── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:18px;}
+.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+.card-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;}
+.card-title-row .card-title{margin-bottom:0;}
+
+/* ── Buttons ────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:700;cursor:pointer;letter-spacing:.03em;transition:background .15s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
+.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
+.btn-ghost{background:var(--cream);color:var(--slate);border:1.5px solid var(--border);}.btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.btn-sm{padding:6px 13px;font-size:.75rem;border-radius:6px;}
+.btn-xs{padding:4px 9px;font-size:.7rem;border-radius:5px;}
+.btn-danger-sm{background:#fef2f2;color:var(--red);border:1.5px solid #fecaca;padding:4px 9px;font-size:.7rem;border-radius:5px;cursor:pointer;font-weight:700;transition:all .15s;}
+.btn-danger-sm:hover{background:var(--red);color:white;}
+
+/* ── Input ──────────────────────── */
+.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
+.iw:focus-within{border-color:var(--gold);background:#fff;}
+.iw-pre{padding:0 9px;font-size:.8rem;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;}
+.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:9px 10px;font-size:.85rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
+.iw input.mono{font-family:'DM Mono',monospace;font-size:.88rem;}
+.iw input[type=text].label-input{font-size:.85rem;}
+
+/* ── Income / Expense rows ──────── */
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.section-total{font-size:.8rem;font-weight:700;font-family:'DM Mono',monospace;}
+
+.item-row{display:grid;grid-template-columns:1fr 130px 130px 32px;gap:8px;align-items:center;margin-bottom:7px;}
+.item-row.income-row{grid-template-columns:1fr 160px 32px;}
+.item-row-header{display:grid;grid-template-columns:1fr 130px 130px 32px;gap:8px;margin-bottom:6px;}
+.item-row-header.income-header{grid-template-columns:1fr 160px 32px;}
+.col-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
+.del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
+.del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
+
+/* Category group */
+.cat-group{margin-bottom:18px;}
+.cat-group-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;border-radius:8px;cursor:pointer;user-select:none;}
+.cat-group-icon{font-size:1.1rem;}
+.cat-group-name{font-size:.82rem;font-weight:700;}
+.cat-group-badge{font-size:.7rem;font-family:'DM Mono',monospace;font-weight:700;padding:3px 9px;border-radius:99px;margin-left:auto;}
+.cat-group-arrow{transition:transform .2s;flex-shrink:0;}
+.cat-group-arrow.open{transform:rotate(90deg);}
+.cat-group-body{padding:0 4px;}
+
+/* ── Summary stat boxes ─────────── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.stat-box{border-radius:9px;padding:13px 14px;border-left:3px solid;}
+.stat-box.green{background:#f0fdf4;border-color:var(--green);}
+.stat-box.red{background:#fef2f2;border-color:var(--red);}
+.stat-box.orange{background:#fffbeb;border-color:var(--orange);}
+.stat-box.navy{background:#f0f4ff;border-color:var(--navy);}
+.stat-box.gold{background:#fffde7;border-color:var(--gold);}
+.stat-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:3px;}
+.stat-value{font-size:.95rem;font-weight:700;font-family:'DM Mono',monospace;}
+.stat-sub{font-size:.64rem;color:var(--muted);margin-top:2px;}
+
+/* ── 50/30/20 bars ──────────────── */
+.rule-row{margin-bottom:12px;}
+.rule-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.rule-name{font-size:.78rem;font-weight:700;}
+.rule-pct{font-size:.75rem;font-family:'DM Mono',monospace;font-weight:700;}
+.rule-bar-track{height:10px;background:var(--border);border-radius:99px;overflow:hidden;}
+.rule-bar-fill{height:100%;border-radius:99px;transition:width 1s cubic-bezier(.4,0,.2,1);}
+.rule-note{font-size:.64rem;color:var(--muted);margin-top:3px;}
+
+/* ── Advice cards ───────────────── */
+.advice-list{display:flex;flex-direction:column;gap:8px;}
+.advice-card{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border-radius:8px;font-size:.79rem;line-height:1.55;border:1.5px solid;}
+.advice-card.good{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.advice-card.warn{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.advice-card.alert{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+.advice-card.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
+.advice-icon{font-size:1rem;flex-shrink:0;margin-top:1px;}
+
+/* ── Trend mini chart ───────────── */
+.trend-cols{display:flex;align-items:flex-end;gap:5px;height:60px;}
+.trend-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;}
+.trend-col-bars{display:flex;gap:2px;align-items:flex-end;height:46px;width:100%;}
+.trend-bar{flex:1;border-radius:3px 3px 0 0;min-height:2px;transition:height .6s;}
+.trend-col-label{font-size:.56rem;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap;}
+.trend-legend{display:flex;gap:12px;margin-top:8px;justify-content:center;}
+.trend-legend-item{display:flex;align-items:center;gap:4px;font-size:.67rem;color:var(--slate);}
+.trend-legend-dot{width:8px;height:8px;border-radius:2px;}
+
+/* ── Month history sidebar ──────── */
+.month-history{display:flex;flex-direction:column;gap:6px;}
+.mh-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--cream);border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:all .15s;}
+.mh-row:hover,.mh-row.active{border-color:var(--navy);background:#f0f4ff;}
+.mh-name{font-size:.8rem;font-weight:700;flex:1;}
+.mh-surplus{font-size:.75rem;font-family:'DM Mono',monospace;font-weight:700;}
+
+/* ── Toast ──────────────────────── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;display:flex;align-items:center;gap:7px;}
+.toast.show{opacity:1;}
+
+/* ── Modal ──────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(13,37,69,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
+.overlay.hidden{display:none;}
+.modal{background:var(--white);border-radius:14px;box-shadow:0 8px 48px rgba(13,37,69,.22);padding:26px;width:100%;max-width:420px;}
+.modal h3{font-size:1rem;font-weight:700;margin-bottom:16px;}
+.modal-actions{display:flex;gap:10px;margin-top:18px;}
+
+/* ── Info note ──────────────────── */
+.info-note{display:flex;align-items:flex-start;gap:9px;background:#eff6ff;border-radius:8px;padding:10px 13px;font-size:.74rem;color:#1e40af;line-height:1.55;border:1px solid #bfdbfe;margin-bottom:14px;}
+
+/* Divider */
+.divider{border:none;border-top:1px solid var(--border);margin:14px 0;}
+
+@media(max-width:560px){
+  .item-row{grid-template-columns:1fr 110px 110px 28px;}
+  .item-row.income-row{grid-template-columns:1fr 130px 28px;}
+}
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast">
+  <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  <span id="toastMsg">Saved</span>
+</div>
+
+<!-- New Month Modal -->
+<div class="overlay hidden" id="newMonthModal">
+  <div class="modal">
+    <h3>Create New Month Budget</h3>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:.74rem;font-weight:600;color:var(--slate);display:block;margin-bottom:6px;">Month</label>
+      <div class="iw"><input type="month" id="newMonthInput" style="padding:10px 12px;"></div>
+    </div>
+    <div id="copyFromWrap" style="margin-bottom:4px;">
+      <label style="font-size:.74rem;font-weight:600;color:var(--slate);display:block;margin-bottom:6px;">Copy budget from</label>
+      <div class="iw"><select id="copyFromSel" style="padding:10px 12px;"></select></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-navy" style="flex:1;" onclick="confirmNewMonth()">Create Month</button>
+      <button class="btn btn-ghost" onclick="closeModal('newMonthModal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Monthly Budget Planner</h1>
+      <p>Plan income &amp; expenses across multiple months · Smart advice · Botswana Pula (BWP)</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" onclick="openNewMonthModal()">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        New Month
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="exportPDF()">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Month navigation bar -->
+  <div class="month-bar">
+    <button class="month-nav-btn" onclick="stepMonth(-1)">
+      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+    </button>
+    <div class="month-label" id="monthLabel">—</div>
+    <button class="month-nav-btn" onclick="stepMonth(1)">
+      <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <div class="month-pill-list" id="monthPills"></div>
+  </div>
+
+  <div id="emptyState" style="display:none;text-align:center;padding:60px 20px;">
+    <div style="font-size:3rem;margin-bottom:14px;">📅</div>
+    <h2 style="font-size:1.1rem;margin-bottom:8px;color:var(--navy);">No budget yet</h2>
+    <p style="font-size:.84rem;color:var(--muted);margin-bottom:20px;">Create your first monthly budget to get started.</p>
+    <button class="btn btn-navy" onclick="openNewMonthModal()">Create First Budget</button>
+  </div>
+
+  <div id="mainContent">
+    <div class="layout">
+
+      <!-- ── LEFT: Budget entry ── -->
+      <div id="budgetLeft">
+
+        <!-- Income -->
+        <div class="card" id="incomeCard">
+          <div class="card-title-row">
+            <div class="card-title">Income</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="section-total" id="incomeTotalLabel" style="color:var(--green);"></span>
+              <button class="btn btn-ghost btn-xs" onclick="addIncomeRow()">+ Add</button>
+            </div>
+          </div>
+          <div class="item-row-header income-header">
+            <span class="col-label">Source</span>
+            <span class="col-label" style="text-align:right;">Monthly Amount</span>
+            <span></span>
+          </div>
+          <div id="incomeRows"></div>
+        </div>
+
+        <!-- Expense categories -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">Expenses</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <span class="section-total" id="expenseTotalLabel" style="color:var(--red);"></span>
+            </div>
+          </div>
+          <div id="expenseCats"></div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card">
+          <div class="card-title">Month Notes</div>
+          <div class="iw">
+            <textarea id="monthNotes" placeholder="Any notes, goals or reminders for this month…" maxlength="500"
+              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Inter',sans-serif;color:var(--navy);"
+              oninput="autoSave()"></textarea>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ── RIGHT: Analysis panel ── -->
+      <div>
+
+        <!-- Surplus/Deficit -->
+        <div class="card">
+          <div class="card-title">Budget Summary</div>
+          <div class="stat-grid" id="summaryStats"></div>
+          <hr class="divider">
+          <!-- 50/30/20 rule -->
+          <div style="margin-bottom:6px;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--gold);">50 / 30 / 20 Rule</div>
+          <div class="info-note" style="margin-bottom:10px;">
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4M12 8h.01"/></svg>
+            50% Needs · 30% Wants · 20% Savings &amp; Debt. Bars show your actual % of income.
+          </div>
+          <div id="ruleSection"></div>
+        </div>
+
+        <!-- Smart Advice -->
+        <div class="card">
+          <div class="card-title">💡 Smart Advice</div>
+          <div class="advice-list" id="adviceList"></div>
+        </div>
+
+        <!-- Trend (last 6 months) -->
+        <div class="card">
+          <div class="card-title">6-Month Trend</div>
+          <div class="trend-cols" id="trendChart"></div>
+          <div class="trend-legend">
+            <div class="trend-legend-item"><div class="trend-legend-dot" style="background:var(--navy);"></div>Income</div>
+            <div class="trend-legend-item"><div class="trend-legend-dot" style="background:var(--red);"></div>Expenses</div>
+            <div class="trend-legend-item"><div class="trend-legend-dot" style="background:var(--green);"></div>Surplus</div>
+          </div>
+        </div>
+
+        <!-- Month history -->
+        <div class="card">
+          <div class="card-title-row">
+            <div class="card-title">All Months</div>
+          </div>
+          <div class="month-history" id="monthHistory"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ────────────────────────────────────────────
+// CONFIG
+// ────────────────────────────────────────────
+const LS_KEY = 'budget_planner_v2';
+
+const EXPENSE_GROUPS = [
+  {
+    id:'needs', name:'Needs', icon:'🏠', color:'#163561',
+    cats:[
+      {id:'housing',    name:'Housing & Rent'},
+      {id:'utilities',  name:'Utilities'},
+      {id:'food',       name:'Food & Groceries'},
+      {id:'transport',  name:'Transport'},
+      {id:'health',     name:'Health & Medical'},
+      {id:'childcare',  name:'Child / Education'},
+      {id:'insurance',  name:'Insurance'},
+      {id:'debt_min',   name:'Minimum Debt Payments'},
+    ]
+  },
+  {
+    id:'wants', name:'Wants', icon:'🎬', color:'#D97706',
+    cats:[
+      {id:'entertain',  name:'Entertainment'},
+      {id:'dining',     name:'Dining Out'},
+      {id:'shopping',   name:'Shopping & Clothing'},
+      {id:'personal',   name:'Personal Care'},
+      {id:'subscript',  name:'Subscriptions'},
+      {id:'travel',     name:'Travel & Holidays'},
+      {id:'hobbies',    name:'Hobbies & Leisure'},
+    ]
+  },
+  {
+    id:'savings', name:'Savings & Investments', icon:'💰', color:'#1A8C5B',
+    cats:[
+      {id:'emfund',     name:'Emergency Fund'},
+      {id:'retirement', name:'Retirement / Pension'},
+      {id:'invest',     name:'Investments'},
+      {id:'goals',      name:'Goal Savings'},
+      {id:'debt_extra', name:'Extra Debt Repayment'},
+    ]
+  },
+  {
+    id:'other', name:'Other', icon:'📋', color:'#64748B',
+    cats:[
+      {id:'gifts',      name:'Gifts & Donations'},
+      {id:'misc',       name:'Miscellaneous'},
+    ]
+  },
+];
+
+const ALL_CATS = EXPENSE_GROUPS.flatMap(g=>g.cats);
+const CAT_MAP  = Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
+const GROUP_MAP = Object.fromEntries(EXPENSE_GROUPS.map(g=>[g.id,g]));
+
+// ────────────────────────────────────────────
+// STATE
+// ────────────────────────────────────────────
+// budgets = { 'YYYY-MM': { income:[{id,label,amount}], expenses:{catId:amount}, notes:'', collapsed:{groupId:bool} } }
+let budgets = {};
+let currentKey = null;
+let collapsedGroups = {};
+
+const now = new Date();
+function mKey(y,m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
+function todayKey(){ return mKey(now.getFullYear(), now.getMonth()); }
+function mLabel(key){ const[y,m]=key.split('-'); return new Date(+y,+m-1,1).toLocaleDateString('en-BW',{month:'long',year:'numeric'}); }
+
+// ────────────────────────────────────────────
+// PERSISTENCE
+// ────────────────────────────────────────────
+let toastTimer;
+function showToast(msg='Saved', dur=1600){
+  const t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg;
+  t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), dur);
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify({budgets, currentKey})); showToast(); }
+function load(){
+  try{
+    const r=localStorage.getItem(LS_KEY);
+    if(!r) return;
+    const d=JSON.parse(r);
+    budgets=d.budgets||{};
+    currentKey=d.currentKey||null;
+  } catch{}
+}
+
+// ────────────────────────────────────────────
+// HELPERS
+// ────────────────────────────────────────────
+function fmt(v){ return 'P '+Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtK(v){ const a=Math.abs(v); if(a>=1e6) return 'P '+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return 'P '+(a/1e3).toFixed(1)+'K'; return fmt(v); }
+function pf(v){ return parseFloat(String(v).replace(/,/g,''))||0; }
+function pfEl(id){ return pf(document.getElementById(id)?.value||'0'); }
+function fmtInput(el){
+  let raw=el.value.replace(/[^0-9.]/g,'');
+  const p=raw.split('.');
+  p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,',');
+  if(p.length>2)p.splice(2);
+  if(p[1]!==undefined)p[1]=p[1].slice(0,2);
+  el.value=p.join('.');
+}
+function finalizeInput(el){const n=pf(el.value);if(!isNaN(n)&&n>0)el.value=n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});else el.value='';}
+
+function getBudget(key){ return budgets[key] || newEmptyBudget(); }
+function newEmptyBudget(){
+  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, notes:'', collapsed:{} };
+}
+function sortedKeys(){ return Object.keys(budgets).sort(); }
+
+// ────────────────────────────────────────────
+// DERIVED TOTALS
+// ────────────────────────────────────────────
+function calcTotals(b){
+  const totalIncome = b.income.reduce((s,r)=>s+pf(r.amount),0);
+  const expByGroup = {};
+  EXPENSE_GROUPS.forEach(g=>{
+    expByGroup[g.id] = g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+  });
+  const totalExpenses = Object.values(expByGroup).reduce((s,v)=>s+v,0);
+  const surplus = totalIncome - totalExpenses;
+  const savingsAmt = expByGroup['savings']||0;
+  const needsAmt   = expByGroup['needs']||0;
+  const wantsAmt   = expByGroup['wants']||0;
+  return { totalIncome, totalExpenses, surplus, savingsAmt, needsAmt, wantsAmt, expByGroup };
+}
+
+// ────────────────────────────────────────────
+// MONTH MANAGEMENT
+// ────────────────────────────────────────────
+function openNewMonthModal(){
+  const keys=sortedKeys();
+  // Default to next month after current or today if none
+  let nextMonth;
+  if(currentKey){
+    const[y,m]=currentKey.split('-');
+    const d=new Date(+y,+m,1);
+    nextMonth=mKey(d.getFullYear(),d.getMonth());
+  } else {
+    const d=new Date(); d.setMonth(d.getMonth()+1);
+    nextMonth=mKey(d.getFullYear(),d.getMonth());
+  }
+  document.getElementById('newMonthInput').value=nextMonth;
+  const sel=document.getElementById('copyFromSel');
+  sel.innerHTML='<option value="">— blank budget —</option>'+keys.map(k=>`<option value="${k}">${mLabel(k)}</option>`).join('');
+  if(currentKey) sel.value=currentKey;
+  document.getElementById('newMonthModal').classList.remove('hidden');
+}
+function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
+
+function confirmNewMonth(){
+  const val=document.getElementById('newMonthInput').value;
+  if(!val){ showToast('Please select a month.'); return; }
+  const key=val; // already YYYY-MM
+  const copyFrom=document.getElementById('copyFromSel').value;
+  if(!budgets[key]){
+    if(copyFrom && budgets[copyFrom]){
+      const src=budgets[copyFrom];
+      budgets[key]={
+        income: src.income.map(r=>({...r, id:Date.now()+Math.random()})),
+        expenses:{...src.expenses},
+        notes:'',
+        collapsed:{...src.collapsed},
+      };
+    } else {
+      budgets[key]=newEmptyBudget();
+    }
+  }
+  currentKey=key;
+  closeModal('newMonthModal');
+  save(); renderAll();
+}
+
+function deleteCurrentMonth(){
+  if(!currentKey) return;
+  if(!confirm(`Delete budget for ${mLabel(currentKey)}? This cannot be undone.`)) return;
+  delete budgets[currentKey];
+  const keys=sortedKeys();
+  currentKey=keys.length?keys[keys.length-1]:null;
+  save(); renderAll();
+}
+
+function switchMonth(key){
+  flushToState();
+  currentKey=key;
+  renderAll();
+}
+
+function stepMonth(delta){
+  const keys=sortedKeys();
+  if(!keys.length) return;
+  const idx=keys.indexOf(currentKey);
+  if(idx===-1){currentKey=keys[0];}
+  else{
+    const next=idx+delta;
+    if(next>=0&&next<keys.length) currentKey=keys[next];
+  }
+  renderAll();
+}
+
+// ────────────────────────────────────────────
+// FLUSH DOM → STATE  (before switching months)
+// ────────────────────────────────────────────
+function flushToState(){
+  if(!currentKey||!budgets[currentKey]) return;
+  const b=budgets[currentKey];
+  // Income
+  b.income.forEach(r=>{
+    r.label = document.getElementById('inc_lbl_'+r.id)?.value||r.label;
+    r.amount = pf(document.getElementById('inc_amt_'+r.id)?.value||'0');
+  });
+  // Expenses
+  ALL_CATS.forEach(c=>{
+    const v=pf(document.getElementById('exp_'+c.id)?.value||'0');
+    if(v>0) b.expenses[c.id]=v; else delete b.expenses[c.id];
+  });
+  b.notes = document.getElementById('monthNotes')?.value||'';
+}
+
+// ────────────────────────────────────────────
+// AUTO-SAVE  (called on every input)
+// ────────────────────────────────────────────
+let autoSaveTimer;
+function autoSave(){
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer=setTimeout(()=>{ flushToState(); if(currentKey) save(); renderSummaryPanel(); },400);
+}
+
+// ────────────────────────────────────────────
+// INCOME ROWS
+// ────────────────────────────────────────────
+function addIncomeRow(){
+  if(!currentKey) return;
+  const b=budgets[currentKey];
+  b.income.push({id:Date.now(),label:'',amount:0});
+  renderIncomeRows(b);
+  autoSave();
+}
+function removeIncomeRow(id){
+  if(!currentKey) return;
+  const b=budgets[currentKey];
+  const lbl=document.getElementById('inc_lbl_'+id)?.value||'';
+  const amt=pf(document.getElementById('inc_amt_'+id)?.value||'0');
+  b.income=b.income.filter(r=>r.id!==id).concat(b.income.filter(r=>r.id===id&&r.id!==id));
+  b.income=b.income.filter(r=>r.id!==id);
+  renderIncomeRows(b); autoSave();
+}
+
+function renderIncomeRows(b){
+  document.getElementById('incomeRows').innerHTML=b.income.map(r=>`
+    <div class="item-row income-row" id="incrow_${r.id}">
+      <div class="iw"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()"></div>
+      <div class="iw">
+        <span class="iw-pre">P</span>
+        <input class="mono" type="text" id="inc_amt_${r.id}" value="${r.amount>0?r.amount.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
+      </div>
+      <button class="del-btn" onclick="removeIncomeRow(${r.id})" ${b.income.length<=1?'disabled style="opacity:.3;cursor:not-allowed;"':''}>
+        <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>`).join('');
+}
+
+// ────────────────────────────────────────────
+// EXPENSE CATEGORIES
+// ────────────────────────────────────────────
+function toggleGroup(groupId){
+  if(!currentKey) return;
+  const b=budgets[currentKey];
+  b.collapsed=b.collapsed||{};
+  b.collapsed[groupId]=!b.collapsed[groupId];
+  renderExpenseCats(b);
+}
+
+function renderExpenseCats(b){
+  document.getElementById('expenseCats').innerHTML=EXPENSE_GROUPS.map(g=>{
+    const isOpen=!b.collapsed?.[g.id];
+    const groupTotal=g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    return `<div class="cat-group">
+      <div class="cat-group-header" style="background:${g.color}18;border:1.5px solid ${g.color}30;" onclick="toggleGroup('${g.id}')">
+        <span class="cat-group-icon">${g.icon}</span>
+        <span class="cat-group-name" style="color:${g.color};">${g.name}</span>
+        <span class="cat-group-badge" style="background:${g.color}22;color:${g.color};">${fmtK(groupTotal)}</span>
+        <svg class="cat-group-arrow ${isOpen?'open':''}" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="${g.color}" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </div>
+      ${isOpen?`<div class="cat-group-body">
+        <div class="item-row-header" style="grid-template-columns:1fr 130px 130px 32px;margin-bottom:6px;">
+          <span class="col-label">Category</span>
+          <span class="col-label" style="text-align:right;">Budgeted</span>
+          <span class="col-label" style="text-align:right;">% of Income</span>
+          <span></span>
+        </div>
+        ${g.cats.map(c=>{
+          const val=pf(b.expenses[c.id]||0);
+          const tot=b.income.reduce((s,r)=>s+pf(r.amount),0);
+          const pct=tot>0?((val/tot)*100).toFixed(1):'—';
+          return `<div class="item-row" style="grid-template-columns:1fr 130px 130px 32px;">
+            <span style="font-size:.82rem;font-weight:500;">${c.name}</span>
+            <div class="iw">
+              <span class="iw-pre">P</span>
+              <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
+                oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
+            </div>
+            <div style="display:flex;align-items:center;justify-content:flex-end;font-size:.75rem;font-family:'DM Mono',monospace;font-weight:700;color:var(--muted);padding-right:4px;">${pct}${pct!=='—'?'%':''}</div>
+            <div></div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ────────────────────────────────────────────
+// SUMMARY PANEL
+// ────────────────────────────────────────────
+function renderSummaryPanel(){
+  if(!currentKey||!budgets[currentKey]) return;
+  const b=budgets[currentKey];
+  const {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+
+  // Labels
+  document.getElementById('incomeTotalLabel').textContent=fmtK(totalIncome);
+  document.getElementById('expenseTotalLabel').textContent=fmtK(totalExpenses);
+
+  // Summary stats
+  const savRate=totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0;
+  const dtiCat = expByGroup['needs']||0;
+  document.getElementById('summaryStats').innerHTML=`
+    <div class="stat-box ${surplus>=0?'green':'red'}">
+      <div class="stat-label">${surplus>=0?'Surplus':'Deficit'}</div>
+      <div class="stat-value">${surplus<0?'-':''}${fmtK(Math.abs(surplus))}</div>
+      <div class="stat-sub">${surplus>=0?'After all expenses':'Over budget'}</div>
+    </div>
+    <div class="stat-box navy">
+      <div class="stat-label">Savings Rate</div>
+      <div class="stat-value">${savRate}%</div>
+      <div class="stat-sub">${savingsAmt>0?fmt(savingsAmt)+' budgeted':'Nothing allocated'}</div>
+    </div>
+    <div class="stat-box gold">
+      <div class="stat-label">Total Income</div>
+      <div class="stat-value">${fmtK(totalIncome)}</div>
+      <div class="stat-sub">${b.income.length} source${b.income.length!==1?'s':''}</div>
+    </div>
+    <div class="stat-box ${totalExpenses>totalIncome?'red':'orange'}">
+      <div class="stat-label">Total Budgeted</div>
+      <div class="stat-value">${fmtK(totalExpenses)}</div>
+      <div class="stat-sub">${totalIncome>0?(totalExpenses/totalIncome*100).toFixed(1)+'% of income':''}</div>
+    </div>`;
+
+  // 50/30/20 rule
+  const rules=[
+    {name:'Needs (50%)',  target:50, actual:totalIncome>0?needsAmt/totalIncome*100:0,  color:'var(--navy)', amount:needsAmt},
+    {name:'Wants (30%)',  target:30, actual:totalIncome>0?wantsAmt/totalIncome*100:0,  color:'var(--orange)', amount:wantsAmt},
+    {name:'Savings (20%)',target:20, actual:totalIncome>0?savingsAmt/totalIncome*100:0,color:'var(--green)', amount:savingsAmt},
+  ];
+  document.getElementById('ruleSection').innerHTML=rules.map(r=>{
+    const over=r.actual>r.target;
+    const fill=Math.min(r.actual,100);
+    const col=over?'var(--red)':r.color;
+    return `<div class="rule-row">
+      <div class="rule-header">
+        <span class="rule-name">${r.name}</span>
+        <span class="rule-pct" style="color:${col};">${r.actual.toFixed(1)}% <span style="color:var(--muted);font-weight:400;">(target ${r.target}%)</span></span>
+      </div>
+      <div class="rule-bar-track">
+        <div class="rule-bar-fill" data-w="${fill}" style="width:0%;background:${col};"></div>
+      </div>
+      <div class="rule-note">${fmt(r.amount)} · ${over?'⚠ '+((r.actual-r.target).toFixed(1))+'% over target':'✓ within target'}</div>
+    </div>`;
+  }).join('');
+  setTimeout(()=>{ document.querySelectorAll('.rule-bar-fill').forEach(el=>{ el.style.width=el.dataset.w+'%'; }); },80);
+
+  // Advice
+  renderAdvice(b,{totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup,savRate:+savRate});
+
+  // Trend
+  renderTrend();
+
+  // Month history
+  renderMonthHistory();
+}
+
+// ────────────────────────────────────────────
+// SMART ADVICE ENGINE
+// ────────────────────────────────────────────
+function renderAdvice(b, {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup,savRate}){
+  const advice=[];
+  if(totalIncome===0){ advice.push({type:'info',icon:'ℹ️',msg:'Enter your monthly income to unlock personalised advice.'}); document.getElementById('adviceList').innerHTML=advice.map(a=>`<div class="advice-card ${a.type}"><span class="advice-icon">${a.icon}</span><span>${a.msg}</span></div>`).join(''); return; }
+
+  // Surplus / deficit
+  if(surplus<0) advice.push({type:'alert',icon:'🚨',msg:`You are <strong>${fmt(Math.abs(surplus))}</strong> over budget. Cut discretionary spending (Wants) or find additional income.`});
+  else if(surplus===0) advice.push({type:'warn',icon:'⚠️',msg:'Your budget is exactly balanced with no buffer. Aim for a small surplus each month.'});
+  else if(surplus/totalIncome>0.15) advice.push({type:'good',icon:'✅',msg:`Great surplus of <strong>${fmt(surplus)}</strong> (${(surplus/totalIncome*100).toFixed(0)}% of income). Consider moving the extra into savings or investments.`});
+  else advice.push({type:'info',icon:'📊',msg:`You have a <strong>${fmt(surplus)}</strong> surplus. Allocate it intentionally — emergency fund, debt, or investments.`});
+
+  // Savings rate
+  if(savRate<5) advice.push({type:'alert',icon:'🏦',msg:`Savings rate is only <strong>${savRate}%</strong>. Aim for at least 20%. Even P200/month builds habits.`});
+  else if(savRate<15) advice.push({type:'warn',icon:'💡',msg:`Savings rate is <strong>${savRate}%</strong>. Try to reach 20%. Automating a transfer on payday helps.`});
+  else if(savRate>=20) advice.push({type:'good',icon:'🌟',msg:`Excellent savings rate of <strong>${savRate}%</strong>! You're on track with the 50/30/20 rule.`});
+
+  // Emergency fund
+  const emFund=pf(b.expenses['emfund']||0);
+  const essential = needsAmt;
+  if(emFund===0) advice.push({type:'warn',icon:'🚨',msg:`No emergency fund contribution budgeted. Aim for <strong>3–6 months</strong> of essential expenses (${fmt(essential*3)}–${fmt(essential*6)}).`});
+
+  // Housing cost
+  const housing=pf(b.expenses['housing']||0);
+  if(housing/totalIncome>0.35) advice.push({type:'warn',icon:'🏠',msg:`Housing is <strong>${(housing/totalIncome*100).toFixed(0)}%</strong> of income — above the 35% guideline. Explore options to reduce this burden.`});
+  else if(housing>0) advice.push({type:'good',icon:'🏠',msg:`Housing at <strong>${(housing/totalIncome*100).toFixed(0)}%</strong> of income — within the recommended 35%.`});
+
+  // Debt minimum payments
+  const debtMin=pf(b.expenses['debt_min']||0);
+  const debtExtra=pf(b.expenses['debt_extra']||0);
+  if(debtMin/totalIncome>0.40) advice.push({type:'alert',icon:'💳',msg:`Minimum debt payments are <strong>${(debtMin/totalIncome*100).toFixed(0)}%</strong> of income. This is dangerously high. Consider the Debt Repayment Plan tool.`});
+  else if(debtMin>0&&debtExtra===0) advice.push({type:'info',icon:'💳',msg:`You have debt payments but no extra repayment budgeted. Even a small extra amount saves significant interest.`});
+
+  // Retirement
+  const retire=pf(b.expenses['retirement']||0);
+  if(retire===0) advice.push({type:'warn',icon:'👴',msg:`No retirement contribution budgeted. Starting even 5% now lets compounding work for decades.`});
+  else if(retire/totalIncome<0.10) advice.push({type:'info',icon:'👴',msg:`Retirement contribution is <strong>${(retire/totalIncome*100).toFixed(0)}%</strong>. Consider increasing toward 10–15% for a secure retirement.`});
+  else advice.push({type:'good',icon:'👴',msg:`Retirement contribution of <strong>${fmt(retire)}</strong> (${(retire/totalIncome*100).toFixed(0)}%) is solid. Keep it consistent!`});
+
+  // Wants %
+  if(wantsAmt/totalIncome>0.40) advice.push({type:'warn',icon:'🛍️',msg:`Discretionary (Wants) spending is <strong>${(wantsAmt/totalIncome*100).toFixed(0)}%</strong> of income. Review subscriptions, dining, and entertainment.`});
+
+  // Food
+  const food=pf(b.expenses['food']||0);
+  if(food/totalIncome>0.20) advice.push({type:'info',icon:'🛒',msg:`Food & groceries are <strong>${(food/totalIncome*100).toFixed(0)}%</strong> of income. Meal planning and buying in bulk can reduce this.`});
+
+  // Multi-month trend
+  const keys=sortedKeys();
+  const idx=keys.indexOf(currentKey);
+  if(idx>=2){
+    const prev2=calcTotals(getBudget(keys[idx-2]));
+    const prev1=calcTotals(getBudget(keys[idx-1]));
+    const cur=calcTotals(b);
+    if(cur.totalExpenses>prev1.totalExpenses&&prev1.totalExpenses>prev2.totalExpenses)
+      advice.push({type:'warn',icon:'📈',msg:`Expenses have risen 3 months in a row. Review what's increasing — awareness is the first step.`});
+    if(cur.savingsAmt>prev1.savingsAmt&&prev1.savingsAmt>prev2.savingsAmt)
+      advice.push({type:'good',icon:'📈',msg:`Your savings allocation has grown for 3 consecutive months. Excellent trend!`});
+  }
+
+  // Unallocated surplus
+  if(surplus>totalIncome*0.05)
+    advice.push({type:'info',icon:'💸',msg:`You have <strong>${fmt(surplus)}</strong> unallocated. Every pula should have a job — assign it to savings, investments, or a specific goal.`});
+
+  if(!advice.length) advice.push({type:'good',icon:'🎉',msg:'Your budget looks healthy! Keep reviewing it monthly.'});
+
+  document.getElementById('adviceList').innerHTML=advice.slice(0,8).map(a=>`<div class="advice-card ${a.type}"><span class="advice-icon">${a.icon}</span><span>${a.msg}</span></div>`).join('');
+}
+
+// ────────────────────────────────────────────
+// TREND CHART
+// ────────────────────────────────────────────
+function renderTrend(){
+  const keys=sortedKeys();
+  const last6=keys.slice(-6);
+  if(!last6.length){ document.getElementById('trendChart').innerHTML='<div style="color:var(--muted);font-size:.78rem;margin:auto;">Budget at least 2 months to see a trend.</div>'; return; }
+  const data=last6.map(k=>{
+    const b=getBudget(k);
+    const t=calcTotals(b);
+    return {k,label:mLabel(k).replace(/\s\d{4}/,''),income:t.totalIncome,expenses:t.totalExpenses,surplus:Math.max(t.surplus,0)};
+  });
+  const maxV=Math.max(...data.flatMap(d=>[d.income,d.expenses]),1);
+  document.getElementById('trendChart').innerHTML=data.map(d=>`
+    <div class="trend-col">
+      <div class="trend-col-bars">
+        <div class="trend-bar" style="height:${Math.max(2,d.income/maxV*46)}px;background:var(--navy);border-radius:3px 3px 0 0;" title="Income: ${fmt(d.income)}"></div>
+        <div class="trend-bar" style="height:${Math.max(2,d.expenses/maxV*46)}px;background:var(--red);opacity:.8;border-radius:3px 3px 0 0;" title="Expenses: ${fmt(d.expenses)}"></div>
+        <div class="trend-bar" style="height:${Math.max(2,d.surplus/maxV*46)}px;background:var(--green);border-radius:3px 3px 0 0;" title="Surplus: ${fmt(d.surplus)}"></div>
+      </div>
+      <div class="trend-col-label">${d.label}</div>
+    </div>`).join('');
+}
+
+// ────────────────────────────────────────────
+// MONTH HISTORY SIDEBAR
+// ────────────────────────────────────────────
+function renderMonthHistory(){
+  const keys=sortedKeys().reverse();
+  if(!keys.length){ document.getElementById('monthHistory').innerHTML='<div style="color:var(--muted);font-size:.78rem;text-align:center;padding:10px;">No budgets yet.</div>'; return; }
+  document.getElementById('monthHistory').innerHTML=keys.map(k=>{
+    const b=getBudget(k);
+    const {surplus}=calcTotals(b);
+    const col=surplus>=0?'var(--green)':'var(--red)';
+    return `<div class="mh-row ${k===currentKey?'active':''}" onclick="switchMonth('${k}')">
+      <div class="mh-name">${mLabel(k)}</div>
+      <div class="mh-surplus" style="color:${col};">${surplus>=0?'+':''}${fmtK(surplus)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ────────────────────────────────────────────
+// MONTH PILLS
+// ────────────────────────────────────────────
+function renderMonthPills(){
+  const keys=sortedKeys();
+  document.getElementById('monthPills').innerHTML=keys.map(k=>{
+    const b=getBudget(k);
+    const {surplus}=calcTotals(b);
+    const dotColor=surplus>=0?'var(--green)':'var(--red)';
+    return `<div class="month-pill ${k===currentKey?'active':''}" onclick="switchMonth('${k}')">
+      <div class="month-pill-dot" style="background:${k===currentKey?'white':dotColor};"></div>
+      ${mLabel(k).replace(/\s\d{4}/,'')} ${k.split('-')[0]}
+    </div>`;
+  }).join('');
+}
+
+// ────────────────────────────────────────────
+// FULL RENDER
+// ────────────────────────────────────────────
+function renderAll(){
+  const keys=sortedKeys();
+  const hasData=keys.length>0;
+  document.getElementById('emptyState').style.display=hasData?'none':'block';
+  document.getElementById('mainContent').style.display=hasData?'block':'none';
+  if(!hasData) return;
+
+  // Ensure currentKey is valid
+  if(!currentKey||!budgets[currentKey]) currentKey=keys[keys.length-1];
+  const b=budgets[currentKey];
+
+  document.getElementById('monthLabel').textContent=mLabel(currentKey);
+  renderMonthPills();
+  renderIncomeRows(b);
+  renderExpenseCats(b);
+  document.getElementById('monthNotes').value=b.notes||'';
+  renderSummaryPanel();
+}
+
+// ────────────────────────────────────────────
+// PDF EXPORT
+// ────────────────────────────────────────────
+function exportPDF(){
+  if(!currentKey) return;
+  flushToState();
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],GREEN=[26,140,91],RED=[192,57,43],SLATE=[74,85,104],WHITE=[255,255,255];
+  const pageW=doc.internal.pageSize.getWidth();
+  const pageH=doc.internal.pageSize.getHeight();
+  const b=budgets[currentKey];
+  const {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Header
+  doc.setFillColor(...NAVY); doc.rect(0,0,pageW,26,'F');
+  doc.setTextColor(...GOLD); doc.setFontSize(15); doc.setFont('helvetica','bold');
+  doc.text('Budget Plan',14,11);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(200,210,220);
+  doc.text(`${mLabel(currentKey)}  ·  Botswana Pula (BWP)  ·  Exported: ${today}`,14,18);
+
+  // Summary strip
+  const stats=[['Total Income',fmt(totalIncome)],['Total Budgeted',fmt(totalExpenses)],[surplus>=0?'Surplus':'Deficit',fmt(Math.abs(surplus))],['Savings Rate',(totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0)+'%']];
+  const sw=(pageW-28)/stats.length;
+  stats.forEach((s,i)=>{
+    const x=14+i*sw, y=30;
+    doc.setFillColor(...CREAM); doc.roundedRect(x,y,sw-2,16,2,2,'F');
+    doc.setFillColor(...NAVY); doc.roundedRect(x,y,2,16,1,1,'F');
+    doc.setTextColor(...SLATE); doc.setFontSize(5.5); doc.setFont('helvetica','bold');
+    doc.text(s[0].toUpperCase(),x+4,y+5.5);
+    doc.setTextColor(...NAVY); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text(s[1],x+4,y+12);
+  });
+
+  let y=52;
+
+  // Income
+  doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+  doc.text('INCOME SOURCES',14,y); y+=2;
+  doc.setDrawColor(...GOLD); doc.setLineWidth(.35); doc.line(14,y,pageW-14,y); y+=4;
+  doc.autoTable({
+    startY:y,
+    head:[['Source','Monthly Amount']],
+    body:b.income.map(r=>[r.label||'Unnamed',fmt(pf(r.amount))]),
+    foot:[['TOTAL',fmt(totalIncome)]],
+    styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
+    headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
+    footStyles:{fillColor:NAVY,textColor:WHITE,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[245,247,250]},
+    columnStyles:{1:{halign:'right'}},
+    margin:{left:14,right:14},
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // Expenses by group
+  if(y>pageH-40){doc.addPage();y=18;}
+  doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+  doc.text('EXPENSE BREAKDOWN',14,y); y+=2;
+  doc.setDrawColor(...GOLD); doc.line(14,y,pageW-14,y); y+=4;
+
+  const rows=[];
+  EXPENSE_GROUPS.forEach(g=>{
+    const gTotal=g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    if(gTotal===0) return;
+    rows.push([{content:g.icon+' '+g.name,styles:{fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY}},{content:fmt(gTotal),styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}},{content:(totalIncome>0?(gTotal/totalIncome*100).toFixed(1):'—')+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}}]);
+    g.cats.forEach(c=>{
+      const v=pf(b.expenses[c.id]||0);
+      if(v===0) return;
+      rows.push([c.name,fmt(v),totalIncome>0?(v/totalIncome*100).toFixed(1)+'%':'—']);
+    });
+  });
+  doc.autoTable({
+    startY:y,
+    head:[['Category','Budgeted','% of Income']],
+    body:rows,
+    foot:[['TOTAL EXPENSES',fmt(totalExpenses),(totalIncome>0?(totalExpenses/totalIncome*100).toFixed(1):0)+'%']],
+    styles:{fontSize:7.5,cellPadding:2.8,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
+    headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:6.5},
+    footStyles:{fillColor:NAVY,textColor:WHITE,fontStyle:'bold'},
+    columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+    margin:{left:14,right:14},
+  });
+  y=doc.lastAutoTable.finalY+8;
+
+  // 50/30/20 note
+  if(y>pageH-40){doc.addPage();y=18;}
+  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'✓ On target':'⚠ Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'✓ On target':'⚠ Over target')],['Savings (20% target)',fmt(savingsAmt),(totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsAmt/totalIncome>=0.2?'✓ On target':'⚠ Below target')]];
+  doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+  doc.text('50 / 30 / 20 RULE ANALYSIS',14,y); y+=2;
+  doc.setDrawColor(...GOLD); doc.line(14,y,pageW-14,y); y+=4;
+  doc.autoTable({
+    startY:y,
+    head:[['Category','Amount','% of Income','Status']],
+    body:rule503020,
+    styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
+    headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
+    alternateRowStyles:{fillColor:[245,247,250]},
+    columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'center'}},
+    margin:{left:14,right:14},
+  });
+
+  // Notes
+  if(b.notes){
+    y=doc.lastAutoTable.finalY+8;
+    if(y>pageH-40){doc.addPage();y=18;}
+    doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('MONTH NOTES',14,y); y+=4;
+    doc.setTextColor(...SLATE); doc.setFontSize(8); doc.setFont('helvetica','normal');
+    doc.text(doc.splitTextToSize(b.notes,pageW-28),14,y);
+  }
+
+  // Footer
+  const n=doc.internal.getNumberOfPages();
+  for(let p=1;p<=n;p++){
+    doc.setPage(p); doc.setFillColor(...NAVY); doc.rect(0,pageH-9,pageW,9,'F');
+    doc.setTextColor(180,190,205); doc.setFontSize(6); doc.setFont('helvetica','normal');
+    doc.text('Budget Planner  ·  Botswana Pula  ·  For personal use only',14,pageH-3.5);
+    doc.text('Page '+p+' of '+n,pageW-14,pageH-3.5,{align:'right'});
+  }
+  doc.save(`budget_${currentKey}.pdf`);
+}
+
+// ────────────────────────────────────────────
+// UTILS
+// ────────────────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────
+load();
+
+// Seed with current month if empty
+if(!Object.keys(budgets).length){
+  const k=todayKey();
+  budgets[k]=newEmptyBudget();
+  currentKey=k;
+}
+
+renderAll();
+</script>
+</body>
+</html>

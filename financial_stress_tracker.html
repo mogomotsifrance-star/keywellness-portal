@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financial Stress Tracker – BWP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
+  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+  --stress1:#1A8C5B;--stress2:#2da870;--stress3:#5cb85c;--stress4:#8bc34a;
+  --stress5:#c8d820;--stress6:#F0C842;--stress7:#f0a830;--stress8:#e07020;
+  --stress9:#d04020;--stress10:#C0392B;
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
+.app{max-width:1040px;margin:0 auto;padding:28px 18px 80px;}
+
+/* Header */
+.header{display:flex;align-items:center;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
+.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
+.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
+.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+
+/* Cards */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 22px;margin-bottom:20px;}
+.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+
+/* Stress scale */
+.scale-wrap{margin-bottom:18px;}
+.scale-label-row{display:flex;justify-content:space-between;margin-bottom:8px;}
+.scale-label-row span{font-size:.68rem;color:var(--muted);font-weight:600;}
+.scale-btns{display:grid;grid-template-columns:repeat(10,1fr);gap:5px;}
+.scale-btn{border:2px solid var(--border);background:var(--cream);border-radius:8px;padding:10px 0;cursor:pointer;text-align:center;font-size:.88rem;font-weight:700;transition:all .15s;position:relative;}
+.scale-btn:hover{transform:translateY(-2px);box-shadow:0 3px 10px rgba(0,0,0,.12);}
+.scale-btn.selected{color:white!important;border-color:transparent;}
+.scale-btn[data-v="1"]{color:var(--stress1);}.scale-btn[data-v="1"].selected{background:var(--stress1);}
+.scale-btn[data-v="2"]{color:var(--stress2);}.scale-btn[data-v="2"].selected{background:var(--stress2);}
+.scale-btn[data-v="3"]{color:var(--stress3);}.scale-btn[data-v="3"].selected{background:var(--stress3);}
+.scale-btn[data-v="4"]{color:var(--stress4);}.scale-btn[data-v="4"].selected{background:var(--stress4);}
+.scale-btn[data-v="5"]{color:var(--stress5);}.scale-btn[data-v="5"].selected{background:var(--stress5);}
+.scale-btn[data-v="6"]{color:var(--stress6);}.scale-btn[data-v="6"].selected{background:var(--stress6);}
+.scale-btn[data-v="7"]{color:var(--stress7);}.scale-btn[data-v="7"].selected{background:var(--stress7);}
+.scale-btn[data-v="8"]{color:var(--stress8);}.scale-btn[data-v="8"].selected{background:var(--stress8);}
+.scale-btn[data-v="9"]{color:var(--stress9);}.scale-btn[data-v="9"].selected{background:var(--stress9);}
+.scale-btn[data-v="10"]{color:var(--stress10);}.scale-btn[data-v="10"].selected{background:var(--stress10);}
+.scale-emoji{display:block;font-size:1.1rem;margin-bottom:2px;}
+
+/* Level descriptor */
+.level-desc{display:none;align-items:center;gap:10px;padding:11px 14px;border-radius:8px;margin-bottom:16px;font-size:.83rem;font-weight:600;}
+.level-desc.show{display:flex;}
+.level-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+/* Triggers */
+.triggers-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:16px;}
+.trigger-pill{display:flex;align-items:center;gap:8px;padding:9px 12px;border:2px solid var(--border);border-radius:8px;cursor:pointer;background:var(--cream);transition:all .15s;user-select:none;}
+.trigger-pill:hover{border-color:var(--navy);}
+.trigger-pill.active{border-color:var(--navy);background:var(--navy);color:white;}
+.trigger-pill.active .trigger-icon{filter:none;}
+.trigger-icon{font-size:1rem;flex-shrink:0;}
+.trigger-name{font-size:.78rem;font-weight:600;}
+
+/* Form fields */
+.form-field{margin-bottom:14px;}
+.form-field label{display:block;font-size:.74rem;font-weight:600;color:var(--slate);margin-bottom:6px;letter-spacing:.03em;}
+.input-wrap{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
+.input-wrap:focus-within{border-color:var(--gold);background:#fff;}
+.input-wrap input,.input-wrap select,.input-wrap textarea{flex:1;border:none;outline:none;background:transparent;padding:10px 12px;font-size:.88rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
+.input-wrap textarea{resize:vertical;min-height:72px;padding:10px 12px;}
+.input-wrap input[type=date]{cursor:pointer;}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:11px 20px;border:none;border-radius:8px;font-size:.88rem;font-weight:700;cursor:pointer;letter-spacing:.03em;transition:background .15s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
+.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
+.btn-ghost{background:var(--cream);color:var(--slate);border:1.5px solid var(--border);}.btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.btn-sm{padding:7px 14px;font-size:.78rem;border-radius:6px;}
+.btn-full{width:100%;}
+.btn-danger{background:#fef2f2;color:var(--red);border:1.5px solid #fecaca;}.btn-danger:hover{background:var(--red);color:white;border-color:var(--red);}
+
+/* Summary strip */
+.summary-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:20px;}
+.stat-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px 18px;border-left:4px solid var(--border);}
+.stat-box.gold{border-color:var(--gold);}.stat-box.navy{border-color:var(--navy);}
+.stat-box.green{border-color:var(--green);}.stat-box.red{border-color:var(--red);}
+.stat-box.orange{border-color:var(--orange);}
+.stat-label{font-size:.63rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:4px;}
+.stat-value{font-size:1.05rem;font-weight:700;font-family:'DM Mono',monospace;}
+.stat-sub{font-size:.67rem;color:var(--muted);margin-top:3px;line-height:1.4;}
+
+/* Trend chart */
+.trend-wrap{overflow-x:auto;}
+.trend-chart{display:flex;align-items:flex-end;gap:4px;height:90px;min-width:max-content;padding-bottom:22px;position:relative;}
+.trend-bar-col{display:flex;flex-direction:column;align-items:center;gap:3px;width:28px;flex-shrink:0;}
+.trend-bar-outer{width:100%;display:flex;align-items:flex-end;height:68px;}
+.trend-bar{width:100%;border-radius:4px 4px 0 0;min-height:4px;cursor:pointer;transition:opacity .15s;}
+.trend-bar:hover{opacity:.75;}
+.trend-date{font-size:.55rem;color:var(--muted);font-family:'DM Mono',monospace;transform:rotate(-45deg);transform-origin:center;white-space:nowrap;margin-top:4px;}
+.trend-val{font-size:.62rem;font-weight:700;font-family:'DM Mono',monospace;}
+
+/* Heatmap calendar */
+.heatmap-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.heatmap-day-label{font-size:.6rem;color:var(--muted);text-align:center;padding:2px 0;font-weight:600;}
+.heatmap-cell{aspect-ratio:1;border-radius:4px;cursor:pointer;transition:transform .1s;position:relative;}
+.heatmap-cell:hover{transform:scale(1.15);z-index:1;}
+.heatmap-cell.empty{background:transparent;cursor:default;}
+.heatmap-cell.empty:hover{transform:none;}
+.heatmap-cell.no-data{background:var(--cream);border:1.5px dashed var(--border);}
+
+/* Insights */
+.insight-list{display:flex;flex-direction:column;gap:9px;}
+.insight-item{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border-radius:8px;font-size:.8rem;line-height:1.5;border:1px solid;}
+.insight-item.info{background:#eff6ff;border-color:#bfdbfe;color:#1e40af;}
+.insight-item.warn{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.insight-item.good{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.insight-item.alert{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+.insight-icon{font-size:1rem;flex-shrink:0;margin-top:1px;}
+
+/* Coping tips */
+.tips-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;}
+.tip-card{background:var(--cream);border-radius:8px;padding:14px 14px;border:1.5px solid var(--border);}
+.tip-icon{font-size:1.4rem;margin-bottom:6px;}
+.tip-title{font-size:.78rem;font-weight:700;color:var(--navy);margin-bottom:4px;}
+.tip-body{font-size:.73rem;color:var(--slate);line-height:1.55;}
+
+/* Log entries */
+.log-list{display:flex;flex-direction:column;gap:10px;}
+.log-item{background:var(--cream);border-radius:9px;border:1.5px solid var(--border);padding:13px 15px;transition:border-color .15s;}
+.log-item:hover{border-color:var(--navy2);}
+.log-header{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+.log-score-badge{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.95rem;font-family:'DM Mono',monospace;color:white;flex-shrink:0;}
+.log-meta{flex:1;}
+.log-date{font-size:.8rem;font-weight:700;color:var(--navy);}
+.log-level{font-size:.68rem;color:var(--muted);margin-top:1px;}
+.log-triggers{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;}
+.log-trigger-tag{font-size:.66rem;font-weight:600;padding:3px 8px;border-radius:99px;background:var(--navy);color:white;}
+.log-note{font-size:.78rem;color:var(--slate);font-style:italic;line-height:1.5;}
+.log-actions{margin-left:auto;display:flex;gap:6px;}
+.log-delete{width:26px;height:26px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
+.log-delete:hover{background:var(--red);color:white;border-color:var(--red);}
+
+/* Month nav */
+.month-nav{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+.month-nav-btn{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border);background:var(--cream);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.month-nav-btn:hover{border-color:var(--navy);background:var(--navy);}
+.month-nav-btn:hover svg{stroke:white;}
+.month-nav-label{font-size:.9rem;font-weight:700;flex:1;text-align:center;}
+.month-today-btn{font-size:.7rem;font-weight:700;padding:5px 10px;border:1.5px solid var(--border);background:var(--cream);border-radius:6px;cursor:pointer;color:var(--slate);transition:all .15s;}
+.month-today-btn:hover{border-color:var(--navy);color:var(--navy);}
+
+/* Grid layout */
+.main-grid{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start;}
+@media(max-width:840px){.main-grid{grid-template-columns:1fr;}}
+
+/* Toast */
+.save-toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;display:flex;align-items:center;gap:7px;}
+.save-toast.show{opacity:1;}
+
+/* Tooltip */
+.tooltip{position:fixed;background:var(--navy);color:white;padding:6px 10px;border-radius:7px;font-size:.72rem;font-weight:600;pointer-events:none;opacity:0;transition:opacity .15s;z-index:500;white-space:nowrap;}
+.tooltip.show{opacity:1;}
+
+/* Section tabs */
+.tab-bar{display:flex;gap:4px;background:var(--cream);border-radius:10px;padding:4px;margin-bottom:18px;}
+.tab{flex:1;padding:8px;text-align:center;font-size:.76rem;font-weight:700;cursor:pointer;border-radius:7px;border:none;background:transparent;color:var(--muted);transition:all .15s;}
+.tab.active{background:var(--navy);color:white;}
+
+/* Mood ring */
+.mood-ring{width:120px;height:120px;position:relative;margin:0 auto 12px;}
+.mood-ring svg{width:100%;height:100%;}
+.mood-ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.mood-ring-score{font-size:1.8rem;font-weight:800;font-family:'DM Mono',monospace;}
+.mood-ring-label{font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
+
+/* Progress ring */
+.prog-ring-track{fill:none;stroke:var(--border);stroke-width:10;}
+.prog-ring-fill{fill:none;stroke-width:10;stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1),stroke .5s;}
+
+@media(max-width:520px){
+  .scale-btns{grid-template-columns:repeat(5,1fr);}
+  .header h1{font-size:1.2rem;}
+  .triggers-grid{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="save-toast" id="saveToast">
+  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  Saved
+</div>
+<div class="tooltip" id="tooltip"></div>
+
+<div class="app">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Financial Stress Tracker</h1>
+      <p>Log stress levels · Identify triggers · Track your wellbeing over time</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-ghost btn-sm" onclick="exportPDF()">
+        <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+        Export PDF
+      </button>
+    </div>
+  </div>
+
+  <!-- Summary strip -->
+  <div class="summary-strip" id="summaryStrip"></div>
+
+  <div class="main-grid">
+
+    <!-- LEFT: Log entry form -->
+    <div>
+      <div class="card">
+        <div class="card-title">Log Today's Stress</div>
+
+        <div class="form-field">
+          <label>Date</label>
+          <div class="input-wrap">
+            <input type="date" id="logDate">
+          </div>
+        </div>
+
+        <div class="scale-wrap">
+          <label style="display:block;font-size:.74rem;font-weight:600;color:var(--slate);margin-bottom:8px;letter-spacing:.03em;">Stress Level</label>
+          <div class="scale-label-row">
+            <span>😌 Calm</span>
+            <span>😰 Overwhelmed</span>
+          </div>
+          <div class="scale-btns" id="scaleBtns"></div>
+        </div>
+
+        <div class="level-desc" id="levelDesc">
+          <div class="level-dot" id="levelDot"></div>
+          <span id="levelDescText"></span>
+        </div>
+
+        <div class="form-field">
+          <label>What's causing stress? <span style="font-weight:400;color:var(--muted);">(select all that apply)</span></label>
+          <div class="triggers-grid" id="triggersGrid"></div>
+        </div>
+
+        <div class="form-field" style="margin-bottom:0;">
+          <label>Journal note <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+          <div class="input-wrap">
+            <textarea id="logNote" placeholder="What's on your mind financially today? Any context you'd like to remember…" maxlength="500"></textarea>
+          </div>
+        </div>
+
+        <button class="btn btn-gold btn-full" style="margin-top:16px;" onclick="logEntry()">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+          Log Stress Entry
+        </button>
+        <div id="logError" style="font-size:.76rem;color:var(--red);margin-top:8px;display:none;"></div>
+      </div>
+
+      <!-- Coping strategies -->
+      <div class="card">
+        <div class="card-title">Coping Strategies</div>
+        <div class="tips-grid">
+          <div class="tip-card">
+            <div class="tip-icon">📋</div>
+            <div class="tip-title">Write It Down</div>
+            <div class="tip-body">List all your financial obligations. Uncertainty is often more stressful than the actual numbers.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🎯</div>
+            <div class="tip-title">One Step Today</div>
+            <div class="tip-body">Pick one small financial action — pay one bill, call one creditor. Progress beats paralysis.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🧘</div>
+            <div class="tip-title">Separate Emotion</div>
+            <div class="tip-body">Money stress activates fight-or-flight. Deep breathing before reviewing finances helps decision quality.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🤝</div>
+            <div class="tip-title">Talk to Someone</div>
+            <div class="tip-body">A financial advisor, counsellor, or trusted friend can provide perspective you can't see alone.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">📅</div>
+            <div class="tip-title">Schedule Money Time</div>
+            <div class="tip-body">Set one 30-min slot per week for finances. Containing it stops financial anxiety from bleeding into daily life.</div>
+          </div>
+          <div class="tip-card">
+            <div class="tip-icon">🌱</div>
+            <div class="tip-title">Emergency Fund First</div>
+            <div class="tip-body">Even P500 in savings reduces stress significantly. Small buffers break the paycheck-to-paycheck cycle.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Dashboard -->
+    <div>
+
+      <!-- Tabs: Overview / History / Heatmap -->
+      <div class="tab-bar">
+        <button class="tab active" id="tab-overview" onclick="showTab('overview')">Overview</button>
+        <button class="tab" id="tab-history" onclick="showTab('history')">History</button>
+        <button class="tab" id="tab-heatmap" onclick="showTab('heatmap')">Calendar</button>
+        <button class="tab" id="tab-insights" onclick="showTab('insights')">Insights</button>
+      </div>
+
+      <!-- OVERVIEW tab -->
+      <div id="pane-overview">
+
+        <!-- Current stress ring + month avg -->
+        <div class="card" style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:120px;text-align:center;">
+            <div class="mood-ring" id="moodRing">
+              <svg viewBox="0 0 120 120">
+                <circle class="prog-ring-track" cx="60" cy="60" r="50"/>
+                <circle class="prog-ring-fill" id="ringFill" cx="60" cy="60" r="50" stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)"/>
+              </svg>
+              <div class="mood-ring-center">
+                <div class="mood-ring-score" id="ringScore">—</div>
+                <div class="mood-ring-label">This Month</div>
+              </div>
+            </div>
+            <div id="ringGrade" style="font-size:.78rem;font-weight:700;text-align:center;margin-top:4px;"></div>
+          </div>
+          <div style="flex:2;min-width:180px;">
+            <div id="monthStatsList" style="display:flex;flex-direction:column;gap:9px;"></div>
+          </div>
+        </div>
+
+        <!-- Trend chart -->
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+            <div class="card-title" style="margin-bottom:0;">30-Day Stress Trend</div>
+            <span style="font-size:.7rem;color:var(--muted);">Bar height = stress level · Hover for details</span>
+          </div>
+          <div class="trend-wrap">
+            <div class="trend-chart" id="trendChart"></div>
+          </div>
+        </div>
+
+        <!-- Top triggers this month -->
+        <div class="card">
+          <div class="card-title">Top Triggers This Month</div>
+          <div id="topTriggers"></div>
+        </div>
+
+      </div>
+
+      <!-- HISTORY tab -->
+      <div id="pane-history" style="display:none;">
+        <div class="card">
+          <div class="month-nav">
+            <button class="month-nav-btn" onclick="changeViewMonth(-1)">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div class="month-nav-label" id="historyMonthLabel"></div>
+            <button class="month-today-btn" onclick="goHistoryToday()">Today</button>
+            <button class="month-nav-btn" onclick="changeViewMonth(1)">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <div class="log-list" id="logList"></div>
+          <div id="emptyLog" style="display:none;text-align:center;padding:28px;color:var(--muted);font-size:.84rem;border:2px dashed var(--border);border-radius:8px;">No entries this month.</div>
+        </div>
+      </div>
+
+      <!-- HEATMAP tab -->
+      <div id="pane-heatmap" style="display:none;">
+        <div class="card">
+          <div class="month-nav">
+            <button class="month-nav-btn" onclick="changeHeatMonth(-1)">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div class="month-nav-label" id="heatMonthLabel"></div>
+            <button class="month-today-btn" onclick="goHeatToday()">Today</button>
+            <button class="month-nav-btn" onclick="changeHeatMonth(1)">
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="var(--navy)" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          <div class="heatmap-grid" id="heatmapGrid"></div>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;">
+            <span style="font-size:.68rem;color:var(--muted);font-weight:600;">Stress level:</span>
+            ${[1,2,3,4,5,6,7,8,9,10].map(i=>`<span style="display:flex;align-items:center;gap:3px;"><span style="width:12px;height:12px;border-radius:3px;background:${stressColor(i)};display:inline-block;"></span><span style="font-size:.62rem;color:var(--muted);">${i}</span></span>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- INSIGHTS tab -->
+      <div id="pane-insights" style="display:none;">
+        <div class="card">
+          <div class="card-title">Personalised Insights</div>
+          <div class="insight-list" id="insightList"></div>
+        </div>
+        <!-- Trigger frequency breakdown -->
+        <div class="card">
+          <div class="card-title">All-Time Trigger Frequency</div>
+          <div id="allTriggerBreakdown"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────
+// Constants
+// ─────────────────────────────────────
+const TRIGGERS = [
+  {id:'debt',      name:'Debt Payments',      icon:'💳'},
+  {id:'bills',     name:'Bills & Utilities',  icon:'🧾'},
+  {id:'income',    name:'Income Uncertainty', icon:'💼'},
+  {id:'job',       name:'Job Security',       icon:'🏢'},
+  {id:'emergency', name:'No Emergency Fund',  icon:'🚨'},
+  {id:'invest',    name:'Investment Losses',  icon:'📉'},
+  {id:'bigpurchase',name:'Big Purchase',      icon:'🛒'},
+  {id:'family',    name:'Family Pressure',    icon:'👨‍👩‍👧'},
+  {id:'savings',   name:'Not Saving Enough',  icon:'🏦'},
+  {id:'medical',   name:'Medical Expenses',   icon:'🏥'},
+  {id:'housing',   name:'Rent / Mortgage',    icon:'🏠'},
+  {id:'other',     name:'Other',              icon:'📋'},
+];
+const LEVELS = [
+  {min:1,max:2,label:'Minimal stress',       color:'#1A8C5B', bg:'#f0fdf4'},
+  {min:3,max:4,label:'Mild stress',          color:'#5cb85c', bg:'#f7fef0'},
+  {min:5,max:6,label:'Moderate stress',      color:'#D97706', bg:'#fffbeb'},
+  {min:7,max:8,label:'High stress',          color:'#e07020', bg:'#fff7ed'},
+  {min:9,max:10,label:'Severe stress',       color:'#C0392B', bg:'#fef2f2'},
+];
+const LS_KEY = 'financial_stress_v1';
+
+function stressColor(v){
+  const c=['','#1A8C5B','#2da870','#5cb85c','#8bc34a','#c8d820','#F0C842','#f0a830','#e07020','#d04020','#C0392B'];
+  return c[v]||'#C0392B';
+}
+function levelInfo(v){return LEVELS.find(l=>v>=l.min&&v<=l.max)||LEVELS[4];}
+function fmt2(n){return n.toFixed(1);}
+function todayStr(){return new Date().toISOString().split('T')[0];}
+function monthKey(y,m){return `${y}-${String(m+1).padStart(2,'0')}`;}
+function monthLabel(y,m){return new Date(y,m,1).toLocaleDateString('en-BW',{month:'long',year:'numeric'});}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+const TMAP = Object.fromEntries(TRIGGERS.map(t=>[t.id,t]));
+
+// ─────────────────────────────────────
+// State
+// ─────────────────────────────────────
+let entries = [];    // [{id,date,score,triggers:[],note}]
+let nextId  = 1;
+let selectedScore = null;
+let selectedTriggers = new Set();
+
+const now = new Date();
+let viewYear  = now.getFullYear();
+let viewMonth = now.getMonth();
+let heatYear  = now.getFullYear();
+let heatMonth = now.getMonth();
+let activeTab = 'overview';
+
+// ─────────────────────────────────────
+// Persistence
+// ─────────────────────────────────────
+let toastTimer;
+function showToast(){const t=document.getElementById('saveToast');t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1600);}
+function save(){localStorage.setItem(LS_KEY,JSON.stringify({entries,nextId}));showToast();}
+function load(){try{const r=localStorage.getItem(LS_KEY);if(!r)return;const d=JSON.parse(r);entries=d.entries||[];nextId=d.nextId||1;}catch{}}
+
+// ─────────────────────────────────────
+// Tooltip
+// ─────────────────────────────────────
+const tip=document.getElementById('tooltip');
+function showTip(e,msg){tip.textContent=msg;tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY-28)+'px';tip.classList.add('show');}
+function hideTip(){tip.classList.remove('show');}
+
+// ─────────────────────────────────────
+// Build form UI
+// ─────────────────────────────────────
+function buildScaleBtns(){
+  const emojis=['','😌','🙂','😊','😐','😕','😟','😰','😨','😖','😱'];
+  document.getElementById('scaleBtns').innerHTML=[1,2,3,4,5,6,7,8,9,10].map(v=>`
+    <button class="scale-btn" data-v="${v}" onclick="selectScore(${v})">
+      <span class="scale-emoji">${emojis[v]}</span>${v}
+    </button>`).join('');
+}
+
+function buildTriggers(){
+  document.getElementById('triggersGrid').innerHTML=TRIGGERS.map(t=>`
+    <div class="trigger-pill" id="trig_${t.id}" onclick="toggleTrigger('${t.id}')">
+      <span class="trigger-icon">${t.icon}</span>
+      <span class="trigger-name">${t.name}</span>
+    </div>`).join('');
+}
+
+function selectScore(v){
+  selectedScore=v;
+  document.querySelectorAll('.scale-btn').forEach(b=>b.classList.toggle('selected',+b.dataset.v===v));
+  const info=levelInfo(v);
+  const d=document.getElementById('levelDesc');
+  d.classList.add('show');
+  d.style.background=info.bg;
+  document.getElementById('levelDot').style.background=info.color;
+  document.getElementById('levelDescText').textContent=`Level ${v} — ${info.label}`;
+  document.getElementById('levelDescText').style.color=info.color;
+}
+
+function toggleTrigger(id){
+  if(selectedTriggers.has(id)) selectedTriggers.delete(id);
+  else selectedTriggers.add(id);
+  document.getElementById('trig_'+id)?.classList.toggle('active',selectedTriggers.has(id));
+}
+
+// ─────────────────────────────────────
+// Log entry
+// ─────────────────────────────────────
+function showLogError(msg){const e=document.getElementById('logError');e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',3000);}
+
+function logEntry(){
+  const date=document.getElementById('logDate').value;
+  if(!date) return showLogError('Please select a date.');
+  if(!selectedScore) return showLogError('Please select a stress level.');
+
+  // Replace existing entry for same date
+  entries=entries.filter(e=>e.date!==date);
+  entries.push({id:nextId++,date,score:selectedScore,triggers:[...selectedTriggers],note:document.getElementById('logNote').value.trim()});
+
+  // Reset form
+  selectedScore=null;
+  selectedTriggers.clear();
+  document.getElementById('logNote').value='';
+  document.getElementById('logDate').value=todayStr();
+  document.querySelectorAll('.scale-btn').forEach(b=>b.classList.remove('selected'));
+  document.querySelectorAll('.trigger-pill').forEach(p=>p.classList.remove('active'));
+  document.getElementById('levelDesc').classList.remove('show');
+
+  save(); renderAll();
+}
+
+function deleteEntry(id){entries=entries.filter(e=>e.id!==id);save();renderAll();}
+
+// ─────────────────────────────────────
+// Tabs
+// ─────────────────────────────────────
+function showTab(t){
+  activeTab=t;
+  ['overview','history','heatmap','insights'].forEach(n=>{
+    document.getElementById('tab-'+n).className='tab'+(n===t?' active':'');
+    document.getElementById('pane-'+n).style.display=n===t?'block':'none';
+  });
+}
+
+// ─────────────────────────────────────
+// Month nav
+// ─────────────────────────────────────
+function changeViewMonth(d){viewMonth+=d;if(viewMonth>11){viewMonth=0;viewYear++;}if(viewMonth<0){viewMonth=11;viewYear--;}renderHistory();}
+function goHistoryToday(){viewYear=now.getFullYear();viewMonth=now.getMonth();renderHistory();}
+function changeHeatMonth(d){heatMonth+=d;if(heatMonth>11){heatMonth=0;heatYear++;}if(heatMonth<0){heatMonth=11;heatYear--;}renderHeatmap();}
+function goHeatToday(){heatYear=now.getFullYear();heatMonth=now.getMonth();renderHeatmap();}
+
+// ─────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────
+function entriesForMonth(y,m){const k=monthKey(y,m);return entries.filter(e=>e.date.startsWith(k));}
+function avgScore(arr){return arr.length?arr.reduce((s,e)=>s+e.score,0)/arr.length:null;}
+function last30(){const d=new Date();d.setDate(d.getDate()-29);const from=d.toISOString().split('T')[0];return entries.filter(e=>e.date>=from);}
+
+// ─────────────────────────────────────
+// RENDER ALL
+// ─────────────────────────────────────
+function renderAll(){
+  renderSummary();
+  renderOverview();
+  renderHistory();
+  renderHeatmap();
+  renderInsights();
+}
+
+// ─────────────────────────────────────
+// Summary strip
+// ─────────────────────────────────────
+function renderSummary(){
+  const cur=entriesForMonth(now.getFullYear(),now.getMonth());
+  const avg=avgScore(cur);
+  const high=cur.filter(e=>e.score>=7).length;
+  const total=entries.length;
+  const prev=entriesForMonth(now.getFullYear(),now.getMonth()-1);
+  const prevAvg=avgScore(prev);
+  const trend=avg&&prevAvg?avg-prevAvg:null;
+  const info=avg?levelInfo(Math.round(avg)):null;
+  document.getElementById('summaryStrip').innerHTML=`
+    <div class="stat-box ${avg?(avg<=4?'green':avg<=6?'orange':'red'):'navy'}">
+      <div class="stat-label">Month Avg Stress</div>
+      <div class="stat-value" style="color:${info?info.color:'var(--muted)'};">${avg?fmt2(avg):'—'}/10</div>
+      <div class="stat-sub">${info?info.label:'No entries yet'}</div>
+    </div>
+    <div class="stat-box ${trend===null?'navy':trend<=0?'green':'red'}">
+      <div class="stat-label">vs Last Month</div>
+      <div class="stat-value">${trend===null?'—':trend>0?'+'+fmt2(trend):fmt2(trend)}</div>
+      <div class="stat-sub">${trend===null?'No comparison data':trend<=0?'Improving':'Increasing'}</div>
+    </div>
+    <div class="stat-box ${high>0?'orange':'green'}">
+      <div class="stat-label">High-Stress Days</div>
+      <div class="stat-value">${high}</div>
+      <div class="stat-sub">Score ≥ 7 this month</div>
+    </div>
+    <div class="stat-box navy">
+      <div class="stat-label">Total Entries</div>
+      <div class="stat-value">${total}</div>
+      <div class="stat-sub">All time</div>
+    </div>`;
+}
+
+// ─────────────────────────────────────
+// Overview
+// ─────────────────────────────────────
+function renderOverview(){
+  const cur=entriesForMonth(now.getFullYear(),now.getMonth());
+  const avg=avgScore(cur);
+
+  // Mood ring
+  const score=avg?Math.round(avg*10)/10:null;
+  const circ=2*Math.PI*50;
+  const info=score?levelInfo(Math.round(score)):null;
+  const pct=score?score/10:0;
+  document.getElementById('ringScore').textContent=score?fmt2(score):'—';
+  document.getElementById('ringScore').style.color=info?info.color:'var(--muted)';
+  document.getElementById('ringFill').style.strokeDashoffset=circ*(1-pct);
+  document.getElementById('ringFill').style.stroke=info?info.color:'var(--border)';
+  document.getElementById('ringGrade').textContent=info?info.label:'No entries';
+  document.getElementById('ringGrade').style.color=info?info.color:'var(--muted)';
+
+  // Month stats list
+  const days30=last30();
+  const dayArr=days30.length>0?days30:cur;
+  const minS=dayArr.length?Math.min(...dayArr.map(e=>e.score)):null;
+  const maxS=dayArr.length?Math.max(...dayArr.map(e=>e.score)):null;
+  document.getElementById('monthStatsList').innerHTML=[
+    ['Entries this month', cur.length, ''],
+    ['Average (30 days)', days30.length?fmt2(avgScore(days30))+'/10':'—', ''],
+    ['Lowest this month', minS?minS+'/10':'—',''],
+    ['Peak this month', maxS?maxS+'/10':'—',''],
+  ].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:.8rem;padding:6px 0;border-bottom:1px solid var(--border);">
+    <span style="color:var(--slate);">${l}</span>
+    <span style="font-weight:700;font-family:'DM Mono',monospace;">${v}</span>
+  </div>`).join('');
+
+  // 30-day trend chart
+  const days=[];
+  for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(d.toISOString().split('T')[0]);}
+  const entryMap=Object.fromEntries(entries.map(e=>[e.date,e]));
+  document.getElementById('trendChart').innerHTML=days.map(d=>{
+    const e=entryMap[d];
+    const score=e?e.score:null;
+    const pct=score?score/10:0;
+    const col=score?stressColor(score):'var(--border)';
+    const label=new Date(d+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short'});
+    return `<div class="trend-bar-col">
+      <div style="font-size:.58rem;font-weight:700;color:${col};min-height:14px;font-family:'DM Mono',monospace;">${score||''}</div>
+      <div class="trend-bar-outer">
+        <div class="trend-bar" style="height:${score?Math.max(6,pct*64):4}px;background:${col};"
+          onmousemove="showTip(event,'${label}${score?': Score '+score+' — '+levelInfo(score).label:': No entry'}')"
+          onmouseleave="hideTip()"></div>
+      </div>
+      <div class="trend-date">${label.replace(' ','&nbsp;')}</div>
+    </div>`;
+  }).join('');
+
+  // Top triggers
+  const trigCount={};
+  cur.forEach(e=>e.triggers.forEach(t=>trigCount[t]=(trigCount[t]||0)+1));
+  const sorted=Object.entries(trigCount).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const maxC=sorted[0]?.[1]||1;
+  document.getElementById('topTriggers').innerHTML=sorted.length?sorted.map(([id,cnt])=>{
+    const t=TMAP[id]||{name:id,icon:'📋'};
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+      <span style="font-size:1rem;flex-shrink:0;">${t.icon}</span>
+      <span style="font-size:.8rem;flex:1;">${t.name}</span>
+      <div style="width:120px;height:8px;background:var(--border);border-radius:99px;overflow:hidden;">
+        <div style="width:${cnt/maxC*100}%;height:100%;background:var(--navy);border-radius:99px;transition:width .8s;"></div>
+      </div>
+      <span style="font-size:.74rem;font-weight:700;font-family:'DM Mono',monospace;min-width:24px;text-align:right;">${cnt}</span>
+    </div>`;
+  }).join(''):`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:14px;">No entries this month yet.</div>`;
+}
+
+// ─────────────────────────────────────
+// History
+// ─────────────────────────────────────
+function renderHistory(){
+  document.getElementById('historyMonthLabel').textContent=monthLabel(viewYear,viewMonth);
+  const arr=entriesForMonth(viewYear,viewMonth).sort((a,b)=>b.date.localeCompare(a.date));
+  const list=document.getElementById('logList');
+  const empty=document.getElementById('emptyLog');
+  if(!arr.length){list.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+  list.innerHTML=arr.map(e=>{
+    const info=levelInfo(e.score);
+    const d=new Date(e.date+'T12:00:00').toLocaleDateString('en-BW',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+    return `<div class="log-item">
+      <div class="log-header">
+        <div class="log-score-badge" style="background:${info.color};">${e.score}</div>
+        <div class="log-meta">
+          <div class="log-date">${d}</div>
+          <div class="log-level" style="color:${info.color};">${info.label}</div>
+        </div>
+        <button class="log-delete" onclick="deleteEntry(${e.id})" title="Delete">
+          <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      ${e.triggers.length?`<div class="log-triggers">${e.triggers.map(id=>`<span class="log-trigger-tag">${TMAP[id]?.icon||''} ${TMAP[id]?.name||id}</span>`).join('')}</div>`:''}
+      ${e.note?`<div class="log-note">"${esc(e.note)}"</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+// ─────────────────────────────────────
+// Heatmap
+// ─────────────────────────────────────
+function renderHeatmap(){
+  document.getElementById('heatMonthLabel').textContent=monthLabel(heatYear,heatMonth);
+  const entryMap=Object.fromEntries(entries.map(e=>[e.date,e]));
+  const firstDay=new Date(heatYear,heatMonth,1).getDay();
+  const daysInMonth=new Date(heatYear,heatMonth+1,0).getDate();
+  const days=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let html=days.map(d=>`<div class="heatmap-day-label">${d}</div>`).join('');
+  // blank cells before first day
+  for(let i=0;i<firstDay;i++) html+=`<div class="heatmap-cell empty"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${heatYear}-${String(heatMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const e=entryMap[dateStr];
+    if(e){
+      const info=levelInfo(e.score);
+      html+=`<div class="heatmap-cell" style="background:${stressColor(e.score)};" title="${dateStr}: ${e.score}/10 — ${info.label}"
+        onmousemove="showTip(event,'${new Date(dateStr+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short'})}: ${e.score}/10 — ${info.label}')"
+        onmouseleave="hideTip()"></div>`;
+    } else {
+      html+=`<div class="heatmap-cell no-data" onmousemove="showTip(event,'${new Date(dateStr+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short'})}: No entry')" onmouseleave="hideTip()"></div>`;
+    }
+  }
+  document.getElementById('heatmapGrid').innerHTML=html;
+}
+
+// ─────────────────────────────────────
+// Insights
+// ─────────────────────────────────────
+function renderInsights(){
+  const insights=[];
+  const all=entries.slice().sort((a,b)=>a.date.localeCompare(b.date));
+  if(!all.length){
+    document.getElementById('insightList').innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:18px;">Log at least a few entries to see personalised insights.</div>`;
+    document.getElementById('allTriggerBreakdown').innerHTML='';
+    return;
+  }
+
+  const cur=entriesForMonth(now.getFullYear(),now.getMonth());
+  const prev=entriesForMonth(now.getFullYear(),now.getMonth()-1);
+  const avgCur=avgScore(cur);
+  const avgPrev=avgScore(prev);
+
+  // Trend vs last month
+  if(avgCur&&avgPrev){
+    const delta=avgCur-avgPrev;
+    if(delta<=-1) insights.push({type:'good',icon:'📉',msg:`Your average stress dropped by ${Math.abs(delta).toFixed(1)} points compared to last month. Keep it up!`});
+    else if(delta>=1.5) insights.push({type:'alert',icon:'📈',msg:`Stress has risen by ${delta.toFixed(1)} points vs last month. Consider what changed.`});
+    else insights.push({type:'info',icon:'📊',msg:`Stress is relatively stable compared to last month (${delta>0?'+':''}${delta.toFixed(1)} points difference).`});
+  }
+
+  // High stress streak
+  const sortedAll=all.slice().reverse();
+  let streak=0;
+  for(const e of sortedAll){if(e.score>=7)streak++;else break;}
+  if(streak>=3) insights.push({type:'alert',icon:'🔥',msg:`You've logged high stress (≥7) for ${streak} consecutive entries. Consider reaching out for support.`});
+
+  // Most common trigger
+  const trigCount={};
+  all.forEach(e=>e.triggers.forEach(t=>trigCount[t]=(trigCount[t]||0)+1));
+  const top=Object.entries(trigCount).sort((a,b)=>b[1]-a[1])[0];
+  if(top) insights.push({type:'warn',icon:'⚠️',msg:`"${TMAP[top[0]]?.name||top[0]}" is your most frequent stress trigger (${top[1]} times). Targeted action here may reduce overall stress.`});
+
+  // Low entry days
+  const totalDays=Math.ceil((new Date()-new Date(all[0].date))/86400000)+1;
+  const coverage=(all.length/totalDays*100).toFixed(0);
+  if(coverage<50&&all.length>5) insights.push({type:'info',icon:'📅',msg:`You've logged on about ${coverage}% of days. Regular tracking helps spot patterns — try daily check-ins.`});
+  else if(all.length>=14) insights.push({type:'good',icon:'✅',msg:`Great consistency! You have ${all.length} entries logged, making your trends more meaningful.`});
+
+  // Average below 4
+  if(avgCur&&avgCur<4) insights.push({type:'good',icon:'😌',msg:`Your average this month is ${fmt2(avgCur)}/10 — that's relatively low financial stress. Keep the habits going!`});
+  else if(avgCur&&avgCur>=8) insights.push({type:'alert',icon:'🆘',msg:`Average stress of ${fmt2(avgCur)}/10 is quite high. Speaking to a financial advisor could help create a plan.`});
+
+  document.getElementById('insightList').innerHTML=insights.map(i=>`
+    <div class="insight-item ${i.type}">
+      <span class="insight-icon">${i.icon}</span>
+      <span>${i.msg}</span>
+    </div>`).join('');
+
+  // All-time trigger breakdown
+  const maxC=Object.values(trigCount).reduce((a,b)=>Math.max(a,b),1);
+  document.getElementById('allTriggerBreakdown').innerHTML=TRIGGERS.filter(t=>trigCount[t.id]).sort((a,b)=>(trigCount[b.id]||0)-(trigCount[a.id]||0)).map(t=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px;">
+      <span style="font-size:.95rem;">${t.icon}</span>
+      <span style="font-size:.8rem;flex:1;">${t.name}</span>
+      <div style="width:140px;height:8px;background:var(--border);border-radius:99px;overflow:hidden;">
+        <div style="width:${(trigCount[t.id]||0)/maxC*100}%;height:100%;background:var(--navy);border-radius:99px;"></div>
+      </div>
+      <span style="font-size:.74rem;font-weight:700;font-family:'DM Mono',monospace;min-width:28px;text-align:right;">${trigCount[t.id]||0}×</span>
+    </div>`).join('')||`<div style="color:var(--muted);font-size:.82rem;">No trigger data yet.</div>`;
+}
+
+// ─────────────────────────────────────
+// PDF Export
+// ─────────────────────────────────────
+function exportPDF(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],WHITE=[255,255,255],SLATE=[74,85,104];
+  const pageW=doc.internal.pageSize.getWidth();
+  const pageH=doc.internal.pageSize.getHeight();
+  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+
+  // Header
+  doc.setFillColor(...NAVY);doc.rect(0,0,pageW,26,'F');
+  doc.setTextColor(...GOLD);doc.setFontSize(15);doc.setFont('helvetica','bold');
+  doc.text('Financial Stress Report',14,11);
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);
+  doc.text(`Botswana Pula Portal  ·  Exported: ${today}`,14,18);
+
+  let y=32;
+
+  // Summary stats
+  const cur=entriesForMonth(now.getFullYear(),now.getMonth());
+  const avg=avgScore(cur);
+  const high=cur.filter(e=>e.score>=7).length;
+  const stats=[['Entries This Month',String(cur.length)],['Avg Stress (Month)',avg?fmt2(avg)+'/10':'—'],['High-Stress Days',String(high)],['Total Entries',String(entries.length)]];
+  const sw=(pageW-28)/stats.length;
+  stats.forEach((s,i)=>{
+    const x=14+i*sw;
+    doc.setFillColor(...CREAM);doc.roundedRect(x,y,sw-2,16,2,2,'F');
+    doc.setFillColor(...NAVY);doc.roundedRect(x,y,2,16,1,1,'F');
+    doc.setTextColor(...SLATE);doc.setFontSize(5.5);doc.setFont('helvetica','bold');
+    doc.text(s[0].toUpperCase(),x+4,y+5.5);
+    doc.setTextColor(...NAVY);doc.setFontSize(8);doc.setFont('helvetica','bold');
+    doc.text(s[1],x+4,y+12);
+  });
+  y+=22;
+
+  // Trigger breakdown
+  const trigCount={};
+  entries.forEach(e=>e.triggers.forEach(t=>trigCount[t]=(trigCount[t]||0)+1));
+  const topTrigs=Object.entries(trigCount).sort((a,b)=>b[1]-a[1]);
+  if(topTrigs.length){
+    doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');
+    doc.text('TRIGGER FREQUENCY (ALL TIME)',14,y);y+=2;
+    doc.setDrawColor(...GOLD);doc.setLineWidth(.35);doc.line(14,y,pageW-14,y);y+=4;
+    doc.autoTable({
+      startY:y,
+      head:[['Trigger','Count']],
+      body:topTrigs.map(([id,cnt])=>[(TMAP[id]?.icon||'')+(TMAP[id]?.name||id),String(cnt)]),
+      styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
+      headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
+      alternateRowStyles:{fillColor:[245,247,250]},
+      columnStyles:{1:{halign:'right'}},
+      margin:{left:14,right:14},
+    });
+    y=doc.lastAutoTable.finalY+8;
+  }
+
+  // Full log
+  if(y>pageH-40){doc.addPage();y=18;}
+  doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');
+  doc.text('FULL STRESS LOG',14,y);y+=2;
+  doc.setDrawColor(...GOLD);doc.line(14,y,pageW-14,y);y+=3;
+  const sorted=entries.slice().sort((a,b)=>b.date.localeCompare(a.date));
+  doc.autoTable({
+    startY:y,
+    head:[['Date','Score','Level','Triggers','Note']],
+    body:sorted.map(e=>{
+      const info=levelInfo(e.score);
+      const d=new Date(e.date+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short',year:'numeric'});
+      const trigs=e.triggers.map(id=>TMAP[id]?.name||id).join(', ')||'—';
+      return [d,e.score+'/10',info.label,trigs,e.note||'—'];
+    }),
+    styles:{fontSize:7.5,cellPadding:2.8,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2,overflow:'linebreak'},
+    headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:6.5},
+    alternateRowStyles:{fillColor:[245,247,250]},
+    columnStyles:{1:{halign:'center'},4:{cellWidth:40}},
+    margin:{left:14,right:14},
+  });
+
+  // Footer
+  const n=doc.internal.getNumberOfPages();
+  for(let p=1;p<=n;p++){
+    doc.setPage(p);doc.setFillColor(...NAVY);doc.rect(0,pageH-9,pageW,9,'F');
+    doc.setTextColor(180,190,205);doc.setFontSize(6);doc.setFont('helvetica','normal');
+    doc.text('Financial Stress Tracker  ·  Botswana Pula  ·  Personal use only',14,pageH-3.5);
+    doc.text('Page '+p+' of '+n,pageW-14,pageH-3.5,{align:'right'});
+  }
+  doc.save('financial_stress_report.pdf');
+}
+
+// ─────────────────────────────────────
+// Init
+// ─────────────────────────────────────
+load();
+buildScaleBtns();
+buildTriggers();
+document.getElementById('logDate').value=todayStr();
+renderAll();
+</script>
+</body>
+</html>

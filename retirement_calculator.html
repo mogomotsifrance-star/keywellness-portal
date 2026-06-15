@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retirement Planner – Botswana Pula</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy:    #0D2545;
+    --navy2:   #163561;
+    --gold:    #C8991A;
+    --gold-lt: #F0C842;
+    --cream:   #F7F4EE;
+    --slate:   #4A5568;
+    --muted:   #8896A8;
+    --border:  #D6DDE8;
+    --green:   #1A8C5B;
+    --red:     #C0392B;
+    --orange:  #D97706;
+    --white:   #FFFFFF;
+    --radius:  10px;
+    --shadow:  0 4px 24px rgba(13,37,69,.12);
+  }
+  body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--navy); min-height: 100vh; }
+  .app { max-width: 960px; margin: 0 auto; padding: 28px 18px 56px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+  .header-icon { width: 48px; height: 48px; background: var(--navy); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .header h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+  .header p { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+
+  /* Cards */
+  .card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+  .card-title { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+
+  /* Form */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+  .field label { display: block; font-size: .75rem; font-weight: 600; color: var(--slate); margin-bottom: 6px; letter-spacing: .03em; }
+  .field .hint { font-size: .68rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+  .input-wrap { display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: 7px; background: var(--cream); overflow: hidden; transition: border-color .15s; }
+  .input-wrap:focus-within { border-color: var(--gold); background: #fff; }
+  .input-prefix, .input-suffix { padding: 0 10px; font-size: .82rem; font-weight: 600; color: var(--muted); background: transparent; white-space: nowrap; font-family: 'DM Mono', monospace; }
+  .input-wrap input, .input-wrap select { flex: 1; border: none; outline: none; background: transparent; padding: 10px 8px; font-size: .9rem; font-family: 'DM Mono', monospace; color: var(--navy); min-width: 0; }
+  .input-wrap select { cursor: pointer; }
+
+  /* Button */
+  .btn-calc { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 13px; margin-top: 4px; background: var(--navy); color: white; border: none; border-radius: 8px; font-size: .92rem; font-weight: 700; cursor: pointer; letter-spacing: .03em; transition: background .15s, transform .1s; }
+  .btn-calc:hover { background: var(--navy2); }
+  .btn-calc:active { transform: scale(.98); }
+
+  /* Summary strip */
+  .summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-box { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; border-left: 4px solid var(--border); }
+  .stat-box.gold  { border-color: var(--gold); }
+  .stat-box.navy  { border-color: var(--navy); }
+  .stat-box.green { border-color: var(--green); }
+  .stat-box.red   { border-color: var(--red); }
+  .stat-box.orange{ border-color: var(--orange); }
+  .stat-label { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 5px; }
+  .stat-value { font-size: 1.1rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-sub   { font-size: .7rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .stat-box.green  .stat-value { color: var(--green); }
+  .stat-box.red    .stat-value { color: var(--red); }
+  .stat-box.orange .stat-value { color: var(--orange); }
+  .stat-box.gold   .stat-value { color: var(--gold); }
+  .stat-box.navy   .stat-value { color: var(--navy); }
+
+  /* Readiness meter */
+  .readiness-label-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .readiness-pct { font-size: 2rem; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+  .readiness-desc { font-size: .78rem; color: var(--slate); }
+  .readiness-bar-wrap { height: 16px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+  .readiness-bar { height: 100%; border-radius: 99px; width: 0%; transition: width 1.1s cubic-bezier(.4,0,.2,1); }
+  .readiness-bar.good { background: linear-gradient(90deg, #1A8C5B, #27ae60); }
+  .readiness-bar.warn { background: linear-gradient(90deg, var(--orange), #f59e0b); }
+  .readiness-bar.poor { background: linear-gradient(90deg, var(--red), #e74c3c); }
+  .readiness-sub { font-size: .72rem; color: var(--muted); }
+
+  /* Two-col layout */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+  /* Data rows */
+  .data-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+  .data-row:last-child { border-bottom: none; }
+  .data-row-label { font-size: .8rem; color: var(--slate); flex: 1; }
+  .data-row-value { font-family: 'DM Mono', monospace; font-weight: 700; font-size: .84rem; white-space: nowrap; }
+  .v-navy   { color: var(--navy); }
+  .v-gold   { color: var(--gold); }
+  .v-green  { color: var(--green); }
+  .v-red    { color: var(--red); }
+  .v-orange { color: var(--orange); }
+  .v-muted  { color: var(--muted); }
+
+  /* Section divider inside card */
+  .section-divider { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--navy); background: #f0f4ff; border-radius: 5px; padding: 5px 8px; margin: 12px 0 4px; }
+
+  /* Action boxes */
+  .action-box { border-radius: 8px; padding: 14px 16px; margin-top: 12px; }
+  .action-box.green  { background: #f0faf5; border: 1.5px solid #a7f3d0; }
+  .action-box.red    { background: #fef2f2; border: 1.5px solid #fecaca; }
+  .action-box.orange { background: #fffbeb; border: 1.5px solid #fde68a; }
+  .action-box-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 7px; }
+  .action-box.green  .action-box-title { color: var(--green); }
+  .action-box.red    .action-box-title { color: var(--red); }
+  .action-box.orange .action-box-title { color: var(--orange); }
+  .action-box p { font-size: .8rem; line-height: 1.6; color: var(--slate); }
+  .action-box strong { color: var(--navy); }
+
+  /* Info note */
+  .info-note { display: flex; align-items: flex-start; gap: 10px; background: #f0f4ff; border-radius: 8px; padding: 12px 14px; margin-top: 14px; font-size: .77rem; color: var(--slate); line-height: 1.55; border: 1px solid #dbeafe; }
+  .info-note svg { flex-shrink: 0; margin-top: 1px; color: var(--navy2); }
+
+  /* Pill badge */
+  .pill { display: inline-block; padding: 2px 7px; border-radius: 99px; font-size: .62rem; font-weight: 700; letter-spacing: .04em; margin-left: 4px; vertical-align: middle; }
+  .pill-gold  { background: #fef3c7; color: #92400e; }
+  .pill-green { background: #dcfce7; color: var(--green); }
+  .pill-red   { background: #fee2e2; color: var(--red); }
+
+  /* Table */
+  .table-controls { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+  .download-btn { padding: 6px 13px; border-radius: 6px; border: 1.5px solid var(--gold); background: white; font-size: .78rem; font-weight: 600; color: var(--gold); cursor: pointer; display: flex; align-items: center; gap: 5px; transition: all .15s; }
+  .download-btn:hover { background: var(--gold); color: white; }
+  .table-container { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  thead th { background: var(--navy); color: var(--gold-lt); font-size: .64rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 11px 12px; text-align: right; white-space: nowrap; }
+  thead th:first-child, thead th:nth-child(2) { text-align: left; }
+  tbody tr:nth-child(even) { background: #f5f7fa; }
+  tbody tr:hover { background: #eef2f8; }
+  tbody tr.retire-row { background: #fffbeb !important; }
+  tbody tr.retire-row td { border-top: 2px solid var(--gold); }
+  tbody td { padding: 9px 12px; text-align: right; font-family: 'DM Mono', monospace; color: var(--navy); border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody td:first-child { text-align: left; font-weight: 600; color: var(--muted); }
+  tbody td:nth-child(2) { text-align: left; }
+  .td-real { color: var(--slate); font-size: .75rem; }
+  tfoot td { background: var(--navy); color: white; padding: 10px 12px; font-weight: 700; font-family: 'DM Mono', monospace; text-align: right; font-size: .78rem; }
+  tfoot td:first-child, tfoot td:nth-child(2) { text-align: left; }
+
+  .results-section { display: none; }
+  .results-section.visible { display: block; }
+
+  @media (max-width: 520px) {
+    .header h1 { font-size: 1.15rem; }
+    .stat-value { font-size: .95rem; }
+    .app { padding: 16px 12px 36px; }
+    .readiness-pct { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── HEADER ── -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Retirement Planner</h1>
+      <p>Botswana Pula (BWP) &middot; Salary Projection &middot; Pension Gap &middot; Real Value Analysis</p>
+    </div>
+  </div>
+
+  <!-- ── CARD 1: PERSONAL ── -->
+  <div class="card">
+    <div class="card-title">Personal Details</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Current Age</label>
+        <div class="input-wrap">
+          <input type="number" id="currentAge" value="30" min="18" max="70" step="1">
+          <span class="input-suffix">yrs</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Retirement Age</label>
+        <div class="input-wrap">
+          <input type="number" id="retirementAge" value="65" min="40" max="80" step="1">
+          <span class="input-suffix">yrs</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Life Expectancy</label>
+        <div class="input-wrap">
+          <input type="number" id="lifeExpectancy" value="85" min="60" max="110" step="1">
+          <span class="input-suffix">yrs</span>
+        </div>
+        <div class="hint">Determines how long your pension must last</div>
+      </div>
+      <div class="field">
+        <label>Target Replacement Rate</label>
+        <div class="input-wrap">
+          <input type="number" id="replacementRate" value="70" min="30" max="100" step="5">
+          <span class="input-suffix">%</span>
+        </div>
+        <div class="hint">% of last salary as monthly pension (standard: 70%)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CARD 2: INCOME ── -->
+  <div class="card">
+    <div class="card-title">Income &amp; Salary Growth</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Current Monthly Salary (Gross)</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="monthlySalary" value="15,000.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual Salary Growth Rate</label>
+        <div class="input-wrap">
+          <input type="number" id="salaryGrowth" value="5" min="0" max="30" step="0.5">
+          <span class="input-suffix">%</span>
+        </div>
+        <div class="hint">Expected annual raises, promotions &amp; COLAs</div>
+      </div>
+      <div class="field">
+        <label>Annual Inflation Rate</label>
+        <div class="input-wrap">
+          <input type="number" id="inflationRate" value="5.5" min="0" max="20" step="0.5">
+          <span class="input-suffix">%</span>
+        </div>
+        <div class="hint">Used to convert future money to today's purchasing power</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CARD 3: SAVINGS ── -->
+  <div class="card">
+    <div class="card-title">Savings &amp; Investment Returns</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Current Retirement Savings</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="currentSavings" value="50,000.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">BPOPF balance, unit trusts, savings — all combined</div>
+      </div>
+      <div class="field">
+        <label>Monthly Contribution</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="monthlyContrib" value="3,000.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">Pension deduction + personal savings per month</div>
+      </div>
+      <div class="field">
+        <label>Pre-Retirement Annual Return</label>
+        <div class="input-wrap">
+          <input type="number" id="annualReturn" value="9" min="0" max="25" step="0.5">
+          <span class="input-suffix">%</span>
+        </div>
+        <div class="hint">Expected growth while building your fund</div>
+      </div>
+      <div class="field">
+        <label>Post-Retirement Annual Return</label>
+        <div class="input-wrap">
+          <input type="number" id="retireReturn" value="6" min="0" max="15" step="0.5">
+          <span class="input-suffix">%</span>
+        </div>
+        <div class="hint">Conservative return during drawdown phase</div>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-calc" onclick="calculate()">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+    </svg>
+    Calculate My Retirement Plan
+  </button>
+
+  <!-- ══════════════════ RESULTS ══════════════════ -->
+  <div class="results-section" id="resultsSection">
+    <div style="margin-top:28px;">
+
+      <!-- Summary strip -->
+      <div class="summary-strip" id="summaryStrip"></div>
+
+      <!-- Row 1: Readiness + Salary Projection -->
+      <div class="two-col">
+
+        <div class="card">
+          <div class="card-title">Retirement Readiness</div>
+          <div class="readiness-label-row">
+            <div>
+              <div class="readiness-pct" id="readinessPct">—</div>
+              <div class="readiness-desc" id="readinessDesc"></div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:.7rem;color:var(--muted);margin-bottom:2px;">of target funded</div>
+              <div style="font-size:.78rem;font-weight:600;color:var(--slate);" id="readinessFraction"></div>
+            </div>
+          </div>
+          <div class="readiness-bar-wrap">
+            <div class="readiness-bar" id="readinessBar"></div>
+          </div>
+          <div class="readiness-sub" id="readinessSub"></div>
+          <div id="actionBox"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Salary &amp; Pension Projection</div>
+          <div id="salaryRows"></div>
+          <div class="info-note" id="realValueNote"></div>
+        </div>
+
+      </div>
+
+      <!-- Row 2: Pension Analysis + Gap Solutions -->
+      <div class="two-col">
+
+        <div class="card">
+          <div class="card-title">Pension Income Analysis</div>
+          <div id="pensionRows"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">How to Close the Gap</div>
+          <div id="gapSolutions"></div>
+        </div>
+
+      </div>
+
+      <!-- Projection Table -->
+      <div class="card">
+        <div class="table-controls">
+          <div class="card-title" style="margin-bottom:0;">Year-by-Year Projection</div>
+          <button class="download-btn" onclick="downloadCSV()">
+            <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Export CSV
+          </button>
+        </div>
+        <div class="table-container" id="tableContainer"></div>
+      </div>
+
+    </div>
+  </div><!-- /results -->
+</div><!-- /app -->
+
+<script>
+// ── Formatters ──────────────────────────────────────────────
+const fmt  = v => 'P ' + v.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtK = v => {
+  if (v >= 1e9) return 'P ' + (v/1e9).toFixed(3) + 'B';
+  if (v >= 1e6) return 'P ' + (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return 'P ' + (v/1e3).toFixed(1) + 'K';
+  return fmt(v);
+};
+
+function fmtInput(el) {
+  let raw = el.value.replace(/[^0-9.]/g, '');
+  const parts = raw.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (parts.length > 2) parts.splice(2);
+  if (parts[1] !== undefined) parts[1] = parts[1].slice(0,2);
+  el.value = parts.join('.');
+}
+function finalizeInput(el) {
+  const n = parseFloat(el.value.replace(/,/g,''));
+  el.value = isNaN(n) ? '0.00' : n.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function parseField(id) {
+  return parseFloat(document.getElementById(id).value.replace(/,/g,'')) || 0;
+}
+
+// ── State ────────────────────────────────────────────────────
+let projData = [];
+
+// ── Main calculation ─────────────────────────────────────────
+function calculate() {
+  // Inputs
+  const currentAge    = parseInt(document.getElementById('currentAge').value)     || 30;
+  const retireAge     = parseInt(document.getElementById('retirementAge').value)   || 65;
+  const lifeExp       = parseInt(document.getElementById('lifeExpectancy').value)  || 85;
+  const replRate      = (parseFloat(document.getElementById('replacementRate').value) || 70) / 100;
+  const salary0       = parseField('monthlySalary');
+  const salGrowth     = (parseFloat(document.getElementById('salaryGrowth').value) || 0) / 100;
+  const inflation     = (parseFloat(document.getElementById('inflationRate').value) || 0) / 100;
+  const savings0      = parseField('currentSavings');
+  const contrib       = parseField('monthlyContrib');
+  const returnPre     = (parseFloat(document.getElementById('annualReturn').value) || 0) / 100;
+  const returnPost    = (parseFloat(document.getElementById('retireReturn').value) || 0) / 100;
+
+  const yrsToRetire   = Math.max(0, retireAge - currentAge);
+  const yrsInRetire   = Math.max(0, lifeExp   - retireAge);
+  const moToRetire    = yrsToRetire * 12;
+  const moInRetire    = yrsInRetire * 12;
+
+  const rPre  = returnPre  / 12;  // monthly pre-retirement
+  const rPost = returnPost / 12;  // monthly post-retirement
+
+  // ── Salary projection ──
+  const lastSalaryNom  = salary0 * Math.pow(1 + salGrowth, yrsToRetire);
+  const lastSalaryReal = lastSalaryNom / Math.pow(1 + inflation, yrsToRetire);  // in today's purchasing power
+  const targetPensNom  = lastSalaryNom  * replRate;
+  const targetPensReal = lastSalaryReal * replRate;  // target in today's money
+
+  // ── Retirement corpus (FV of savings + contributions) ──
+  let corpus;
+  if (rPre === 0) {
+    corpus = savings0 + contrib * moToRetire;
+  } else {
+    corpus = savings0 * Math.pow(1 + rPre, moToRetire)
+           + contrib  * (Math.pow(1 + rPre, moToRetire) - 1) / rPre;
+  }
+
+  // ── Monthly pension from corpus (annuity formula) ──
+  let projPensNom;
+  if (moInRetire === 0) {
+    projPensNom = 0;
+  } else if (rPost === 0) {
+    projPensNom = corpus / moInRetire;
+  } else {
+    projPensNom = corpus * rPost / (1 - Math.pow(1 + rPost, -moInRetire));
+  }
+  const projPensReal = projPensNom / Math.pow(1 + inflation, yrsToRetire);
+
+  // ── Corpus needed for target pension ──
+  let corpusNeeded;
+  if (moInRetire === 0) {
+    corpusNeeded = 0;
+  } else if (rPost === 0) {
+    corpusNeeded = targetPensNom * moInRetire;
+  } else {
+    corpusNeeded = targetPensNom * (1 - Math.pow(1 + rPost, -moInRetire)) / rPost;
+  }
+
+  const corpusGap  = Math.max(0, corpusNeeded - corpus);
+  const pensionGap = Math.max(0, targetPensNom - projPensNom);
+  const readiness  = Math.min(1, projPensNom / Math.max(0.01, targetPensNom));
+
+  // ── Extra monthly contribution to close corpus gap ──
+  let extraContrib = 0;
+  if (corpusGap > 0 && moToRetire > 0) {
+    extraContrib = rPre === 0
+      ? corpusGap / moToRetire
+      : corpusGap * rPre / (Math.pow(1 + rPre, moToRetire) - 1);
+  }
+
+  // ── Year-by-year projection (pre-retirement) ──
+  projData = [];
+  for (let y = 0; y <= yrsToRetire; y++) {
+    const age       = currentAge + y;
+    const salNom    = salary0 * Math.pow(1 + salGrowth, y);
+    const salReal   = salNom  / Math.pow(1 + inflation, y);
+    const balNom    = rPre === 0
+      ? savings0 + contrib * y * 12
+      : savings0 * Math.pow(1 + rPre, y * 12)
+          + contrib * (Math.pow(1 + rPre, y * 12) - 1) / rPre;
+    const balReal   = balNom / Math.pow(1 + inflation, y);
+    const isRetire  = y === yrsToRetire;
+    projData.push({ age, year: y, salNom, salReal, balNom, balReal, isRetire });
+  }
+
+  // ══ RENDER ══════════════════════════════════════════════════
+
+  // Summary strip
+  document.getElementById('summaryStrip').innerHTML = `
+    <div class="stat-box navy">
+      <div class="stat-label">Projected Last Salary</div>
+      <div class="stat-value">${fmtK(lastSalaryNom)}<span style="font-size:.65rem;font-weight:400;color:var(--muted)">/mo</span></div>
+      <div class="stat-sub">Nominal at age ${retireAge}<br>${fmt(lastSalaryReal)}/mo in today's money</div>
+    </div>
+    <div class="stat-box gold">
+      <div class="stat-label">Target Pension</div>
+      <div class="stat-value">${fmtK(targetPensNom)}<span style="font-size:.65rem;font-weight:400;color:var(--muted)">/mo</span></div>
+      <div class="stat-sub">${(replRate*100).toFixed(0)}% of last salary<br>${fmt(targetPensReal)}/mo in today's money</div>
+    </div>
+    <div class="stat-box ${pensionGap > 0 ? 'red' : 'green'}">
+      <div class="stat-label">Projected Pension</div>
+      <div class="stat-value">${fmtK(projPensNom)}<span style="font-size:.65rem;font-weight:400;color:var(--muted)">/mo</span></div>
+      <div class="stat-sub">${pensionGap > 0 ? 'Gap: ' + fmtK(pensionGap) + '/mo' : '✓ Target met'}<br>${fmt(projPensReal)}/mo in today's money</div>
+    </div>
+    <div class="stat-box ${corpusGap > 0 ? 'orange' : 'green'}">
+      <div class="stat-label">Total Fund Credit at Retirement</div>
+      <div class="stat-value">${fmtK(corpus)}</div>
+      <div class="stat-sub">Need ${fmtK(corpusNeeded)}<br>${corpusGap > 0 ? 'Short ' + fmtK(corpusGap) : '✓ Sufficient'}</div>
+    </div>`;
+
+  // Readiness meter
+  const pctTxt = (readiness * 100).toFixed(0) + '%';
+  const barEl  = document.getElementById('readinessBar');
+  document.getElementById('readinessPct').textContent  = pctTxt;
+  document.getElementById('readinessPct').style.color  = readiness >= 0.9 ? 'var(--green)' : readiness >= 0.6 ? 'var(--orange)' : 'var(--red)';
+  document.getElementById('readinessFraction').textContent = `${fmtK(projPensNom)} / ${fmtK(targetPensNom)}`;
+  document.getElementById('readinessDesc').textContent = readiness >= 1 ? 'Fully funded' : readiness >= 0.75 ? 'Mostly on track' : readiness >= 0.5 ? 'Needs attention' : 'Significant gap';
+  document.getElementById('readinessSub').textContent  = `Your fund covers ${pctTxt} of your ${(replRate*100).toFixed(0)}% target pension over ${yrsInRetire} retirement years.`;
+  setTimeout(() => {
+    barEl.style.width = Math.min(100, readiness * 100).toFixed(1) + '%';
+    barEl.className   = 'readiness-bar ' + (readiness >= 0.9 ? 'good' : readiness >= 0.6 ? 'warn' : 'poor');
+  }, 100);
+
+  // Action box
+  let actionHtml = '';
+  if (pensionGap <= 0) {
+    actionHtml = `<div class="action-box green" style="margin-top:16px;"><div class="action-box-title">✓ On Track</div>
+      <p>Your projected total fund credit of <strong>${fmtK(corpus)}</strong> exceeds the <strong>${fmtK(corpusNeeded)}</strong> needed. Consider increasing contributions for early retirement or building a surplus buffer.</p></div>`;
+  } else if (readiness >= 0.75) {
+    actionHtml = `<div class="action-box orange" style="margin-top:16px;"><div class="action-box-title">⚠ Needs Attention</div>
+      <p>Small gap detected. An extra <strong>${fmt(extraContrib)}/mo</strong> in contributions — or <strong>${fmtK(pensionGap)}/mo</strong> in passive income at retirement — closes it completely.</p></div>`;
+  } else {
+    actionHtml = `<div class="action-box red" style="margin-top:16px;"><div class="action-box-title">Action Required</div>
+      <p>Significant funding gap. You need an additional <strong>${fmt(extraContrib)}/mo</strong> in contributions now, or <strong>${fmtK(pensionGap)}/mo</strong> in passive income streams by retirement to reach your <strong>${(replRate*100).toFixed(0)}%</strong> target.</p></div>`;
+  }
+  document.getElementById('actionBox').innerHTML = actionHtml;
+
+  // Salary rows
+  document.getElementById('salaryRows').innerHTML = `
+    <div class="data-row"><span class="data-row-label">Current monthly salary</span><span class="data-row-value v-navy">${fmt(salary0)}</span></div>
+    <div class="data-row"><span class="data-row-label">Last salary at retirement — nominal</span><span class="data-row-value v-gold">${fmt(lastSalaryNom)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Last salary — real (today's money)</span><span class="data-row-value v-navy">${fmt(lastSalaryReal)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Target pension — nominal</span><span class="data-row-value v-gold">${fmt(targetPensNom)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Target pension — real (today's money)</span><span class="data-row-value v-navy">${fmt(targetPensReal)}/mo</span></div>`;
+
+  document.getElementById('realValueNote').innerHTML = `
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4M12 8h.01"/></svg>
+    <span><strong>Real value:</strong> "Today's money" strips away ${(inflation*100).toFixed(1)}%/yr inflation. ${fmt(targetPensReal)}/mo in real terms buys the same goods as ${fmt(targetPensNom)}/mo will at age ${retireAge}. Use the real figure to gauge actual lifestyle.</span>`;
+
+  // Pension analysis rows
+  document.getElementById('pensionRows').innerHTML = `
+    <div class="data-row"><span class="data-row-label">Total fund credit at retirement (projected)</span><span class="data-row-value v-navy">${fmtK(corpus)}</span></div>
+    <div class="data-row"><span class="data-row-label">Total fund credit needed for target</span><span class="data-row-value v-gold">${fmtK(corpusNeeded)}</span></div>
+    <div class="data-row"><span class="data-row-label">Fund credit ${corpusGap > 0 ? 'shortfall' : 'surplus'}</span><span class="data-row-value ${corpusGap > 0 ? 'v-red' : 'v-green'}">${corpusGap > 0 ? '−' : '+'}${fmtK(Math.abs(corpusNeeded - corpus))}</span></div>
+    <div style="height:4px;"></div>
+    <div class="data-row"><span class="data-row-label">Projected pension — nominal</span><span class="data-row-value ${pensionGap > 0 ? 'v-red' : 'v-green'}">${fmt(projPensNom)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Projected pension — real value</span><span class="data-row-value v-navy">${fmt(projPensReal)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Monthly pension gap (nominal)</span><span class="data-row-value ${pensionGap > 0 ? 'v-red' : 'v-green'}">${pensionGap > 0 ? fmt(pensionGap) : '—'}</span></div>
+    <div class="data-row"><span class="data-row-label">Retirement duration</span><span class="data-row-value v-muted">${yrsInRetire} yrs (age ${retireAge}–${lifeExp})</span></div>
+    <div class="data-row"><span class="data-row-label">Years to build</span><span class="data-row-value v-muted">${yrsToRetire} years</span></div>`;
+
+  // Gap solutions
+  if (pensionGap <= 0) {
+    document.getElementById('gapSolutions').innerHTML = `
+      <div class="action-box green" style="margin-top:0;"><div class="action-box-title">✓ No Gap to Close</div>
+        <p>Your plan fully funds the target. Stay consistent with contributions and review annually. Consider increasing the target rate or retiring earlier.</p></div>`;
+  } else {
+    const passiveReal = pensionGap / Math.pow(1 + inflation, yrsToRetire);
+    document.getElementById('gapSolutions').innerHTML = `
+      <div class="data-row"><span class="data-row-label" style="font-weight:700;color:var(--navy)">Monthly gap to close</span><span class="data-row-value v-red">${fmt(pensionGap)}/mo</span></div>
+      <div class="section-divider">Option A — Increase Contributions</div>
+      <div class="data-row"><span class="data-row-label">Extra monthly contribution needed</span><span class="data-row-value v-orange">${fmt(extraContrib)}/mo</span></div>
+      <div class="data-row"><span class="data-row-label">New total monthly contribution</span><span class="data-row-value v-navy">${fmt(contrib + extraContrib)}/mo</span></div>
+      <div class="data-row"><span class="data-row-label">This grows total fund credit by</span><span class="data-row-value v-green">+${fmtK(corpusGap)}</span></div>
+      <div class="section-divider">Option B — Passive Income at Retirement</div>
+      <div class="data-row"><span class="data-row-label">Passive income needed (nominal)</span><span class="data-row-value v-orange">${fmt(pensionGap)}/mo</span></div>
+      <div class="data-row"><span class="data-row-label">Passive income (today's equivalent)</span><span class="data-row-value v-navy">${fmt(passiveReal)}/mo</span></div>
+      <div style="margin-top:12px;padding:10px 12px;background:var(--cream);border-radius:7px;font-size:.75rem;color:var(--slate);line-height:1.65;">
+        <strong style="color:var(--navy);display:block;margin-bottom:4px;">Passive income ideas to bridge the gap:</strong>
+        Rental property income · Dividend-paying shares · Unit trust drawdown · Small business / franchise ·
+        Freelance / consulting · Agricultural income · Combination of A &amp; B
+      </div>`;
+  }
+
+  // Projection table
+  const rows = projData.map(r => `
+    <tr${r.isRetire ? ' class="retire-row"' : ''}>
+      <td>${r.age}${r.isRetire ? ' <span class="pill pill-gold">RETIRE</span>' : ''}</td>
+      <td>${r.year === 0 ? 'Now' : 'Year ' + r.year}</td>
+      <td>${fmt(r.salNom)}</td>
+      <td class="td-real">${fmt(r.salReal)}</td>
+      <td>${fmtK(r.balNom)}</td>
+      <td class="td-real">${fmtK(r.balReal)}</td>
+    </tr>`).join('');
+
+  document.getElementById('tableContainer').innerHTML = `
+    <table>
+      <thead><tr>
+        <th style="text-align:left">Age</th>
+        <th style="text-align:left">Period</th>
+        <th>Monthly Salary</th>
+        <th>Salary (Real)</th>
+        <th>Savings Balance</th>
+        <th>Balance (Real)</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="2">At Retirement (age ${retireAge})</td>
+        <td>${fmt(lastSalaryNom)}/mo</td>
+        <td>${fmt(lastSalaryReal)}/mo</td>
+        <td>${fmtK(corpus)}</td>
+        <td>${fmtK(corpus / Math.pow(1+inflation, yrsToRetire))}</td>
+      </tr></tfoot>
+    </table>`;
+
+  document.getElementById('resultsSection').classList.add('visible');
+  setTimeout(() => {
+    document.getElementById('resultsSection').scrollIntoView({behavior:'smooth', block:'start'});
+  }, 80);
+}
+
+// ── CSV export ───────────────────────────────────────────────
+function downloadCSV() {
+  if (!projData.length) return;
+  const headers = ['Age','Period','Monthly Salary Nominal (BWP)','Monthly Salary Real (BWP)','Savings Balance Nominal (BWP)','Savings Balance Real (BWP)'];
+  const rows = projData.map(r => [
+    r.age,
+    r.year === 0 ? 'Now' : `Year ${r.year}`,
+    r.salNom.toFixed(2),
+    r.salReal.toFixed(2),
+    r.balNom.toFixed(2),
+    r.balReal.toFixed(2)
+  ]);
+  const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
+  const a   = document.createElement('a');
+  a.href    = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'retirement_projection_bwp.csv';
+  a.click();
+}
+</script>
+</body>
+</html>

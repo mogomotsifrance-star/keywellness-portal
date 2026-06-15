@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debt-to-Income Calculator – Botswana Pula</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:    #0D2545;
+  --navy2:   #163561;
+  --gold:    #C8991A;
+  --gold-lt: #F0C842;
+  --cream:   #F7F4EE;
+  --slate:   #4A5568;
+  --muted:   #8896A8;
+  --border:  #D6DDE8;
+  --green:   #1A8C5B;
+  --red:     #C0392B;
+  --orange:  #D97706;
+  --white:   #FFFFFF;
+  --radius:  10px;
+  --shadow:  0 4px 24px rgba(13,37,69,.12);
+}
+body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--navy); min-height: 100vh; }
+.app { max-width: 960px; margin: 0 auto; padding: 28px 18px 60px; }
+
+/* Header */
+.header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; flex-wrap: wrap; }
+.header-icon { width: 48px; height: 48px; background: var(--navy); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.header h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+.header p  { font-size: .82rem; color: var(--muted); margin-top: 2px; }
+.user-badge { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
+.user-avatar { width: 32px; height: 32px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: var(--navy); flex-shrink: 0; }
+.user-name { font-size: .82rem; font-weight: 600; color: var(--navy); }
+.user-sub  { font-size: .67rem; color: var(--muted); }
+.btn-logout { padding: 6px 13px; background: var(--cream); border: 1.5px solid var(--border); border-radius: 7px; font-size: .75rem; font-weight: 600; color: var(--slate); cursor: pointer; transition: all .15s; white-space: nowrap; }
+.btn-logout:hover { border-color: var(--red); color: var(--red); background: #fef2f2; }
+
+/* Cards */
+.card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+.card-title { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+
+/* Form */
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.field label { display: block; font-size: .75rem; font-weight: 600; color: var(--slate); margin-bottom: 6px; letter-spacing: .03em; }
+.field .hint { font-size: .68rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.input-wrap { display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: 7px; background: var(--cream); overflow: hidden; transition: border-color .15s; }
+.input-wrap:focus-within { border-color: var(--gold); background: #fff; }
+.input-prefix, .input-suffix { padding: 0 10px; font-size: .82rem; font-weight: 600; color: var(--muted); background: transparent; white-space: nowrap; font-family: 'DM Mono', monospace; flex-shrink: 0; }
+.input-wrap input, .input-wrap select { flex: 1; border: none; outline: none; background: transparent; padding: 10px 8px; font-size: .9rem; font-family: 'DM Mono', monospace; color: var(--navy); min-width: 0; }
+.input-wrap select { cursor: pointer; font-family: 'Inter', sans-serif; font-size: .85rem; }
+
+/* Buttons */
+.btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 22px; background: var(--navy); color: white; border: none; border-radius: 8px; font-size: .88rem; font-weight: 700; cursor: pointer; letter-spacing: .03em; transition: background .15s, transform .1s; }
+.btn-primary:hover { background: var(--navy2); }
+.btn-primary:active { transform: scale(.98); }
+.btn-gold { background: var(--gold); color: var(--navy); }
+.btn-gold:hover { background: #b8870f; }
+.btn-sm { padding: 7px 14px; font-size: .78rem; border-radius: 6px; }
+.btn-danger { background: #fef2f2; color: var(--red); border: 1.5px solid #fecaca; font-size: .74rem; font-weight: 600; border-radius: 6px; padding: 5px 10px; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.btn-danger:hover { background: var(--red); color: white; border-color: var(--red); }
+
+/* Debt type chips */
+.type-chip-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 4px; }
+.type-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--cream); cursor: pointer; font-size: .76rem; font-weight: 600; color: var(--slate); transition: all .15s; white-space: nowrap; }
+.type-chip:hover  { border-color: var(--gold); color: var(--navy); }
+.type-chip.active { border-color: var(--navy); background: var(--navy); color: white; }
+
+/* Debt list */
+.debt-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.debt-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--cream); border-radius: 8px; border: 1.5px solid var(--border); flex-wrap: wrap; }
+.debt-row-icon { font-size: 1.2rem; flex-shrink: 0; }
+.debt-row-name { flex: 1; font-size: .85rem; font-weight: 600; color: var(--navy); min-width: 120px; }
+.debt-row-type { font-size: .7rem; color: var(--muted); margin-top: 1px; }
+.debt-row-amount { font-family: 'DM Mono', monospace; font-weight: 700; font-size: .9rem; color: var(--navy); white-space: nowrap; }
+.debt-row-housing { font-size: .65rem; background: #f0f4ff; color: var(--navy2); border-radius: 99px; padding: 2px 7px; font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.empty-debts { text-align: center; padding: 28px; color: var(--muted); font-size: .84rem; border: 2px dashed var(--border); border-radius: 8px; margin-top: 12px; }
+
+/* DTI Gauge */
+.gauge-wrap { position: relative; width: 220px; height: 120px; margin: 0 auto 10px; }
+.gauge-svg { width: 100%; height: 100%; }
+.gauge-pct { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+.gauge-pct-val { font-size: 2rem; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+.gauge-pct-lbl { font-size: .72rem; color: var(--muted); margin-top: 2px; }
+
+/* Summary strip */
+.summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.stat-box { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; border-left: 4px solid var(--border); }
+.stat-box.gold   { border-color: var(--gold); }
+.stat-box.navy   { border-color: var(--navy); }
+.stat-box.green  { border-color: var(--green); }
+.stat-box.red    { border-color: var(--red); }
+.stat-box.orange { border-color: var(--orange); }
+.stat-label { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 5px; }
+.stat-value { font-size: 1.12rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy); }
+.stat-sub   { font-size: .7rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.stat-box.green  .stat-value { color: var(--green); }
+.stat-box.red    .stat-value { color: var(--red); }
+.stat-box.orange .stat-value { color: var(--orange); }
+.stat-box.gold   .stat-value { color: var(--gold); }
+
+/* Two-col */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+@media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+/* Data rows */
+.data-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+.data-row:last-child { border-bottom: none; }
+.data-row-label { font-size: .8rem; color: var(--slate); flex: 1; }
+.data-row-value { font-family: 'DM Mono', monospace; font-weight: 700; font-size: .84rem; white-space: nowrap; }
+.v-navy   { color: var(--navy); }
+.v-gold   { color: var(--gold); }
+.v-green  { color: var(--green); }
+.v-red    { color: var(--red); }
+.v-orange { color: var(--orange); }
+.v-muted  { color: var(--muted); }
+
+/* Benchmark bands */
+.benchmark-track { margin: 18px 0 6px; position: relative; }
+.benchmark-bar { height: 12px; border-radius: 99px; display: flex; overflow: hidden; }
+.bb-seg { height: 100%; }
+.benchmark-labels { display: flex; justify-content: space-between; font-size: .65rem; color: var(--muted); margin-top: 4px; font-family: 'DM Mono', monospace; }
+.benchmark-pointer { position: absolute; top: -6px; transform: translateX(-50%); transition: left 1s cubic-bezier(.4,0,.2,1); }
+.benchmark-pointer svg { display: block; }
+.benchmark-rows { margin-top: 14px; }
+.bench-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+.bench-row:last-child { border-bottom: none; }
+.bench-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.bench-range { font-size: .76rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy); min-width: 60px; }
+.bench-label { font-size: .76rem; color: var(--slate); flex: 1; }
+.bench-badge { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.you-badge { font-size: .62rem; font-weight: 700; background: var(--navy); color: white; padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
+
+/* Advice card */
+.advice-card { border-radius: 8px; padding: 16px 18px; }
+.advice-card.green  { background: #f0faf5; border: 1.5px solid #a7f3d0; }
+.advice-card.orange { background: #fffbeb; border: 1.5px solid #fde68a; }
+.advice-card.red    { background: #fef2f2; border: 1.5px solid #fecaca; }
+.advice-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+.advice-card.green  .advice-title { color: var(--green); }
+.advice-card.orange .advice-title { color: var(--orange); }
+.advice-card.red    .advice-title { color: var(--red); }
+.advice-card p { font-size: .8rem; line-height: 1.65; color: var(--slate); }
+.advice-card strong { color: var(--navy); }
+
+/* Table */
+.table-container { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+thead th { background: var(--navy); color: var(--gold-lt); font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 11px 14px; white-space: nowrap; }
+thead th:first-child { text-align: left; }
+tbody tr:nth-child(even) { background: #f5f7fa; }
+tbody tr:hover { background: #eef2f8; }
+tbody td { padding: 10px 14px; text-align: right; font-family: 'DM Mono', monospace; color: var(--navy); border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
+tfoot td { background: var(--navy); color: white; padding: 10px 14px; font-weight: 700; font-family: 'DM Mono', monospace; text-align: right; }
+tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
+
+/* Info note */
+.info-note { display: flex; align-items: flex-start; gap: 10px; background: #f0f4ff; border-radius: 8px; padding: 12px 14px; font-size: .77rem; color: var(--slate); line-height: 1.55; border: 1px solid #dbeafe; }
+.info-note svg { flex-shrink: 0; margin-top: 2px; color: var(--navy2); }
+
+/* Section divider */
+.section-divider { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--navy); background: #f0f4ff; border-radius: 5px; padding: 5px 8px; margin: 12px 0 4px; }
+
+/* Results */
+.results-section { display: none; }
+.results-section.visible { display: block; }
+
+/* Save toast */
+.save-toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy); color: white; padding: 10px 18px; border-radius: 8px; font-size: .78rem; font-weight: 600; box-shadow: var(--shadow); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; display: flex; align-items: center; gap: 7px; }
+.save-toast.show { opacity: 1; }
+
+@media (max-width: 520px) {
+  .header h1 { font-size: 1.15rem; }
+  .app { padding: 16px 12px 40px; }
+  .gauge-wrap { width: 180px; height: 98px; }
+  .gauge-pct-val { font-size: 1.5rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SAVE TOAST ══ -->
+<div class="save-toast" id="saveToast">
+  <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+  Data saved
+</div>
+
+<div class="app" id="mainApp">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Debt-to-Income Calculator</h1>
+      <p>Botswana Pula (BWP) &middot; DTI ratio &middot; Lending benchmarks &middot; Affordability analysis</p>
+    </div>
+  </div>
+
+  <!-- ── INCOME ── -->
+  <div class="card">
+    <div class="card-title">Monthly Income</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>Gross Monthly Salary</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="grossSalary" value="15,000.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">Before tax (PAYE) deductions</div>
+      </div>
+      <div class="field">
+        <label>Other Monthly Income</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="otherIncome" value="0.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">Rental, freelance, dividends, etc.</div>
+      </div>
+      <div class="field">
+        <label>Net Monthly Salary (Take-home)</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="netSalary" value="12,000.00" inputmode="decimal" autocomplete="off"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">Used for affordability view</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ADD DEBT ── -->
+  <div class="card">
+    <div class="card-title">Add a Debt Obligation</div>
+
+    <div class="field" style="margin-bottom:16px;">
+      <label>Debt Type</label>
+      <div class="type-chip-grid" id="debtTypeGrid">
+        <button class="type-chip active" data-type="mortgage"  onclick="selectDebtType(this)">🏠 Mortgage / Rent</button>
+        <button class="type-chip"        data-type="car"       onclick="selectDebtType(this)">🚗 Car / HP</button>
+        <button class="type-chip"        data-type="personal"  onclick="selectDebtType(this)">💳 Personal Loan</button>
+        <button class="type-chip"        data-type="credit"    onclick="selectDebtType(this)">🏦 Credit Card</button>
+        <button class="type-chip"        data-type="student"   onclick="selectDebtType(this)">🎓 Student Loan</button>
+        <button class="type-chip"        data-type="store"     onclick="selectDebtType(this)">🛍️ Store Credit</button>
+        <button class="type-chip"        data-type="medical"   onclick="selectDebtType(this)">🏥 Medical</button>
+        <button class="type-chip"        data-type="business"  onclick="selectDebtType(this)">💼 Business Loan</button>
+        <button class="type-chip"        data-type="other"     onclick="selectDebtType(this)">📋 Other</button>
+      </div>
+    </div>
+
+    <div class="form-grid">
+      <div class="field" style="grid-column:span 2;">
+        <label>Description</label>
+        <div class="input-wrap">
+          <input type="text" id="debtName" placeholder="e.g. Standard Chartered home loan" style="font-family:'Inter',sans-serif;font-size:.88rem;" maxlength="60">
+        </div>
+      </div>
+      <div class="field">
+        <label>Monthly Payment</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="debtAmount" inputmode="decimal" autocomplete="off" placeholder="0.00"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Outstanding Balance (optional)</label>
+        <div class="input-wrap">
+          <span class="input-prefix">P</span>
+          <input type="text" id="debtBalance" inputmode="decimal" autocomplete="off" placeholder="0.00"
+            style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+        </div>
+        <div class="hint">For net worth tracking</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center;">
+      <button class="btn-primary btn-gold" onclick="addDebt()">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+        </svg>
+        Add Debt
+      </button>
+      <button class="btn-primary" onclick="clearDebtForm()" style="background:#f5f7fa;color:var(--slate);font-weight:600;">Clear</button>
+      <span id="debtError" style="font-size:.78rem;color:var(--red);display:none;"></span>
+    </div>
+
+    <!-- Debt list -->
+    <div id="debtListWrap">
+      <div style="margin-top:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div class="card-title" style="margin-bottom:0;">Current Obligations</div>
+        <span id="debtCountBadge" style="display:none;font-size:.72rem;font-weight:700;background:var(--navy);color:white;padding:3px 10px;border-radius:99px;"></span>
+      </div>
+      <div class="debt-list" id="debtList"></div>
+      <div class="empty-debts" id="emptyDebts">No debts added yet. Add your first obligation above.</div>
+    </div>
+  </div>
+
+  <!-- ── CALCULATE ── -->
+  <button class="btn-primary" style="width:100%;padding:13px;margin-bottom:20px;font-size:.92rem;" onclick="calculate()">
+    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+    </svg>
+    Calculate DTI Ratio
+  </button>
+
+  <!-- ══ RESULTS ══ -->
+  <div class="results-section" id="resultsSection">
+
+    <!-- Summary strip -->
+    <div class="summary-strip" id="summaryStrip"></div>
+
+    <!-- Gauge + Breakdown -->
+    <div class="two-col">
+
+      <!-- Gauge card -->
+      <div class="card" style="text-align:center;">
+        <div class="card-title">Back-End DTI Gauge</div>
+        <div class="gauge-wrap" id="gaugeWrap">
+          <svg class="gauge-svg" viewBox="0 0 220 120" id="gaugeSvg">
+            <!-- Background arc segments -->
+            <path d="M20,110 A90,90 0 0,1 65,27" stroke="#1A8C5B" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M65,27 A90,90 0 0,1 110,20" stroke="#C8991A" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M110,20 A90,90 0 0,1 165,40" stroke="#D97706" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M165,40 A90,90 0 0,1 200,110" stroke="#C0392B" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <!-- Needle -->
+            <line id="gaugeNeedle" x1="110" y1="110" x2="110" y2="30" stroke="var(--navy)" stroke-width="3" stroke-linecap="round" transform="rotate(0,110,110)" style="transition:transform 1.2s cubic-bezier(.4,0,.2,1)"/>
+            <circle cx="110" cy="110" r="6" fill="var(--navy)"/>
+          </svg>
+          <div class="gauge-pct">
+            <div class="gauge-pct-val" id="gaugePct" style="color:var(--navy)">—</div>
+            <div class="gauge-pct-lbl">Back-End DTI</div>
+          </div>
+        </div>
+        <div style="font-size:.78rem;font-weight:700;margin-bottom:4px;" id="gaugeStatus"></div>
+        <div style="font-size:.72rem;color:var(--muted);line-height:1.5;" id="gaugeDesc"></div>
+      </div>
+
+      <!-- Benchmarks -->
+      <div class="card">
+        <div class="card-title">Botswana Lending Benchmarks</div>
+        <div class="benchmark-track" id="benchmarkTrack">
+          <div class="benchmark-bar">
+            <div class="bb-seg" style="width:35%;background:#1A8C5B;opacity:.85;"></div>
+            <div class="bb-seg" style="width:15%;background:#C8991A;opacity:.85;"></div>
+            <div class="bb-seg" style="width:15%;background:#D97706;opacity:.85;"></div>
+            <div class="bb-seg" style="width:35%;background:#C0392B;opacity:.85;"></div>
+          </div>
+          <div style="position:absolute;top:0;left:0;right:0;" id="benchmarkPointerWrap">
+            <div class="benchmark-pointer" id="benchmarkPointer" style="left:0%;">
+              <svg width="12" height="18" viewBox="0 0 12 18"><polygon points="6,0 12,18 0,18" fill="var(--navy)"/></svg>
+            </div>
+          </div>
+          <div class="benchmark-labels">
+            <span>0%</span><span>35%</span><span>50%</span><span>65%</span><span>80%+</span>
+          </div>
+        </div>
+        <div class="benchmark-rows">
+          <div class="bench-row">
+            <div class="bench-dot" style="background:#1A8C5B;"></div>
+            <div class="bench-range">0 – 35%</div>
+            <div class="bench-label">Excellent — most lenders approve freely</div>
+            <span class="bench-badge" style="background:#dcfce7;color:#1A8C5B;">Low Risk</span>
+          </div>
+          <div class="bench-row">
+            <div class="bench-dot" style="background:#C8991A;"></div>
+            <div class="bench-range">36 – 50%</div>
+            <div class="bench-label">Acceptable — NBFIRA DSR limit for unsecured</div>
+            <span class="bench-badge" style="background:#fef3c7;color:#92400e;">Moderate</span>
+          </div>
+          <div class="bench-row">
+            <div class="bench-dot" style="background:#D97706;"></div>
+            <div class="bench-range">51 – 65%</div>
+            <div class="bench-label">High — some lenders decline; review advised</div>
+            <span class="bench-badge" style="background:#ffedd5;color:#D97706;">High Risk</span>
+          </div>
+          <div class="bench-row">
+            <div class="bench-dot" style="background:#C0392B;"></div>
+            <div class="bench-range">65%+</div>
+            <div class="bench-label">Very high — credit applications likely rejected</div>
+            <span class="bench-badge" style="background:#fee2e2;color:#C0392B;">Critical</span>
+          </div>
+        </div>
+        <div class="info-note" style="margin-top:14px;">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4M12 8h.01"/></svg>
+          <span>NBFIRA (Non-Bank Financial Institutions Regulatory Authority) caps unsecured credit at 30% of net salary. Botswana commercial banks typically use a 35–40% gross DSR for mortgage approval.</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Income vs Debt + Advice -->
+    <div class="two-col">
+
+      <div class="card">
+        <div class="card-title">Income vs Debt Breakdown</div>
+        <div id="breakdownRows"></div>
+        <div style="margin-top:16px;" id="allocationViz"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Affordability &amp; Capacity</div>
+        <div id="capacityRows"></div>
+        <div id="adviceCard" style="margin-top:16px;"></div>
+      </div>
+
+    </div>
+
+    <!-- Debt obligations table -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+        <div class="card-title" style="margin-bottom:0;">Debt Obligations Detail</div>
+        <button class="btn-primary btn-sm" onclick="exportPDF()" style="display:flex;align-items:center;gap:6px;">
+          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          Export PDF
+        </button>
+      </div>
+      <div class="table-container" id="debtTable"></div>
+    </div>
+
+  </div><!-- /results -->
+
+</div><!-- /app -->
+
+<script>
+// ──────────────────────────────────────────────
+// Formatters
+// ──────────────────────────────────────────────
+const fmt  = v => 'P ' + v.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtK = v => {
+  if (v >= 1e6) return 'P ' + (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return 'P ' + (v/1e3).toFixed(1) + 'K';
+  return fmt(v);
+};
+function fmtInput(el) {
+  let raw = el.value.replace(/[^0-9.]/g, '');
+  const parts = raw.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (parts.length > 2) parts.splice(2);
+  if (parts[1] !== undefined) parts[1] = parts[1].slice(0,2);
+  el.value = parts.join('.');
+}
+function finalizeInput(el) {
+  const n = parseFloat(el.value.replace(/,/g,''));
+  if (!isNaN(n)) el.value = n.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function parseField(id) { return parseFloat(document.getElementById(id).value.replace(/,/g,'')) || 0; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ──────────────────────────────────────────────
+// Persistence (no login — shared session)
+// ──────────────────────────────────────────────
+const LS_DATA = 'dti_data';
+
+function saveData() {
+  const data = {
+    debts, nextId,
+    grossSalary: document.getElementById('grossSalary').value,
+    otherIncome: document.getElementById('otherIncome').value,
+    netSalary:   document.getElementById('netSalary').value,
+  };
+  localStorage.setItem(LS_DATA, JSON.stringify(data));
+  showToast();
+}
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(LS_DATA);
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    debts  = d.debts  || [];
+    nextId = d.nextId || (debts.length ? Math.max(...debts.map(x=>x.id))+1 : 1);
+    if (d.grossSalary) document.getElementById('grossSalary').value = d.grossSalary;
+    if (d.otherIncome) document.getElementById('otherIncome').value = d.otherIncome;
+    if (d.netSalary)   document.getElementById('netSalary').value   = d.netSalary;
+    renderDebtList();
+  } catch { debts = []; }
+}
+
+let toastTimer;
+function showToast() {
+  const t = document.getElementById('saveToast');
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ──────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────
+let debts         = [];
+let nextId        = 1;
+let selectedDebtType = 'mortgage';
+
+const DEBT_META = {
+  mortgage: { icon:'🏠', label:'Mortgage / Rent',  housing: true  },
+  car:      { icon:'🚗', label:'Car / HP',          housing: false },
+  personal: { icon:'💳', label:'Personal Loan',     housing: false },
+  credit:   { icon:'🏦', label:'Credit Card',       housing: false },
+  student:  { icon:'🎓', label:'Student Loan',      housing: false },
+  store:    { icon:'🛍️', label:'Store Credit',      housing: false },
+  medical:  { icon:'🏥', label:'Medical',           housing: false },
+  business: { icon:'💼', label:'Business Loan',     housing: false },
+  other:    { icon:'📋', label:'Other',             housing: false },
+};
+
+// ──────────────────────────────────────────────
+// UI helpers
+// ──────────────────────────────────────────────
+function selectDebtType(btn) {
+  document.querySelectorAll('.type-chip').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedDebtType = btn.dataset.type;
+  const nameEl = document.getElementById('debtName');
+  if (!nameEl.value) nameEl.value = DEBT_META[selectedDebtType].label;
+}
+
+function clearDebtForm() {
+  document.getElementById('debtName').value    = '';
+  document.getElementById('debtAmount').value  = '';
+  document.getElementById('debtBalance').value = '';
+  document.getElementById('debtError').style.display = 'none';
+}
+
+function showDebtError(msg) {
+  const el = document.getElementById('debtError');
+  el.textContent = msg; el.style.display='inline';
+  setTimeout(()=>el.style.display='none', 3500);
+}
+
+// ──────────────────────────────────────────────
+// Add / Remove debt
+// ──────────────────────────────────────────────
+function addDebt() {
+  const name    = document.getElementById('debtName').value.trim();
+  const amount  = parseField('debtAmount');
+  const balance = parseField('debtBalance');
+  if (!name)   return showDebtError('Please enter a description.');
+  if (!amount) return showDebtError('Please enter a monthly payment.');
+
+  debts.push({
+    id: nextId++,
+    type: selectedDebtType,
+    name, amount, balance,
+    isHousing: DEBT_META[selectedDebtType].housing,
+  });
+  clearDebtForm();
+  renderDebtList();
+  saveData();
+}
+
+function removeDebt(id) {
+  if (!confirm('Remove this debt?')) return;
+  debts = debts.filter(d=>d.id!==id);
+  renderDebtList();
+  saveData();
+}
+
+function renderDebtList() {
+  const listEl  = document.getElementById('debtList');
+  const emptyEl = document.getElementById('emptyDebts');
+  const badge   = document.getElementById('debtCountBadge');
+
+  if (!debts.length) {
+    listEl.innerHTML=''; emptyEl.style.display='block';
+    badge.style.display='none'; return;
+  }
+  emptyEl.style.display='none';
+  badge.style.display='inline';
+  badge.textContent = `${debts.length} obligation${debts.length!==1?'s':''}`;
+
+  listEl.innerHTML = debts.map(d => {
+    const meta = DEBT_META[d.type]||DEBT_META.other;
+    return `<div class="debt-row">
+      <span class="debt-row-icon">${meta.icon}</span>
+      <div style="flex:1;min-width:120px;">
+        <div class="debt-row-name">${esc(d.name)}${d.isHousing?'<span class="debt-row-housing">Housing</span>':''}</div>
+        <div class="debt-row-type">${meta.label}${d.balance>0?' · Balance: '+fmtK(d.balance):''}</div>
+      </div>
+      <div class="debt-row-amount">${fmt(d.amount)}/mo</div>
+      <button class="btn-danger" onclick="removeDebt(${d.id})">
+        <svg width="11" height="11" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg> Remove
+      </button>
+    </div>`;
+  }).join('');
+}
+
+// ──────────────────────────────────────────────
+// Calculate
+// ──────────────────────────────────────────────
+function calculate() {
+  const gross     = parseField('grossSalary');
+  const other     = parseField('otherIncome');
+  const net       = parseField('netSalary');
+  const totalIncome = gross + other;
+
+  if (!totalIncome) { alert('Please enter your monthly income.'); return; }
+  if (!debts.length) { alert('Please add at least one debt obligation.'); return; }
+
+  const totalDebt    = debts.reduce((s,d)=>s+d.amount, 0);
+  const housingDebt  = debts.filter(d=>d.isHousing).reduce((s,d)=>s+d.amount, 0);
+  const nonHousing   = totalDebt - housingDebt;
+  const totalBalance = debts.reduce((s,d)=>s+d.balance, 0);
+
+  const backEndDTI   = totalDebt / totalIncome * 100;
+  const frontEndDTI  = housingDebt / totalIncome * 100;
+  const netDTI       = net > 0 ? totalDebt / net * 100 : null;
+
+  // Capacities
+  const capacity35   = Math.max(0, totalIncome * 0.35 - totalDebt);  // max Botswana bank threshold
+  const capacity40   = Math.max(0, totalIncome * 0.40 - totalDebt);
+  const netCapacity30= net > 0 ? Math.max(0, net * 0.30 - totalDebt) : null; // NBFIRA unsecured cap
+
+  // Deficit
+  const deficit35    = Math.max(0, totalDebt - totalIncome * 0.35);
+  const deficit40    = Math.max(0, totalDebt - totalIncome * 0.40);
+
+  // Status
+  const status = backEndDTI <= 35 ? {label:'Excellent',  color:'var(--green)',  cls:'green',  msg:`Your DTI is well within Botswana lending norms. You have strong borrowing capacity and are in a healthy financial position.`}
+               : backEndDTI <= 50 ? {label:'Acceptable', color:'#b8870f',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
+               : backEndDTI <= 65 ? {label:'High Risk',  color:'var(--orange)', cls:'orange', msg:`Your DTI is elevated. Some lenders may decline applications. Focus on reducing existing debt before applying for new credit.`}
+               :                    {label:'Critical',   color:'var(--red)',    cls:'red',    msg:`Your DTI exceeds safe lending thresholds. Most Botswana lenders will decline applications. Debt reduction should be an immediate priority.`};
+
+  // ── Summary strip ──
+  document.getElementById('summaryStrip').innerHTML = `
+    <div class="stat-box navy">
+      <div class="stat-label">Gross Monthly Income</div>
+      <div class="stat-value">${fmtK(totalIncome)}</div>
+      <div class="stat-sub">Salary + other income</div>
+    </div>
+    <div class="stat-box gold">
+      <div class="stat-label">Total Monthly Debt</div>
+      <div class="stat-value">${fmtK(totalDebt)}</div>
+      <div class="stat-sub">${debts.length} obligation${debts.length!==1?'s':''}</div>
+    </div>
+    <div class="stat-box ${backEndDTI<=35?'green':backEndDTI<=50?'orange':'red'}">
+      <div class="stat-label">Back-End DTI</div>
+      <div class="stat-value">${backEndDTI.toFixed(1)}%</div>
+      <div class="stat-sub">${status.label}</div>
+    </div>
+    <div class="stat-box ${frontEndDTI<=28?'green':frontEndDTI<=35?'orange':'red'}">
+      <div class="stat-label">Front-End DTI</div>
+      <div class="stat-value">${frontEndDTI.toFixed(1)}%</div>
+      <div class="stat-sub">Housing costs only · ideal ≤28%</div>
+    </div>`;
+
+  // ── Gauge ──
+  const clampedPct = Math.min(backEndDTI, 80);
+  const angle      = -90 + (clampedPct / 80) * 180;
+  document.getElementById('gaugeNeedle').setAttribute('transform', `rotate(${angle},110,110)`);
+  const gaugeColor = backEndDTI<=35?'var(--green)':backEndDTI<=50?'var(--gold)':backEndDTI<=65?'var(--orange)':'var(--red)';
+  document.getElementById('gaugePct').textContent  = backEndDTI.toFixed(1) + '%';
+  document.getElementById('gaugePct').style.color  = gaugeColor;
+  document.getElementById('gaugeStatus').textContent = status.label;
+  document.getElementById('gaugeStatus').style.color  = gaugeColor;
+  document.getElementById('gaugeDesc').textContent    = `${fmtK(totalDebt)}/mo of ${fmtK(totalIncome)}/mo gross income`;
+
+  // Benchmark pointer (0–80% maps to 0–100% of bar)
+  setTimeout(() => {
+    const pct = Math.min(100, (backEndDTI / 80) * 100);
+    document.getElementById('benchmarkPointer').style.left = pct.toFixed(1) + '%';
+  }, 100);
+
+  // ── Breakdown rows ──
+  // Stacked bar
+  const debtPct  = Math.min(100, (totalDebt / totalIncome) * 100);
+  const freePct  = 100 - debtPct;
+  document.getElementById('breakdownRows').innerHTML = `
+    <div class="data-row"><span class="data-row-label">Total gross income</span><span class="data-row-value v-navy">${fmt(totalIncome)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Housing / rent payments</span><span class="data-row-value v-navy">${housingDebt>0?fmt(housingDebt)+'/mo':'—'}</span></div>
+    <div class="data-row"><span class="data-row-label">Other debt payments</span><span class="data-row-value v-navy">${nonHousing>0?fmt(nonHousing)+'/mo':'—'}</span></div>
+    <div class="data-row"><span class="data-row-label">Total debt obligations</span><span class="data-row-value v-gold">${fmt(totalDebt)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Free income (after debt)</span><span class="data-row-value v-green">${fmt(totalIncome-totalDebt)}/mo</span></div>
+    ${totalBalance>0?`<div class="data-row"><span class="data-row-label">Total outstanding balance</span><span class="data-row-value v-muted">${fmtK(totalBalance)}</span></div>`:''}
+    ${net>0?`<div class="data-row"><span class="data-row-label">DTI on net (take-home)</span><span class="data-row-value ${netDTI>50?'v-red':netDTI>35?'v-orange':'v-green'}">${netDTI.toFixed(1)}%</span></div>`:''}`;
+
+  document.getElementById('allocationViz').innerHTML = `
+    <div style="display:flex;height:14px;border-radius:99px;overflow:hidden;margin-bottom:6px;">
+      <div style="width:${debtPct.toFixed(1)}%;background:var(--red);opacity:.8;" title="Debt: ${debtPct.toFixed(1)}%"></div>
+      <div style="width:${freePct.toFixed(1)}%;background:var(--green);opacity:.6;" title="Free: ${freePct.toFixed(1)}%"></div>
+    </div>
+    <div style="display:flex;gap:16px;font-size:.72rem;color:var(--slate);">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--red);opacity:.8;border-radius:3px;margin-right:4px;"></span>Debt ${debtPct.toFixed(0)}%</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);opacity:.6;border-radius:3px;margin-right:4px;"></span>Free ${freePct.toFixed(0)}%</span>
+    </div>`;
+
+  // ── Capacity rows ──
+  document.getElementById('capacityRows').innerHTML = `
+    <div class="section-divider">Borrowing Capacity</div>
+    <div class="data-row"><span class="data-row-label">Max total debt at 35% DSR (bank)</span><span class="data-row-value v-navy">${fmt(totalIncome*0.35)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Remaining capacity (35% limit)</span><span class="data-row-value ${capacity35>0?'v-green':'v-red'}">${capacity35>0?'+'+fmt(capacity35):'-'+fmt(Math.abs(capacity35))}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Remaining capacity (40% limit)</span><span class="data-row-value ${capacity40>0?'v-green':'v-red'}">${capacity40>0?'+'+fmt(capacity40):'-'+fmt(Math.abs(capacity40))}/mo</span></div>
+    ${net>0&&netCapacity30!==null?`
+    <div class="section-divider">NBFIRA Unsecured Cap (Net Salary)</div>
+    <div class="data-row"><span class="data-row-label">Max unsecured debt at 30% of net</span><span class="data-row-value v-navy">${fmt(net*0.30)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Remaining NBFIRA capacity</span><span class="data-row-value ${netCapacity30>0?'v-green':'v-red'}">${netCapacity30>0?'+'+fmt(netCapacity30):'-'+fmt(Math.abs(netCapacity30))}/mo</span></div>`:''}
+    ${deficit35>0?`
+    <div class="section-divider">To reach 35% threshold, reduce debt by</div>
+    <div class="data-row"><span class="data-row-label">Monthly payment reduction needed</span><span class="data-row-value v-orange">${fmt(deficit35)}/mo</span></div>`:''}`;
+
+  // ── Advice ──
+  let advice = `Your back-end DTI is <strong>${backEndDTI.toFixed(1)}%</strong>. ${status.msg}`;
+  if (capacity35 > 0) {
+    advice += ` You can take on up to <strong>${fmt(capacity35)}/mo</strong> in additional debt before reaching the 35% bank threshold.`;
+  } else if (deficit35 > 0) {
+    advice += ` To qualify for most loans, reduce monthly debt payments by <strong>${fmt(deficit35)}</strong>.`;
+  }
+  document.getElementById('adviceCard').innerHTML = `<div class="advice-card ${status.cls}"><div class="advice-title">${status.label}</div><p>${advice}</p></div>`;
+
+  // ── Detail table ──
+  const rows = debts.map(d => {
+    const meta = DEBT_META[d.type]||DEBT_META.other;
+    const pctOfIncome = (d.amount / totalIncome * 100).toFixed(1);
+    return `<tr>
+      <td>${meta.icon} ${esc(d.name)}${d.isHousing?' <span style="font-size:.65rem;background:#f0f4ff;color:var(--navy2);padding:1px 6px;border-radius:99px;font-weight:700;">Housing</span>':''}</td>
+      <td>${meta.label}</td>
+      <td>${fmt(d.amount)}</td>
+      <td>${pctOfIncome}%</td>
+      <td>${d.balance>0?fmtK(d.balance):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('debtTable').innerHTML = `<table>
+    <thead><tr>
+      <th style="text-align:left;">Description</th>
+      <th style="text-align:left;">Type</th>
+      <th style="text-align:right;">Monthly Payment</th>
+      <th style="text-align:right;">% of Income</th>
+      <th style="text-align:right;">Outstanding Balance</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr>
+      <td>Total</td><td></td>
+      <td style="text-align:right;">${fmt(totalDebt)}/mo</td>
+      <td style="text-align:right;">${backEndDTI.toFixed(1)}%</td>
+      <td style="text-align:right;">${totalBalance>0?fmtK(totalBalance):'—'}</td>
+    </tr></tfoot>
+  </table>`;
+
+  document.getElementById('resultsSection').classList.add('visible');
+  setTimeout(()=>document.getElementById('resultsSection').scrollIntoView({behavior:'smooth',block:'start'}), 80);
+}
+
+// ──────────────────────────────────────────────
+// PDF Export
+// ──────────────────────────────────────────────
+function exportPDF() {
+  if (!debts.length) return;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
+
+  const NAVY=[13,37,69], GOLD=[200,153,26], CREAM=[247,244,238], GREEN=[26,140,91], RED=[192,57,43], SLATE=[74,85,104];
+  const gross = parseField('grossSalary'), other = parseField('otherIncome'), net = parseField('netSalary');
+  const totalIncome = gross+other;
+  const totalDebt   = debts.reduce((s,d)=>s+d.amount,0);
+  const backEnd     = totalIncome>0 ? totalDebt/totalIncome*100 : 0;
+  const frontEnd    = totalIncome>0 ? debts.filter(d=>d.isHousing).reduce((s,d)=>s+d.amount,0)/totalIncome*100 : 0;
+  const today       = new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+  const pageW       = doc.internal.pageSize.getWidth();
+  const pageH       = doc.internal.pageSize.getHeight();
+
+  // Header
+  doc.setFillColor(...NAVY); doc.rect(0,0,pageW,22,'F');
+  doc.setTextColor(...GOLD); doc.setFontSize(15); doc.setFont('helvetica','bold');
+  doc.text('Debt-to-Income Report', 12, 10);
+  doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(200,210,220);
+  doc.text(`Botswana Pula (BWP)  ·  Generated: ${today}`, 12, 16);
+
+  // Stats
+  const stats = [
+    {label:'Gross Income',   value: fmt(totalIncome)+'/mo'},
+    {label:'Total Debt',     value: fmt(totalDebt)+'/mo'},
+    {label:'Back-End DTI',   value: backEnd.toFixed(1)+'%'},
+    {label:'Front-End DTI',  value: frontEnd.toFixed(1)+'%'},
+    {label:'Free Income',    value: fmt(totalIncome-totalDebt)+'/mo'},
+    {label:'Obligations',    value: String(debts.length)},
+  ];
+  const bw = (pageW-24)/stats.length;
+  stats.forEach((s,i)=>{
+    const x=12+i*bw, y=26;
+    doc.setFillColor(...CREAM); doc.roundedRect(x,y,bw-3,18,2,2,'F');
+    doc.setFillColor(...NAVY);  doc.roundedRect(x,y,3,18,1,1,'F');
+    doc.setTextColor(...SLATE); doc.setFontSize(6); doc.setFont('helvetica','bold');
+    doc.text(s.label.toUpperCase(),x+6,y+6);
+    doc.setTextColor(...NAVY);  doc.setFontSize(9); doc.setFont('helvetica','bold');
+    doc.text(s.value,x+6,y+13);
+  });
+
+  // Section title
+  doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+  doc.text('DEBT OBLIGATIONS', 12, 52);
+  doc.setDrawColor(...GOLD); doc.setLineWidth(.4); doc.line(12,53.5,pageW-12,53.5);
+
+  // Table
+  doc.autoTable({
+    startY: 56,
+    head: [['Description','Type','Monthly Payment (BWP)','% of Income','Outstanding Balance (BWP)','Category']],
+    body: debts.map(d=>{
+      const meta=DEBT_META[d.type]||DEBT_META.other;
+      return [d.name, meta.label, fmt(d.amount), (d.amount/totalIncome*100).toFixed(1)+'%', d.balance>0?fmtK(d.balance):'—', d.isHousing?'Housing':'Non-Housing'];
+    }),
+    styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
+    headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
+    alternateRowStyles:{fillColor:[245,247,250]},
+    columnStyles:{0:{cellWidth:55,fontStyle:'bold'},2:{halign:'right'},3:{halign:'right'},4:{halign:'right'},5:{halign:'center'}},
+    foot:[['TOTAL','',fmt(totalDebt)+'/mo',backEnd.toFixed(1)+'%','','']],
+    footStyles:{fillColor:NAVY,textColor:[255,255,255],fontStyle:'bold'},
+    margin:{left:12,right:12},
+  });
+
+  // Analysis section
+  const fy = doc.lastAutoTable.finalY+8;
+  if (fy < pageH-40) {
+    doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    doc.text('AFFORDABILITY ANALYSIS', 12, fy);
+    doc.line(12,fy+1.5,pageW-12,fy+1.5);
+    const rows=[
+      ['Back-End DTI',backEnd.toFixed(1)+'%'],['Front-End DTI',frontEnd.toFixed(1)+'%'],
+      ['Remaining at 35% DSR',fmt(Math.max(0,totalIncome*.35-totalDebt))+'/mo'],
+      ['Remaining at 40% DSR',fmt(Math.max(0,totalIncome*.40-totalDebt))+'/mo'],
+      ...(net>0?[['DTI on Net Salary',(totalDebt/net*100).toFixed(1)+'%'],['NBFIRA cap (30% net)',fmt(net*.30)+'/mo']]:[] ),
+    ];
+    rows.forEach(([l,v],i)=>{
+      doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...SLATE);
+      doc.text(l, 12, fy+8+i*6);
+      doc.setFont('helvetica','bold'); doc.setTextColor(...NAVY);
+      doc.text(v, pageW/2, fy+8+i*6, {align:'right'});
+    });
+  }
+
+  // Footer
+  const n=doc.internal.getNumberOfPages();
+  for(let p=1;p<=n;p++){
+    doc.setPage(p); doc.setFillColor(...NAVY); doc.rect(0,pageH-10,pageW,10,'F');
+    doc.setTextColor(180,190,205); doc.setFontSize(6.5); doc.setFont('helvetica','normal');
+    doc.text('Debt-to-Income Report  ·  Botswana Pula  ·  For planning purposes only',12,pageH-4);
+    doc.text(`Page ${p} of ${n}`,pageW-12,pageH-4,{align:'right'});
+  }
+  doc.save('dti_report_bwp.pdf');
+}
+
+// ──────────────────────────────────────────────
+// Init
+// ──────────────────────────────────────────────
+document.getElementById('debtName').value = DEBT_META['mortgage'].label;
+loadData();
+</script>
+</body>
+</html>
