@@ -166,6 +166,23 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 /* ── Chart ── */
 .chart-wrap{position:relative;height:240px;margin-top:14px}
 
+/* ── Video ── */
+.video-placeholder{background:var(--navy);border-radius:var(--radius);aspect-ratio:16/9;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;margin-bottom:14px}
+.video-placeholder .play-btn{width:56px;height:56px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:10px;transition:.2s}
+.video-placeholder:hover .play-btn{transform:scale(1.1)}
+.video-placeholder .play-icon{width:0;height:0;border-style:solid;border-width:10px 0 10px 18px;border-color:transparent transparent transparent var(--navy);margin-left:3px}
+.video-placeholder p{color:rgba(255,255,255,.7);font-size:13px;text-align:center;padding:0 20px}
+.video-placeholder .add-url-tag{position:absolute;top:10px;right:10px;background:var(--gold);color:var(--navy);font-size:10px;font-weight:700;padding:3px 8px;border-radius:99px}
+.video-embed{width:100%;aspect-ratio:16/9;border-radius:var(--radius);border:none;margin-bottom:14px}
+.video-tag{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;background:rgba(200,151,58,.15);color:var(--gold);border:1px solid var(--gold);margin-bottom:8px}
+
+/* ── Welcome Video Modal ── */
+#welcome-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:998;align-items:center;justify-content:center;padding:20px}
+#welcome-modal.visible{display:flex}
+.welcome-modal-box{background:var(--white);border-radius:16px;padding:32px;max-width:640px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.welcome-modal-box h2{font-size:22px;font-weight:700;margin-bottom:6px}
+.welcome-modal-box p{font-size:14px;color:var(--muted);margin-bottom:20px}
+
 /* ── Spinner ── */
 .spinner{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-size:14px;gap:10px}
 .spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
@@ -192,6 +209,27 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 </style>
 </head>
 <body>
+
+<!-- ══ WELCOME VIDEO MODAL ══ -->
+<div id="welcome-modal">
+  <div class="welcome-modal-box">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Welcome to Key Wellness</div>
+    <h2>You're all set! 🎉</h2>
+    <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
+    <div id="welcome-video-area">
+      <!-- REPLACE: paste your YouTube embed URL below e.g. https://www.youtube.com/embed/YOUR_VIDEO_ID -->
+      <div class="video-placeholder" onclick="void(0)" style="cursor:default">
+        <span class="add-url-tag">Video Coming Soon</span>
+        <div class="play-btn" style="opacity:.5"><div class="play-icon"></div></div>
+        <p>Your welcome video will appear here.<br>Add your YouTube or Vimeo link to activate it.</p>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
+      <button class="btn btn-outline" onclick="closeWelcome()">Skip</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══ AUTH SCREEN ══ -->
 <div id="auth-screen">
@@ -570,7 +608,7 @@ VIEWS['onboarding'] = function () {
     state.user = { ...profile, joined_at: new Date().toISOString() };
     await saveUser();
     awardBadge('first_login');
-    go('assessment');
+    showWelcomeVideo();
   }
 
   render();
@@ -753,6 +791,33 @@ VIEWS['dashboard'] = function () {
 };
 
 // ══════════════════════════════════════════════════
+//  WELCOME VIDEO
+// ══════════════════════════════════════════════════
+function showWelcomeVideo(){
+  document.getElementById('welcome-modal').classList.add('visible');
+}
+window.closeWelcome = function(){
+  document.getElementById('welcome-modal').classList.remove('visible');
+  go('assessment');
+};
+
+// ══════════════════════════════════════════════════
+//  VIDEOS CONFIG
+//  To add a real video: replace null with a YouTube embed URL
+//  e.g. 'https://www.youtube.com/embed/dQw4w9WgXcQ'
+// ══════════════════════════════════════════════════
+const VIDEOS = [
+  { title:'Welcome to Key Wellness',         cat:'Getting Started', duration:'3 min',  url: null },
+  { title:'How to Build a Budget',            cat:'Budgeting',       duration:'5 min',  url: null },
+  { title:'Understanding Your Credit Score',  cat:'Debt',            duration:'4 min',  url: null },
+  { title:'Starting Your Emergency Fund',     cat:'Savings',         duration:'4 min',  url: null },
+  { title:'Retirement Planning 101',          cat:'Retirement',      duration:'6 min',  url: null },
+  { title:'Investing for Beginners',          cat:'Investing',       duration:'7 min',  url: null },
+  { title:'Managing Financial Stress',        cat:'Mindset',         duration:'5 min',  url: null },
+  { title:'Insurance Explained Simply',       cat:'Insurance',       duration:'4 min',  url: null },
+];
+
+// ══════════════════════════════════════════════════
 //  VIEW: LEARN
 // ══════════════════════════════════════════════════
 const CONTENT = [
@@ -766,22 +831,49 @@ const CONTENT = [
   { cat:'Mindset',      icon:'🧠', title:'Financial Stress & Wellbeing',desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.' },
 ];
 
-VIEWS['learn'] = function () {
+VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
+  const activeTab = tab || 'articles';
+
   el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">📚 <strong>Learn, then apply.</strong> Each article connects to tools and real-world actions.</div>
-    <div class="learn-grid">
-      ${CONTENT.map((c,idx)=>`
-        <div class="learn-card" onclick="showArticle(${idx})">
-          <div class="learn-top">${c.icon}</div>
-          <div class="learn-body">
-            <div class="learn-cat">${c.cat}</div>
-            <div class="learn-title">${c.title}</div>
-            <div class="learn-desc">${c.desc}</div>
-            <div style="margin-top:12px"><button class="btn btn-outline btn-sm">Read More →</button></div>
-          </div>
-        </div>`).join('')}
-    </div>`;
+    <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:320px">
+      <button class="auth-tab${activeTab==='articles'?' active':''}" onclick="VIEWS['learn']('articles')" style="flex:1">📚 Articles</button>
+      <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Videos</button>
+    </div>
+
+    ${activeTab==='articles' ? `
+      <div class="notice notice-gold" style="margin-bottom:18px">📚 <strong>Learn, then apply.</strong> Each article connects to tools and real-world actions.</div>
+      <div class="learn-grid">
+        ${CONTENT.map((c,idx)=>`
+          <div class="learn-card" onclick="showArticle(${idx})">
+            <div class="learn-top">${c.icon}</div>
+            <div class="learn-body">
+              <div class="learn-cat">${c.cat}</div>
+              <div class="learn-title">${c.title}</div>
+              <div class="learn-desc">${c.desc}</div>
+              <div style="margin-top:12px"><button class="btn btn-outline btn-sm">Read More →</button></div>
+            </div>
+          </div>`).join('')}
+      </div>` : `
+      <div class="notice notice-gold" style="margin-bottom:18px">🎬 <strong>Video lessons</strong> from the Key Wellness coaching team. New videos added regularly.</div>
+      <div class="learn-grid">
+        ${VIDEOS.map((v,i)=>`
+          <div class="learn-card" style="cursor:default">
+            <div class="learn-body" style="padding-top:18px">
+              <div class="video-tag">${v.cat}</div>
+              <div class="learn-title" style="margin-bottom:10px">${v.title}</div>
+              ${v.url
+                ? `<iframe class="video-embed" src="${v.url}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>`
+                : `<div class="video-placeholder" style="cursor:default">
+                    <span class="add-url-tag">Coming Soon</span>
+                    <div class="play-btn" style="opacity:.4"><div class="play-icon"></div></div>
+                    <p>Video will be available soon</p>
+                   </div>`
+              }
+              <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
+            </div>
+          </div>`).join('')}
+      </div>`}`;
 };
 
 window.showArticle = function (idx) {
