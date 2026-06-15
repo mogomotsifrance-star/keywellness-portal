@@ -816,11 +816,17 @@ window.showArticle = function (idx) {
 VIEWS['tools'] = function () {
   const el = document.getElementById('page-content');
   const tools = [
-    { icon:'💰', name:'Budget Planner',         desc:'Build your monthly budget with income and expense categories.',  file:'budget_planner.html' },
-    { icon:'📊', name:'Expense Tracker',         desc:'Log and categorise daily spending. Export reports.',             file:'expense_tracker.html' },
-    { icon:'🆘', name:'Emergency Fund Planner', desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
-    { icon:'⚔️',  name:'Debt Payoff Calculator', desc:'Avalanche or snowball? See which strategy pays off faster.',    file:null },
-    { icon:'📅', name:'Book a Coach',            desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
+    { icon:'💰', name:'Budget Planner',           desc:'Build your monthly budget using the 50/30/20 rule.',            file:'budget_planner.html' },
+    { icon:'📊', name:'Expense Tracker',           desc:'Log and categorise daily spending. Track where money goes.',    file:'expense_tracker.html' },
+    { icon:'🆘', name:'Emergency Fund Planner',    desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
+    { icon:'⚔️',  name:'Debt Snowball Planner',    desc:'List your debts and see your payoff order and timeline.',       file:'debt_snowball.html' },
+    { icon:'📐', name:'Debt-to-Income Calculator', desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
+    { icon:'🎯', name:'Retirement Calculator',     desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
+    { icon:'🏆', name:'Goal Planner',              desc:'Set SMART financial goals and track progress toward each one.', file:'goal_planner.html' },
+    { icon:'💎', name:'Net Worth Tracker',         desc:'Track assets vs liabilities and watch your net worth grow.',    file:'net_worth_tracker.html' },
+    { icon:'🧠', name:'Financial Stress Tracker',  desc:'Log your financial stress levels and spot patterns over time.', file:'financial_stress_tracker.html' },
+    { icon:'📋', name:'Wellness Assessment',       desc:'Standalone financial wellness quiz with instant score.',         file:'wellness_assessment.html' },
+    { icon:'📅', name:'Book a Coach',              desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
   ];
   el.innerHTML = `
     <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action.</div>
