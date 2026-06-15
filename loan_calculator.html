@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Loan Calculator – Key Wellness</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#f0c842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#fff;
+  --radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(13,37,69,.1);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
+.wrap{max-width:760px;margin:0 auto}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--navy);text-decoration:none;margin-bottom:18px;opacity:.7;transition:opacity .15s}
+.back-link:hover{opacity:1}
+.tool-header{background:var(--navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px;position:relative;overflow:hidden}
+.tool-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(200,153,26,.18) 0%,transparent 70%)}
+.tool-header-inner{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
+.tool-icon{font-size:2.2rem}
+.tool-header h1{color:#fff;font-size:1.3rem;font-weight:700;margin-bottom:3px}
+.tool-header p{color:rgba(255,255,255,.6);font-size:.82rem}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
+.card-title{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:520px){.field-grid{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.72rem;font-weight:700;color:var(--slate);letter-spacing:.03em}
+.field .hint{font-size:.65rem;color:var(--muted);margin-top:2px}
+.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);overflow:hidden;transition:border-color .2s,box-shadow .2s}
+.iw:focus-within{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px rgba(200,153,26,.12)}
+.iw-prefix,.iw-suffix{padding:0 12px;font-size:.85rem;font-weight:700;color:var(--muted);background:var(--cream);border-right:1.5px solid var(--border);height:100%;display:flex;align-items:center;flex-shrink:0}
+.iw-suffix{border-right:none;border-left:1.5px solid var(--border)}
+.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:11px 12px;font-size:.92rem;color:var(--navy);min-width:0;font-family:inherit}
+.iw select{cursor:pointer;appearance:none}
+/* loan type toggle */
+.toggle-row{display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:18px}
+.toggle-btn{flex:1;padding:8px 14px;border:none;background:var(--cream);font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;font-family:inherit}
+.toggle-btn.active{background:var(--navy);color:#fff}
+/* extra payment section */
+.extra-section{border:2px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:20px}
+.extra-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--cream);cursor:pointer;user-select:none}
+.extra-header-left{display:flex;align-items:center;gap:10px;font-size:.82rem;font-weight:700;color:var(--navy)}
+.extra-toggle-icon{font-size:1rem}
+.extra-chevron{font-size:.7rem;color:var(--muted);transition:transform .2s}
+.extra-chevron.open{transform:rotate(180deg)}
+.extra-body{display:none;padding:16px;border-top:1.5px solid var(--border);background:#fff}
+.extra-body.open{display:block}
+.extra-type-row{display:flex;gap:8px;margin-bottom:16px}
+.xtype-btn{flex:1;padding:9px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);background:var(--cream);font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;transition:.15s;font-family:inherit;text-align:center}
+.xtype-btn.active{border-color:var(--navy);background:var(--navy);color:#fff}
+/* calc button */
+.calc-btn{width:100%;padding:14px;background:var(--gold);color:var(--navy);border:none;border-radius:var(--radius-sm);font-size:.95rem;font-weight:800;cursor:pointer;letter-spacing:.03em;transition:background .15s;margin-top:4px}
+.calc-btn:hover{background:var(--gold-lt)}
+/* results */
+.results{display:none}
+.results.show{display:block}
+.result-hero{background:var(--navy);border-radius:var(--radius);padding:28px;text-align:center;margin-bottom:16px}
+.result-hero-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.5);margin-bottom:8px}
+.result-hero-val{font-size:2.4rem;font-weight:800;color:var(--gold-lt);font-family:'DM Mono',monospace;letter-spacing:-.02em}
+.result-hero-sub{font-size:.78rem;color:rgba(255,255,255,.55);margin-top:6px}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px}
+.stat-box{background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--border)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .stat-val{color:var(--green)}
+.stat-box.red{border-left-color:var(--red)}.stat-box.red .stat-val{color:var(--red)}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .stat-val{color:var(--gold)}
+.stat-val{font-size:1.2rem;font-weight:800;font-family:'DM Mono',monospace;color:var(--navy)}
+.stat-lbl{font-size:.68rem;font-weight:600;color:var(--muted);margin-top:3px}
+/* savings banner */
+.savings-banner{background:#f0faf4;border:2px solid var(--green);border-radius:var(--radius-sm);padding:16px 18px;margin-bottom:16px;display:none}
+.savings-banner.show{display:block}
+.savings-banner-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-bottom:10px}
+.savings-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:480px){.savings-grid{grid-template-columns:1fr 1fr}}
+.savings-item{text-align:center}
+.savings-val{font-size:1.1rem;font-weight:800;font-family:'DM Mono',monospace;color:var(--green)}
+.savings-lbl{font-size:.62rem;font-weight:600;color:var(--muted);margin-top:2px}
+/* compare table */
+.compare-wrap{overflow-x:auto;margin-bottom:8px}
+.compare-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.compare-table th{padding:9px 14px;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;border-bottom:2px solid var(--border);background:var(--cream)}
+.compare-table th:not(:first-child){text-align:right}
+.compare-table td{padding:11px 14px;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;text-align:right;font-size:.82rem}
+.compare-table td:first-child{text-align:left;font-family:'Inter',sans-serif;font-weight:600;color:var(--slate);font-size:.78rem}
+.compare-table tr:last-child td{border-bottom:none}
+.col-base{color:var(--navy)}
+.col-extra{color:var(--green);font-weight:700}
+/* breakdown bar */
+.breakdown-bar{height:14px;border-radius:99px;overflow:hidden;display:flex;margin:10px 0 6px}
+.bar-principal{background:var(--navy)}
+.bar-interest{background:var(--gold)}
+.bar-legend{display:flex;gap:18px;font-size:.72rem;font-weight:600;color:var(--muted)}
+.bar-legend span{display:flex;align-items:center;gap:5px}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* amortization table */
+.amort-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+th{background:var(--navy);color:#fff;padding:9px 12px;text-align:right;font-weight:700;font-size:.68rem;letter-spacing:.05em}
+th:first-child{text-align:left}
+td{padding:8px 12px;border-bottom:1px solid var(--border);text-align:right;font-family:'DM Mono',monospace;font-size:.78rem}
+td:first-child{text-align:left;font-family:'Inter',sans-serif;font-weight:600;color:var(--navy)}
+tr:nth-child(even) td{background:#fafafa}
+tr.total-row td{background:var(--cream);font-weight:700;border-top:2px solid var(--border);font-family:'Inter',sans-serif}
+tr.extra-row td{background:#f0faf4}
+.amort-toggle{font-size:.75rem;color:var(--navy);font-weight:600;cursor:pointer;border:none;background:none;padding:6px 0;text-decoration:underline;text-underline-offset:3px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="index.html">← Back to Portal</a>
+
+  <div class="tool-header">
+    <div class="tool-header-inner">
+      <div class="tool-icon">🏦</div>
+      <div>
+        <h1>Loan Calculator</h1>
+        <p>Calculate repayments, total interest, and see how extra payments save you money.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="card">
+    <div class="card-title">Loan Details</div>
+
+    <div class="toggle-row" style="max-width:300px">
+      <button class="toggle-btn active" onclick="setLoanType('personal',this)">Personal / Vehicle</button>
+      <button class="toggle-btn" onclick="setLoanType('home',this)">Home Loan</button>
+    </div>
+
+    <div class="field-grid" style="margin-bottom:16px">
+      <div class="field">
+        <label>Loan Amount</label>
+        <div class="iw">
+          <div class="iw-prefix">BWP</div>
+          <input type="number" id="loanAmount" value="50000" min="1000" step="1000" placeholder="50 000">
+        </div>
+      </div>
+      <div class="field">
+        <label>Annual Interest Rate</label>
+        <div class="iw">
+          <input type="number" id="interestRate" value="12" min="0.1" max="60" step="0.1" placeholder="12">
+          <div class="iw-suffix">% p.a.</div>
+        </div>
+      </div>
+    </div>
+    <div class="field-grid" style="margin-bottom:20px">
+      <div class="field">
+        <label>Loan Term</label>
+        <div class="iw">
+          <input type="number" id="loanTerm" value="5" min="1" max="30" step="1" placeholder="5">
+          <div class="iw-suffix">Years</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Repayment Frequency</label>
+        <div class="iw" style="padding-right:10px">
+          <select id="frequency">
+            <option value="12">Monthly</option>
+            <option value="26">Fortnightly</option>
+            <option value="52">Weekly</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Extra Payment section -->
+    <div class="extra-section">
+      <div class="extra-header" onclick="toggleExtraSection()">
+        <div class="extra-header-left">
+          <span class="extra-toggle-icon">➕</span>
+          Add Extra Payment <span style="font-weight:400;color:var(--muted);font-size:.72rem;margin-left:4px">(optional — see how much you save)</span>
+        </div>
+        <span class="extra-chevron" id="extraChevron">▾</span>
+      </div>
+      <div class="extra-body" id="extraBody">
+        <div class="extra-type-row">
+          <button class="xtype-btn active" id="xtypeMonthly" onclick="setExtraType('monthly')">📅 Extra Monthly</button>
+          <button class="xtype-btn" id="xtypeLump" onclick="setExtraType('lump')">💰 Lump Sum</button>
+          <button class="xtype-btn" id="xtypeBoth" onclick="setExtraType('both')">📅 + 💰 Both</button>
+        </div>
+
+        <!-- Monthly extra -->
+        <div id="monthlyExtraFields">
+          <div class="field">
+            <label>Extra Amount per Payment</label>
+            <div class="iw">
+              <div class="iw-prefix">BWP</div>
+              <input type="number" id="extraMonthly" value="500" min="0" step="100" placeholder="500">
+            </div>
+            <div class="hint">Added on top of your regular repayment each period</div>
+          </div>
+        </div>
+
+        <!-- Lump sum extra -->
+        <div id="lumpExtraFields" style="display:none">
+          <div class="field-grid">
+            <div class="field">
+              <label>Lump Sum Amount</label>
+              <div class="iw">
+                <div class="iw-prefix">BWP</div>
+                <input type="number" id="extraLump" value="10000" min="0" step="1000" placeholder="10 000">
+              </div>
+            </div>
+            <div class="field">
+              <label>Pay It In (Month #)</label>
+              <div class="iw">
+                <input type="number" id="lumpMonth" value="12" min="1" step="1" placeholder="12">
+                <div class="iw-suffix">months</div>
+              </div>
+              <div class="hint">e.g. 12 = after 1 year</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <button class="calc-btn" onclick="calculate()">Calculate Repayments →</button>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <div class="result-hero">
+      <div class="result-hero-label" id="heroLabel">Monthly Repayment</div>
+      <div class="result-hero-val" id="heroVal">—</div>
+      <div class="result-hero-sub" id="heroSub"></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box gold">
+        <div class="stat-val" id="statPrincipal">—</div>
+        <div class="stat-lbl">Loan Principal</div>
+      </div>
+      <div class="stat-box red">
+        <div class="stat-val" id="statInterest">—</div>
+        <div class="stat-lbl">Total Interest</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statTotal">—</div>
+        <div class="stat-lbl">Total Repayment</div>
+      </div>
+      <div class="stat-box green">
+        <div class="stat-val" id="statRate">—</div>
+        <div class="stat-lbl">Interest Rate</div>
+      </div>
+    </div>
+
+    <!-- Savings banner (shown when extra payments entered) -->
+    <div class="savings-banner" id="savingsBanner">
+      <div class="savings-banner-title">💚 With Extra Payments You Save</div>
+      <div class="savings-grid">
+        <div class="savings-item">
+          <div class="savings-val" id="saveInterest">—</div>
+          <div class="savings-lbl">Interest Saved</div>
+        </div>
+        <div class="savings-item">
+          <div class="savings-val" id="saveTime">—</div>
+          <div class="savings-lbl">Time Saved</div>
+        </div>
+        <div class="savings-item">
+          <div class="savings-val" id="savePayoff">—</div>
+          <div class="savings-lbl">Pay Off By</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Side-by-side comparison (shown when extra payments) -->
+    <div class="card" id="compareCard" style="display:none">
+      <div class="card-title">Standard vs With Extra Payments</div>
+      <div class="compare-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Standard</th>
+              <th>With Extra Payments</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Regular Payment</td>
+              <td class="col-base" id="cmpPayment">—</td>
+              <td class="col-extra" id="cmpExtraPayment">—</td>
+            </tr>
+            <tr>
+              <td>Loan Term</td>
+              <td class="col-base" id="cmpTerm">—</td>
+              <td class="col-extra" id="cmpExtraTerm">—</td>
+            </tr>
+            <tr>
+              <td>Total Interest</td>
+              <td class="col-base" id="cmpInterest">—</td>
+              <td class="col-extra" id="cmpExtraInterest">—</td>
+            </tr>
+            <tr>
+              <td>Total Repaid</td>
+              <td class="col-base" id="cmpTotal">—</td>
+              <td class="col-extra" id="cmpExtraTotal">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Principal vs Interest</div>
+      <div class="breakdown-bar">
+        <div class="bar-principal" id="barPrincipal" style="width:60%"></div>
+        <div class="bar-interest" id="barInterest" style="width:40%"></div>
+      </div>
+      <div class="bar-legend">
+        <span><div class="leg-dot" style="background:var(--navy)"></div>Principal <span id="legPct">—</span></span>
+        <span><div class="leg-dot" style="background:var(--gold)"></div>Interest <span id="legIntPct">—</span></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Amortisation Schedule</div>
+      <div class="amort-wrap" id="amortWrap"></div>
+      <button class="amort-toggle" id="amortToggle" onclick="toggleAmort()">Show full schedule ▾</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let loanType = 'personal';
+let extraType = 'monthly';
+let showFullAmort = false;
+let extraOpen = false;
+
+// ── UI toggles ──
+function setLoanType(type, btn) {
+  loanType = type;
+  document.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(type==='home'){
+    document.getElementById('loanTerm').value = 20;
+    document.getElementById('interestRate').value = 9;
+  } else {
+    document.getElementById('loanTerm').value = 5;
+    document.getElementById('interestRate').value = 12;
+  }
+}
+
+function toggleExtraSection() {
+  extraOpen = !extraOpen;
+  document.getElementById('extraBody').classList.toggle('open', extraOpen);
+  document.getElementById('extraChevron').classList.toggle('open', extraOpen);
+}
+
+function setExtraType(type) {
+  extraType = type;
+  ['monthly','lump','both'].forEach(t=>{
+    document.getElementById('xtype'+t.charAt(0).toUpperCase()+t.slice(1)).classList.toggle('active', t===type);
+  });
+  document.getElementById('monthlyExtraFields').style.display = (type==='monthly'||type==='both') ? '' : 'none';
+  document.getElementById('lumpExtraFields').style.display    = (type==='lump'   ||type==='both') ? '' : 'none';
+}
+
+// ── Formatting ──
+function fmt(n){ return 'BWP ' + n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtShort(n){ return n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function periodsToLabel(periods, freq) {
+  const months = Math.round(periods * 12 / freq);
+  const yrs = Math.floor(months/12);
+  const mos = months % 12;
+  let s = '';
+  if(yrs>0) s += yrs + ' yr' + (yrs>1?'s':'');
+  if(mos>0) s += (s?' ':'')+mos + ' mo';
+  return s || '< 1 mo';
+}
+
+// ── Simulate amortisation (supports extra monthly + lump sum) ──
+function simulate(P, r, PMT, maxPeriods, extraPerPeriod, lumpAmt, lumpAtPeriod) {
+  let balance = P;
+  let period = 0;
+  let totalInterest = 0;
+  let totalPaid = 0;
+  const rows = []; // annual buckets
+  let yearPrincipal=0, yearInterest=0;
+
+  while(balance > 0.01 && period < maxPeriods * 2) {
+    period++;
+    const intCharge   = balance * r;
+    let payment       = Math.min(PMT + extraPerPeriod, balance + intCharge);
+    // Apply lump sum at the specified period
+    if(lumpAmt > 0 && period === lumpAtPeriod) {
+      payment = Math.min(payment + lumpAmt, balance + intCharge);
+    }
+    const princCharge = payment - intCharge;
+    balance          -= princCharge;
+    totalInterest    += intCharge;
+    totalPaid        += payment;
+    yearPrincipal    += princCharge;
+    yearInterest     += intCharge;
+    if(balance < 0.01) balance = 0;
+
+    // Bucket into years (based on freq)
+    const freq = parseInt(document.getElementById('frequency').value);
+    if(period % freq === 0 || balance === 0) {
+      const yr = Math.ceil(period / freq);
+      rows.push({ yr, paidPrincipal: yearPrincipal, paidInterest: yearInterest, balance: Math.max(0,balance), hasLump: lumpAmt>0 && lumpAtPeriod >= (yr-1)*freq+1 && lumpAtPeriod <= yr*freq });
+      yearPrincipal=0; yearInterest=0;
+    }
+  }
+  return { periods: period, totalInterest, totalPaid, rows };
+}
+
+// ── Main calculate ──
+function calculate() {
+  const P          = parseFloat(document.getElementById('loanAmount').value);
+  const annualRate = parseFloat(document.getElementById('interestRate').value);
+  const years      = parseFloat(document.getElementById('loanTerm').value);
+  const freq       = parseInt(document.getElementById('frequency').value);
+  if(!P||!annualRate||!years) return;
+
+  const r = annualRate / 100 / freq;
+  const n = years * freq;
+  const PMT = r===0 ? P/n : P * (r * Math.pow(1+r,n)) / (Math.pow(1+r,n)-1);
+
+  // Extra payment inputs
+  const hasExtra  = extraOpen;
+  const extraMo   = (hasExtra && (extraType==='monthly'||extraType==='both')) ? (parseFloat(document.getElementById('extraMonthly').value)||0) : 0;
+  const lumpAmt   = (hasExtra && (extraType==='lump'   ||extraType==='both')) ? (parseFloat(document.getElementById('extraLump').value)||0) : 0;
+  const lumpMonth = (hasExtra && (extraType==='lump'   ||extraType==='both')) ? (parseInt(document.getElementById('lumpMonth').value)||1) : 0;
+
+  // Scale monthly extra to match repayment frequency
+  const extraPerPeriod = extraMo * (12 / freq);
+
+  // Simulate standard
+  const base  = simulate(P, r, PMT, n, 0, 0, 0);
+  // Simulate with extra payments
+  const extra = (hasExtra && (extraMo>0 || lumpAmt>0))
+    ? simulate(P, r, PMT, n, extraPerPeriod, lumpAmt, lumpMonth)
+    : null;
+
+  const freqLabel = freq===12?'Monthly':freq===26?'Fortnightly':'Weekly';
+
+  // Hero — show standard payment
+  document.getElementById('heroLabel').textContent = freqLabel + ' Repayment';
+  document.getElementById('heroVal').textContent   = 'BWP ' + fmtShort(PMT);
+  document.getElementById('heroSub').textContent   = n + ' payments over ' + years + ' year' + (years>1?'s':'');
+
+  // Stats (standard)
+  document.getElementById('statPrincipal').textContent = fmt(P);
+  document.getElementById('statInterest').textContent  = fmt(base.totalInterest);
+  document.getElementById('statTotal').textContent     = fmt(base.totalPaid);
+  document.getElementById('statRate').textContent      = annualRate.toFixed(2) + '% p.a.';
+
+  // Breakdown bar (standard)
+  const pPct = (P/base.totalPaid*100).toFixed(1);
+  const iPct = (base.totalInterest/base.totalPaid*100).toFixed(1);
+  document.getElementById('barPrincipal').style.width = pPct+'%';
+  document.getElementById('barInterest').style.width  = iPct+'%';
+  document.getElementById('legPct').textContent       = pPct+'%';
+  document.getElementById('legIntPct').textContent    = iPct+'%';
+
+  // Extra payment results
+  if(extra) {
+    const interestSaved = base.totalInterest - extra.totalInterest;
+    const periodsSaved  = base.periods - extra.periods;
+    const timeSaved     = periodsToLabel(periodsSaved, freq);
+    const payoffPeriods = extra.periods;
+    const payoffMonths  = Math.round(payoffPeriods * 12 / freq);
+    const payoffDate    = new Date();
+    payoffDate.setMonth(payoffDate.getMonth() + payoffMonths);
+    const payoffStr     = payoffDate.toLocaleDateString('en-BW',{month:'short',year:'numeric'});
+
+    document.getElementById('saveInterest').textContent = fmt(interestSaved);
+    document.getElementById('saveTime').textContent     = timeSaved;
+    document.getElementById('savePayoff').textContent   = payoffStr;
+    document.getElementById('savingsBanner').classList.add('show');
+
+    // Compare table
+    document.getElementById('cmpPayment').textContent      = 'BWP '+fmtShort(PMT);
+    document.getElementById('cmpExtraPayment').textContent = extraMo>0 ? 'BWP '+fmtShort(PMT+extraPerPeriod) : 'BWP '+fmtShort(PMT)+' + lump';
+    document.getElementById('cmpTerm').textContent         = periodsToLabel(base.periods, freq);
+    document.getElementById('cmpExtraTerm').textContent    = periodsToLabel(extra.periods, freq);
+    document.getElementById('cmpInterest').textContent     = fmt(base.totalInterest);
+    document.getElementById('cmpExtraInterest').textContent= fmt(extra.totalInterest);
+    document.getElementById('cmpTotal').textContent        = fmt(base.totalPaid);
+    document.getElementById('cmpExtraTotal').textContent   = fmt(extra.totalPaid);
+    document.getElementById('compareCard').style.display   = '';
+  } else {
+    document.getElementById('savingsBanner').classList.remove('show');
+    document.getElementById('compareCard').style.display = 'none';
+  }
+
+  // Amortisation — use extra rows if available, else standard
+  const amortRows   = extra ? extra.rows : base.rows;
+  const amortTotals = {
+    totalPrincipal: amortRows.reduce((s,r)=>s+r.paidPrincipal,0),
+    totalInterest:  amortRows.reduce((s,r)=>s+r.paidInterest,0),
+  };
+  window._amortRows   = amortRows;
+  window._amortTotals = amortTotals;
+  window._amortHasLump = lumpAmt > 0;
+  renderAmort(showFullAmort);
+
+  document.getElementById('results').classList.add('show');
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderAmort(full) {
+  const rows    = window._amortRows || [];
+  const t       = window._amortTotals || {};
+  const hasLump = window._amortHasLump;
+  const display = full ? rows : rows.slice(0,5);
+
+  document.getElementById('amortWrap').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Principal Paid</th>
+          <th>Interest Paid</th>
+          <th>Balance Remaining</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${display.map(r=>`
+          <tr${r.hasLump?' class="extra-row"':''}>
+            <td>Year ${r.yr}${r.hasLump?' 💰':''}</td>
+            <td>${fmtShort(r.paidPrincipal)}</td>
+            <td style="color:var(--red)">${fmtShort(r.paidInterest)}</td>
+            <td>${fmtShort(r.balance)}</td>
+          </tr>`).join('')}
+        <tr class="total-row">
+          <td>Total</td>
+          <td>${fmtShort(t.totalPrincipal||0)}</td>
+          <td style="color:var(--red)">${fmtShort(t.totalInterest||0)}</td>
+          <td>0.00</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  const toggle = document.getElementById('amortToggle');
+  if(rows.length<=5){ toggle.style.display='none'; }
+  else { toggle.style.display=''; toggle.textContent = full?'Show less ▴':`Show all ${rows.length} years ▾`; }
+}
+
+function toggleAmort() {
+  showFullAmort = !showFullAmort;
+  renderAmort(showFullAmort);
+}
+
+calculate();
+</script>
+</body>
+</html>
