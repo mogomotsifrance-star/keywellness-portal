@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Key Wellness — Financial Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--gold-light:#e8b85a;
+  --cream:#f5f0e8;--cream-dark:#ede7d9;--white:#ffffff;
+  --green:#2d8a4e;--red:#c0392b;--orange:#e67e22;--blue:#2980b9;
+  --text:#1a2744;--muted:#6b7280;--border:#ddd6c8;
+  --radius:12px;--radius-sm:8px;--shadow:0 2px 12px rgba(26,39,68,.10);
+  --sidebar-w:240px;--bottom-nav-h:64px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
+a{color:inherit;text-decoration:none}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+input,select,textarea{font-family:'Inter',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── Sidebar ── */
+#sidebar{
+  width:var(--sidebar-w);min-height:100vh;background:var(--navy);
+  display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100;
+}
+.sb-logo{padding:28px 20px 20px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo h1{color:var(--white);font-size:16px;font-weight:700;line-height:1.2}
+.sb-logo span{color:var(--gold);font-size:12px;font-weight:500}
+.sb-nav{flex:1;padding:16px 0;overflow-y:auto}
+.sb-item{
+  display:flex;align-items:center;gap:12px;padding:11px 20px;
+  color:rgba(255,255,255,.7);font-size:14px;font-weight:500;
+  cursor:pointer;transition:.15s;border-left:3px solid transparent;
+}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.07)}
+.sb-item.active{color:#fff;background:rgba(200,151,58,.15);border-left-color:var(--gold)}
+.sb-item .icon{font-size:18px;width:22px;text-align:center}
+.sb-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1)}
+.sb-points{color:var(--gold);font-size:13px;font-weight:600}
+.sb-points span{color:rgba(255,255,255,.5);font-weight:400}
+
+/* ── Main ── */
+#main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column}
+.page-header{
+  background:var(--white);border-bottom:1px solid var(--border);
+  padding:18px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;
+}
+.page-header h2{font-size:20px;font-weight:700;flex:1}
+.page-content{padding:32px;max-width:960px}
+
+/* ── Cards ── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:16px;font-weight:700;margin-bottom:16px;color:var(--navy)}
+.card-subtitle{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* ── Buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:10px 20px;
+  border-radius:var(--radius-sm);font-size:14px;font-weight:600;border:none;transition:.15s;
+}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--navy);border:2px solid var(--border)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-navy:hover{background:var(--navy-light)}
+.btn-sm{padding:7px 14px;font-size:13px}
+.btn-danger{background:var(--red);color:#fff}
+
+/* ── Forms ── */
+.field{margin-bottom:18px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--navy);margin-bottom:6px}
+.field input,.field select,.field textarea{
+  width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;background:var(--cream);transition:.15s;outline:none;
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--gold);background:#fff}
+.field .hint{font-size:12px;color:var(--muted);margin-top:5px}
+
+/* ── Progress bar ── */
+.progress-bar{background:var(--cream-dark);border-radius:99px;height:10px;overflow:hidden;margin-top:8px}
+.progress-fill{height:100%;border-radius:99px;background:var(--gold);transition:.4s}
+
+/* ── Score Gauge ── */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;padding:8px 0}
+.gauge-score{font-family:'DM Mono',monospace;font-size:48px;font-weight:500;color:var(--navy);line-height:1}
+.gauge-label{font-size:14px;font-weight:600;margin-top:6px}
+
+/* ── Badges ── */
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:16px}
+.badge-card{
+  background:var(--cream);border-radius:var(--radius);padding:20px 16px;
+  text-align:center;border:2px solid var(--border);transition:.2s;
+}
+.badge-card.earned{border-color:var(--gold);background:#fffbf2}
+.badge-card.earned .badge-icon{filter:none}
+.badge-icon{font-size:36px;display:block;margin-bottom:8px;filter:grayscale(1) opacity(.4)}
+.badge-name{font-size:12px;font-weight:700;color:var(--navy)}
+.badge-desc{font-size:11px;color:var(--muted);margin-top:3px}
+.badge-pts{font-size:11px;font-weight:600;color:var(--gold);margin-top:6px}
+
+/* ── Assessment ── */
+.q-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px}
+.q-number{font-size:12px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.05em}
+.q-text{font-size:18px;font-weight:600;margin:10px 0 20px;line-height:1.4}
+.q-options{display:flex;flex-direction:column;gap:10px}
+.q-opt{
+  padding:12px 16px;border-radius:var(--radius-sm);border:2px solid var(--border);
+  cursor:pointer;font-size:14px;font-weight:500;transition:.15s;text-align:left;background:#fff;
+}
+.q-opt:hover{border-color:var(--gold);background:#fffbf2}
+.q-opt.selected{border-color:var(--gold);background:#fffbf2;color:var(--navy)}
+.q-progress{display:flex;gap:4px;margin-bottom:24px}
+.q-dot{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.q-dot.done{background:var(--gold)}
+.q-dot.current{background:var(--navy)}
+
+/* ── Score bands ── */
+.band-red{color:var(--red)} .band-orange{color:var(--orange)}
+.band-yellow{color:#d4ac0d} .band-green{color:var(--green)}
+.bg-red{background:#fdf2f2} .bg-orange{background:#fef5ec}
+.bg-yellow{background:#fefde7} .bg-green{background:#f0faf4}
+
+/* ── Stat boxes ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;margin-bottom:24px}
+.stat-box{background:var(--white);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);text-align:center}
+.stat-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--navy)}
+.stat-lbl{font-size:12px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+
+/* ── Learn cards ── */
+.learn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px}
+.learn-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;transition:.2s}
+.learn-card:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(26,39,68,.14)}
+.learn-top{padding:20px 20px 0;font-size:32px}
+.learn-body{padding:12px 20px 20px}
+.learn-cat{font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.learn-title{font-size:15px;font-weight:700;margin-bottom:6px}
+.learn-desc{font-size:13px;color:var(--muted);line-height:1.5}
+.learn-btn{margin-top:14px}
+
+/* ── Onboarding wizard ── */
+.wizard{max-width:580px;margin:0 auto}
+.wizard-steps{display:flex;justify-content:center;gap:6px;margin-bottom:32px}
+.wstep{width:32px;height:5px;border-radius:99px;background:var(--border)}
+.wstep.done,.wstep.active{background:var(--gold)}
+.wizard-q{font-size:22px;font-weight:700;margin-bottom:8px}
+.wizard-hint{font-size:14px;color:var(--muted);margin-bottom:28px}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.choice-btn{
+  padding:16px 12px;border-radius:var(--radius);border:2px solid var(--border);
+  background:#fff;cursor:pointer;text-align:left;transition:.15s;font-size:14px;font-weight:500;
+}
+.choice-btn .choice-icon{font-size:24px;display:block;margin-bottom:8px}
+.choice-btn:hover,.choice-btn.selected{border-color:var(--gold);background:#fffbf2}
+
+/* ── Alert / notice ── */
+.notice{padding:14px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;margin-bottom:16px}
+.notice-gold{background:#fffbf2;border-left:4px solid var(--gold);color:var(--navy)}
+.notice-green{background:#f0faf4;border-left:4px solid var(--green);color:#1a4a2e}
+.notice-red{background:#fdf2f2;border-left:4px solid var(--red);color:#7b1a1a}
+
+/* ── Tags ── */
+.tag{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;margin:2px}
+.tag-gold{background:#fffbf2;color:var(--gold);border:1px solid var(--gold)}
+.tag-navy{background:var(--navy);color:#fff}
+.tag-green{background:#f0faf4;color:var(--green)}
+
+/* ── Chart wrapper ── */
+.chart-wrap{position:relative;height:260px;margin-top:16px}
+
+/* ── Checkin slider ── */
+.slider-row{margin-bottom:20px}
+.slider-row label{display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px}
+.slider-row label span{font-family:'DM Mono',monospace;color:var(--gold);font-size:15px}
+input[type=range]{width:100%;accent-color:var(--gold)}
+
+/* ── Booking form ── */
+.booking-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ── Emergency fund ── */
+.ef-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}
+.ef-box{background:var(--cream);border-radius:var(--radius-sm);padding:18px;text-align:center}
+.ef-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:500;color:var(--navy)}
+.ef-lbl{font-size:12px;color:var(--muted);margin-top:4px;font-weight:600;text-transform:uppercase}
+.ef-months{display:flex;gap:8px;margin:16px 0}
+.ef-month-btn{
+  flex:1;padding:12px;border-radius:var(--radius-sm);border:2px solid var(--border);
+  background:#fff;cursor:pointer;font-size:14px;font-weight:600;text-align:center;transition:.15s;
+}
+.ef-month-btn.selected{border-color:var(--gold);background:#fffbf2;color:var(--navy)}
+.ef-tip{background:var(--cream);border-radius:var(--radius-sm);padding:14px 16px;margin-top:12px;font-size:13px;color:var(--muted);line-height:1.5}
+
+/* ── Checkin categories ── */
+.cat-scores{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+.cat-row{background:var(--cream);border-radius:var(--radius-sm);padding:14px 16px}
+.cat-name{font-size:13px;font-weight:600;margin-bottom:6px}
+.cat-score{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)}
+
+/* ── Mobile ── */
+@media(max-width:768px){
+  #sidebar{display:none}
+  #main{margin-left:0;padding-bottom:var(--bottom-nav-h)}
+  .page-content{padding:16px}
+  .page-header{padding:14px 16px}
+  .booking-grid{grid-template-columns:1fr}
+  .ef-summary{grid-template-columns:1fr 1fr}
+  .cat-scores{grid-template-columns:1fr}
+  .choice-grid{grid-template-columns:1fr}
+  #bottom-nav{display:flex}
+}
+@media(min-width:769px){#bottom-nav{display:none}}
+#bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;height:var(--bottom-nav-h);
+  background:var(--navy);border-top:1px solid rgba(255,255,255,.1);
+  justify-content:space-around;align-items:center;z-index:100;
+}
+.bn-item{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  color:rgba(255,255,255,.5);font-size:10px;font-weight:600;cursor:pointer;padding:6px;
+}
+.bn-item.active{color:var(--gold)}
+.bn-icon{font-size:20px}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <h1>Key Wellness</h1>
+    <span>Financial Wellness Portal</span>
+  </div>
+  <div class="sb-nav" id="sb-nav"></div>
+  <div class="sb-footer">
+    <div class="sb-points"><span>Points: </span><span id="sb-pts" class="mono">0</span></div>
+  </div>
+</nav>
+
+<!-- ══ BOTTOM NAV (mobile) ══ -->
+<nav id="bottom-nav" style="display:none"></nav>
+
+<!-- ══ MAIN ══ -->
+<div id="main">
+  <div class="page-header">
+    <h2 id="page-title">Dashboard</h2>
+    <div id="header-actions"></div>
+  </div>
+  <div class="page-content" id="page-content"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════
+const KEYS = {
+  user: 'kw_portal_user_v1',
+  assessments: 'kw_portal_assessments_v1',
+  goals: 'kw_portal_goals_v1',
+  checkins: 'kw_portal_checkins_v1',
+  badges: 'kw_portal_badges_v1',
+};
+
+function load(key){ try{return JSON.parse(localStorage.getItem(key))||null}catch{return null} }
+function save(key,val){ localStorage.setItem(key,JSON.stringify(val)) }
+
+let state = {
+  user: load(KEYS.user) || null,
+  assessments: load(KEYS.assessments) || [],
+  goals: load(KEYS.goals) || [],
+  checkins: load(KEYS.checkins) || [],
+  badges: load(KEYS.badges) || { earned:[], points:0 },
+};
+
+function saveUser(){ save(KEYS.user, state.user) }
+function saveAssessments(){ save(KEYS.assessments, state.assessments) }
+function saveCheckins(){ save(KEYS.checkins, state.checkins) }
+function saveBadges(){ save(KEYS.badges, state.badges) }
+
+// ══════════════════════════════════════════════════
+//  NAV CONFIG
+// ══════════════════════════════════════════════════
+const NAV = [
+  { id:'dashboard',  icon:'🏠', label:'Dashboard' },
+  { id:'assessment', icon:'📋', label:'Assessment' },
+  { id:'learn',      icon:'📚', label:'Learn' },
+  { id:'tools',      icon:'🛠️',  label:'Tools' },
+  { id:'emergency',  icon:'🆘', label:'Emergency Fund' },
+  { id:'checkin',    icon:'✅', label:'Check-in' },
+  { id:'progress',   icon:'📈', label:'Progress' },
+  { id:'booking',    icon:'📅', label:'Book Session' },
+  { id:'badges',     icon:'🏆', label:'Badges' },
+];
+
+const MOBILE_NAV = [
+  { id:'dashboard', icon:'🏠', label:'Home' },
+  { id:'assessment',icon:'📋', label:'Assess' },
+  { id:'emergency', icon:'🆘', label:'Emergency' },
+  { id:'booking',   icon:'📅', label:'Book' },
+  { id:'badges',    icon:'🏆', label:'Badges' },
+];
+
+function buildNav(current){
+  const sb = document.getElementById('sb-nav');
+  sb.innerHTML = NAV.map(n=>`
+    <div class="sb-item${current===n.id?' active':''}" onclick="go('${n.id}')">
+      <span class="icon">${n.icon}</span>${n.label}
+    </div>`).join('');
+
+  const bn = document.getElementById('bottom-nav');
+  bn.innerHTML = MOBILE_NAV.map(n=>`
+    <div class="bn-item${current===n.id?' active':''}" onclick="go('${n.id}')">
+      <span class="bn-icon">${n.icon}</span>${n.label}
+    </div>`).join('');
+
+  document.getElementById('sb-pts').textContent = state.badges.points;
+}
+
+// ══════════════════════════════════════════════════
+//  ROUTER
+// ══════════════════════════════════════════════════
+const VIEWS = {};
+
+function go(view){
+  if(!state.user && view !== 'onboarding'){ view = 'onboarding'; }
+  window.location.hash = view;
+}
+
+window.addEventListener('hashchange', route);
+function route(){
+  let view = window.location.hash.replace('#','') || 'dashboard';
+  if(!state.user && view !== 'onboarding') view = 'onboarding';
+  buildNav(view);
+  const fn = VIEWS[view] || VIEWS['dashboard'];
+  const info = NAV.find(n=>n.id===view) || {label:'Dashboard'};
+  document.getElementById('page-title').textContent = info.label;
+  document.getElementById('header-actions').innerHTML = '';
+  document.getElementById('page-content').innerHTML = '';
+  fn();
+}
+
+// ══════════════════════════════════════════════════
+//  BADGE ENGINE
+// ══════════════════════════════════════════════════
+const BADGE_DEFS = [
+  { id:'first_login',      icon:'🌟', name:'First Step',         desc:'Completed onboarding',                pts:50  },
+  { id:'first_assessment', icon:'📋', name:'Self-Aware',         desc:'Completed first assessment',          pts:100 },
+  { id:'budget_master',    icon:'📊', name:'Budget Master',      desc:'Score 80+ in Budgeting category',     pts:150 },
+  { id:'savings_champ',    icon:'🏦', name:'Savings Champion',   desc:'Score 80+ in Savings category',      pts:150 },
+  { id:'debt_destroyer',   icon:'⚔️',  name:'Debt Destroyer',    desc:'Score 80+ in Debt category',         pts:150 },
+  { id:'retirement_planner',icon:'🎯',name:'Retirement Planner', desc:'Score 80+ in Retirement category',   pts:150 },
+  { id:'insurance_hero',   icon:'🛡️',  name:'Insurance Hero',    desc:'Score 80+ in Insurance category',    pts:150 },
+  { id:'high_scorer',      icon:'💯', name:'Financial Star',     desc:'Overall score of 75+',                pts:200 },
+  { id:'ef_started',       icon:'🆘', name:'Safety Net Started', desc:'Started emergency fund planning',     pts:75  },
+  { id:'ef_halfway',       icon:'🛟', name:'Halfway Safe',       desc:'Emergency fund 50% funded',           pts:150 },
+  { id:'ef_complete',      icon:'🏰', name:'Fortress Built',     desc:'Emergency fund fully funded',         pts:300 },
+  { id:'check_in_1',       icon:'✅', name:'On Track',           desc:'Completed first monthly check-in',   pts:75  },
+  { id:'check_in_3',       icon:'🔥', name:'Consistent',         desc:'3 monthly check-ins',                 pts:150 },
+  { id:'booked_session',   icon:'📅', name:'Getting Help',       desc:'Booked a coaching session',           pts:100 },
+];
+
+function awardBadge(id){
+  if(state.badges.earned.includes(id)) return false;
+  const def = BADGE_DEFS.find(b=>b.id===id);
+  if(!def) return false;
+  state.badges.earned.push(id);
+  state.badges.points += def.pts;
+  saveBadges();
+  document.getElementById('sb-pts').textContent = state.badges.points;
+  showToast(`🏆 Badge earned: ${def.name} (+${def.pts} pts)`);
+  return true;
+}
+
+function showToast(msg){
+  const t = document.createElement('div');
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 24px;border-radius:99px;font-size:13px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
+
+// ══════════════════════════════════════════════════
+//  SCORE HELPERS
+// ══════════════════════════════════════════════════
+function scoreBand(s){
+  if(s>=76) return {label:'Strong',cls:'band-green',bg:'bg-green',color:'var(--green)'};
+  if(s>=51) return {label:'Developing',cls:'band-yellow',bg:'bg-yellow',color:'#d4ac0d'};
+  if(s>=26) return {label:'Needs Work',cls:'band-orange',bg:'bg-orange',color:'var(--orange)'};
+  return {label:'Critical',cls:'band-red',bg:'bg-red',color:'var(--red)'};
+}
+
+function svgGauge(score, color){
+  const r=80, cx=100, cy=100;
+  const angle = (score/100)*180;
+  const rad = (angle-180)*Math.PI/180;
+  const x = cx + r*Math.cos(rad), y = cy + r*Math.sin(rad);
+  return `<svg viewBox="0 0 200 110" width="200" height="110">
+    <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="16" stroke-linecap="round"/>
+    <path d="M 20 100 A 80 80 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round"/>
+    <text x="100" y="95" text-anchor="middle" font-family="DM Mono,monospace" font-size="32" fill="${color}" font-weight="500">${score}</text>
+    <text x="100" y="108" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#6b7280">out of 100</text>
+  </svg>`;
+}
+
+// ══════════════════════════════════════════════════
+//  VIEW: ONBOARDING
+// ══════════════════════════════════════════════════
+VIEWS['onboarding'] = function(){
+  document.getElementById('page-title').textContent = 'Welcome';
+  const el = document.getElementById('page-content');
+  let step = 0;
+  const profile = { ageGroup:'', incomeRange:'', employment:'', goals:[] };
+
+  const steps = [
+    {
+      q:'What is your age group?', hint:'Helps us tailor advice to your life stage.',
+      key:'ageGroup', type:'single',
+      opts:[
+        {icon:'🎓',label:'18–25'},
+        {icon:'💼',label:'26–35'},
+        {icon:'🏠',label:'36–45'},
+        {icon:'📈',label:'46–55'},
+        {icon:'🌅',label:'56+'},
+      ]
+    },
+    {
+      q:'What is your monthly income range?', hint:'In Botswana Pula (BWP).',
+      key:'incomeRange', type:'single',
+      opts:[
+        {icon:'💸',label:'Under P3,000'},
+        {icon:'💵',label:'P3,000–P8,000'},
+        {icon:'💰',label:'P8,000–P15,000'},
+        {icon:'🏦',label:'P15,000–P30,000'},
+        {icon:'💎',label:'Over P30,000'},
+      ]
+    },
+    {
+      q:'What is your employment status?', hint:'We will personalise your action plan.',
+      key:'employment', type:'single',
+      opts:[
+        {icon:'🏢',label:'Employed (full-time)'},
+        {icon:'⏰',label:'Employed (part-time)'},
+        {icon:'💼',label:'Self-employed'},
+        {icon:'📚',label:'Student'},
+        {icon:'🏡',label:'Not currently employed'},
+      ]
+    },
+    {
+      q:'What are your financial goals?', hint:'Select all that apply.',
+      key:'goals', type:'multi',
+      opts:[
+        {icon:'💳',label:'Pay off debt'},
+        {icon:'🏦',label:'Build savings'},
+        {icon:'🏠',label:'Buy property'},
+        {icon:'🆘',label:'Emergency fund'},
+        {icon:'🎯',label:'Retirement planning'},
+        {icon:'📈',label:'Invest & grow wealth'},
+      ]
+    },
+  ];
+
+  function render(){
+    const s = steps[step];
+    const pct = Math.round((step/steps.length)*100);
+    el.innerHTML = `
+      <div class="wizard">
+        <div class="card" style="padding:36px">
+          <div class="wizard-steps">${steps.map((_,i)=>`<div class="wstep${i<step?' done':i===step?' active':''}"></div>`).join('')}</div>
+          <div style="text-align:center;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">Step ${step+1} of ${steps.length}</span>
+          </div>
+          <div class="wizard-q">${s.q}</div>
+          <div class="wizard-hint">${s.hint}</div>
+          <div class="choice-grid" id="opts-grid"></div>
+          <div style="display:flex;justify-content:space-between;margin-top:28px;gap:12px">
+            ${step>0?`<button class="btn btn-outline" onclick="prevStep()">← Back</button>`:'<span></span>'}
+            <button class="btn btn-primary" id="next-btn" onclick="nextStep()" disabled>
+              ${step===steps.length-1?'Complete Setup →':'Next →'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+
+    const grid = document.getElementById('opts-grid');
+    const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
+    grid.innerHTML = s.opts.map((o,i)=>`
+      <button class="choice-btn${
+        s.type==='multi'?(cur.includes(o.label)?' selected':''):(cur===o.label?' selected':'')
+      }" onclick="pick(${i})">
+        <span class="choice-icon">${o.icon}</span>${o.label}
+      </button>`).join('');
+    updateNext();
+  }
+
+  window.pick = function(i){
+    const s = steps[step];
+    if(s.type==='multi'){
+      if(!profile[s.key]) profile[s.key]=[];
+      const idx = profile[s.key].indexOf(s.opts[i].label);
+      if(idx>=0) profile[s.key].splice(idx,1);
+      else profile[s.key].push(s.opts[i].label);
+    } else {
+      profile[s.key] = s.opts[i].label;
+    }
+    render();
+  };
+
+  function updateNext(){
+    const s = steps[step];
+    const val = profile[s.key];
+    const ok = s.type==='multi' ? (val&&val.length>0) : !!val;
+    document.getElementById('next-btn').disabled = !ok;
+  }
+
+  window.nextStep = function(){
+    if(step < steps.length-1){ step++; render(); }
+    else { finishOnboarding(); }
+  };
+  window.prevStep = function(){ if(step>0){ step--; render(); } };
+
+  function finishOnboarding(){
+    state.user = { ...profile, joinedAt: new Date().toISOString(), name:'' };
+    saveUser();
+    awardBadge('first_login');
+    go('assessment');
+  }
+
+  render();
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: ASSESSMENT
+// ══════════════════════════════════════════════════
+const QUESTIONS = [
+  // Budgeting (0-3)
+  { cat:'Budgeting',    q:'I have a monthly budget that I follow.'                              },
+  { cat:'Budgeting',    q:'I track my daily and weekly spending.'                               },
+  { cat:'Budgeting',    q:'I consistently spend less than I earn each month.'                   },
+  { cat:'Budgeting',    q:'I review my budget regularly and adjust when needed.'                },
+  // Savings (4-7)
+  { cat:'Savings',      q:'I save a portion of my income every month.'                         },
+  { cat:'Savings',      q:'I have an emergency fund covering 3+ months of expenses.'           },
+  { cat:'Savings',      q:'I have specific savings goals I am working towards.'                 },
+  { cat:'Savings',      q:'I am on track to reach my savings goals.'                           },
+  // Debt (8-11)
+  { cat:'Debt',         q:'My total debt feels manageable relative to my income.'              },
+  { cat:'Debt',         q:'I pay more than the minimum on any loans or credit cards.'          },
+  { cat:'Debt',         q:'I have a clear plan to pay off all my debts.'                       },
+  { cat:'Debt',         q:'I avoid taking on new debt for non-essential purchases.'             },
+  // Retirement (12-15)
+  { cat:'Retirement',   q:'I contribute regularly to a pension or retirement fund.'             },
+  { cat:'Retirement',   q:'I know approximately how much I need to retire comfortably.'        },
+  { cat:'Retirement',   q:'I have investments beyond my retirement/pension contributions.'     },
+  { cat:'Retirement',   q:'I feel on track for the retirement lifestyle I want.'               },
+  // Insurance (16-19)
+  { cat:'Insurance',    q:'I have life insurance appropriate to my situation.'                  },
+  { cat:'Insurance',    q:'I have health insurance or medical aid coverage.'                    },
+  { cat:'Insurance',    q:'Financial worries rarely interfere with my daily life or sleep.'    },
+  { cat:'Insurance',    q:'Overall, I feel financially secure and in control of my finances.'  },
+];
+
+const OPTS = ['Never / Not at all','Rarely','Sometimes','Often','Always / Completely'];
+
+VIEWS['assessment'] = function(){
+  const el = document.getElementById('page-content');
+  let current = 0;
+  const answers = new Array(QUESTIONS.length).fill(null);
+
+  function render(){
+    const q = QUESTIONS[current];
+    const pct = Math.round((current/QUESTIONS.length)*100);
+    el.innerHTML = `
+      <div style="max-width:640px">
+        <div class="notice notice-gold" style="margin-bottom:20px">
+          <strong>Financial Wellness Assessment</strong> — 20 questions across 5 categories.
+          Answer honestly for the most accurate score.
+        </div>
+        <div class="q-progress">${QUESTIONS.map((_,i)=>`<div class="q-dot${i<current?' done':i===current?' current':''}"></div>`).join('')}</div>
+        <div class="q-card">
+          <div class="q-number">${q.cat} · Question ${current+1} of ${QUESTIONS.length}</div>
+          <div class="q-text">${q.q}</div>
+          <div class="q-options">
+            ${OPTS.map((o,i)=>`
+              <button class="q-opt${answers[current]===i?' selected':''}" onclick="selectOpt(${i})">${o}</button>
+            `).join('')}
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
+            ${current>0?`<button class="btn btn-outline btn-sm" onclick="prevQ()">← Back</button>`:'<span></span>'}
+            <button class="btn btn-primary btn-sm" id="q-next" onclick="nextQ()" ${answers[current]===null?'disabled':''}>
+              ${current===QUESTIONS.length-1?'See My Score →':'Next →'}
+            </button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  window.selectOpt = function(i){
+    answers[current] = i;
+    render();
+  };
+  window.prevQ = function(){ if(current>0){ current--; render(); } };
+  window.nextQ = function(){
+    if(answers[current]===null) return;
+    if(current < QUESTIONS.length-1){ current++; render(); }
+    else { finishAssessment(answers); }
+  };
+
+  render();
+};
+
+function finishAssessment(answers){
+  const total = answers.reduce((s,a)=>s+(a||0),0);
+  const score = Math.round((total/(QUESTIONS.length*4))*100);
+
+  // Category scores
+  const cats = ['Budgeting','Savings','Debt','Retirement','Insurance'];
+  const catScores = {};
+  cats.forEach(cat=>{
+    const qs = QUESTIONS.filter(q=>q.cat===cat);
+    const idxs = QUESTIONS.reduce((a,q,i)=>q.cat===cat?[...a,i]:a,[]);
+    const sum = idxs.reduce((s,i)=>s+(answers[i]||0),0);
+    catScores[cat] = Math.round((sum/(qs.length*4))*100);
+  });
+
+  const entry = { date: new Date().toISOString(), score, catScores, answers };
+  state.assessments.unshift(entry);
+  saveAssessments();
+
+  if(state.user){ state.user.lastScore = score; state.user.lastCatScores = catScores; saveUser(); }
+
+  // Badges
+  awardBadge('first_assessment');
+  if(score>=75) awardBadge('high_scorer');
+  cats.forEach(cat=>{
+    const map={Budgeting:'budget_master',Savings:'savings_champ',Debt:'debt_destroyer',Retirement:'retirement_planner',Insurance:'insurance_hero'};
+    if(catScores[cat]>=80) awardBadge(map[cat]);
+  });
+
+  go('dashboard');
+}
+
+// ══════════════════════════════════════════════════
+//  VIEW: DASHBOARD
+// ══════════════════════════════════════════════════
+VIEWS['dashboard'] = function(){
+  const el = document.getElementById('page-content');
+  const score = state.user?.lastScore ?? null;
+  const cats = state.user?.lastCatScores ?? null;
+
+  if(!score){
+    el.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px">
+        <div style="font-size:64px;margin-bottom:16px">📋</div>
+        <h3 style="margin-bottom:8px">No assessment yet</h3>
+        <p style="color:var(--muted);margin-bottom:24px">Complete your financial wellness assessment to see your personalised dashboard.</p>
+        <button class="btn btn-primary" onclick="go('assessment')">Start Assessment →</button>
+      </div>`;
+    return;
+  }
+
+  const band = scoreBand(score);
+  const topPriorities = cats ? Object.entries(cats).sort((a,b)=>a[1]-b[1]).slice(0,3) : [];
+  const checkins = state.checkins.length;
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card" style="text-align:center">
+        <div class="card-title">Financial Wellness Score</div>
+        ${svgGauge(score, band.color)}
+        <div style="font-size:16px;font-weight:700;color:${band.color};margin-top:8px">${band.label}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Last assessed ${fmtDate(state.assessments[0]?.date)}</div>
+        <button class="btn btn-outline btn-sm" style="margin-top:16px" onclick="go('assessment')">Re-assess</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Category Breakdown</div>
+        ${cats ? Object.entries(cats).map(([cat,s])=>`
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:4px">
+              <span>${cat}</span><span class="mono" style="color:${scoreBand(s).color}">${s}</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width:${s}%;background:${scoreBand(s).color}"></div>
+            </div>
+          </div>`).join('') : ''}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🎯 Top Priorities</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Focus here for the biggest improvement in your wellness score.</p>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${topPriorities.map(([cat,s],i)=>`
+          <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--cream);border-radius:var(--radius-sm)">
+            <div style="font-size:24px;font-weight:800;color:var(--gold);width:28px;text-align:center">${i+1}</div>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:14px">${cat}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${priorityTip(cat,s)}</div>
+            </div>
+            <span class="tag tag-${s<40?'gold':s<65?'gold':'green'}" style="font-size:11px">${s}/100</span>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-val">${state.assessments.length}</div>
+        <div class="stat-lbl">Assessments</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">${checkins}</div>
+        <div class="stat-lbl">Check-ins</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">${state.badges.earned.length}</div>
+        <div class="stat-lbl">Badges</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val mono">${state.badges.points}</div>
+        <div class="stat-lbl">Points</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚡ Quick Actions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <button class="btn btn-primary" onclick="go('checkin')">✅ Monthly Check-in</button>
+        <button class="btn btn-outline" onclick="go('emergency')">🆘 Emergency Fund</button>
+        <button class="btn btn-outline" onclick="go('learn')">📚 Learn</button>
+        <button class="btn btn-navy" onclick="go('booking')">📅 Book Coaching</button>
+      </div>
+    </div>`;
+};
+
+function priorityTip(cat, score){
+  const tips = {
+    Budgeting: 'Create a budget using the 50/30/20 rule. Track every pula.',
+    Savings: 'Aim to save at least 10% of income. Automate transfers.',
+    Debt: 'List all debts by interest rate. Target highest-rate first.',
+    Retirement: 'Start contributing to a pension now. Even 5% helps.',
+    Insurance: 'Review your coverage annually. Gaps can be costly.',
+  };
+  return tips[cat] || 'Focus on improving this area for better financial health.';
+}
+
+function fmtDate(iso){
+  if(!iso) return 'never';
+  return new Date(iso).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+
+// ══════════════════════════════════════════════════
+//  VIEW: LEARN
+// ══════════════════════════════════════════════════
+const CONTENT = [
+  { cat:'Budgeting', icon:'📊', title:'The 50/30/20 Rule',
+    desc:'Allocate 50% to needs, 30% to wants, 20% to savings and debt. A simple framework for any income level.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Savings', icon:'🏦', title:'Pay Yourself First',
+    desc:'Set up automatic savings transfers on payday before you spend. Treat savings as a non-negotiable expense.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Debt', icon:'⚔️', title:'Avalanche vs Snowball',
+    desc:'Avalanche: pay highest-interest debt first (saves money). Snowball: pay smallest first (builds momentum).',
+    link:'https://keywellness.co.bw' },
+  { cat:'Emergency Fund', icon:'🆘', title:'Building Your Safety Net',
+    desc:'Target 3–6 months of essential expenses. Even P500/month adds up. Start small, stay consistent.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Retirement', icon:'🎯', title:'The Power of Compound Growth',
+    desc:'Money invested early grows exponentially. P100/month at 25 is worth far more than P200/month at 40.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Insurance', icon:'🛡️', title:'Why Insurance Matters',
+    desc:'Insurance protects your financial plan from catastrophic events. One medical emergency can erase years of savings.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Investing', icon:'📈', title:'Investment Basics',
+    desc:'Diversify across asset classes. Stocks for growth, bonds for stability. Never invest money you cannot afford to lose.',
+    link:'https://keywellness.co.bw' },
+  { cat:'Mindset', icon:'🧠', title:'Financial Stress & Wellbeing',
+    desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.',
+    link:'https://keywellness.co.bw' },
+];
+
+VIEWS['learn'] = function(){
+  const el = document.getElementById('page-content');
+  el.innerHTML = `
+    <div class="notice notice-gold">📚 <strong>Learn, then apply.</strong> Each article links to interactive tools and real-world actions.</div>
+    <div class="learn-grid">
+      ${CONTENT.map(c=>`
+        <div class="learn-card">
+          <div class="learn-top">${c.icon}</div>
+          <div class="learn-body">
+            <div class="learn-cat">${c.cat}</div>
+            <div class="learn-title">${c.title}</div>
+            <div class="learn-desc">${c.desc}</div>
+            <div class="learn-btn">
+              <button class="btn btn-outline btn-sm" onclick="showLearnArticle('${c.title.replace(/'/g,"\\'")}')">Read More →</button>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+};
+
+window.showLearnArticle = function(title){
+  const c = CONTENT.find(x=>x.title===title);
+  if(!c) return;
+  const el = document.getElementById('page-content');
+  el.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:20px">← Back to Learn</button>
+    <div class="card">
+      <div style="font-size:48px;margin-bottom:12px">${c.icon}</div>
+      <div class="tag tag-gold" style="margin-bottom:12px">${c.cat}</div>
+      <h2 style="font-size:22px;margin-bottom:16px">${c.title}</h2>
+      <p style="font-size:15px;line-height:1.7;color:var(--muted);margin-bottom:20px">${c.desc}</p>
+      ${getArticleBody(c.title)}
+      <div style="margin-top:28px;display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
+        <button class="btn btn-navy" onclick="go('booking')">📅 Book a Coach</button>
+      </div>
+    </div>`;
+};
+
+function getArticleBody(title){
+  const bodies = {
+    'The 50/30/20 Rule': `
+      <div style="background:var(--cream);border-radius:var(--radius-sm);padding:20px;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
+          <div><div style="font-size:28px;font-weight:800;color:var(--navy)">50%</div><div style="font-size:13px;font-weight:600">Needs</div><div style="font-size:12px;color:var(--muted)">Rent, food, transport, bills</div></div>
+          <div><div style="font-size:28px;font-weight:800;color:var(--gold)">30%</div><div style="font-size:13px;font-weight:600">Wants</div><div style="font-size:12px;color:var(--muted)">Dining, shopping, entertainment</div></div>
+          <div><div style="font-size:28px;font-weight:800;color:var(--green)">20%</div><div style="font-size:13px;font-weight:600">Savings</div><div style="font-size:12px;color:var(--muted)">Emergency fund, investments, debt</div></div>
+        </div>
+      </div>
+      <p style="font-size:14px;line-height:1.7;color:var(--muted)">Start by calculating your after-tax income. Then categorise your current spending to see where adjustments are needed. The 50/30/20 rule is a guide, not a law — adjust to your situation.</p>`,
+    'Building Your Safety Net': `
+      <p style="font-size:14px;line-height:1.7;color:var(--muted);margin-bottom:16px">An emergency fund is your financial shock absorber. It prevents you from taking on debt when unexpected costs arise.</p>
+      <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Where to keep it:</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.6">✓ Separate savings account (not your main account)<br>✓ High-interest savings or money market account<br>✓ Easily accessible but not too easy to spend</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="go('emergency')">Open Emergency Fund Planner →</button>`,
+  };
+  return bodies[title] || `<p style="font-size:14px;line-height:1.7;color:var(--muted)">Speak to a Key Wellness coach to dive deeper into this topic with personalised guidance.</p>`;
+}
+
+// ══════════════════════════════════════════════════
+//  VIEW: TOOLS
+// ══════════════════════════════════════════════════
+VIEWS['tools'] = function(){
+  const el = document.getElementById('page-content');
+  const tools = [
+    { icon:'💰', name:'Budget Planner', desc:'Build your monthly budget with income and expense categories.', file:'budget_planner.html' },
+    { icon:'📊', name:'Expense Tracker', desc:'Log and categorise daily spending. Export reports.', file:'expense_tracker.html' },
+    { icon:'🆘', name:'Emergency Fund Planner', desc:'Calculate your target and track progress toward 3–6 months of cover.', view:'emergency' },
+    { icon:'⚔️', name:'Debt Payoff Calculator', desc:'Avalanche or snowball? See which pays off debt fastest.', file:null },
+    { icon:'📅', name:'Book a Coach', desc:'Work one-on-one with a Key Wellness financial coach.', view:'booking' },
+  ];
+
+  el.innerHTML = `
+    <div class="notice notice-gold" style="margin-bottom:20px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action on your finances.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px">
+      ${tools.map(t=>`
+        <div class="card" style="cursor:pointer;transition:.2s" onmouseenter="this.style.transform='translateY(-2px)'" onmouseleave="this.style.transform=''">
+          <div style="font-size:36px;margin-bottom:12px">${t.icon}</div>
+          <div class="card-title" style="margin-bottom:6px">${t.name}</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:16px">${t.desc}</p>
+          ${t.view
+            ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open Tool →</button>`
+            : t.file
+              ? `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open Tool →</button>`
+              : `<button class="btn btn-outline btn-sm" disabled>Coming Soon</button>`
+          }
+        </div>`).join('')}
+    </div>`;
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: EMERGENCY FUND PLANNER
+// ══════════════════════════════════════════════════
+VIEWS['emergency'] = function(){
+  awardBadge('ef_started');
+  const el = document.getElementById('page-content');
+  const saved = load('kw_ef_v1') || { monthly:0, current:0, contribution:0, target:3 };
+
+  el.innerHTML = `
+    <div style="max-width:680px">
+      <div class="notice notice-gold">🆘 <strong>Emergency Fund Planner</strong> — Calculate exactly how much you need and track your progress.</div>
+
+      <div class="card">
+        <div class="card-title">Your Target</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Choose how many months of essential expenses you want to cover:</p>
+        <div class="ef-months">
+          <button class="ef-month-btn${saved.target===3?' selected':''}" onclick="efSetTarget(3)">3 Months<br><span style="font-size:11px;color:var(--muted)">Minimum</span></button>
+          <button class="ef-month-btn${saved.target===4?' selected':''}" onclick="efSetTarget(4)">4 Months</button>
+          <button class="ef-month-btn${saved.target===5?' selected':''}" onclick="efSetTarget(5)">5 Months</button>
+          <button class="ef-month-btn${saved.target===6?' selected':''}" onclick="efSetTarget(6)">6 Months<br><span style="font-size:11px;color:var(--muted)">Recommended</span></button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Your Numbers</div>
+        <div class="field">
+          <label>Monthly Essential Expenses (BWP)</label>
+          <input type="number" id="ef-monthly" value="${saved.monthly||''}" placeholder="e.g. 4500" min="0" oninput="efCalc()">
+          <div class="hint">Rent, food, transport, utilities, insurance — basics only</div>
+        </div>
+        <div class="field">
+          <label>Current Emergency Savings (BWP)</label>
+          <input type="number" id="ef-current" value="${saved.current||''}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
+        </div>
+        <div class="field">
+          <label>Monthly Contribution to Emergency Fund (BWP)</label>
+          <input type="number" id="ef-contribution" value="${saved.contribution||''}" placeholder="e.g. 800" min="0" oninput="efCalc()">
+          <div class="hint">How much can you set aside each month?</div>
+        </div>
+      </div>
+
+      <div class="card" id="ef-results" style="display:none">
+        <div class="card-title">📊 Your Emergency Fund Plan</div>
+        <div class="ef-summary" id="ef-boxes"></div>
+        <div style="margin-top:8px">
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:6px">
+            <span>Progress to Goal</span>
+            <span class="mono" id="ef-pct-lbl">0%</span>
+          </div>
+          <div class="progress-bar" style="height:16px">
+            <div class="progress-fill" id="ef-bar" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="ef-tip" class="ef-tip"></div>
+        <div id="ef-months-msg" style="margin-top:16px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">💡 Tips for Building Your Emergency Fund</div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.6">
+          <div style="padding:12px;background:var(--cream);border-radius:var(--radius-sm)">💼 <strong>Open a separate account.</strong> Keep your emergency fund in a dedicated savings account — not your current account.</div>
+          <div style="padding:12px;background:var(--cream);border-radius:var(--radius-sm)">🤖 <strong>Automate it.</strong> Set up a standing order to transfer money the same day you get paid.</div>
+          <div style="padding:12px;background:var(--cream);border-radius:var(--radius-sm)">🎁 <strong>Windfalls go here first.</strong> Tax refunds, bonuses, gifts — direct them to your emergency fund until it is fully funded.</div>
+          <div style="padding:12px;background:var(--cream);border-radius:var(--radius-sm)">📵 <strong>Do not touch it.</strong> An emergency fund is for genuine emergencies: job loss, medical crisis, urgent repairs. Not holidays or sales.</div>
+          <div style="padding:12px;background:var(--cream);border-radius:var(--radius-sm)">🔄 <strong>Replenish immediately.</strong> If you dip into it, rebuild it as your first financial priority.</div>
+        </div>
+      </div>
+    </div>`;
+
+  window.efSetTarget = function(months){
+    saved.target = months;
+    document.querySelectorAll('.ef-month-btn').forEach((b,i)=>{
+      b.classList.toggle('selected', [3,4,5,6][i]===months);
+    });
+    efCalc();
+  };
+
+  window.efCalc = function(){
+    const monthly = parseFloat(document.getElementById('ef-monthly').value)||0;
+    const current = parseFloat(document.getElementById('ef-current').value)||0;
+    const contrib = parseFloat(document.getElementById('ef-contribution').value)||0;
+    const target = monthly * saved.target;
+    const needed = Math.max(0, target - current);
+    const pct = target>0 ? Math.min(100, Math.round((current/target)*100)) : 0;
+    const monthsToGo = contrib>0 ? Math.ceil(needed/contrib) : null;
+
+    save('kw_ef_v1', { monthly, current, contribution:contrib, target:saved.target });
+
+    if(monthly===0 && current===0){ document.getElementById('ef-results').style.display='none'; return; }
+    document.getElementById('ef-results').style.display='';
+
+    const fmt = n=>'P'+Math.round(n).toLocaleString();
+    document.getElementById('ef-boxes').innerHTML = `
+      <div class="ef-box"><div class="ef-val">${fmt(target)}</div><div class="ef-lbl">Target (${saved.target} mo)</div></div>
+      <div class="ef-box"><div class="ef-val">${fmt(current)}</div><div class="ef-lbl">Current Savings</div></div>
+      <div class="ef-box"><div class="ef-val">${fmt(needed)}</div><div class="ef-lbl">Still Needed</div></div>`;
+
+    document.getElementById('ef-pct-lbl').textContent = pct+'%';
+    document.getElementById('ef-bar').style.width = pct+'%';
+    document.getElementById('ef-bar').style.background = pct>=100 ? 'var(--green)' : pct>=50 ? 'var(--gold)' : 'var(--red)';
+
+    let tip = '';
+    if(pct>=100){ tip='🎉 Congratulations! Your emergency fund is fully funded. You can now focus on investments and other goals.'; awardBadge('ef_complete'); }
+    else if(pct>=50){ tip=`You are halfway there! Keep contributing ${fmt(contrib)}/month and you will reach your goal.`; awardBadge('ef_halfway'); }
+    else if(pct>0){ tip=`Good start! You have ${pct}% funded. Increasing your monthly contribution will get you there faster.`; }
+    else{ tip=`Start with whatever you can — even P200/month helps. Consistency beats amount.`; }
+    document.getElementById('ef-tip').textContent = tip;
+
+    const msg = document.getElementById('ef-months-msg');
+    if(monthsToGo!==null && pct<100){
+      const date = new Date(); date.setMonth(date.getMonth()+monthsToGo);
+      msg.innerHTML = `<div class="notice notice-green">
+        ✅ At <strong>${fmt(contrib)}/month</strong>, you will reach your goal in approximately <strong>${monthsToGo} month${monthsToGo!==1?'s':''}</strong> (${date.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}).
+      </div>`;
+    } else if(pct<100 && contrib===0){
+      msg.innerHTML = `<div class="notice notice-red">⚠️ Enter a monthly contribution above to see when you will reach your goal.</div>`;
+    } else { msg.innerHTML=''; }
+
+    if(monthly>0 && contrib>0){
+      const ideal = Math.round(monthly*0.1);
+      if(contrib < ideal){
+        msg.innerHTML += `<div class="ef-tip" style="margin-top:8px">💡 Aim to save at least 10% of your expenses (${fmt(ideal)}/mo) for your emergency fund.</div>`;
+      }
+    }
+  };
+
+  setTimeout(()=>{ if(saved.monthly||saved.current) efCalc(); },50);
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: MONTHLY CHECK-IN
+// ══════════════════════════════════════════════════
+VIEWS['checkin'] = function(){
+  const el = document.getElementById('page-content');
+  const lastScore = state.user?.lastScore ?? 50;
+  let vals = { savings:50, debt:50, stress:50, income:50, expenses:50 };
+
+  el.innerHTML = `
+    <div style="max-width:580px">
+      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate how this month went. Your score will recalculate.</div>
+      <div class="card">
+        <div class="card-title">How did this month go?</div>
+        <div class="slider-row">
+          <label>Savings progress <span id="v-savings">5</span>/10</label>
+          <input type="range" min="1" max="10" value="5" id="sl-savings" oninput="slUpdate('savings',this.value)">
+        </div>
+        <div class="slider-row">
+          <label>Debt management <span id="v-debt">5</span>/10</label>
+          <input type="range" min="1" max="10" value="5" id="sl-debt" oninput="slUpdate('debt',this.value)">
+        </div>
+        <div class="slider-row">
+          <label>Income stability <span id="v-income">5</span>/10</label>
+          <input type="range" min="1" max="10" value="5" id="sl-income" oninput="slUpdate('income',this.value)">
+        </div>
+        <div class="slider-row">
+          <label>Expense control <span id="v-expenses">5</span>/10</label>
+          <input type="range" min="1" max="10" value="5" id="sl-expenses" oninput="slUpdate('expenses',this.value)">
+        </div>
+        <div class="slider-row">
+          <label>Stress level (1=very stressed) <span id="v-stress">5</span>/10</label>
+          <input type="range" min="1" max="10" value="5" id="sl-stress" oninput="slUpdate('stress',this.value)">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <label>Notes (optional)</label>
+          <textarea id="ci-notes" rows="3" placeholder="What went well? What challenged you?" style="width:100%;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);resize:vertical"></textarea>
+        </div>
+        <div id="ci-preview" style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;margin:16px 0;font-size:14px;display:flex;gap:20px;align-items:center">
+          <div>Check-in Score: <span id="ci-score" class="mono" style="font-size:20px;font-weight:700;color:var(--navy)">50</span></div>
+          <div style="font-size:12px;color:var(--muted)">Based on your ratings above</div>
+        </div>
+        <button class="btn btn-primary" onclick="submitCheckin()">Save Check-in</button>
+      </div>
+    </div>`;
+
+  window.slUpdate = function(key, val){
+    vals[key] = parseInt(val);
+    document.getElementById('v-'+key).textContent = val;
+    const avg = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length * 10);
+    document.getElementById('ci-score').textContent = avg;
+  };
+
+  window.submitCheckin = function(){
+    const avg = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length * 10);
+    const notes = document.getElementById('ci-notes').value;
+    const entry = { date: new Date().toISOString(), vals: {...vals}, score: avg, notes };
+    state.checkins.unshift(entry);
+    saveCheckins();
+
+    if(state.checkins.length===1) awardBadge('check_in_1');
+    if(state.checkins.length>=3) awardBadge('check_in_3');
+
+    showToast('✅ Check-in saved! Great work staying on track.');
+    go('progress');
+  };
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: PROGRESS
+// ══════════════════════════════════════════════════
+VIEWS['progress'] = function(){
+  const el = document.getElementById('page-content');
+
+  const assessmentData = state.assessments.slice(0,8).reverse();
+  const checkinData = state.checkins.slice(0,8).reverse();
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title">📈 Wellness Score History</div>
+      ${assessmentData.length<2
+        ? '<div class="notice notice-gold">Complete at least 2 assessments to see your progress chart.</div>'
+        : '<div class="chart-wrap"><canvas id="score-chart"></canvas></div>'
+      }
+    </div>
+    <div class="card">
+      <div class="card-title">✅ Monthly Check-in History</div>
+      ${checkinData.length<1
+        ? '<div class="notice notice-gold">No check-ins yet. <button class="btn btn-primary btn-sm" onclick="go(\'checkin\')">Do First Check-in</button></div>'
+        : '<div class="chart-wrap"><canvas id="checkin-chart"></canvas></div>'
+      }
+    </div>
+    <div class="card">
+      <div class="card-title">📅 Assessment Log</div>
+      ${state.assessments.length===0
+        ? '<p style="color:var(--muted);font-size:14px">No assessments yet.</p>'
+        : state.assessments.map(a=>`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <div style="font-weight:600;font-size:14px">${fmtDate(a.date)}</div>
+                <div style="font-size:12px;color:var(--muted)">Score: <span class="mono" style="color:${scoreBand(a.score).color}">${a.score}</span> — ${scoreBand(a.score).label}</div>
+              </div>
+              <span class="tag tag-${a.score>=76?'green':'gold'}">${a.score}/100</span>
+            </div>`).join('')
+      }
+    </div>`;
+
+  if(assessmentData.length>=2){
+    setTimeout(()=>{
+      const ctx = document.getElementById('score-chart');
+      if(!ctx) return;
+      new Chart(ctx, {
+        type:'line',
+        data:{
+          labels: assessmentData.map(a=>fmtDate(a.date)),
+          datasets:[{ label:'Wellness Score', data: assessmentData.map(a=>a.score),
+            borderColor:'#c8973a', backgroundColor:'rgba(200,151,58,.1)', tension:0.3,
+            pointBackgroundColor:'#1a2744', pointRadius:5, fill:true }]
+        },
+        options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
+      });
+    },100);
+  }
+
+  if(checkinData.length>=1){
+    setTimeout(()=>{
+      const ctx = document.getElementById('checkin-chart');
+      if(!ctx) return;
+      new Chart(ctx, {
+        type:'bar',
+        data:{
+          labels: checkinData.map(c=>fmtDate(c.date)),
+          datasets:[{ label:'Check-in Score', data: checkinData.map(c=>c.score),
+            backgroundColor:'rgba(200,151,58,.7)', borderColor:'#c8973a', borderWidth:2, borderRadius:6 }]
+        },
+        options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
+      });
+    },100);
+  }
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: BOOKING
+// ══════════════════════════════════════════════════
+VIEWS['booking'] = function(){
+  const el = document.getElementById('page-content');
+  el.innerHTML = `
+    <div style="max-width:680px">
+      <div class="notice notice-gold">📅 <strong>Book a One-on-One Coaching Session</strong> with a Key Wellness financial coach.</div>
+      <div class="card" id="booking-form-card">
+        <div class="card-title">Session Details</div>
+        <div class="booking-grid">
+          <div class="field">
+            <label>First Name *</label>
+            <input type="text" id="b-first" placeholder="Your first name">
+          </div>
+          <div class="field">
+            <label>Surname *</label>
+            <input type="text" id="b-last" placeholder="Your surname">
+          </div>
+        </div>
+        <div class="booking-grid">
+          <div class="field">
+            <label>Email *</label>
+            <input type="email" id="b-email" placeholder="your@email.com">
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input type="tel" id="b-phone" placeholder="+267 7x xxx xxx">
+          </div>
+        </div>
+        <div class="booking-grid">
+          <div class="field">
+            <label>Preferred Date *</label>
+            <input type="date" id="b-date">
+          </div>
+          <div class="field">
+            <label>Preferred Time *</label>
+            <select id="b-time">
+              <option value="">Select a time</option>
+              <option>08:00</option><option>09:00</option><option>10:00</option>
+              <option>11:00</option><option>12:00</option><option>14:00</option>
+              <option>15:00</option><option>16:00</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Session Focus</label>
+          <select id="b-service">
+            <option value="Financial Wellness Review">Financial Wellness Review (60 min)</option>
+            <option value="Budget Planning">Budget Planning (60 min)</option>
+            <option value="Debt Management">Debt Management (60 min)</option>
+            <option value="Savings Strategy">Savings Strategy (60 min)</option>
+            <option value="Retirement Planning">Retirement Planning (60 min)</option>
+            <option value="Emergency Fund Planning">Emergency Fund Planning (60 min)</option>
+            <option value="General Coaching">General Coaching (60 min)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>What would you like to work on?</label>
+          <textarea id="b-msg" rows="3" placeholder="Tell us about your current situation and goals..."></textarea>
+        </div>
+        <div id="b-error" class="notice notice-red" style="display:none"></div>
+        <button class="btn btn-primary" onclick="submitBooking()">Request Session →</button>
+      </div>
+      <div class="card" id="booking-success" style="display:none;text-align:center;padding:40px">
+        <div style="font-size:64px;margin-bottom:16px">🎉</div>
+        <h3 style="margin-bottom:8px">Session Requested!</h3>
+        <p style="color:var(--muted);font-size:14px;margin-bottom:20px">We will confirm your session within 24 hours. Check your email.</p>
+        <button class="btn btn-outline" onclick="go('dashboard')">Back to Dashboard</button>
+      </div>
+    </div>`;
+
+  // Set min date to tomorrow
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  document.getElementById('b-date').min = tomorrow.toISOString().split('T')[0];
+};
+
+window.submitBooking = async function(){
+  const first = document.getElementById('b-first').value.trim();
+  const last  = document.getElementById('b-last').value.trim();
+  const email = document.getElementById('b-email').value.trim();
+  const date  = document.getElementById('b-date').value;
+  const time  = document.getElementById('b-time').value;
+  const service = document.getElementById('b-service').value;
+  const phone = document.getElementById('b-phone').value.trim();
+  const msg   = document.getElementById('b-msg').value.trim();
+  const err   = document.getElementById('b-error');
+
+  if(!first||!last||!email||!date||!time){
+    err.textContent='Please fill in all required fields.'; err.style.display=''; return;
+  }
+  err.style.display='none';
+
+  try{
+    const fd = new FormData();
+    fd.append('_subject','New Coaching Request — Key Wellness Portal');
+    fd.append('First Name',first); fd.append('Surname',last);
+    fd.append('Email',email); fd.append('Phone',phone||'N/A');
+    fd.append('Preferred Date',date); fd.append('Preferred Time',time);
+    fd.append('Session Focus',service); fd.append('Message',msg||'N/A');
+    fd.append('Portal Score',state.user?.lastScore||'N/A');
+
+    const res = await fetch('https://formspree.io/f/xnjylyaq',{method:'POST',body:fd,headers:{Accept:'application/json'}});
+    if(!res.ok) throw new Error();
+  }catch(e){
+    // Still show success — don't block UX
+  }
+
+  awardBadge('booked_session');
+  document.getElementById('booking-form-card').style.display='none';
+  document.getElementById('booking-success').style.display='';
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: BADGES
+// ══════════════════════════════════════════════════
+VIEWS['badges'] = function(){
+  const el = document.getElementById('page-content');
+  el.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:24px">
+      <div class="stat-box">
+        <div class="stat-val mono">${state.badges.points}</div>
+        <div class="stat-lbl">Total Points</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val">${state.badges.earned.length}/${BADGE_DEFS.length}</div>
+        <div class="stat-lbl">Badges Earned</div>
+      </div>
+    </div>
+    <div class="badge-grid">
+      ${BADGE_DEFS.map(b=>{
+        const earned = state.badges.earned.includes(b.id);
+        return `<div class="badge-card${earned?' earned':''}">
+          <span class="badge-icon">${b.icon}</span>
+          <div class="badge-name">${b.name}</div>
+          <div class="badge-desc">${b.desc}</div>
+          <div class="badge-pts">+${b.pts} pts${earned?' ✓':''}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+};
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+route();
+if(!window.location.hash){
+  go(state.user ? 'dashboard' : 'onboarding');
+}
+
+</script>
+</body>
+</html>
