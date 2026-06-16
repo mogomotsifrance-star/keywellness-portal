@@ -362,12 +362,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <h2>You're all set! 🎉</h2>
     <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
     <div id="welcome-video-area">
-      <!-- REPLACE: paste your YouTube embed URL below e.g. https://www.youtube.com/embed/YOUR_VIDEO_ID -->
-      <div class="video-placeholder" onclick="void(0)" style="cursor:default">
-        <span class="add-url-tag">Video Coming Soon</span>
-        <div class="play-btn" style="opacity:.5"><div class="play-icon"></div></div>
-        <p>Your welcome video will appear here.<br>Add your YouTube or Vimeo link to activate it.</p>
-      </div>
+      <iframe class="video-embed" src="https://www.youtube.com/embed/xMV5CDMuHGU" title="Welcome to Key Wellness" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
     </div>
     <div style="display:flex;gap:10px;margin-top:8px">
       <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
@@ -1277,7 +1272,7 @@ window.closeWelcome = function(){
 //  e.g. 'https://www.youtube.com/embed/dQw4w9WgXcQ'
 // ══════════════════════════════════════════════════
 const VIDEOS = [
-  { title:'Welcome to Key Wellness',         cat:'Getting Started', duration:'3 min',  url: null },
+  { title:'Welcome to Key Wellness',         cat:'Getting Started', duration:'3 min',  url: 'https://www.youtube.com/embed/xMV5CDMuHGU' },
   { title:'How to Build a Budget',            cat:'Budgeting',       duration:'5 min',  url: null },
   { title:'Understanding Your Credit Score',  cat:'Debt',            duration:'4 min',  url: null },
   { title:'Starting Your Emergency Fund',     cat:'Savings',         duration:'4 min',  url: null },
