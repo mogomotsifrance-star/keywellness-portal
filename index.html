@@ -1774,7 +1774,7 @@ VIEWS['booking'] = function () {
           <svg width="34" height="34" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
         </div>
         <h2 style="font-size:1.3rem;font-weight:700;margin-bottom:8px">Booking Received!</h2>
-        <p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:380px;margin:0 auto 24px">Your session request has been submitted. Our team will contact you within 24 hours to confirm.</p>
+        <p style="color:var(--muted);font-size:.85rem;line-height:1.65;max-width:400px;margin:0 auto 24px">A confirmation has been sent to your email and our team has been notified. We will confirm your appointment within 24 hours.</p>
         <div class="bk-success-card">
           <div class="card-title">Booking Summary</div>
           <div class="bk-success-row"><span style="font-size:1rem">👤</span><div><div class="bk-success-label">Client</div><div class="bk-success-val" id="bs-name"></div></div></div>
@@ -1852,20 +1852,34 @@ window.submitBooking = async function () {
   const btn = document.getElementById('bkSubmitBtn');
   btn.disabled=true; btn.classList.add('bk-loading');
 
+  // Client auto-reply message
+  const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n• Service: ${service}\n• Date: ${dateStr}\n• Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you need to make any changes or have questions, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nLooking forward to supporting your financial wellness journey.\n\nWarm regards,\nKey Wellness Team`;
+
   try {
-    const fd = new FormData();
-    fd.append('_subject','New Booking – '+service+' – Key Wellness');
-    fd.append('_replyto', email);
-    fd.append('First Name', first); fd.append('Surname', last);
-    fd.append('Phone Number', phone); fd.append('Email Address', email);
-    fd.append('Service', service);
-    fd.append('Preferred Date', dateStr); fd.append('Preferred Time', time);
-    fd.append('Message', msg||'No message provided.');
-    fd.append('Wellness Score', state.user?.last_score||'N/A');
-    const res = await fetch('https://formspree.io/f/xnjylyaq',{method:'POST',body:fd,headers:{Accept:'application/json'}});
-    if(!res.ok) throw new Error('server');
-  } catch(e){
-    document.getElementById('bkErrMsg').textContent='Could not submit. Please try again or email wellness@keywellness.co.bw';
+    const res = await fetch('https://formsubmit.co/ajax/wellness@keywellness.co.bw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({
+        'First Name':      first,
+        'Surname':         last,
+        'Phone Number':    phone,
+        'Email Address':   email,
+        'Service':         service,
+        'Preferred Date':  dateStr,
+        'Preferred Time':  time,
+        'Message':         msg || 'No additional message.',
+        'Wellness Score':  state.user?.last_score || 'N/A',
+        '_subject':        '📅 New Booking – ' + service + ' – ' + first + ' ' + last,
+        '_replyto':        email,
+        '_autoresponse':   clientMsg,
+        '_template':       'table',
+        '_captcha':        'false'
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.success === 'false') throw new Error('server');
+  } catch(e) {
+    document.getElementById('bkErrMsg').textContent = 'Could not submit. Please try again or email wellness@keywellness.co.bw';
     document.getElementById('bkErrBanner').classList.add('show');
     btn.disabled=false; btn.classList.remove('bk-loading');
     return;
