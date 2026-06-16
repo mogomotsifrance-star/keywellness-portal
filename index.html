@@ -52,6 +52,7 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .sb-item:hover{color:#fff;background:rgba(255,255,255,.07)}
 .sb-item.active{color:#fff;background:rgba(200,151,58,.15);border-left-color:var(--gold)}
 .sb-item .icon{font-size:16px;width:20px;text-align:center}
+.sb-section-label{padding:10px 20px 4px;font-size:9px;font-weight:800;letter-spacing:.1em;color:rgba(255,255,255,.3);text-transform:uppercase;border-top:1px solid rgba(255,255,255,.07);margin-top:6px}
 .sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1)}
 .sb-user{color:rgba(255,255,255,.5);font-size:11px;margin-bottom:6px;word-break:break-all}
 .sb-pts{color:var(--gold);font-size:12px;font-weight:600;margin-bottom:10px}
@@ -666,31 +667,35 @@ async function doLogout() {
 //  NAV
 // ══════════════════════════════════════════════════
 const NAV = [
-  { id:'dashboard',   icon:'🏠', label:'Dashboard' },
-  { id:'assessment',  icon:'📋', label:'Assessment' },
-  { id:'learn',       icon:'📚', label:'Learn' },
-  { id:'tools',       icon:'🛠️',  label:'Tools' },
-  { id:'emergency',   icon:'🆘', label:'Emergency Fund' },
-  { id:'checkin',     icon:'✅', label:'Check-in' },
-  { id:'progress',    icon:'📈', label:'Progress' },
-  { id:'booking',     icon:'📅', label:'Book Session' },
-  { id:'my-bookings', icon:'🗓️', label:'My Bookings' },
-  { id:'badges',      icon:'🏆', label:'Badges' },
-  { id:'profile',     icon:'👤', label:'My Profile' },
+  { id:'dashboard',    icon:'🏠', label:'Dashboard' },
+  { id:'assessment',   icon:'📋', label:'Assessment' },
+  { id:'learn',        icon:'📚', label:'Learn' },
+  { id:'_sep_tools',   sep:true,  label:'TOOLS' },
+  { id:'tools',        icon:'🛠️', label:'Tools' },
+  { id:'calculators',  icon:'🧮', label:'Calculators' },
+  { id:'emergency',    icon:'🆘', label:'Emergency Fund' },
+  { id:'checkin',      icon:'✅', label:'Check-in' },
+  { id:'progress',     icon:'📈', label:'Progress' },
+  { id:'booking',      icon:'📅', label:'Book Session' },
+  { id:'my-bookings',  icon:'🗓️', label:'My Bookings' },
+  { id:'badges',       icon:'🏆', label:'Badges' },
+  { id:'profile',      icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
-  { id:'dashboard', icon:'🏠', label:'Home' },
-  { id:'assessment',icon:'📋', label:'Assess' },
-  { id:'emergency', icon:'🆘', label:'Emergency' },
-  { id:'booking',   icon:'📅', label:'Book' },
-  { id:'badges',    icon:'🏆', label:'Badges' },
+  { id:'dashboard',   icon:'🏠', label:'Home' },
+  { id:'assessment',  icon:'📋', label:'Assess' },
+  { id:'tools',       icon:'🛠️', label:'Tools' },
+  { id:'calculators', icon:'🧮', label:'Calc' },
+  { id:'booking',     icon:'📅', label:'Book' },
 ];
 
 function buildNav(current) {
-  document.getElementById('sb-nav').innerHTML = NAV.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
+  document.getElementById('sb-nav').innerHTML = NAV.map(n => {
+    if (n.sep) return `<div style="padding:10px 20px 4px;font-size:9px;font-weight:800;letter-spacing:.1em;color:rgba(255,255,255,.3);text-transform:uppercase;border-top:1px solid rgba(255,255,255,.07);margin-top:6px">${n.label}</div>`;
+    return `<div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="icon">${n.icon}</span>${n.label}
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
     <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="bn-icon">${n.icon}</span>${n.label}
@@ -714,7 +719,7 @@ function route() {
   let view = window.location.hash.replace('#', '') || 'dashboard';
   if (!state.user && view !== 'onboarding') view = 'onboarding';
   buildNav(view);
-  const info = NAV.find(n => n.id === view) || { label: 'Dashboard' };
+  const info = NAV.find(n => !n.sep && n.id === view) || { label: 'Dashboard' };
   document.getElementById('page-title').textContent = info.label;
   document.getElementById('header-actions').innerHTML = '';
   document.getElementById('page-content').innerHTML = '';
@@ -1508,21 +1513,21 @@ window.showArticle = function (idx) {
 VIEWS['tools'] = function () {
   const el = document.getElementById('page-content');
   const tools = [
-    { icon:'💰', name:'Budget Planner',           desc:'Build your monthly budget using the 50/30/20 rule.',            file:'budget_planner.html' },
-    { icon:'📊', name:'Expense Tracker',           desc:'Log and categorise daily spending. Track where money goes.',    file:'expense_tracker.html' },
-    { icon:'🆘', name:'Emergency Fund Planner',    desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
-    { icon:'⚔️',  name:'Debt Snowball Planner',    desc:'List your debts and see your payoff order and timeline.',       file:'debt_snowball.html' },
-    { icon:'📐', name:'Debt-to-Income Calculator', desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
-    { icon:'🎯', name:'Retirement Calculator',     desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
-    { icon:'🏆', name:'Goal Planner',              desc:'Set SMART financial goals and track progress toward each one.', file:'goal_planner.html' },
-    { icon:'💎', name:'Net Worth Tracker',         desc:'Track assets vs liabilities and watch your net worth grow.',    file:'net_worth_tracker.html' },
-    { icon:'🧠', name:'Financial Stress Tracker',  desc:'Log your financial stress levels and spot patterns over time.', file:'financial_stress_tracker.html' },
-    { icon:'🏦', name:'Loan Calculator',           desc:'Calculate monthly repayments, total interest and amortisation.',  file:'loan_calculator.html' },
-    { icon:'📈', name:'Investment Calculator',     desc:'Project how a lump sum and monthly contributions grow over time.', file:'investment_calculator.html' },
-    { icon:'📅', name:'Book a Coach',              desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
+    { icon:'📊', name:'Budget Planner',          desc:'Build your monthly budget using the 50/30/20 rule.',             file:'budget_planner.html' },
+    { icon:'🎯', name:'Goal Planner',             desc:'Set SMART financial goals and track progress toward each one.',  file:'goal_planner.html' },
+    { icon:'💰', name:'Net Worth Tracker',        desc:'Track assets vs liabilities and watch your net worth grow.',     file:'net_worth_tracker.html' },
+    { icon:'🆘', name:'Emergency Fund',           desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
+    { icon:'💳', name:'Debt Repayment Planner',   desc:'List your debts and see your payoff order and timeline.',        file:'debt_snowball_planner.html' },
+    { icon:'📈', name:'Expense Tracker',          desc:'Log and categorise daily spending. Track where money goes.',     file:'expense_tracker.html' },
+    { icon:'🧮', name:'Debt-to-Income',           desc:'Check if your debt load is healthy relative to your income.',    file:'dti_calculator.html' },
+    { icon:'🏖️', name:'Retirement Planner',       desc:'Project how much you need and whether you are on track.',        file:'retirement_calculator.html' },
+    { icon:'😰', name:'Stress Tracker',           desc:'Log your financial stress levels and spot patterns over time.',  file:'financial_stress_tracker.html' },
+    { icon:'📋', name:'Assessment',               desc:'Take the 8-dimension financial wellness assessment.',             file:'wellness_assessment.html' },
+    { icon:'📚', name:'Learn',                    desc:'Explore guides and videos on personal finance fundamentals.',    view:'learn' },
+    { icon:'📅', name:'Book a Session',           desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
   ];
   el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action.</div>
+    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action. Need a number? Check the <button class="btn btn-outline btn-sm" onclick="go('calculators')" style="margin-left:4px">🧮 Calculators →</button></div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
       ${tools.map(t=>`
         <div class="card" style="cursor:default">
@@ -1534,6 +1539,30 @@ VIEWS['tools'] = function () {
             : t.file
               ? `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`
               : `<button class="btn btn-outline btn-sm" disabled>Coming Soon</button>`}
+        </div>`).join('')}
+    </div>`;
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: CALCULATORS
+// ══════════════════════════════════════════════════
+VIEWS['calculators'] = function () {
+  const el = document.getElementById('page-content');
+  const calcs = [
+    { icon:'🏦', name:'Loan Calculator',          desc:'Calculate monthly bond or loan repayments, total interest and full amortisation schedule. Includes extra payments and lump sums.', file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',     desc:'Project how a lump sum and monthly contributions grow over time. Inflation-adjusted view with year-by-year breakdown.', file:'investment_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',              desc:'Compare the true long-term cost of renting vs buying property. Find the break-even year and net wealth position.', file:'rent_vs_buy.html' },
+    { icon:'✅', name:'Affordability Calculator',  desc:'Find out the maximum bond you can qualify for using Botswana lending rules — 35% DTI cap and residual income test.', file:'affordability_calculator.html' },
+  ];
+  el.innerHTML = `
+    <div class="notice notice-gold" style="margin-bottom:18px">🧮 <strong>Run the numbers.</strong> Use these calculators to make informed financial decisions. Ready to act? <button class="btn btn-outline btn-sm" onclick="go('tools')" style="margin-left:4px">🛠️ Open Tools →</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px">
+      ${calcs.map(t=>`
+        <div class="card" style="cursor:default">
+          <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
+          <div class="card-title" style="margin-bottom:5px">${t.name}</div>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.55">${t.desc}</p>
+          <button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>
         </div>`).join('')}
     </div>`;
 };
