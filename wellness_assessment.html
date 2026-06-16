@@ -760,16 +760,24 @@ function calculateWellness(){
   const totalScore=Math.round(dims.reduce((s,d)=>s+d.score*d.w/100,0));
 
   // Save result to localStorage for dashboard sync
+  const _now = new Date().toISOString();
   localStorage.setItem('kw_assessment_result', JSON.stringify({
     score: totalScore,
     dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})),
-    date: new Date().toISOString(),
+    date: _now,
     savingsRate: savingsRate*100,
     dti: dti*100,
     emMonths,
     netWorth,
     insCount
   }));
+  // ── kw_snapshot ──
+  try {
+    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    const _grade = totalScore>=85?'Excellent':totalScore>=70?'Good':totalScore>=55?'Fair':totalScore>=40?'Needs Work':'Critical';
+    _snap.assessment = { score: totalScore, grade: _grade, dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})), lastUpdated: _now };
+    localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
+  } catch(e){}
 
   const grade=totalScore>=85?{label:'Excellent 🌟',tagline:'You are in outstanding financial health. Continue your disciplined habits and focus on optimising your wealth strategy.',color:'var(--green)'}
     :totalScore>=70?{label:'Good 👍',tagline:'Your financial foundation is solid. A few targeted improvements will move you to excellent.',color:'var(--green)'}

@@ -116,6 +116,9 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .hub-sub{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
 .hub-card.green .hub-val{color:var(--green)}.hub-card.red .hub-val{color:var(--red)}
 .hub-card.orange .hub-val{color:var(--orange)}.hub-card.gold .hub-val{color:var(--gold)}
+.hub-fresh{font-size:10px;color:var(--muted);margin-top:5px;font-style:italic}
+.hub-fresh-stale{color:var(--orange);font-style:normal;font-weight:600}
+.hub-card.stale{opacity:.88;border-left-style:dashed}
 /* ── Next actions ── */
 .next-action{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--cream);border-radius:var(--radius-sm);margin-bottom:9px;border:1.5px solid var(--border)}
 .na-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px}
@@ -974,6 +977,41 @@ VIEWS['dashboard'] = async function () {
     }
   } catch {}
 
+  // ── kw_snapshot staleness ──
+  const snap = JSON.parse(localStorage.getItem('kw_snapshot') || '{}');
+  const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;
+  const snapAge = {
+    assessment: daysSince(snap.assessment?.lastUpdated),
+    budget:     daysSince(snap.budget?.lastUpdated),
+    stress:     daysSince(snap.stress?.lastUpdated),
+    dti:        daysSince(snap.dti?.lastUpdated),
+  };
+  const freshLabel = days => days === null ? null : days === 0 ? 'Updated today' : days === 1 ? 'Updated yesterday' : `${days}d ago`;
+
+  // ── Nudge generation ──
+  const nudges = [];
+  const curMonth = new Date().toISOString().slice(0,7);
+  if (!snap.assessment) {
+    nudges.push({ pri:'high', icon:'📋', title:'Start your wellness assessment', desc:"Your financial health score hasn't been set — takes 5 minutes.", cta:'Start Now', click:`openTool('wellness_assessment.html')` });
+  } else if (snapAge.assessment > 90) {
+    nudges.push({ pri:'medium', icon:'🔄', title:'Quarterly review due', desc:`Last assessed ${snapAge.assessment} days ago. Re-assess to measure your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
+  }
+  if (!snap.budget) {
+    nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
+  } else if (snap.budget.month && snap.budget.month < curMonth) {
+    nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${snap.budget.month}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
+  } else if (snapAge.budget > 30) {
+    nudges.push({ pri:'medium', icon:'📊', title:'Budget not updated recently', desc:`Last saved ${snapAge.budget} days ago. Refresh your income and expenses.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
+  }
+  if (!snap.stress) {
+    nudges.push({ pri:'medium', icon:'😰', title:'Log your first stress check-in', desc:'Fortnightly stress tracking shows trends and helps your advisor spot patterns.', cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
+  } else if (snapAge.stress > 14) {
+    nudges.push({ pri:'low', icon:'😰', title:'Stress check-in overdue', desc:`Last logged ${snapAge.stress} days ago. Your fortnightly check-in is due.`, cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
+  }
+  if (!snap.dti && snap.budget) {
+    nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
+  }
+
   // ── Helper formatters ──
   const fmtP = v => {
     const abs = Math.abs(v);
@@ -988,7 +1026,7 @@ VIEWS['dashboard'] = async function () {
   if (wellScore !== null) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
-    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, click:`openTool('wellness_assessment.html')` });
+    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -996,7 +1034,8 @@ VIEWS['dashboard'] = async function () {
   // Budget surplus
   if (budgetSurplus !== null) {
     const cls = budgetSurplus >= 0 ? 'green' : 'red';
-    hubCards.push({ cls, lbl:'Budget Surplus', val:fmtP(budgetSurplus), sub:budgetLabel || 'This month', click:`openTool('budget_planner.html')` });
+    const isBudgetStale = snap.budget?.month && snap.budget.month < curMonth;
+    hubCards.push({ cls, lbl:'Budget Surplus', val:fmtP(budgetSurplus), sub:budgetLabel || 'This month', fresh:freshLabel(snapAge.budget), stale: isBudgetStale, click:`openTool('budget_planner.html')` });
   } else {
     hubCards.push({ cls:'gold', lbl:'Budget Surplus', val:'—', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
   }
@@ -1029,7 +1068,7 @@ VIEWS['dashboard'] = async function () {
   if (stressScore !== null) {
     const cls = stressScore <= 3 ? 'green' : stressScore <= 6 ? 'gold' : 'red';
     const lbl = stressScore <= 3 ? 'Low stress' : stressScore <= 6 ? 'Moderate' : 'High stress';
-    hubCards.push({ cls, lbl:'Financial Stress', val:`${stressScore}/10`, sub:lbl, click:`openTool('financial_stress_tracker.html')` });
+    hubCards.push({ cls, lbl:'Financial Stress', val:`${stressScore}/10`, sub:lbl, fresh:freshLabel(snapAge.stress), stale: snapAge.stress > 14, click:`openTool('financial_stress_tracker.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
@@ -1061,6 +1100,29 @@ VIEWS['dashboard'] = async function () {
   ];
 
   el.innerHTML = `
+    ${nudges.length ? `
+    <!-- Nudge strip -->
+    <div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:13px;font-weight:700;color:var(--navy)">🔔 Action Required</span>
+        <span style="font-size:11px;background:var(--gold);color:#fff;border-radius:20px;padding:1px 8px;font-weight:700">${nudges.length}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${nudges.map(n=>{
+          const border = n.pri==='high' ? 'var(--red)' : n.pri==='medium' ? 'var(--gold)' : 'var(--navy2)';
+          const bg     = n.pri==='high' ? '#fff5f5' : n.pri==='medium' ? '#fffbf0' : '#f5f7ff';
+          return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border-left:4px solid ${border};background:${bg};cursor:pointer" onclick="${n.click}">
+            <span style="font-size:20px;flex-shrink:0">${n.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px">${n.title}</div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.4">${n.desc}</div>
+            </div>
+            <button style="flex-shrink:0;padding:5px 12px;border-radius:6px;border:1.5px solid ${border};background:transparent;color:var(--navy);font-size:11px;font-weight:700;cursor:pointer;font-family:inherit" onclick="event.stopPropagation();${n.click}">${n.cta} →</button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
     <!-- Score + Category row -->
     <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;margin-bottom:18px;align-items:start">
       <div class="card" style="text-align:center;min-width:180px">
@@ -1078,10 +1140,11 @@ VIEWS['dashboard'] = async function () {
         <div class="card-title" style="margin-bottom:14px">Your Financial Hub</div>
         <div class="hub-summary">
           ${hubCards.map(c=>`
-            <div class="hub-card ${c.cls}" onclick="${c.click}" title="Click to open">
+            <div class="hub-card ${c.cls}${c.stale?' stale':''}" onclick="${c.click}" title="Click to open">
               <div class="hub-lbl">${c.lbl}</div>
               <div class="hub-val">${c.val}</div>
               <div class="hub-sub">${c.sub}</div>
+              ${c.fresh ? `<div class="hub-fresh${c.stale?' hub-fresh-stale':''}">${c.stale?'⚠ ':''}${c.fresh}</div>` : ''}
             </div>`).join('')}
         </div>
       </div>

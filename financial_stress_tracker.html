@@ -547,6 +547,14 @@ function logEntry(){
   document.getElementById('levelDesc').classList.remove('show');
 
   save(); renderAll();
+  // ── kw_snapshot ──
+  try {
+    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    const _sorted = [...entries].sort((a,b)=>b.date.localeCompare(a.date));
+    const _trend  = _sorted.slice(0,4).map(e=>e.score).reverse();
+    _snap.stress = { score: _sorted[0]?.score ?? null, trend: _trend, lastUpdated: new Date().toISOString() };
+    localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
+  } catch(e){}
 }
 
 function deleteEntry(id){entries=entries.filter(e=>e.id!==id);save();renderAll();}
