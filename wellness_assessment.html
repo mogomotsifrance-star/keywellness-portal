@@ -775,7 +775,7 @@ function calculateWellness(){
   try {
     const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
     const _grade = totalScore>=85?'Excellent':totalScore>=70?'Good':totalScore>=55?'Fair':totalScore>=40?'Needs Work':'Critical';
-    _snap.assessment = { score: totalScore, grade: _grade, dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})), lastUpdated: _now };
+    _snap.assessment = { score: totalScore, grade: _grade, dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})), insCount, lastUpdated: _now };
     localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
   } catch(e){}
 

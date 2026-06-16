@@ -1085,6 +1085,38 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
   }
 
+  // Savings Rate — from budget snapshot
+  const budgetSavRate = snap.budget?.savingsRate ?? null;
+  if (budgetSavRate !== null) {
+    const srCls = budgetSavRate >= 20 ? 'green' : budgetSavRate >= 10 ? 'gold' : budgetSavRate > 0 ? 'orange' : 'red';
+    const srSub = budgetSavRate >= 20 ? 'On target (20% rule)' : budgetSavRate >= 10 ? 'Building — aim for 20%' : budgetSavRate > 0 ? 'Low — increase contributions' : 'No savings budgeted';
+    hubCards.push({ cls:srCls, lbl:'Savings Rate', val:`${budgetSavRate}%`, sub:srSub, fresh:freshLabel(snapAge.budget), stale: snap.budget?.month && snap.budget.month < curMonth, click:`openTool('budget_planner.html')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
+  }
+
+  // Insurance Coverage — from assessment snapshot
+  const insCount = snap.assessment?.insCount ?? null;
+  if (insCount !== null) {
+    const insCls = insCount >= 5 ? 'green' : insCount >= 3 ? 'gold' : insCount >= 1 ? 'orange' : 'red';
+    const insSub = insCount >= 5 ? 'Well covered' : insCount >= 3 ? 'Partial coverage' : insCount >= 1 ? 'Significant gaps' : 'No coverage recorded';
+    hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insCount}/6`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
+  }
+
+  // Retirement Readiness — from retirement snapshot
+  const retSnap = snap.retirement ?? null;
+  if (retSnap) {
+    const retPct  = retSnap.readinessPct;
+    const retCls  = retPct >= 80 ? 'green' : retPct >= 50 ? 'gold' : retPct >= 25 ? 'orange' : 'red';
+    const retSub  = retPct >= 80 ? `On track · retire at ${retSnap.retireAge}` : retPct >= 50 ? `${retSnap.yrsToRetire}y to retire · gap exists` : `Significant shortfall · ${retSnap.yrsToRetire}y left`;
+    const retAge  = snap.retirement?.lastUpdated;
+    hubCards.push({ cls:retCls, lbl:'Retirement Readiness', val:`${retPct}%`, sub:retSub, fresh:freshLabel(daysSince(retAge)), click:`openTool('retirement_calculator.html')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'—', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
+  }
+
   // ── Build "What to do next" actions ──
   const actions = [];
   if (!wellScore) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
@@ -1094,22 +1126,29 @@ VIEWS['dashboard'] = async function () {
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (netWorth === null) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
   if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Consider the debt snowball to reduce obligations.', click:`openTool('debt_snowball_planner.html')` });
+  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
+  if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
+  if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
   if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your monthly check-in and review your goals.', click:`go('checkin')` });
 
-  // ── Tools grid ──
+  // ── Tools + Calculators grids ──
   const TOOLS = [
-    { icon:'📊', label:'Budget Planner',      file:'budget_planner.html' },
-    { icon:'🎯', label:'Goal Planner',         file:'goal_planner.html' },
-    { icon:'💰', label:'Net Worth',            file:'net_worth_tracker.html' },
-    { icon:'🆘', label:'Emergency Fund',       view:'emergency' },
-    { icon:'💳', label:'Debt Snowball',        file:'debt_snowball_planner.html' },
-    { icon:'📈', label:'Expense Tracker',      file:'expense_tracker.html' },
-    { icon:'🧮', label:'Debt-to-Income',       file:'dti_calculator.html' },
-    { icon:'🏖️', label:'Retirement Calc',      file:'retirement_calculator.html' },
-    { icon:'😰', label:'Stress Tracker',       file:'financial_stress_tracker.html' },
-    { icon:'📋', label:'Assessment',           file:'wellness_assessment.html' },
-    { icon:'📚', label:'Learn',                view:'learn' },
-    { icon:'📅', label:'Book Session',         view:'booking' },
+    { icon:'📊', label:'Budget Planner',    file:'budget_planner.html' },
+    { icon:'🎯', label:'Goal Planner',       file:'goal_planner.html' },
+    { icon:'💰', label:'Net Worth',          file:'net_worth_tracker.html' },
+    { icon:'🆘', label:'Emergency Fund',     view:'emergency' },
+    { icon:'💳', label:'Debt Snowball',      file:'debt_snowball_planner.html' },
+    { icon:'📈', label:'Expense Tracker',    file:'expense_tracker.html' },
+    { icon:'🧮', label:'Debt-to-Income',     file:'dti_calculator.html' },
+    { icon:'🏖️', label:'Retirement Planner', file:'retirement_calculator.html' },
+    { icon:'😰', label:'Stress Tracker',     file:'financial_stress_tracker.html' },
+    { icon:'📋', label:'Assessment',         file:'wellness_assessment.html' },
+    { icon:'📚', label:'Learn',              view:'learn' },
+    { icon:'📅', label:'Book Session',       view:'booking' },
+  ];
+  const CALCS = [
+    { icon:'🏦', label:'Loan Calculator',       file:'loan_calculator.html' },
+    { icon:'📈', label:'Investment Calculator',  file:'investment_calculator.html' },
   ];
 
   el.innerHTML = `
@@ -1177,12 +1216,23 @@ VIEWS['dashboard'] = async function () {
         </div>`).join('')}
     </div>
 
-    <!-- All Tools -->
-    <div class="card" style="margin-bottom:18px">
-      <div class="card-title">🛠️ All Financial Tools</div>
+    <!-- Tools -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">🛠️ Tools</div>
       <div class="tool-hub-grid">
         ${TOOLS.map(t=>`
           <button class="tool-hub-btn" onclick="${t.file ? `openTool('${t.file}')` : `go('${t.view}')`}">
+            <span class="th-icon">${t.icon}</span>${t.label}
+          </button>`).join('')}
+      </div>
+    </div>
+
+    <!-- Calculators -->
+    <div class="card" style="margin-bottom:18px">
+      <div class="card-title">🧮 Calculators</div>
+      <div class="tool-hub-grid">
+        ${CALCS.map(t=>`
+          <button class="tool-hub-btn" onclick="openTool('${t.file}')">
             <span class="th-icon">${t.icon}</span>${t.label}
           </button>`).join('')}
       </div>
