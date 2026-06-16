@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Affordability Calculator – Key Wellness</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#f0c842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#fff;
+  --radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(13,37,69,.1);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
+.wrap{max-width:740px;margin:0 auto}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--navy);text-decoration:none;margin-bottom:18px;opacity:.7;transition:opacity .15s}
+.back-link:hover{opacity:1}
+.tool-header{background:var(--navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px;position:relative;overflow:hidden}
+.tool-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(200,153,26,.18) 0%,transparent 70%)}
+.tool-header-inner{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
+.tool-icon{font-size:2.2rem}
+.tool-header h1{color:#fff;font-size:1.3rem;font-weight:700;margin-bottom:3px}
+.tool-header p{color:rgba(255,255,255,.6);font-size:.82rem}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
+.card-title{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:520px){.field-grid{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.75rem;font-weight:600;color:var(--slate)}
+.field input,.field select{padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border .15s;width:100%}
+.field input:focus,.field select:focus{outline:none;border-color:var(--gold)}
+.field-hint{font-size:.7rem;color:var(--muted);margin-top:2px}
+.btn{padding:12px 24px;border-radius:var(--radius-sm);font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:.15s}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold-lt)}
+.results{display:none}
+.results.show{display:block}
+
+/* Hero result */
+.hero-result{background:var(--navy);border-radius:var(--radius);padding:24px 28px;margin-bottom:16px;text-align:center;position:relative;overflow:hidden}
+.hero-result::before{content:'';position:absolute;top:-50px;right:-50px;width:220px;height:220px;background:radial-gradient(circle,rgba(200,153,26,.14) 0%,transparent 70%)}
+.hero-label{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:8px;position:relative}
+.hero-val{font-family:'DM Mono',monospace;font-size:2.2rem;font-weight:700;color:var(--gold-lt);position:relative}
+.hero-sub{font-size:.82rem;color:rgba(255,255,255,.6);margin-top:6px;position:relative}
+
+/* Stat grid */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px}
+.stat-box{background:var(--white);border-radius:var(--radius-sm);padding:14px 16px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.red{border-left-color:var(--red)}.stat-box.gold{border-left-color:var(--gold)}.stat-box.orange{border-left-color:var(--orange)}
+.stat-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px}
+.stat-value{font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:600;color:var(--navy)}
+.stat-sub{font-size:.7rem;color:var(--muted);margin-top:3px}
+.stat-box.green .stat-value{color:var(--green)}
+.stat-box.red .stat-value{color:var(--red)}
+.stat-box.gold .stat-value{color:var(--gold)}
+.stat-box.orange .stat-value{color:var(--orange)}
+
+/* Gauge bar */
+.gauge-wrap{margin:6px 0 10px}
+.gauge-track{background:var(--cream);border-radius:999px;height:14px;overflow:hidden;position:relative}
+.gauge-fill{height:100%;border-radius:999px;transition:width .6s ease}
+.gauge-labels{display:flex;justify-content:space-between;font-size:.68rem;color:var(--muted);margin-top:4px}
+
+/* Scenarios */
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.scenario-card{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;transition:.15s}
+.scenario-card:hover{border-color:var(--gold);background:var(--cream)}
+.scenario-card.active{border-color:var(--gold);background:#fffbf0}
+.sc-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
+.sc-val{font-family:'DM Mono',monospace;font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:3px}
+.sc-sub{font-size:.72rem;color:var(--slate)}
+
+/* Advice */
+.advice-list{display:flex;flex-direction:column;gap:10px}
+.advice-item{display:flex;gap:12px;padding:12px 14px;border-radius:8px;font-size:.82rem;line-height:1.5}
+.advice-item.good{background:#f0fbf5;border-left:3px solid var(--green)}
+.advice-item.warn{background:#fffbf0;border-left:3px solid var(--gold)}
+.advice-item.alert{background:#fff5f5;border-left:3px solid var(--red)}
+.advice-item.info{background:#f0f4ff;border-left:3px solid var(--navy2)}
+.advice-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+
+.info-note{background:#f0f4ff;border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
+
+/* Debt table */
+.debt-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:6px}
+.debt-table th{background:var(--cream);padding:8px 10px;text-align:left;font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.debt-table td{padding:8px 10px;border-bottom:1px solid var(--cream)}
+.debt-table tr:last-child td{border-bottom:none}
+.remove-btn{background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:2px 6px;line-height:1}
+
+/* Add debt row */
+.add-debt-row{display:grid;grid-template-columns:1fr 120px 100px auto;gap:10px;align-items:end;margin-top:12px}
+@media(max-width:520px){.add-debt-row{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="javascript:history.back()">← Back to Portal</a>
+
+  <div class="tool-header">
+    <div class="tool-header-inner">
+      <span class="tool-icon">✅</span>
+      <div>
+        <h1>Affordability Calculator</h1>
+        <p>Find out how much home or loan you can qualify for under Botswana lending rules</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Income -->
+  <div class="card">
+    <div class="card-title">💼 Monthly Income</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>Gross Monthly Salary (BWP)</label>
+        <input type="number" id="grossSalary" placeholder="e.g. 15000" min="0">
+        <span class="field-hint">Before tax and deductions</span>
+      </div>
+      <div class="field">
+        <label>Net (Take-home) Salary (BWP)</label>
+        <input type="number" id="netSalary" placeholder="e.g. 11000" min="0">
+        <span class="field-hint">After PAYE, BURS deductions</span>
+      </div>
+      <div class="field">
+        <label>Other Monthly Income (BWP)</label>
+        <input type="number" id="otherIncome" placeholder="e.g. 0" min="0">
+        <span class="field-hint">Rental, business, freelance etc.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Existing debts -->
+  <div class="card">
+    <div class="card-title">💳 Existing Monthly Debt Obligations</div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px">Enter all current monthly repayments (personal loans, car, credit cards, store accounts)</p>
+    <table class="debt-table" id="debtTable">
+      <thead><tr><th>Description</th><th>Monthly Payment</th><th>Balance</th><th></th></tr></thead>
+      <tbody id="debtBody"></tbody>
+    </table>
+    <div class="add-debt-row" style="margin-top:14px">
+      <div class="field" style="margin:0"><input type="text" id="newDebtLabel" placeholder="e.g. Car loan"></div>
+      <div class="field" style="margin:0"><input type="number" id="newDebtAmt" placeholder="Monthly (BWP)" min="0"></div>
+      <div class="field" style="margin:0"><input type="number" id="newDebtBal" placeholder="Balance (BWP)" min="0"></div>
+      <button class="btn btn-primary" onclick="addDebt()" style="padding:10px 16px;white-space:nowrap">+ Add</button>
+    </div>
+  </div>
+
+  <!-- Loan parameters -->
+  <div class="card">
+    <div class="card-title">🏦 Bond / Loan Parameters</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>Interest Rate (% p.a.)</label>
+        <input type="number" id="intRate" value="8.75" step="0.25" min="0">
+        <span class="field-hint">Current prime ~8.75%</span>
+      </div>
+      <div class="field">
+        <label>Loan Term (years)</label>
+        <input type="number" id="loanTerm" value="20" min="5" max="30">
+      </div>
+      <div class="field">
+        <label>Deposit Available (BWP)</label>
+        <input type="number" id="deposit" placeholder="e.g. 120000" min="0">
+        <span class="field-hint">Minimum 10% usually required</span>
+      </div>
+      <div class="field">
+        <label>Monthly Living Expenses (BWP)</label>
+        <input type="number" id="livingExp" placeholder="e.g. 6000" min="0">
+        <span class="field-hint">Food, transport, utilities etc.</span>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-primary" onclick="calculate()" style="min-width:160px">Calculate Affordability →</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <div class="hero-result">
+      <div class="hero-label">Maximum Bond You Can Afford</div>
+      <div class="hero-val" id="maxBond">—</div>
+      <div class="hero-sub" id="maxBondSub"></div>
+    </div>
+
+    <!-- Key stats -->
+    <div class="stat-row" id="keyStats"></div>
+
+    <!-- DTI gauge -->
+    <div class="card">
+      <div class="card-title">📊 Debt-to-Income Position</div>
+      <div id="dtiGauge"></div>
+    </div>
+
+    <!-- Scenarios -->
+    <div class="card">
+      <div class="card-title">🏡 What Can You Buy?</div>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:14px">Based on your maximum bond + deposit available</p>
+      <div class="scenario-grid" id="scenarios"></div>
+    </div>
+
+    <!-- Advice -->
+    <div class="card">
+      <div class="card-title">💡 Personalised Advice</div>
+      <div class="advice-list" id="adviceList"></div>
+    </div>
+
+    <!-- What-if: reducing debt -->
+    <div class="card" id="whatIfCard" style="display:none">
+      <div class="card-title">🔧 What If You Reduce Your Debt First?</div>
+      <div id="whatIfContent"></div>
+    </div>
+
+    <div class="info-note">
+      ⚠️ This is an estimate based on standard Botswana lending guidelines. Individual bank criteria vary. Qualification also depends on credit score, employment type, and bank policy. Get a formal pre-approval from your bank or a bond originator.
+    </div>
+
+  </div>
+</div>
+
+<script>
+const fmt  = v => 'BWP ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:0,maximumFractionDigits:0});
+const fmtK = v => { const a=Math.abs(v); const s=a>=1e6?(a/1e6).toFixed(2)+'M':a>=1e3?(a/1e3).toFixed(0)+'K':a.toFixed(0); return (v<0?'-':'')+'BWP '+s; };
+const pf   = id => parseFloat(document.getElementById(id).value)||0;
+
+let debts = [], nextId = 1;
+
+// Pre-load from kw_snapshot budget if available
+try {
+  const snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+  if (snap.budget?.income)  document.getElementById('netSalary').value  = snap.budget.income;
+  if (snap.dti?.totalIncome) document.getElementById('grossSalary').value = snap.dti.totalIncome;
+  if (snap.dti?.totalDebt)   addDebtSilent('Existing obligations (from DTI tool)', snap.dti.totalDebt, 0);
+} catch(e){}
+
+function addDebtSilent(label, amt, bal) {
+  debts.push({id: nextId++, label, amt, bal});
+  renderDebtTable();
+}
+
+function addDebt() {
+  const label = document.getElementById('newDebtLabel').value.trim() || 'Debt '+nextId;
+  const amt   = parseFloat(document.getElementById('newDebtAmt').value)||0;
+  const bal   = parseFloat(document.getElementById('newDebtBal').value)||0;
+  if (!amt) return;
+  debts.push({id: nextId++, label, amt, bal});
+  document.getElementById('newDebtLabel').value = '';
+  document.getElementById('newDebtAmt').value   = '';
+  document.getElementById('newDebtBal').value   = '';
+  renderDebtTable();
+}
+
+function removeDebt(id) {
+  debts = debts.filter(d=>d.id!==id);
+  renderDebtTable();
+}
+
+function renderDebtTable() {
+  const body = document.getElementById('debtBody');
+  if (!debts.length) { body.innerHTML = `<tr><td colspan="4" style="color:var(--muted);font-style:italic;padding:10px">No debts added yet</td></tr>`; return; }
+  body.innerHTML = debts.map(d=>`
+    <tr>
+      <td>${d.label}</td>
+      <td>${fmt(d.amt)}/mo</td>
+      <td>${d.bal ? fmt(d.bal) : '—'}</td>
+      <td><button class="remove-btn" onclick="removeDebt(${d.id})">✕</button></td>
+    </tr>`).join('');
+}
+renderDebtTable();
+
+function calculate() {
+  const gross    = pf('grossSalary');
+  const net      = pf('netSalary');
+  const other    = pf('otherIncome');
+  const living   = pf('livingExp');
+  const deposit  = pf('deposit');
+  const rate     = pf('intRate') / 100;
+  const term     = pf('loanTerm');
+
+  const totalGross = gross + other;
+  const totalNet   = net  + other;
+  if (!totalGross && !totalNet) { alert('Please enter your monthly income.'); return; }
+  const income = totalGross || totalNet;
+
+  const rMo = rate / 12;
+  const nMo = term * 12;
+  const pmt = (P) => rMo === 0 ? P/nMo : P * (rMo * Math.pow(1+rMo,nMo)) / (Math.pow(1+rMo,nMo)-1);
+  const maxBondFromPMT = (mo) => rMo === 0 ? mo*nMo : mo * (Math.pow(1+rMo,nMo)-1) / (rMo * Math.pow(1+rMo,nMo));
+
+  const existingDebt = debts.reduce((s,d)=>s+d.amt, 0);
+  const totalDebtBal = debts.reduce((s,d)=>s+d.bal, 0);
+
+  // ── Botswana lending rules ──
+  // 1. Back-end DTI cap: 35% of gross (some banks 40%)
+  // 2. NBFIRA unsecured: 30% of net
+  // 3. Residual income: net salary minus living expenses minus all debts minus new bond
+
+  const maxTotalDebt35 = income * 0.35;
+  const maxTotalDebt40 = income * 0.40;
+  const maxNewPMT35    = Math.max(0, maxTotalDebt35 - existingDebt);
+  const maxNewPMT40    = Math.max(0, maxTotalDebt40 - existingDebt);
+
+  // Residual income approach (conservative): net - living - existing - new payment >= 15% of net
+  const residualBuffer  = totalNet * 0.15;
+  const maxNewPMTResid  = Math.max(0, totalNet - living - existingDebt - residualBuffer);
+
+  // Take the most restrictive
+  const maxNewPMT = Math.min(
+    maxNewPMT35,
+    maxNewPMTResid > 0 ? maxNewPMTResid : maxNewPMT35
+  );
+
+  const maxBond35   = maxBondFromPMT(maxNewPMT35);
+  const maxBond40   = maxBondFromPMT(maxNewPMT40);
+  const maxBondRes  = maxBondFromPMT(maxNewPMTResid);
+  const maxBond     = maxBondFromPMT(maxNewPMT);
+
+  const maxPurchase = maxBond + deposit;
+  const currentDTI  = income > 0 ? (existingDebt / income * 100) : 0;
+  const projDTI     = income > 0 ? ((existingDebt + pmt(maxBond)) / income * 100) : 0;
+
+  // ── Hero ──
+  document.getElementById('maxBond').textContent = fmtK(maxBond);
+  document.getElementById('maxBondSub').textContent =
+    `Maximum home purchase: ${fmtK(maxPurchase)} (bond + ${fmtK(deposit)} deposit)  ·  Bond repayment: ${fmtK(pmt(maxBond))}/mo`;
+
+  // ── Key stats ──
+  const dtiCls = currentDTI<=25?'green':currentDTI<=35?'gold':currentDTI<=50?'orange':'red';
+  document.getElementById('keyStats').innerHTML = `
+    <div class="stat-box ${dtiCls}">
+      <div class="stat-label">Current DTI</div>
+      <div class="stat-value">${currentDTI.toFixed(1)}%</div>
+      <div class="stat-sub">Before new bond</div>
+    </div>
+    <div class="stat-box ${projDTI<=35?'green':projDTI<=40?'gold':'orange'}">
+      <div class="stat-label">DTI with Bond</div>
+      <div class="stat-value">${projDTI.toFixed(1)}%</div>
+      <div class="stat-sub">Target ≤ 35%</div>
+    </div>
+    <div class="stat-box gold">
+      <div class="stat-label">Max Bond (35% DTI)</div>
+      <div class="stat-value">${fmtK(maxBond35)}</div>
+      <div class="stat-sub">Conservative</div>
+    </div>
+    <div class="stat-box ${maxBondRes >= maxBond35 ? 'green':'orange'}">
+      <div class="stat-label">Max Bond (Residual)</div>
+      <div class="stat-value">${fmtK(maxBondRes)}</div>
+      <div class="stat-sub">After living expenses</div>
+    </div>
+    <div class="stat-box navy" style="border-left-color:var(--navy2)">
+      <div class="stat-label">Monthly Bond PMT</div>
+      <div class="stat-value">${fmtK(pmt(maxBond))}</div>
+      <div class="stat-sub">At ${pf('intRate')}% over ${term}y</div>
+    </div>
+    <div class="stat-box ${deposit >= maxBond*0.1 ? 'green':'orange'}">
+      <div class="stat-label">Deposit Readiness</div>
+      <div class="stat-value">${deposit ? (deposit/maxPurchase*100).toFixed(1)+'%' : '—'}</div>
+      <div class="stat-sub">Min 10% required</div>
+    </div>`;
+
+  // ── DTI gauge ──
+  const gaugeColor = projDTI<=35?'var(--green)':projDTI<=40?'var(--gold)':'var(--red)';
+  document.getElementById('dtiGauge').innerHTML = `
+    <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:6px">
+      <span style="color:var(--slate)">Current DTI: <strong>${currentDTI.toFixed(1)}%</strong></span>
+      <span style="color:var(--slate)">With bond: <strong style="color:${gaugeColor}">${projDTI.toFixed(1)}%</strong></span>
+    </div>
+    <div class="gauge-track">
+      <div class="gauge-fill" style="width:${Math.min(projDTI/80*100,100).toFixed(1)}%;background:${gaugeColor}"></div>
+    </div>
+    <div class="gauge-labels"><span>0%</span><span style="color:var(--green)">35% (ideal)</span><span style="color:var(--red)">80%+</span></div>
+    <div style="margin-top:10px;font-size:.8rem;color:var(--slate)">
+      ${projDTI<=35 ? '✅ You are within Botswana\'s standard lending threshold of 35%. Most banks should approve you.'
+       : projDTI<=40 ? '⚠️ Your DTI will be 35–40%. Some banks may still approve, but you are close to the limit.'
+       : '🚨 DTI above 40% — most lenders will decline. Reduce existing debt before applying for a bond.'}
+    </div>`;
+
+  // ── Scenarios ──
+  const scenarios = [
+    { label:'Conservative (35% DTI)', price: maxBond35 + deposit, bond: maxBond35, pmt: pmt(maxBond35), dti: (existingDebt+pmt(maxBond35))/income*100 },
+    { label:'Standard (40% DTI)',     price: maxBond40 + deposit, bond: maxBond40, pmt: pmt(maxBond40), dti: (existingDebt+pmt(maxBond40))/income*100 },
+    { label:'Your Binding Limit',     price: maxBond  + deposit, bond: maxBond,   pmt: pmt(maxBond),   dti: projDTI },
+  ];
+  document.getElementById('scenarios').innerHTML = scenarios.map((s,i)=>`
+    <div class="scenario-card${i===2?' active':''}">
+      <div class="sc-label">${s.label}</div>
+      <div class="sc-val">${fmtK(s.price)}</div>
+      <div class="sc-sub">Bond: ${fmtK(s.bond)}<br>${fmtK(s.pmt)}/mo · DTI ${s.dti.toFixed(1)}%</div>
+    </div>`).join('');
+
+  // ── Advice ──
+  const advice = [];
+  if (!deposit) advice.push({cls:'alert',icon:'🚨',msg:'No deposit entered. Most Botswana banks require a minimum 10% deposit. Start saving before applying.'});
+  else if (deposit < maxPurchase * 0.1) advice.push({cls:'warn',icon:'⚠️',msg:`Your deposit of ${fmt(deposit)} is less than 10% of your maximum purchase price. Banks may require mortgage insurance or decline.`});
+  else advice.push({cls:'good',icon:'✅',msg:`Your deposit covers ${(deposit/maxPurchase*100).toFixed(1)}% of the purchase price — well above the minimum 10%.`});
+
+  if (existingDebt > income * 0.25) advice.push({cls:'warn',icon:'💳',msg:`Existing debt (${fmt(existingDebt)}/mo) is using ${(existingDebt/income*100).toFixed(0)}% of your income before the bond. Paying this down first significantly increases your bond qualification.`});
+
+  if (!living) advice.push({cls:'info',icon:'ℹ️',msg:'Enter your monthly living expenses for a more accurate residual income calculation.'});
+  else if (totalNet - living - existingDebt - pmt(maxBond) < totalNet * 0.1) advice.push({cls:'warn',icon:'⚠️',msg:'After all obligations, you have very little buffer. A rate increase of 1–2% could put you under pressure. Consider a smaller bond.'});
+
+  if (maxBond <= 0) advice.push({cls:'alert',icon:'🚨',msg:'Your existing debt obligations already exceed the 35% DTI threshold. You will not qualify for a bond without first reducing your debt.'});
+
+  if (rate < 0.07) advice.push({cls:'info',icon:'📉',msg:'If rates rise, your repayment will increase. Stress-test your affordability at 10–11% to ensure you can cope with rate hikes.'});
+
+  advice.push({cls:'info',icon:'🏦',msg:'Get pre-approval letters from at least two banks (BBS, FNB, Standard Bank, Stanbic) — rates and qualifying criteria differ.'});
+
+  document.getElementById('adviceList').innerHTML = advice.map(a=>`
+    <div class="advice-item ${a.cls}">
+      <span class="advice-icon">${a.icon}</span>
+      <span>${a.msg}</span>
+    </div>`).join('');
+
+  // ── What-if: pay off debt ──
+  if (existingDebt > 0 && totalDebtBal > 0) {
+    const freedPMT   = existingDebt;
+    const maxBondNew = maxBondFromPMT(freedPMT + maxNewPMT);
+    const gain       = maxBondNew - maxBond;
+    document.getElementById('whatIfCard').style.display = '';
+    document.getElementById('whatIfContent').innerHTML = `
+      <p style="font-size:.82rem;color:var(--slate);margin-bottom:12px">If you pay off all current debt (total balance: <strong>${fmtK(totalDebtBal)}</strong>) before applying:</p>
+      <div class="stat-row" style="margin-bottom:0">
+        <div class="stat-box green">
+          <div class="stat-label">New Max Bond</div>
+          <div class="stat-value">${fmtK(maxBondNew)}</div>
+          <div class="stat-sub">+${fmtK(gain)} more</div>
+        </div>
+        <div class="stat-box green">
+          <div class="stat-label">New Max Purchase</div>
+          <div class="stat-value">${fmtK(maxBondNew + deposit)}</div>
+          <div class="stat-sub">with ${fmtK(deposit)} deposit</div>
+        </div>
+        <div class="stat-box gold">
+          <div class="stat-label">Debt to Pay Off</div>
+          <div class="stat-value">${fmtK(totalDebtBal)}</div>
+          <div class="stat-sub">Total outstanding</div>
+        </div>
+      </div>`;
+  }
+
+  // ── kw_snapshot ──
+  try {
+    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    _snap.affordability = {
+      maxBond: Math.round(maxBond),
+      maxPurchase: Math.round(maxPurchase),
+      monthlyPMT: Math.round(pmt(maxBond)),
+      projDTI: +projDTI.toFixed(1),
+      deposit,
+      lastUpdated: new Date().toISOString()
+    };
+    localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
+  } catch(e){}
+
+  document.getElementById('results').classList.add('show');
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+}
+</script>
+</body>
+</html>

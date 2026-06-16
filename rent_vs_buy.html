@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Rent vs Buy – Key Wellness</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#f0c842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#fff;
+  --radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(13,37,69,.1);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
+.wrap{max-width:800px;margin:0 auto}
+.back-link{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--navy);text-decoration:none;margin-bottom:18px;opacity:.7;transition:opacity .15s}
+.back-link:hover{opacity:1}
+.tool-header{background:var(--navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px;position:relative;overflow:hidden}
+.tool-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(200,153,26,.18) 0%,transparent 70%)}
+.tool-header-inner{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
+.tool-icon{font-size:2.2rem}
+.tool-header h1{color:#fff;font-size:1.3rem;font-weight:700;margin-bottom:3px}
+.tool-header p{color:rgba(255,255,255,.6);font-size:.82rem}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
+.card-title{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:520px){.field-grid{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:.75rem;font-weight:600;color:var(--slate)}
+.field input,.field select{padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border .15s;width:100%}
+.field input:focus,.field select:focus{outline:none;border-color:var(--gold)}
+.field-hint{font-size:.7rem;color:var(--muted);margin-top:2px}
+.btn{padding:12px 24px;border-radius:var(--radius-sm);font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:.15s}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold-lt)}
+.btn-outline{background:transparent;border:2px solid var(--navy);color:var(--navy)}
+.btn-outline:hover{background:var(--navy);color:#fff}
+.results{display:none}
+.results.show{display:block}
+
+/* Verdict banner */
+.verdict{border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:16px}
+.verdict.buy{background:linear-gradient(135deg,#e8f7f0,#d4f0e2);border-left:5px solid var(--green)}
+.verdict.rent{background:linear-gradient(135deg,#fff8e8,#fef0c0);border-left:5px solid var(--gold)}
+.verdict.neutral{background:linear-gradient(135deg,#f0f4ff,#e8eeff);border-left:5px solid var(--navy2)}
+.verdict-icon{font-size:2.2rem;flex-shrink:0}
+.verdict-title{font-size:1.05rem;font-weight:800;color:var(--navy);margin-bottom:4px}
+.verdict-sub{font-size:.82rem;color:var(--slate);line-height:1.5}
+
+/* Stat grid */
+.stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat-box{background:var(--white);border-radius:var(--radius-sm);padding:16px;box-shadow:var(--shadow);border-top:3px solid var(--border);text-align:center}
+.stat-box.buy{border-top-color:var(--green)}.stat-box.rent{border-top-color:var(--gold)}.stat-box.neutral{border-top-color:var(--navy2)}
+.stat-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+.stat-value{font-family:'DM Mono',monospace;font-size:1.15rem;font-weight:600;color:var(--navy)}
+.stat-sub{font-size:.7rem;color:var(--muted);margin-top:3px}
+
+/* Breakdown bars */
+.cost-bars{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:4px}
+@media(max-width:520px){.cost-bars{grid-template-columns:1fr}}
+.cost-col-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.cost-col-title.buy{color:var(--green)}.cost-col-title.rent{color:var(--gold)}
+.cost-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--cream);font-size:.8rem}
+.cost-row:last-child{border-bottom:none;font-weight:700;padding-top:10px}
+.cost-label{color:var(--slate)}
+.cost-val{font-family:'DM Mono',monospace;font-weight:600;color:var(--navy)}
+
+/* Break-even */
+.breakeven-bar-wrap{background:var(--cream);border-radius:8px;height:12px;overflow:hidden;margin:10px 0 4px}
+.breakeven-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--gold-lt));border-radius:8px;transition:width .6s ease}
+
+/* Chart */
+.chart-wrap{overflow-x:auto}
+canvas{display:block;max-width:100%}
+
+/* Schedule table */
+.sched-wrap table{width:100%;border-collapse:collapse;font-size:.78rem}
+.sched-wrap th{background:var(--navy);color:#fff;padding:8px 10px;text-align:right;font-weight:600;font-size:.72rem}
+.sched-wrap th:first-child{text-align:left}
+.sched-wrap td{padding:7px 10px;border-bottom:1px solid var(--cream);text-align:right}
+.sched-wrap td:first-child{text-align:left;font-weight:600}
+.sched-wrap tr.buy-wins{background:#f0fbf5}
+.sched-wrap tr.rent-wins{background:#fffbf0}
+.sched-wrap tr.breakeven-row{background:#eef2ff;font-weight:700}
+.show-more-btn{font-size:.75rem;color:var(--navy);font-weight:600;cursor:pointer;border:none;background:none;padding:8px 0;text-decoration:underline;text-underline-offset:3px;margin-top:6px}
+
+/* Toggle */
+.tab-toggle{display:flex;gap:0;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:14px;width:fit-content}
+.tab-btn{padding:7px 16px;border:none;background:var(--cream);font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;transition:.15s}
+.tab-btn.active{background:var(--navy);color:#fff}
+.tab-btn+.tab-btn{border-left:1.5px solid var(--border)}
+
+.info-note{background:#f0f4ff;border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back-link" href="javascript:history.back()">← Back to Portal</a>
+
+  <div class="tool-header">
+    <div class="tool-header-inner">
+      <span class="tool-icon">🏠</span>
+      <div>
+        <h1>Rent vs Buy Calculator</h1>
+        <p>Compare the true long-term cost of renting versus buying property in Botswana</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inputs -->
+  <div class="card">
+    <div class="card-title">🏡 Buying Scenario</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>Home Purchase Price (BWP)</label>
+        <input type="number" id="homePrice" value="1200000" min="0">
+      </div>
+      <div class="field">
+        <label>Down Payment (%)</label>
+        <input type="number" id="downPct" value="10" min="0" max="100">
+        <span class="field-hint" id="downAmtHint">= BWP 120,000</span>
+      </div>
+      <div class="field">
+        <label>Bond Interest Rate (% p.a.)</label>
+        <input type="number" id="bondRate" value="8.75" step="0.25" min="0">
+        <span class="field-hint">Current BBS/Stanbic prime ~8.75%</span>
+      </div>
+      <div class="field">
+        <label>Bond Term (years)</label>
+        <input type="number" id="bondTerm" value="20" min="5" max="30">
+      </div>
+      <div class="field">
+        <label>Home Appreciation (% p.a.)</label>
+        <input type="number" id="appreciation" value="5" step="0.5" min="0">
+        <span class="field-hint">Gaborone avg ~4–6% p.a.</span>
+      </div>
+      <div class="field">
+        <label>Annual Maintenance (% of value)</label>
+        <input type="number" id="maintenance" value="1.5" step="0.25" min="0">
+        <span class="field-hint">Typical 1–2% per year</span>
+      </div>
+      <div class="field">
+        <label>Annual Rates & Levies (BWP/mo)</label>
+        <input type="number" id="ratesMonthly" value="800" min="0">
+      </div>
+      <div class="field">
+        <label>Home Insurance (BWP/mo)</label>
+        <input type="number" id="homeInsurance" value="600" min="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏢 Renting Scenario</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>Current Monthly Rent (BWP)</label>
+        <input type="number" id="monthlyRent" value="8000" min="0">
+      </div>
+      <div class="field">
+        <label>Annual Rent Increase (%)</label>
+        <input type="number" id="rentIncrease" value="6" step="0.5" min="0">
+        <span class="field-hint">Landlords typically increase 5–8%</span>
+      </div>
+      <div class="field">
+        <label>Renter's Insurance (BWP/mo)</label>
+        <input type="number" id="rentInsurance" value="200" min="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 Comparison Settings</div>
+    <div class="field-grid">
+      <div class="field">
+        <label>Time Horizon (years)</label>
+        <input type="number" id="horizon" value="10" min="1" max="30">
+      </div>
+      <div class="field">
+        <label>Investment Return on Deposit (%)</label>
+        <input type="number" id="investReturn" value="9" step="0.5" min="0">
+        <span class="field-hint">If deposit invested instead (e.g. unit trust)</span>
+      </div>
+      <div class="field">
+        <label>Transfer Duty & Costs (% of price)</label>
+        <input type="number" id="transferCosts" value="5" step="0.5" min="0">
+        <span class="field-hint">Incl. transfer duty, legal, bond fees</span>
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-primary" onclick="calculate()" style="min-width:160px">Calculate →</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+
+    <!-- Verdict -->
+    <div id="verdictBanner"></div>
+
+    <!-- Key stats -->
+    <div class="stat-row" id="keyStats"></div>
+
+    <!-- Cost breakdown -->
+    <div class="card">
+      <div class="card-title">💰 Total Cost Breakdown over <span id="horizonLabel"></span> Years</div>
+      <div class="cost-bars" id="costBars"></div>
+    </div>
+
+    <!-- Break-even -->
+    <div class="card">
+      <div class="card-title">⏱ Break-even Point</div>
+      <div id="breakEvenContent"></div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="card-title">📈 Cumulative Cost Over Time</div>
+      <div class="tab-toggle">
+        <button class="tab-btn active" id="btnCost" onclick="setChart('cost')">Total Cost</button>
+        <button class="tab-btn" id="btnNetWorth" onclick="setChart('networth')">Net Worth Impact</button>
+      </div>
+      <div class="chart-wrap"><canvas id="mainChart" height="280"></canvas></div>
+    </div>
+
+    <!-- Year-by-year table -->
+    <div class="card">
+      <div class="card-title">📋 Year-by-Year Comparison</div>
+      <div class="sched-wrap" id="schedWrap"></div>
+      <button class="show-more-btn" id="schedToggle" onclick="toggleSched()"></button>
+    </div>
+
+    <div class="info-note">
+      ⚠️ This calculator provides estimates for comparison purposes only. Transfer duty rates, bond qualifying criteria, and property values vary. Consult a financial advisor or bond originator before making a property decision.
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ── Formatters ──────────────────────────────────────────────
+const fmt  = v => 'BWP ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:0,maximumFractionDigits:0});
+const fmtK = v => { const a=Math.abs(v); const s=a>=1e6?(a/1e6).toFixed(2)+'M':a>=1e3?(a/1e3).toFixed(1)+'K':a.toFixed(0); return (v<0?'-':'')+'BWP '+s; };
+const pf   = id => parseFloat(document.getElementById(id).value)||0;
+
+let schedRows = [], showFullSched = false, chartMode = 'cost', chartInst = null;
+
+// ── Live down payment hint ───────────────────────────────────
+['homePrice','downPct'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateDownHint);
+});
+function updateDownHint() {
+  const price = pf('homePrice'), pct = pf('downPct');
+  document.getElementById('downAmtHint').textContent = '= ' + fmt(price * pct / 100);
+}
+
+// ── Main calculate ───────────────────────────────────────────
+function calculate() {
+  const homePrice    = pf('homePrice');
+  const downPct      = pf('downPct') / 100;
+  const bondRateAnn  = pf('bondRate') / 100;
+  const bondTermYrs  = pf('bondTerm');
+  const appreciation = pf('appreciation') / 100;
+  const maintPct     = pf('maintenance') / 100;
+  const ratesMonthly = pf('ratesMonthly');
+  const homeIns      = pf('homeInsurance');
+
+  const monthlyRent  = pf('monthlyRent');
+  const rentIncrAnn  = pf('rentIncrease') / 100;
+  const rentIns      = pf('rentInsurance');
+
+  const horizonYrs   = Math.max(1, Math.round(pf('horizon')));
+  const investReturn = pf('investReturn') / 100;
+  const transferPct  = pf('transferCosts') / 100;
+
+  if (!homePrice || !monthlyRent) return;
+
+  // ── Up-front costs ──
+  const deposit       = homePrice * downPct;
+  const transferCost  = homePrice * transferPct;
+  const loanAmount    = homePrice - deposit;
+
+  // ── Monthly bond payment ──
+  const rMo  = bondRateAnn / 12;
+  const nMo  = bondTermYrs * 12;
+  const bondPMT = rMo === 0 ? loanAmount / nMo
+    : loanAmount * (rMo * Math.pow(1+rMo, nMo)) / (Math.pow(1+rMo, nMo) - 1);
+
+  // ── Year-by-year simulation ──
+  schedRows = [];
+  let buyTotal = transferCost;   // cumulative out-of-pocket (excl deposit which builds equity)
+  let rentTotal = 0;             // cumulative rent paid
+  let bondBalance = loanAmount;
+  let homeValue = homePrice;
+  let rentNow = monthlyRent;
+  let investBalance = deposit;   // deposit invested if renting
+  let breakEvenYear = null;
+
+  for (let y = 1; y <= horizonYrs; y++) {
+    // ── Buying this year ──
+    let yearBondInt = 0, yearBondPrin = 0;
+    for (let m = 0; m < 12; m++) {
+      const interest = bondBalance * rMo;
+      const principal = Math.min(bondPMT - interest, bondBalance);
+      bondBalance = Math.max(0, bondBalance - principal);
+      yearBondInt  += interest;
+      yearBondPrin += principal;
+    }
+    const yearMaint   = homeValue * maintPct;
+    const yearRates   = ratesMonthly * 12;
+    const yearHomeIns = homeIns * 12;
+    const yearBuyOpex = yearBondInt + yearMaint + yearRates + yearHomeIns; // "spent" money
+    buyTotal += yearBuyOpex + yearBondPrin; // total cash out (principal goes to equity though)
+    homeValue *= (1 + appreciation);
+    const equity = homeValue - bondBalance;
+
+    // ── Renting this year ──
+    const yearRent    = rentNow * 12;
+    const yearRentIns = rentIns * 12;
+    rentTotal += yearRent + yearRentIns;
+    rentNow   *= (1 + rentIncrAnn);
+
+    // ── Opportunity cost: invest deposit ──
+    investBalance *= (1 + investReturn);
+
+    // ── Net wealth positions ──
+    // Buyer: equity in home minus transfer costs
+    const buyerWealth  = equity - transferCost;
+    // Renter: invested deposit grows, but subtract total rent paid
+    const renterWealth = investBalance - rentTotal;
+
+    // ── Cumulative buy true cost = cash paid - equity gained ──
+    const buyCumCost  = buyTotal - (equity - homePrice); // cash out less appreciation
+    const rentCumCost = rentTotal;
+
+    if (!breakEvenYear && buyerWealth > renterWealth) breakEvenYear = y;
+
+    schedRows.push({
+      y, bondPMT: bondPMT.toFixed(0),
+      yearBuyOpex, yearBondPrin,
+      yearRent, yearRentIns,
+      buyCumCost: buyTotal - deposit, // excl deposit (sunk cost comparison)
+      rentCumCost,
+      homeValue, bondBalance, equity,
+      buyerWealth, renterWealth,
+      buyAhead: buyerWealth > renterWealth
+    });
+  }
+
+  const last = schedRows[schedRows.length - 1];
+  const winner = last.buyerWealth > last.renterWealth ? 'buy' : 'rent';
+
+  // ── Verdict ──
+  const wealthDiff = Math.abs(last.buyerWealth - last.renterWealth);
+  let verdictHtml;
+  if (winner === 'buy') {
+    verdictHtml = `<div class="verdict buy">
+      <div class="verdict-icon">🏡</div>
+      <div>
+        <div class="verdict-title">Buying is better over ${horizonYrs} years</div>
+        <div class="verdict-sub">After ${horizonYrs} years, buying leaves you <strong>${fmtK(wealthDiff)}</strong> wealthier than renting, primarily through equity build-up and home appreciation.</div>
+      </div></div>`;
+  } else {
+    verdictHtml = `<div class="verdict rent">
+      <div class="verdict-icon">🏢</div>
+      <div>
+        <div class="verdict-title">Renting is better over ${horizonYrs} years</div>
+        <div class="verdict-sub">After ${horizonYrs} years, renting and investing the deposit leaves you <strong>${fmtK(wealthDiff)}</strong> ahead — largely because buying costs are high early on and the investment returns on your deposit are strong.</div>
+      </div></div>`;
+  }
+  document.getElementById('verdictBanner').innerHTML = verdictHtml;
+
+  // ── Key stats ──
+  const totalBondPaid = bondPMT * Math.min(nMo, horizonYrs * 12);
+  document.getElementById('keyStats').innerHTML = `
+    <div class="stat-box buy">
+      <div class="stat-label">Bond Repayment/mo</div>
+      <div class="stat-value">${fmtK(bondPMT)}</div>
+      <div class="stat-sub">${bondTermYrs}-year bond</div>
+    </div>
+    <div class="stat-box buy">
+      <div class="stat-label">Home Value in ${horizonYrs}y</div>
+      <div class="stat-value">${fmtK(last.homeValue)}</div>
+      <div class="stat-sub">from ${fmtK(homePrice)}</div>
+    </div>
+    <div class="stat-box buy">
+      <div class="stat-label">Equity in ${horizonYrs}y</div>
+      <div class="stat-value">${fmtK(last.equity)}</div>
+      <div class="stat-sub">Net of bond balance</div>
+    </div>
+    <div class="stat-box rent">
+      <div class="stat-label">Total Rent Paid</div>
+      <div class="stat-value">${fmtK(last.rentCumCost)}</div>
+      <div class="stat-sub">Over ${horizonYrs} years</div>
+    </div>
+    <div class="stat-box rent">
+      <div class="stat-label">Deposit if Invested</div>
+      <div class="stat-value">${fmtK(last.homeValue - last.bondBalance - (last.homeValue - last.equity))}</div>
+      <div class="stat-sub">at ${pf('investReturn')}% p.a.</div>
+    </div>
+    <div class="stat-box neutral">
+      <div class="stat-label">Break-even</div>
+      <div class="stat-value">${breakEvenYear ? 'Year '+breakEvenYear : 'Never'}</div>
+      <div class="stat-sub">${breakEvenYear ? 'Buyer overtakes renter' : 'Within this horizon'}</div>
+    </div>`;
+
+  // ── Cost breakdown ──
+  const upfrontBuy = deposit + transferCost;
+  const buyOpexTotal   = schedRows.reduce((s,r)=>s+r.yearBuyOpex,0);
+  const buyPrinTotal   = schedRows.reduce((s,r)=>s+r.yearBondPrin,0);
+  const rentOpexTotal  = schedRows.reduce((s,r)=>s+r.yearRent+r.yearRentIns,0);
+
+  document.getElementById('horizonLabel').textContent = horizonYrs;
+  document.getElementById('costBars').innerHTML = `
+    <div>
+      <div class="cost-col-title buy">🏡 Buying Costs</div>
+      <div class="cost-row"><span class="cost-label">Deposit (upfront)</span><span class="cost-val">${fmtK(deposit)}</span></div>
+      <div class="cost-row"><span class="cost-label">Transfer & Legal Costs</span><span class="cost-val">${fmtK(transferCost)}</span></div>
+      <div class="cost-row"><span class="cost-label">Bond Interest Paid</span><span class="cost-val">${fmtK(schedRows.reduce((s,r)=>s+r.yearBuyOpex - pf('ratesMonthly')*12 - pf('homeInsurance')*12 - r.yearBuyOpex + r.yearBuyOpex,0))}</span></div>
+      <div class="cost-row"><span class="cost-label">Maintenance</span><span class="cost-val">${fmtK(schedRows.reduce((s,r)=>s + (schedRows.indexOf(r)===0?pf('homePrice'):schedRows[schedRows.indexOf(r)-1].homeValue)*pf('maintenance')/100,0))}</span></div>
+      <div class="cost-row"><span class="cost-label">Rates & Insurance</span><span class="cost-val">${fmtK((ratesMonthly + homeIns) * 12 * horizonYrs)}</span></div>
+      <div class="cost-row"><span class="cost-label">Principal Repaid</span><span class="cost-val">${fmtK(buyPrinTotal)}</span></div>
+      <div class="cost-row"><span class="cost-label">Less: Equity Gained</span><span class="cost-val" style="color:var(--green)">- ${fmtK(last.equity)}</span></div>
+      <div class="cost-row"><span class="cost-label">Net True Cost</span><span class="cost-val" style="color:var(--navy)">${fmtK(Math.max(0, upfrontBuy + buyOpexTotal + buyPrinTotal - last.equity))}</span></div>
+    </div>
+    <div>
+      <div class="cost-col-title rent">🏢 Renting Costs</div>
+      <div class="cost-row"><span class="cost-label">Total Rent Paid</span><span class="cost-val">${fmtK(schedRows.reduce((s,r)=>s+r.yearRent,0))}</span></div>
+      <div class="cost-row"><span class="cost-label">Renter's Insurance</span><span class="cost-val">${fmtK(schedRows.reduce((s,r)=>s+r.yearRentIns,0))}</span></div>
+      <div class="cost-row"><span class="cost-label">Deposit Invested</span><span class="cost-val" style="color:var(--green)">+ ${fmtK(schedRows[schedRows.length-1].buyCumCost * 0)}</span></div>
+      <div class="cost-row" style="margin-top:8px"><span class="cost-label">Rent Y1/mo</span><span class="cost-val">${fmtK(monthlyRent)}</span></div>
+      <div class="cost-row"><span class="cost-label">Rent Y${horizonYrs}/mo</span><span class="cost-val">${fmtK(rentNow / (1+rentIncrAnn))}</span></div>
+      <div class="cost-row"><span class="cost-label">Invest Return on Deposit</span><span class="cost-val" style="color:var(--green)">+ ${fmtK(last.renterWealth + last.rentCumCost - deposit)}</span></div>
+      <div class="cost-row"><span class="cost-label">Net True Cost</span><span class="cost-val" style="color:var(--navy)">${fmtK(Math.max(0, last.rentCumCost - (last.renterWealth + last.rentCumCost - deposit)))}</span></div>
+    </div>`;
+
+  // ── Break-even ──
+  const beContent = breakEvenYear
+    ? `<p style="font-size:.85rem;color:var(--slate);margin-bottom:10px">Buying becomes the better financial decision in <strong>Year ${breakEvenYear}</strong>. Before that point, renting and investing the deposit generates more wealth.</p>
+       <div class="breakeven-bar-wrap"><div class="breakeven-bar" style="width:${Math.min(100,(breakEvenYear/horizonYrs)*100).toFixed(1)}%"></div></div>
+       <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted)"><span>Year 1</span><span>Break-even: Year ${breakEvenYear}</span><span>Year ${horizonYrs}</span></div>`
+    : `<p style="font-size:.85rem;color:var(--slate)">Within your ${horizonYrs}-year horizon, ${winner === 'buy' ? 'buying remains ahead from the start (strong equity growth).' : 'renting remains ahead. Extend your horizon or increase appreciation to see when buying would win.'}</p>`;
+  document.getElementById('breakEvenContent').innerHTML = beContent;
+
+  // ── Chart ──
+  drawChart();
+
+  // ── Schedule ──
+  renderSched(false);
+
+  document.getElementById('results').classList.add('show');
+  document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
+
+  // ── kw_snapshot ──
+  try {
+    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    _snap.rentVsBuy = {
+      winner, breakEvenYear, horizonYrs,
+      homePrice, deposit, bondPMT: Math.round(bondPMT),
+      buyerWealth: Math.round(last.buyerWealth),
+      renterWealth: Math.round(last.renterWealth),
+      lastUpdated: new Date().toISOString()
+    };
+    localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
+  } catch(e){}
+}
+
+// ── Chart ────────────────────────────────────────────────────
+function drawChart() {
+  const labels = schedRows.map(r => 'Y'+r.y);
+  let buyData, rentData, yLabel;
+
+  if (chartMode === 'cost') {
+    buyData  = schedRows.map(r => Math.round(r.buyCumCost));
+    rentData = schedRows.map(r => Math.round(r.rentCumCost));
+    yLabel   = 'Cumulative Cash Out (BWP)';
+  } else {
+    buyData  = schedRows.map(r => Math.round(r.buyerWealth));
+    rentData = schedRows.map(r => Math.round(r.renterWealth));
+    yLabel   = 'Net Wealth Position (BWP)';
+  }
+
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(document.getElementById('mainChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Buying', data:buyData, borderColor:'#1A8C5B', backgroundColor:'rgba(26,140,91,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true },
+        { label:'Renting', data:rentData, borderColor:'#C8991A', backgroundColor:'rgba(200,153,26,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true }
+      ]
+    },
+    options: {
+      responsive:true, interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{labels:{font:{family:'Inter',size:11},boxWidth:14}},
+        tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': BWP '+ctx.parsed.y.toLocaleString('en-BW')}}
+      },
+      scales:{
+        x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}},
+        y:{ticks:{font:{family:'DM Mono',size:10},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v},grid:{color:'rgba(214,221,232,.5)'}}
+      }
+    }
+  });
+}
+
+function setChart(mode) {
+  chartMode = mode;
+  document.getElementById('btnCost').classList.toggle('active', mode==='cost');
+  document.getElementById('btnNetWorth').classList.toggle('active', mode==='networth');
+  drawChart();
+}
+
+// ── Year-by-year schedule ────────────────────────────────────
+function renderSched(full) {
+  const rows = full ? schedRows : schedRows.slice(0,5);
+  const html = `<table>
+    <thead><tr>
+      <th style="text-align:left">Year</th>
+      <th>Bond/mo</th>
+      <th>Rent/mo</th>
+      <th>Cum. Buy Cost</th>
+      <th>Cum. Rent Cost</th>
+      <th>Buyer Wealth</th>
+      <th>Renter Wealth</th>
+    </tr></thead>
+    <tbody>
+      ${rows.map(r=>{
+        const cls = r.y === schedRows.findIndex(x=>x.buyAhead) + 1 ? 'breakeven-row' : r.buyAhead ? 'buy-wins' : 'rent-wins';
+        return `<tr class="${cls}">
+          <td>Year ${r.y}</td>
+          <td>${fmtK(+r.bondPMT)}</td>
+          <td>${fmtK(r.yearRent/12)}</td>
+          <td>${fmtK(r.buyCumCost)}</td>
+          <td>${fmtK(r.rentCumCost)}</td>
+          <td style="color:var(--green);font-weight:600">${fmtK(r.buyerWealth)}</td>
+          <td style="color:var(--gold);font-weight:600">${fmtK(r.renterWealth)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+  document.getElementById('schedWrap').innerHTML = html;
+  const toggle = document.getElementById('schedToggle');
+  if (schedRows.length <= 5) { toggle.style.display='none'; return; }
+  toggle.style.display = '';
+  toggle.textContent = full ? 'Show less ▴' : `Show all ${schedRows.length} years ▾`;
+}
+
+function toggleSched() {
+  showFullSched = !showFullSched;
+  renderSched(showFullSched);
+}
+</script>
+</body>
+</html>
