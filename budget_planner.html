@@ -408,12 +408,17 @@ function save(){
   try {
     if(currentKey && budgets[currentKey]) {
       const _t = calcTotals(budgets[currentKey]);
+      const _b   = budgets[currentKey];
+      const _debtMin = parseFloat(_b.expenses?.debt_min||0);
+      const _dtiRatio = _t.totalIncome > 0 ? +(_debtMin / _t.totalIncome * 100).toFixed(1) : null;
       const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
       _snap.budget = {
         income: _t.totalIncome,
         expenses: _t.totalExpenses,
         surplus: _t.surplus,
         savingsRate: _t.totalIncome > 0 ? +(_t.savingsAmt / _t.totalIncome * 100).toFixed(1) : 0,
+        debtPayments: _debtMin,
+        dtiRatio: _dtiRatio,
         month: currentKey,
         lastUpdated: new Date().toISOString()
       };

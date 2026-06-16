@@ -1073,6 +1073,18 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
 
+  // DTI — derived from budget snapshot
+  const budgetDTI = snap.budget?.dtiRatio ?? null;
+  if (budgetDTI !== null) {
+    const dtiCls  = budgetDTI <= 35 ? 'green' : budgetDTI <= 50 ? 'gold' : budgetDTI <= 65 ? 'orange' : 'red';
+    const dtiSub  = budgetDTI <= 35 ? 'Healthy' : budgetDTI <= 50 ? 'Acceptable' : budgetDTI <= 65 ? 'High Risk' : 'Critical';
+    hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: snap.budget?.month && snap.budget.month < curMonth, click:`openTool('dti_calculator.html')` });
+  } else if (snap.budget) {
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
+  }
+
   // ── Build "What to do next" actions ──
   const actions = [];
   if (!wellScore) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
@@ -1081,6 +1093,7 @@ VIEWS['dashboard'] = async function () {
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (netWorth === null) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
+  if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Consider the debt snowball to reduce obligations.', click:`openTool('debt_snowball_planner.html')` });
   if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your monthly check-in and review your goals.', click:`go('checkin')` });
 
   // ── Tools grid ──
