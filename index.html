@@ -208,6 +208,10 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 /* ── Welcome Video Modal ── */
 #welcome-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:998;align-items:center;justify-content:center;padding:20px}
 #welcome-modal.visible{display:flex}
+
+/* ── Name Capture Modal ── */
+#name-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center;padding:20px}
+#name-modal.visible{display:flex}
 .welcome-modal-box{background:var(--white);border-radius:16px;padding:32px;max-width:640px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.4)}
 .welcome-modal-box h2{font-size:22px;font-weight:700;margin-bottom:6px}
 .welcome-modal-box p{font-size:14px;color:var(--muted);margin-bottom:20px}
@@ -355,11 +359,37 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 </head>
 <body>
 
+<!-- ══ NAME CAPTURE MODAL ══ -->
+<div id="name-modal">
+  <div class="welcome-modal-box" style="max-width:440px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
+    <h2 style="margin-bottom:6px">What's your name? 👋</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:22px">So we can personalise your experience and address you properly in all communications.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="field" style="margin-bottom:0">
+        <label style="font-size:12px;font-weight:600;color:var(--navy);text-transform:uppercase;letter-spacing:.04em">First Name <span style="color:var(--gold)">*</span></label>
+        <input type="text" id="nm-first" placeholder="e.g. Kagiso" autocomplete="given-name"
+          style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);margin-top:5px;outline:none;font-family:inherit"
+          oninput="document.getElementById('nm-err').style.display='none'"
+          onkeydown="if(event.key==='Enter')saveNameModal()">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label style="font-size:12px;font-weight:600;color:var(--navy);text-transform:uppercase;letter-spacing:.04em">Last Name</label>
+        <input type="text" id="nm-last" placeholder="e.g. Sithole" autocomplete="family-name"
+          style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);margin-top:5px;outline:none;font-family:inherit"
+          onkeydown="if(event.key==='Enter')saveNameModal()">
+      </div>
+    </div>
+    <p id="nm-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none">⚠ Please enter your first name to continue.</p>
+    <button class="btn btn-primary" style="width:100%;padding:12px" onclick="saveNameModal()">Save &amp; Continue →</button>
+  </div>
+</div>
+
 <!-- ══ WELCOME VIDEO MODAL ══ -->
 <div id="welcome-modal">
   <div class="welcome-modal-box">
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Welcome to Key Wellness</div>
-    <h2>You're all set! 🎉</h2>
+    <h2 id="welcome-heading">You're all set! 🎉</h2>
     <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
     <div id="welcome-video-area">
       <iframe class="video-embed" src="https://www.youtube.com/embed/xMV5CDMuHGU" title="Welcome to Key Wellness" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
@@ -773,9 +803,10 @@ function fmtDate(iso) {
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { age_group:'', income_range:'', employment:'', goals:[] };
+  const profile = { first_name:'', last_name:'', age_group:'', income_range:'', employment:'', goals:[] };
 
   const steps = [
+    { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
     { q:'What is your age group?', hint:'Helps us tailor advice to your life stage.', key:'age_group', type:'single',
       opts:[{i:'🎓',l:'18–25'},{i:'💼',l:'26–35'},{i:'🏠',l:'36–45'},{i:'📈',l:'46–55'},{i:'🌅',l:'56+'}] },
     { q:'What is your monthly income range?', hint:'In Botswana Pula (BWP).', key:'income_range', type:'single',
@@ -788,6 +819,7 @@ VIEWS['onboarding'] = function () {
 
   function render() {
     const s = steps[step];
+    const isNames = s.type === 'names';
     el.innerHTML = `
       <div class="wizard">
         <div class="card" style="padding:32px">
@@ -795,23 +827,46 @@ VIEWS['onboarding'] = function () {
           <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of ${steps.length}</div>
           <div style="font-size:20px;font-weight:700;margin-bottom:6px">${s.q}</div>
           <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${s.hint}</div>
-          <div class="choice-grid" id="cg"></div>
+          ${isNames ? `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First Name <span style="color:var(--gold)">*</span></label>
+                <input type="text" id="onb-first" value="${profile.first_name}" placeholder="e.g. Kagiso"
+                  autocomplete="given-name"
+                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
+                  oninput="document.getElementById('onb-name-err').style.display='none'"
+                  onkeydown="if(event.key==='Enter')wNext()">
+              </div>
+              <div>
+                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last Name</label>
+                <input type="text" id="onb-last" value="${profile.last_name}" placeholder="e.g. Sithole"
+                  autocomplete="family-name"
+                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
+                  onkeydown="if(event.key==='Enter')wNext()">
+              </div>
+            </div>
+            <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ First name is required.</p>
+          ` : `<div class="choice-grid" id="cg"></div>`}
           <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
             ${step>0?`<button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>`:'<span></span>'}
-            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" disabled>
+            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${isNames?'':' disabled'}>
               ${step===steps.length-1?'Complete Setup →':'Next →'}
             </button>
           </div>
         </div>
       </div>`;
-    const cg = document.getElementById('cg');
-    const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
-    cg.innerHTML = s.opts.map((o,i)=>`
-      <button class="choice-btn${s.type==='multi'?(cur.includes(o.l)?' selected':''):(cur===o.l?' selected':'')}" onclick="wPick(${i})">
-        <span class="ci">${o.i}</span>${o.l}
-      </button>`).join('');
-    const val = profile[s.key];
-    document.getElementById('w-next').disabled = s.type==='multi' ? !(val&&val.length) : !val;
+    if (!isNames) {
+      const cg = document.getElementById('cg');
+      const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
+      cg.innerHTML = s.opts.map((o,i)=>`
+        <button class="choice-btn${s.type==='multi'?(cur.includes(o.l)?' selected':''):(cur===o.l?' selected':'')}" onclick="wPick(${i})">
+          <span class="ci">${o.i}</span>${o.l}
+        </button>`).join('');
+      const val = profile[s.key];
+      document.getElementById('w-next').disabled = s.type==='multi' ? !(val&&val.length) : !val;
+    } else {
+      setTimeout(()=>document.getElementById('onb-first')?.focus(), 50);
+    }
   }
 
   window.wPick = function (i) {
@@ -824,6 +879,14 @@ VIEWS['onboarding'] = function () {
     render();
   };
   window.wNext = function () {
+    const s = steps[step];
+    if (s.type === 'names') {
+      const first = document.getElementById('onb-first')?.value.trim() || '';
+      const last  = document.getElementById('onb-last')?.value.trim()  || '';
+      if (!first) { document.getElementById('onb-name-err').style.display=''; return; }
+      profile.first_name = first;
+      profile.last_name  = last;
+    }
     if (step < steps.length-1) { step++; render(); }
     else { finishOnboarding(); }
   };
@@ -832,6 +895,15 @@ VIEWS['onboarding'] = function () {
   async function finishOnboarding() {
     state.user = { ...profile, joined_at: new Date().toISOString() };
     await saveUser();
+    // Persist name to kw_profile localStorage so all tools can read it immediately
+    if (profile.first_name) {
+      const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+      _lp.firstName   = profile.first_name;
+      _lp.lastName    = profile.last_name || '';
+      _lp.displayName = profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.first_name;
+      localStorage.setItem('kw_profile', JSON.stringify(_lp));
+      initProfileUI();
+    }
     awardBadge('first_login');
     showWelcomeVideo();
   }
@@ -1126,6 +1198,12 @@ VIEWS['dashboard'] = async function () {
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
   if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your monthly check-in and review your goals.', click:`go('checkin')` });
 
+  // ── Dashboard greeting ──
+  const _dProf = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const _dFirst = _dProf.firstName || state.user?.first_name || _dProf.displayName?.split(' ')[0] || '';
+  const _hr = new Date().getHours();
+  const _greet = _hr < 12 ? 'Good morning' : _hr < 17 ? 'Good afternoon' : 'Good evening';
+
   // ── Tools + Calculators grids ──
   const TOOLS = [
     { icon:'📊', label:'Budget Planner',    file:'budget_planner.html' },
@@ -1149,6 +1227,12 @@ VIEWS['dashboard'] = async function () {
   ];
 
   el.innerHTML = `
+    <!-- Greeting -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:22px;font-weight:700;color:var(--navy)">${_greet}${_dFirst ? `, ${_dFirst}` : ''} 👋</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:3px">Here's your financial wellness overview.</div>
+    </div>
+
     ${nudges.length ? `
     <!-- Nudge strip -->
     <div style="margin-bottom:18px">
@@ -1259,11 +1343,54 @@ VIEWS['dashboard'] = async function () {
 //  WELCOME VIDEO
 // ══════════════════════════════════════════════════
 function showWelcomeVideo(){
+  // Personalise the welcome heading with first name if available
+  const _wlp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const _wn  = _wlp.firstName || state.user?.first_name || '';
+  const _wh  = document.getElementById('welcome-heading');
+  if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
   document.getElementById('welcome-modal').classList.add('visible');
 }
 window.closeWelcome = function(){
   document.getElementById('welcome-modal').classList.remove('visible');
   openTool('wellness_assessment.html');
+};
+
+// ══════════════════════════════════════════════════
+//  NAME CAPTURE MODAL
+// ══════════════════════════════════════════════════
+function showNameModal() {
+  // Pre-fill from state.user if available
+  const _su = state.user;
+  if (_su?.first_name) document.getElementById('nm-first').value = _su.first_name;
+  if (_su?.last_name)  document.getElementById('nm-last').value  = _su.last_name;
+  document.getElementById('name-modal').classList.add('visible');
+  setTimeout(() => document.getElementById('nm-first')?.focus(), 100);
+}
+window.saveNameModal = function () {
+  const first = document.getElementById('nm-first').value.trim();
+  const last  = document.getElementById('nm-last').value.trim();
+  if (!first) { document.getElementById('nm-err').style.display = ''; return; }
+  document.getElementById('nm-err').style.display = 'none';
+
+  // Save to kw_profile localStorage
+  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  prof.firstName   = first;
+  prof.lastName    = last;
+  prof.displayName = last ? `${first} ${last}` : first;
+  localStorage.setItem('kw_profile', JSON.stringify(prof));
+
+  // Save to Supabase state.user
+  if (state.user) {
+    state.user.first_name = first;
+    state.user.last_name  = last;
+    saveUser().catch(()=>{});
+  } else {
+    // Fallback: update Supabase auth metadata
+    sb.auth.updateUser({ data: { first_name: first, last_name: last, full_name: prof.displayName } }).catch(()=>{});
+  }
+
+  initProfileUI();
+  document.getElementById('name-modal').classList.remove('visible');
 };
 
 // ══════════════════════════════════════════════════
@@ -1669,10 +1796,17 @@ const BK_TIMES = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00
 VIEWS['booking'] = function () {
   const el = document.getElementById('page-content');
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  const _bkFullName = prof.displayName || currentUser?.user_metadata?.full_name || '';
+  // Prefer explicit first/last — avoids mis-splitting compound names
+  const _bkFirst    = prof.firstName  || state.user?.first_name || '';
+  const _bkLast     = prof.lastName   || state.user?.last_name  || '';
+  const _bkFullName = (_bkFirst || _bkLast)
+    ? `${_bkFirst} ${_bkLast}`.trim()
+    : prof.displayName || currentUser?.user_metadata?.full_name || '';
   const _bkEmail    = currentUser?.email || '';
   const _bkPhone    = prof.phone || '';
   // Store on window so submitBooking can read them
+  window._bkPrefFirst = _bkFirst;
+  window._bkPrefLast  = _bkLast;
   window._bkPrefName  = _bkFullName;
   window._bkPrefEmail = _bkEmail;
   window._bkPrefPhone = _bkPhone;
@@ -1832,10 +1966,9 @@ function bkValidate() {
 
 window.submitBooking = async function () {
   if(!bkValidate()) return;
-  const fullName = window._bkPrefName || '';
-  const parts    = fullName.trim().split(' ');
-  const first    = parts[0] || 'Client';
-  const last     = parts.slice(1).join(' ') || '';
+  // Use pre-split names if available; fall back to splitting displayName
+  const first = window._bkPrefFirst || (window._bkPrefName||'').split(' ')[0] || 'Client';
+  const last  = window._bkPrefLast  || (window._bkPrefName||'').split(' ').slice(1).join(' ') || '';
   const email    = window._bkPrefEmail || '';
   const phone    = window._bkPrefPhone || 'N/A';
   const date     = document.getElementById('bk-date').value;
@@ -1978,7 +2111,12 @@ VIEWS['my-bookings'] = function () {
 VIEWS['profile'] = function () {
   const el = document.getElementById('page-content');
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  const displayName = prof.displayName || currentUser?.user_metadata?.full_name || '';
+  // Derive first/last from parts or split displayName as fallback
+  const _dn = prof.displayName || state.user?.first_name && (state.user.last_name ? `${state.user.first_name} ${state.user.last_name}` : state.user.first_name) || currentUser?.user_metadata?.full_name || '';
+  const _parts = _dn.split(' ');
+  const firstName   = prof.firstName   || state.user?.first_name || _parts[0] || '';
+  const lastName    = prof.lastName    || state.user?.last_name  || _parts.slice(1).join(' ') || '';
+  const displayName = _dn;
   const phone = prof.phone || '';
   const avatarB64 = prof.avatarB64 || '';
 
@@ -1998,9 +2136,15 @@ VIEWS['profile'] = function () {
         <div style="font-size:13px;color:var(--muted);margin-top:8px">Click photo to change</div>
       </div>
 
-      <div class="field" style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Display Name</label>
-        <input type="text" id="prof-name" class="input" value="${displayName}" placeholder="Your name" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="field" style="margin-bottom:0">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">First Name</label>
+          <input type="text" id="prof-fname" autocomplete="given-name" value="${firstName}" placeholder="e.g. Kagiso" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Last Name</label>
+          <input type="text" id="prof-lname" autocomplete="family-name" value="${lastName}" placeholder="e.g. Sithole" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
+        </div>
       </div>
 
       <div class="field" style="margin-bottom:14px">
@@ -2045,12 +2189,22 @@ window.handleAvatarUpload = function (input) {
 };
 
 window.saveProfile = function () {
-  const name = document.getElementById('prof-name').value.trim();
+  const fname = (document.getElementById('prof-fname')?.value || '').trim();
+  const lname = (document.getElementById('prof-lname')?.value || '').trim();
   const phone = document.getElementById('prof-phone').value.trim();
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  prof.displayName = name;
+  prof.firstName   = fname;
+  prof.lastName    = lname;
+  prof.displayName = lname ? `${fname} ${lname}` : fname;
   prof.phone = phone;
   localStorage.setItem('kw_profile', JSON.stringify(prof));
+  // Sync to Supabase if profile exists
+  if (state.user) {
+    state.user.first_name = fname;
+    state.user.last_name  = lname;
+    saveUser().catch(()=>{});
+  }
+  const name = prof.displayName;
   updateAvatarUI(prof.avatarB64||'', name);
   const msg = document.getElementById('prof-msg');
   msg.innerHTML = '<div class="notice notice-green">✓ Profile saved!</div>';
@@ -2075,7 +2229,28 @@ function updateAvatarUI(b64, name) {
 
 function initProfileUI() {
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  updateAvatarUI(prof.avatarB64||'', prof.displayName||'');
+  // Build display name: prefer explicit parts, fall back to displayName, then Supabase, then email
+  let displayName = '';
+  if (prof.firstName) {
+    displayName = prof.lastName ? `${prof.firstName} ${prof.lastName}` : prof.firstName;
+    // Keep localStorage displayName in sync
+    if (displayName !== prof.displayName) {
+      prof.displayName = displayName;
+      localStorage.setItem('kw_profile', JSON.stringify(prof));
+    }
+  } else if (prof.displayName) {
+    displayName = prof.displayName;
+  } else if (state.user?.first_name) {
+    displayName = state.user.last_name
+      ? `${state.user.first_name} ${state.user.last_name}`
+      : state.user.first_name;
+    // Back-fill localStorage so tools can read it
+    prof.firstName   = state.user.first_name;
+    prof.lastName    = state.user.last_name || '';
+    prof.displayName = displayName;
+    localStorage.setItem('kw_profile', JSON.stringify(prof));
+  }
+  updateAvatarUI(prof.avatarB64||'', displayName);
   const emailEl = document.getElementById('sb-email');
   if (emailEl && currentUser?.email) emailEl.textContent = currentUser.email;
 }
@@ -2237,6 +2412,14 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
+      // Show name-capture modal for existing users who have no name set yet
+      // (new users going through onboarding will capture name there instead)
+      if (state.user) {
+        const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+          setTimeout(showNameModal, 700);
+        }
+      }
     } else if (event === 'SIGNED_OUT') {
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
       window.location.hash = '';
