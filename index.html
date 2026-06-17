@@ -1225,10 +1225,13 @@ VIEWS['dashboard'] = async function () {
     { icon:'📅', label:'Book Session',       view:'booking' },
   ];
   const CALCS = [
-    { icon:'🏦', label:'Loan Calculator',        file:'loan_calculator.html' },
-    { icon:'📈', label:'Investment Calculator',   file:'investment_calculator.html' },
-    { icon:'🏠', label:'Rent vs Buy',             file:'rent_vs_buy.html' },
-    { icon:'✅', label:'Affordability Calculator', file:'affordability_calculator.html' },
+    { icon:'🏦', label:'Loan Calculator',              file:'loan_calculator.html' },
+    { icon:'📈', label:'Investment Calculator',         file:'investment_calculator.html' },
+    { icon:'🏠', label:'Rent vs Buy',                  file:'rent_vs_buy.html' },
+    { icon:'✅', label:'Affordability Calculator',      file:'affordability_calculator.html' },
+    { icon:'🎓', label:'Education Savings Calculator',  file:'education_savings_calculator.html' },
+    { icon:'🛡️', label:'Life Insurance Calculator',     file:'life_insurance_calculator.html' },
+    { icon:'📊', label:'Lifestyle Inflation Calculator', file:'lifestyle_inflation_calculator.html' },
   ];
 
   el.innerHTML = `
@@ -1549,10 +1552,13 @@ VIEWS['tools'] = function () {
 VIEWS['calculators'] = function () {
   const el = document.getElementById('page-content');
   const calcs = [
-    { icon:'🏦', name:'Loan Calculator',          desc:'Calculate monthly bond or loan repayments, total interest and full amortisation schedule. Includes extra payments and lump sums.', file:'loan_calculator.html' },
-    { icon:'📈', name:'Investment Calculator',     desc:'Project how a lump sum and monthly contributions grow over time. Inflation-adjusted view with year-by-year breakdown.', file:'investment_calculator.html' },
-    { icon:'🏠', name:'Rent vs Buy',              desc:'Compare the true long-term cost of renting vs buying property. Find the break-even year and net wealth position.', file:'rent_vs_buy.html' },
-    { icon:'✅', name:'Affordability Calculator',  desc:'Find out the maximum bond you can qualify for using Botswana lending rules — 35% DTI cap and residual income test.', file:'affordability_calculator.html' },
+    { icon:'🏦', name:'Loan Calculator',               desc:'Calculate monthly bond or loan repayments, total interest and full amortisation schedule. Includes extra payments and lump sums.', file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',          desc:'Project how a lump sum and monthly contributions grow over time. Inflation-adjusted view with year-by-year breakdown.', file:'investment_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',                   desc:'Compare the true long-term cost of renting vs buying property. Find the break-even year and net wealth position.', file:'rent_vs_buy.html' },
+    { icon:'✅', name:'Affordability Calculator',       desc:'Find out the maximum bond you can qualify for using Botswana lending rules — 35% DTI cap and residual income test.', file:'affordability_calculator.html' },
+    { icon:'🎓', name:'Education Savings Calculator',   desc:'Project the inflation-adjusted cost of university or college, set a monthly savings target, and track milestones for each child.', file:'education_savings_calculator.html' },
+    { icon:'🛡️', name:'Life Insurance Calculator',      desc:'Calculate exactly how much life cover your family needs using the DIME method, and see your coverage gap and estimated monthly premium.', file:'life_insurance_calculator.html' },
+    { icon:'📊', name:'Lifestyle Inflation Calculator', desc:'See how much of your salary increase went to lifestyle spending vs. savings. Score your lifestyle creep and project the opportunity cost of investing the difference.', file:'lifestyle_inflation_calculator.html' },
   ];
   el.innerHTML = `
     <div class="notice notice-gold" style="margin-bottom:18px">🧮 <strong>Run the numbers.</strong> Use these calculators to make informed financial decisions. Ready to act? <button class="btn btn-outline btn-sm" onclick="go('tools')" style="margin-left:4px">🛠️ Open Tools →</button></div>
