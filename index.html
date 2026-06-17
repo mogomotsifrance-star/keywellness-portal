@@ -581,6 +581,30 @@ let state = {
 };
 
 // ══════════════════════════════════════════════════
+//  LOCALSTORAGE CACHE HELPERS
+// ══════════════════════════════════════════════════
+function clearLocalUserCache() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    if (k === 'kw_active_uid') continue; // preserve the scope marker
+    if (k.startsWith('kw_') || k === 'budget_planner_v2' || k === 'financial_stress_v1' || k === 'kw_assessment_v2') {
+      keys.push(k);
+    }
+  }
+  keys.forEach(k => localStorage.removeItem(k));
+}
+
+function enforceUserScope(userId) {
+  const prev = localStorage.getItem('kw_active_uid');
+  if (prev && prev !== userId) {
+    clearLocalUserCache();
+  }
+  localStorage.setItem('kw_active_uid', userId);
+}
+
+// ══════════════════════════════════════════════════
 //  DATA — SUPABASE READ / WRITE
 // ══════════════════════════════════════════════════
 async function loadAllData() {
@@ -603,8 +627,36 @@ async function loadAllData() {
 }
 
 async function saveUser() {
-  if (!currentUser || !state.user) return;
-  await sb.from('profiles').upsert({ id: currentUser.id, ...state.user, updated_at: new Date().toISOString() });
+  if (!currentUser) { console.warn('saveUser called with no currentUser'); return; }
+  // Whitelist known columns so unknown keys never cause RLS/schema rejections
+  const u = state.user || {};
+  const payload = {
+    id:               currentUser.id,
+    first_name:       u.first_name       ?? null,
+    last_name:        u.last_name        ?? null,
+    age:              u.age              ?? null,
+    monthly_income:   u.monthly_income   ?? null,
+    monthly_expenses: u.monthly_expenses ?? null,
+    last_score:       u.last_score       ?? null,
+    last_cat_scores:  u.last_cat_scores  ?? null,
+    consent_accepted: u.consent_accepted ?? false,
+    consent_date:     u.consent_date     ?? null,
+    welcome_seen:     u.welcome_seen     ?? false,
+    onboarded:        u.onboarded        ?? false,
+    joined_at:        u.joined_at        ?? null,
+    updated_at:       new Date().toISOString(),
+  };
+  const { data, error } = await sb
+    .from('profiles')
+    .upsert(payload, { onConflict: 'id' })
+    .select()
+    .single();
+  if (error) {
+    console.error('saveUser/profiles upsert failed:', error);
+    showToast('⚠️ Could not save your profile. Please try again.');
+    return;
+  }
+  state.user = data;
 }
 
 function saveBadges() {
@@ -614,14 +666,18 @@ function saveBadges() {
     earned_badge_ids: state.badges.earned,
     points: state.badges.points,
     updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id' }).then(() => {}).catch(console.error);
+  }, { onConflict: 'user_id' })
+    .then(({ error }) => { if (error) console.error('saveBadges failed:', error); })
+    .catch(console.error);
 }
 
 function saveEF(data) {
   if (!currentUser) return;
   sb.from('emergency_fund').upsert({
     user_id: currentUser.id, ...data, updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id' }).then(() => {}).catch(console.error);
+  }, { onConflict: 'user_id' })
+    .then(({ error }) => { if (error) console.error('saveEF failed:', error); })
+    .catch(console.error);
 }
 
 async function loadEF() {
@@ -740,7 +796,8 @@ function route() {
   if (!currentUser) { showAuthScreen(true); return; }
   showAuthScreen(false);
   let view = window.location.hash.replace('#', '') || 'dashboard';
-  if (!state.user && view !== 'onboarding') view = 'onboarding';
+  const hasOnboarded = state.user?.onboarded === true || !!state.user?.first_name;
+  if (!hasOnboarded && view !== 'onboarding') view = 'onboarding';
   buildNav(view);
   const info = NAV.find(n => n.id === view) || { label: 'Dashboard' };
   document.getElementById('page-title').textContent = info.label;
@@ -935,7 +992,7 @@ VIEWS['onboarding'] = function () {
   window.wPrev = function () { if (step>0) { step--; render(); } };
 
   async function finishOnboarding() {
-    state.user = { ...profile, joined_at: new Date().toISOString() };
+    state.user = { ...profile, id: currentUser.id, onboarded: true, joined_at: new Date().toISOString() };
     await saveUser();
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
@@ -1844,7 +1901,13 @@ VIEWS['checkin'] = function () {
       user_id: currentUser.id, vals: {...vals}, score: avg, notes, created_at: new Date().toISOString()
     }).select().single();
 
-    if (!error && data) state.checkins.unshift(data);
+    if (error) {
+      console.error('checkin save failed:', error);
+      showToast('⚠️ Check-in could not be saved. Please try again.');
+      btn.disabled = false; btn.textContent = 'Save Check-in';
+      return;
+    }
+    if (data) state.checkins.unshift(data);
 
     if (state.checkins.length===1) awardBadge('check_in_1');
     if (state.checkins.length>=3)  awardBadge('check_in_3');
@@ -2214,7 +2277,9 @@ window.submitBooking = async function () {
       requested_date: date,
       status: 'pending',
       created_at: new Date().toISOString()
-    }).then(()=>{}).catch(()=>{});
+    })
+      .then(({ error }) => { if (error) console.error('booking save failed:', error); })
+      .catch(console.error);
   }
   awardBadge('booked_session');
 
@@ -2457,28 +2522,25 @@ function updateAvatarUI(b64, name) {
 }
 
 function initProfileUI() {
+  // Supabase profile is the source of truth for name
+  let first = state.user?.first_name || '';
+  let last  = state.user?.last_name  || '';
+  let displayName = last ? `${first} ${last}` : first;
+
+  // Only fall back to localStorage avatar (image stays local-only for now)
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  // Build display name: prefer explicit parts, fall back to displayName, then Supabase, then email
-  let displayName = '';
-  if (prof.firstName) {
-    displayName = prof.lastName ? `${prof.firstName} ${prof.lastName}` : prof.firstName;
-    // Keep localStorage displayName in sync
-    if (displayName !== prof.displayName) {
-      prof.displayName = displayName;
-      localStorage.setItem('kw_profile', JSON.stringify(prof));
-    }
-  } else if (prof.displayName) {
-    displayName = prof.displayName;
-  } else if (state.user?.first_name) {
-    displayName = state.user.last_name
-      ? `${state.user.first_name} ${state.user.last_name}`
-      : state.user.first_name;
-    // Back-fill localStorage so tools can read it
-    prof.firstName   = state.user.first_name;
-    prof.lastName    = state.user.last_name || '';
+  if (!displayName) {
+    displayName = prof.displayName || '';
+  }
+
+  // Keep localStorage in sync so standalone tool pages can read the name
+  if (first) {
+    prof.firstName   = first;
+    prof.lastName    = last;
     prof.displayName = displayName;
     localStorage.setItem('kw_profile', JSON.stringify(prof));
   }
+
   updateAvatarUI(prof.avatarB64||'', displayName);
   const emailEl = document.getElementById('sb-email');
   if (emailEl && currentUser?.email) emailEl.textContent = currentUser.email;
@@ -2635,8 +2697,10 @@ async function init() {
   loadNotifications();
 
   sb.auth.onAuthStateChange(async (event, session) => {
-    currentUser = session?.user ?? null;
     if (event === 'SIGNED_IN') {
+      clearLocalUserCache();
+      currentUser = session?.user ?? null;
+      if (currentUser) enforceUserScope(currentUser.id);
       await loadAllData();
       initProfileUI();
       loadNotifications();
@@ -2659,6 +2723,8 @@ async function init() {
         }
       }
     } else if (event === 'SIGNED_OUT') {
+      clearLocalUserCache();
+      currentUser = null;
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
       window.location.hash = '';
       showAuthScreen(true);
