@@ -948,7 +948,7 @@ function exportPDF(){
       doc.setTextColor(200,153,26); doc.setFontSize(6.5);
       doc.text(`→ Rolls ${fmt(freedPayment)}/mo to next debt`,24,y+9);
     } else {
-      doc.setTextColor(...GREEN); doc.text('🎉 Debt-free!',24,y+9);
+      doc.setTextColor(...GREEN); doc.text('Debt-free!',24,y+9);
     }
     y+=15;
     if(i<r.sorted.length-1){ doc.setDrawColor(...NAVY); doc.setLineWidth(.2); doc.line(18,y-12,18,y-6); }
@@ -964,7 +964,7 @@ function exportPDF(){
     const s=window._snowballResult.primary, a=window._snowballResult.avalanche||(()=>{ const sorted2=sortDebts(r.debts,'avalanche'); return simulate(sorted2,r.extraAvail); })();
     doc.autoTable({
       startY:y,
-      head:[['Metric','❄️ Snowball','🏔️ Avalanche']],
+      head:[['Metric','Snowball','Avalanche']],
       body:[
         ['Payoff date',fmtDate(s.months),fmtDate(a.months)],
         ['Total months',fmtM(s.months),fmtM(a.months)],

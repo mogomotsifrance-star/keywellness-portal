@@ -963,7 +963,7 @@ function exportPDF(){
   EXPENSE_GROUPS.forEach(g=>{
     const gTotal=g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
     if(gTotal===0) return;
-    rows.push([{content:g.icon+' '+g.name,styles:{fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY}},{content:fmt(gTotal),styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}},{content:(totalIncome>0?(gTotal/totalIncome*100).toFixed(1):'—')+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}}]);
+    rows.push([{content:pdfSafe(g.icon+' '+g.name),styles:{fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY}},{content:fmt(gTotal),styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}},{content:(totalIncome>0?(gTotal/totalIncome*100).toFixed(1):'—')+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}}]);
     g.cats.forEach(c=>{
       const v=pf(b.expenses[c.id]||0);
       if(v===0) return;
@@ -985,7 +985,7 @@ function exportPDF(){
 
   // 50/30/20 note
   if(y>pageH-40){doc.addPage();y=18;}
-  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'✓ On target':'⚠ Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'✓ On target':'⚠ Over target')],['Savings (20% target)',fmt(savingsAmt),(totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsAmt/totalIncome>=0.2?'✓ On target':'⚠ Below target')]];
+  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'On target':'Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'On target':'Over target')],['Savings (20% target)',fmt(savingsAmt),(totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsAmt/totalIncome>=0.2?'On target':'Below target')]];
   doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
   doc.text('50 / 30 / 20 RULE ANALYSIS',14,y); y+=2;
   doc.setDrawColor(...GOLD); doc.line(14,y,pageW-14,y); y+=4;

@@ -888,7 +888,7 @@ function exportPDF(){
     doc.autoTable({
       startY:y,
       head:[['Trigger','Count']],
-      body:topTrigs.map(([id,cnt])=>[(TMAP[id]?.icon||'')+(TMAP[id]?.name||id),String(cnt)]),
+      body:topTrigs.map(([id,cnt])=>[TMAP[id]?.name||id,String(cnt)]),
       styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
       headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
       alternateRowStyles:{fillColor:[245,247,250]},

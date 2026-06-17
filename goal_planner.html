@@ -971,7 +971,7 @@ function exportPDF() {
     const meta   = TYPE_META[g.type] || TYPE_META.custom;
     const status = c.onTrack ? 'Funded' : c.progress >= 0.5 ? 'On Track' : 'Needs Saving';
     return [
-      meta.icon + ' ' + g.name,
+      pdfSafe(meta.icon + ' ' + g.name),
       g.priority.charAt(0).toUpperCase() + g.priority.slice(1),
       fmtK(g.target),
       fmtK(g.saved),

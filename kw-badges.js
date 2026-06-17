@@ -90,6 +90,23 @@
 
   global.KWBadges = { BADGE_DEFS, DEF_MAP, pointsFor, award };
 
+  // Strip emoji and non-Latin symbols before writing text into jsPDF.
+  // jsPDF's built-in fonts only cover Latin-1; multi-byte characters
+  // render as "&"-separated bytes (garbled). Apply ONLY on the PDF path —
+  // on-screen HTML renders emoji fine and should not be touched.
+  function pdfSafe(text) {
+    if (text == null) return '';
+    return String(text)
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')   // supplementary emoji planes
+      .replace(/[\u{2600}-\u{27BF}]/gu,   '')   // misc symbols & dingbats (✓ ✗ ⚠ etc.)
+      .replace(/[\u{2190}-\u{21FF}]/gu,   '')   // arrows
+      .replace(/[\u{2B00}-\u{2BFF}]/gu,   '')   // misc symbols & arrows
+      .replace(/[︀-️]/g,        '')   // variation selectors
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+  global.pdfSafe = pdfSafe;
+
   // Suppress browser autofill/autocomplete on financial inputs portal-wide.
   // Runs after the DOM is ready on every page that includes this module.
   // Auth fields (email, password) are intentionally skipped so password managers keep working.

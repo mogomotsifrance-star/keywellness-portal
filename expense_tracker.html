@@ -785,7 +785,7 @@ function exportPDF(){
       head:[['Category','Spent','Budget','% of Budget','% of Total']],
       body:usedCats.sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0)).map(c=>{
         const s=totals[c.id]||0, b=budgets[c.id]||0;
-        return [c.icon+' '+c.name, fmt(s), b>0?fmt(b):'—', b>0?(s/b*100).toFixed(1)+'%':'—', (s/totalExp*100).toFixed(1)+'%'];
+        return [pdfSafe(c.icon+' '+c.name), fmt(s), b>0?fmt(b):'—', b>0?(s/b*100).toFixed(1)+'%':'—', (s/totalExp*100).toFixed(1)+'%'];
       }),
       styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
       headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
