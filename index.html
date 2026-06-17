@@ -550,6 +550,7 @@ let state = {
   user: null,
   assessments: [],
   checkins: [],
+  stressLogs: [],
   badges: { earned: [], points: 0 },
 };
 
@@ -560,19 +561,42 @@ async function loadAllData() {
   if (!currentUser) return;
   const uid = currentUser.id;
 
-  const [pR, aR, cR, bR] = await Promise.all([
+  const [pR, aR, cR, bR, sR] = await Promise.all([
     sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
     sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
     sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
     sb.from('badges').select('*').eq('user_id', uid).maybeSingle(),
+    sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true }),
   ]);
 
   state.user        = pR.data || null;
   state.assessments = aR.data || [];
   state.checkins    = cR.data || [];
-  state.badges      = bR.data
+  state.stressLogs  = (sR.data || []).map(r => ({
+    date:  r.created_at,
+    level: r.level,
+    tags:  r.tags  || [],
+    notes: r.notes || '',
+  }));
+  state.badges = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
+
+  // Mirror stress logs to localStorage so standalone tracker can still read them
+  if (state.stressLogs.length) {
+    localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
+  }
+
+  // Restore phone + avatar from Supabase profile into localStorage cache
+  if (pR.data) {
+    const cached = JSON.parse(localStorage.getItem('kw_profile') || '{}');
+    if (pR.data.phone)      cached.phone     = pR.data.phone;
+    if (pR.data.avatar_b64) cached.avatarB64 = pR.data.avatar_b64;
+    if (pR.data.first_name) cached.firstName  = pR.data.first_name;
+    if (pR.data.last_name)  cached.lastName   = pR.data.last_name;
+    cached.displayName = [pR.data.first_name, pR.data.last_name].filter(Boolean).join(' ');
+    localStorage.setItem('kw_profile', JSON.stringify(cached));
+  }
 }
 
 async function saveUser() {
@@ -2015,15 +2039,24 @@ VIEWS['checkin'] = function () {
     if (state.checkins.length===1) awardBadge('check_in_1');
     if (state.checkins.length>=3)  awardBadge('check_in_3');
 
-    // 2. Save stress entry to localStorage (same format as standalone tracker)
-    const stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
-    stressLog.push({
-      date:  new Date().toISOString(),
+    // 2. Save stress entry to Supabase stress_logs
+    const stressEntry = {
+      user_id:    currentUser.id,
+      level:      stressVal,
+      tags:       [...selectedTags],
+      notes:      notes,
+      created_at: new Date().toISOString(),
+    };
+    const { data: sData } = await sb.from('stress_logs').insert(stressEntry).select().single();
+    const stressRecord = {
+      date:  stressEntry.created_at,
       level: stressVal,
       tags:  [...selectedTags],
       notes: notes,
-    });
-    localStorage.setItem('financial_stress_v1', JSON.stringify(stressLog));
+    };
+    state.stressLogs.push(stressRecord);
+    // Mirror to localStorage so standalone tracker can still read it
+    localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
     showToast('✅ Check-in & stress level saved!');
     go('progress');
@@ -2040,12 +2073,15 @@ VIEWS['progress'] = function () {
   const latestCI  = state.checkins[0] || null;
   const latestAss = state.assessments[0] || null;
 
-  const _stressLog   = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
-  const _stressChart = _stressLog.slice(-8);
+  // Stress from Supabase (state.stressLogs), falling back to localStorage if needed
+  const _stressLog    = state.stressLogs.length
+    ? state.stressLogs
+    : JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  const _stressChart  = _stressLog.slice(-8);
   const _latestStress = _stressLog.length ? _stressLog[_stressLog.length-1] : null;
 
-  // Badges
-  const _badges = JSON.parse(localStorage.getItem('kw_badges')||'[]');
+  // Badges from Supabase state
+  const _badges = state.badges.earned;
   const BADGE_META = {
     first_checkin:  { icon:'✅', label:'First Check-in' },
     check_in_1:     { icon:'✅', label:'First Check-in' },
@@ -2632,10 +2668,15 @@ window.handleAvatarUpload = function (input) {
   const reader = new FileReader();
   reader.onload = function (e) {
     const b64 = e.target.result;
-    // Save immediately
+    // Save to localStorage immediately
     const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
     prof.avatarB64 = b64;
     localStorage.setItem('kw_profile', JSON.stringify(prof));
+    // Sync avatar to Supabase
+    if (state.user) {
+      state.user.avatar_b64 = b64;
+      saveUser().catch(()=>{});
+    }
     updateAvatarUI(b64, prof.displayName || '');
     VIEWS['profile'](); // re-render
   };
@@ -2652,10 +2693,12 @@ window.saveProfile = function () {
   prof.displayName = lname ? `${fname} ${lname}` : fname;
   prof.phone = phone;
   localStorage.setItem('kw_profile', JSON.stringify(prof));
-  // Sync to Supabase if profile exists
+  // Sync ALL profile fields to Supabase
   if (state.user) {
     state.user.first_name = fname;
     state.user.last_name  = lname;
+    state.user.phone      = phone;
+    if (prof.avatarB64) state.user.avatar_b64 = prof.avatarB64;
     saveUser().catch(()=>{});
   }
   const name = prof.displayName;
