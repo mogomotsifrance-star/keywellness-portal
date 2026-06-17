@@ -419,7 +419,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <h2 id="welcome-heading">You're all set! 🎉</h2>
     <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
     <div id="welcome-video-area">
-      <iframe class="video-embed" src="https://www.youtube.com/embed/xMV5CDMuHGU" title="Welcome to Key Wellness" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      <iframe id="welcome-iframe" class="video-embed" src="https://www.youtube.com/embed/xMV5CDMuHGU?enablejsapi=1" title="Welcome to Key Wellness" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
     </div>
     <div id="welcome-start-wrap" style="display:none;margin-top:8px">
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
@@ -947,11 +947,15 @@ VIEWS['onboarding'] = function () {
       initProfileUI();
     }
     awardBadge('first_login');
-    // Show consent before welcome video for new users
-    if (!state.user?.consent_accepted) {
+    // Show consent → welcome video for new users, checking localStorage first
+    const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
+    const _lsWelcome = localStorage.getItem('kw_welcome_seen') === 'true';
+    if (!_lsConsent && !state.user?.consent_accepted) {
       showConsentModal();
-    } else {
+    } else if (!_lsWelcome && !state.user?.welcome_seen) {
       showWelcomeVideo();
+    } else {
+      go('dashboard');
     }
   }
 
@@ -1411,6 +1415,8 @@ window.acceptConsent = async function () {
   const el = document.getElementById('consent-modal');
   if (el) el.style.display = 'none';
   const now = new Date().toISOString();
+  // Save to localStorage immediately as fast-path for future loads
+  localStorage.setItem('kw_consent_accepted', 'true');
   if (state.user) {
     state.user.consent_accepted = true;
     state.user.consent_date = now;
@@ -1418,28 +1424,69 @@ window.acceptConsent = async function () {
   } else if (currentUser) {
     await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
   }
-  showWelcomeVideo();
+  // Only show welcome video if user hasn't already seen it
+  const welcomeSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
+  if (!welcomeSeen) {
+    showWelcomeVideo();
+  } else {
+    go('dashboard');
+  }
 };
 
 // ══════════════════════════════════════════════════
 //  WELCOME VIDEO
 // ══════════════════════════════════════════════════
+function _showStartButton() {
+  const btn  = document.getElementById('welcome-start-wrap');
+  const wait = document.getElementById('welcome-wait-msg');
+  if (btn && btn.style.display === 'none') {
+    btn.style.display = '';
+    btn.style.opacity = '0';
+    btn.style.transition = 'opacity 0.5s';
+    setTimeout(() => { btn.style.opacity = '1'; }, 50);
+  }
+  if (wait) wait.style.display = 'none';
+}
+
 function showWelcomeVideo(){
   const _wlp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
   const _wn  = _wlp.firstName || state.user?.first_name || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
+  // Reset button state
+  const _sw = document.getElementById('welcome-start-wrap');
+  if (_sw) { _sw.style.display = 'none'; _sw.style.opacity = '0'; }
+  const _wm = document.getElementById('welcome-wait-msg');
+  if (_wm) _wm.style.display = '';
   document.getElementById('welcome-modal').classList.add('visible');
-  // Show "Start" button after 60 seconds — no skip allowed
-  const _startWrap = document.getElementById('welcome-start-wrap');
-  const _waitMsg   = document.getElementById('welcome-wait-msg');
-  setTimeout(() => {
-    if (_startWrap) _startWrap.style.display = '';
-    if (_waitMsg)   _waitMsg.style.display   = 'none';
-  }, 60000);
+
+  // YouTube IFrame API — reveal button when video ends
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+  window.onYouTubeIframeAPIReady = function() {
+    new YT.Player('welcome-iframe', {
+      events: {
+        onStateChange: function(e) {
+          if (e.data === YT.PlayerState.ENDED) _showStartButton();
+        }
+      }
+    });
+  };
+  // 90-second fallback in case YouTube API doesn't fire
+  setTimeout(_showStartButton, 90000);
 }
-window.closeWelcome = function(){
+
+window.closeWelcome = async function(){
   document.getElementById('welcome-modal').classList.remove('visible');
+  // Mark welcome as seen in both places so it never shows again
+  localStorage.setItem('kw_welcome_seen', 'true');
+  if (state.user) {
+    state.user.welcome_seen = true;
+    await saveUser();
+  } else if (currentUser) {
+    sb.from('profiles').update({ welcome_seen: true }).eq('id', currentUser.id).then(()=>{}).catch(()=>{});
+  }
   openTool('wellness_assessment.html');
 };
 
@@ -2641,8 +2688,14 @@ async function init() {
         if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
           setTimeout(showNameModal, 700);
         }
-        // Show consent modal for users who haven't accepted yet
-        if (!state.user.consent_accepted) {
+        // Consent check: localStorage is fast-path; Supabase is fallback
+        const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
+        if (_lsConsent || state.user.consent_accepted) {
+          // Sync to localStorage if only Supabase had it
+          if (!_lsConsent) localStorage.setItem('kw_consent_accepted', 'true');
+          // Never show consent or welcome video again for returning users
+        } else {
+          // Only show consent if truly not accepted anywhere
           setTimeout(showConsentModal, 800);
         }
       }
