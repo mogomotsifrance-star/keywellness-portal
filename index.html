@@ -629,7 +629,8 @@ function saveBadges() {
   .catch(e => console.error('[KW] saveBadges catch:', e));
 }
 
-// Auto-award any badges the user has already earned but weren't saved to Supabase
+// Auto-award any badges the user has earned based on their Supabase data.
+// Needed because the assessment runs in a standalone file and never calls awardBadge().
 function rebuildBadges() {
   if (!currentUser) return;
   let changed = false;
@@ -641,14 +642,25 @@ function rebuildBadges() {
     state.badges.points += def.pts;
     changed = true;
   };
+
+  // Profile / onboarding
   if (state.user?.first_name) award('first_login');
+
+  // Assessment badges — assessment runs in standalone file, so check state.assessments
   if (state.assessments.length >= 1) {
     award('first_assessment');
     const latest = state.assessments[0];
     if (latest?.score >= 75) award('high_scorer');
+    if (latest?.score >= 75) award('financial_star');
+    const bmap = { Budgeting:'budget_master', Savings:'savings_champ', Debt:'debt_destroyer', Retirement:'retirement_planner', Insurance:'insurance_hero' };
+    const cats = latest?.cat_scores || {};
+    Object.entries(bmap).forEach(([cat, id]) => { if ((cats[cat]||0) >= 80) award(id); });
   }
+
+  // Check-in badges
   if (state.checkins.length >= 1) award('check_in_1');
   if (state.checkins.length >= 3) award('check_in_3');
+
   if (changed) { saveBadges(); refreshPointsUI(); }
 }
 
