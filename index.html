@@ -561,17 +561,20 @@ async function loadAllData() {
   if (!currentUser) return;
   const uid = currentUser.id;
 
+  // Use allSettled so one failing query never blocks the rest from loading
+  const safe = q => q.catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
+
   const [pR, aR, cR, bR, sR] = await Promise.all([
-    sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
-    sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
-    sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
-    sb.from('badges').select('*').eq('user_id', uid).maybeSingle(),
-    sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true }),
+    safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
+    safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
+    safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
+    safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
+    safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
   ]);
 
-  state.user        = pR.data || null;
-  state.assessments = aR.data || [];
-  state.checkins    = cR.data || [];
+  state.user        = pR.data  || null;
+  state.assessments = aR.data  || [];
+  state.checkins    = cR.data  || [];
   state.stressLogs  = (sR.data || []).map(r => ({
     date:  r.created_at,
     level: r.level,
