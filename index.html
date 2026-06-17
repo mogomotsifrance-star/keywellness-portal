@@ -1908,53 +1908,66 @@ VIEWS['emergency'] = async function () {
 VIEWS['checkin'] = function () {
   const el = document.getElementById('page-content');
   const vals = { savings:5, debt:5, income:5, expenses:5 };
+  let stressVal = 5;
+  let selectedTags = new Set();
 
-  // Pull latest stress score from the standalone tracker
-  const _stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
-  const _latestStress = _stressLog.length ? _stressLog[_stressLog.length-1] : null;
-  const _stressScore = _latestStress ? _latestStress.level : null;
-  const _stressDays  = _latestStress ? Math.floor((Date.now()-new Date(_latestStress.date))/86400000) : null;
+  const TAGS = ['😰 Stressed','😟 Anxious','😤 Frustrated','😔 Overwhelmed','😌 Calm','😊 Confident','🌟 Hopeful','😤 Worried','😮‍💨 Relieved'];
+  const STRESS_LABEL = ['','Very calm','Calm','Mostly calm','Slightly stressed','Moderate stress','Notable stress','Quite stressed','Very stressed','Highly stressed','Extremely stressed'];
 
   el.innerHTML = `
-    <div style="max-width:560px">
-      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month across 4 dimensions. Your score updates the Progress page.</div>
+    <div style="max-width:580px">
+      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate your finances and stress level in one place. Everything saves together.</div>
       <div class="card">
-        <div class="card-title">How did this month go?</div>
+        <div class="card-title">💼 Financial Scores</div>
+        <div style="font-size:12px;color:var(--muted);margin:-8px 0 14px">Rate how this month went across each area</div>
         ${[
-          ['savings','Savings progress','1=none, 10=great'],
-          ['debt','Debt management','1=worsened, 10=improved'],
-          ['income','Income stability','1=very unstable, 10=very stable'],
-          ['expenses','Expense control','1=overspent, 10=well controlled'],
+          ['savings','Savings progress','1 = saved nothing · 10 = saved a lot'],
+          ['debt','Debt management','1 = worsened · 10 = improved significantly'],
+          ['income','Income stability','1 = very unstable · 10 = rock solid'],
+          ['expenses','Expense control','1 = overspent · 10 = well within budget'],
         ].map(([k,label,hint])=>`
           <div class="slider-row">
-            <label>${label} <span id="v-${k}">5</span>/10</label>
+            <label>${label} <span id="v-${k}" style="color:var(--navy);font-weight:700">5</span>/10</label>
             <input type="range" min="1" max="10" value="5" id="sl-${k}" oninput="slUpdate('${k}',this.value)">
             <div style="font-size:11px;color:var(--muted);margin-top:2px">${hint}</div>
           </div>`).join('')}
-        <div class="field" style="margin-top:6px">
-          <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-          <textarea id="ci-notes" rows="3" placeholder="What went well? What was challenging?"></textarea>
-        </div>
-        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:14px;margin:14px 0;display:flex;align-items:center;gap:16px">
-          <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">50</span>/100</div>
-        </div>
-        <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()">Save Check-in</button>
-      </div>
 
-      <!-- Stress tracker card -->
-      <div class="card" style="border-left:4px solid var(--orange)">
-        <div class="card-title">😰 Financial Stress</div>
-        ${_latestStress ? `
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
-            <div style="font-family:'DM Mono',monospace;font-size:36px;font-weight:700;color:var(--navy)">${_stressScore}<span style="font-size:16px;color:var(--muted)">/10</span></div>
-            <div>
-              <div style="font-size:13px;font-weight:600">Last logged ${_stressDays===0?'today':_stressDays===1?'yesterday':_stressDays+' days ago'}</div>
-              <div style="font-size:12px;color:var(--muted)">${_stressDays>14?'⚠️ Due for an update':'✓ Up to date'}</div>
+        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:12px 16px;margin:10px 0 18px;display:flex;align-items:center;gap:16px">
+          <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:24px;font-weight:700;color:var(--navy)">50</span>/100</div>
+        </div>
+
+        <div style="border-top:2px solid var(--border);padding-top:18px;margin-top:4px">
+          <div class="card-title" style="margin-bottom:4px">😰 Financial Stress</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">How stressed are you about your finances right now?</div>
+
+          <div class="slider-row">
+            <label>Stress level <span id="v-stress" style="color:var(--orange);font-weight:700">5</span>/10
+              <span id="stress-label" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">Moderate stress</span>
+            </label>
+            <input type="range" min="1" max="10" value="5" id="sl-stress" oninput="stressUpdate(this.value)"
+              style="accent-color:var(--orange)">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
+              <span>1 = Very calm</span><span>10 = Extremely stressed</span>
             </div>
-          </div>` : `
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">You haven't logged a stress level yet. The Financial Stress Tracker helps you spot patterns over time.</p>`}
-        <button class="btn btn-outline" onclick="openTool('financial_stress_tracker.html')" style="width:100%;justify-content:center">
-          😰 ${_latestStress ? 'Update Stress Log' : 'Log Stress Level'} →
+          </div>
+
+          <div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--text)">How are you feeling? <span style="font-weight:400;color:var(--muted)">(pick any)</span></div>
+          <div id="tag-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+            ${TAGS.map(t=>`
+              <button type="button" class="tag-btn" data-tag="${t}" onclick="toggleTag('${t}')"
+                style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer;transition:all .15s">
+                ${t}
+              </button>`).join('')}
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <textarea id="ci-notes" rows="3" placeholder="What went well? What was challenging? What's causing stress?"></textarea>
+        </div>
+
+        <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()" style="width:100%;justify-content:center;margin-top:6px">
+          💾 Save Check-in
         </button>
       </div>
     </div>`;
@@ -1966,12 +1979,33 @@ VIEWS['checkin'] = function () {
     document.getElementById('ci-score').textContent = avg;
   };
 
+  window.stressUpdate = function (val) {
+    stressVal = parseInt(val);
+    document.getElementById('v-stress').textContent = val;
+    document.getElementById('stress-label').textContent = STRESS_LABEL[stressVal] || '';
+  };
+
+  window.toggleTag = function (tag) {
+    if (selectedTags.has(tag)) {
+      selectedTags.delete(tag);
+    } else {
+      selectedTags.add(tag);
+    }
+    document.querySelectorAll('.tag-btn').forEach(btn => {
+      const active = selectedTags.has(btn.dataset.tag);
+      btn.style.background  = active ? 'var(--orange)' : '#fff';
+      btn.style.color       = active ? '#fff' : 'inherit';
+      btn.style.borderColor = active ? 'var(--orange)' : 'var(--border)';
+    });
+  };
+
   window.submitCheckin = async function () {
     const avg   = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length*10);
     const notes = document.getElementById('ci-notes').value;
     const btn   = document.getElementById('ci-btn');
     btn.disabled = true; btn.textContent = 'Saving…';
 
+    // 1. Save financial check-in to Supabase
     const { data, error } = await sb.from('checkins').insert({
       user_id: currentUser.id, vals: {...vals}, score: avg, notes, created_at: new Date().toISOString()
     }).select().single();
@@ -1981,7 +2015,17 @@ VIEWS['checkin'] = function () {
     if (state.checkins.length===1) awardBadge('check_in_1');
     if (state.checkins.length>=3)  awardBadge('check_in_3');
 
-    showToast('✅ Check-in saved! Keep it up.');
+    // 2. Save stress entry to localStorage (same format as standalone tracker)
+    const stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+    stressLog.push({
+      date:  new Date().toISOString(),
+      level: stressVal,
+      tags:  [...selectedTags],
+      notes: notes,
+    });
+    localStorage.setItem('financial_stress_v1', JSON.stringify(stressLog));
+
+    showToast('✅ Check-in & stress level saved!');
     go('progress');
   };
 };
