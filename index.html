@@ -620,21 +620,13 @@ async function saveUser() {
 
 function saveBadges() {
   if (!currentUser) return;
-  // Fetch existing row first to decide update vs insert (avoids duplicate rows)
-  sb.from('badges').select('id').eq('user_id', currentUser.id).maybeSingle()
-    .then(({ data }) => {
-      const payload = {
-        user_id: currentUser.id,
-        earned_badge_ids: state.badges.earned,
-        points: state.badges.points,
-        updated_at: new Date().toISOString()
-      };
-      if (data?.id) {
-        return sb.from('badges').update(payload).eq('id', data.id);
-      } else {
-        return sb.from('badges').insert(payload);
-      }
-    }).catch(console.error);
+  // Unique constraint on user_id is now in place — upsert works correctly
+  sb.from('badges').upsert({
+    user_id: currentUser.id,
+    earned_badge_ids: state.badges.earned,
+    points: state.badges.points,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'user_id' }).catch(console.error);
 }
 
 function saveEF(data) {
@@ -2932,41 +2924,27 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
-  if (currentUser) {
-    // Seed from cache first for instant render, then sync from Supabase in background
-    const _c = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-    if (_c.firstName || _c.displayName) {
-      state.user = { first_name: _c.firstName||'', last_name: _c.lastName||'' };
-    }
-    loadAllData().then(() => { initProfileUI(); refreshPointsUI(); }).catch(()=>{});
-  }
+  if (currentUser) await loadAllData();
   initProfileUI();
+  refreshPointsUI();
   loadNotifications();
 
   sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user ?? null;
     if (event === 'SIGNED_IN') {
-      // Seed state.user from cache so route() doesn't redirect to onboarding for returning users
-      const _cached = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-      if ((_cached.firstName || _cached.displayName) && !state.user) {
-        state.user = { first_name: _cached.firstName||'', last_name: _cached.lastName||'' };
-      }
-      // Route immediately — don't wait for data to load
-      route();
+      // Load data first so badges/points are correct before any view renders
+      await loadAllData();
       initProfileUI();
+      refreshPointsUI();
       loadNotifications();
-      // Load all data in the background
-      loadAllData().then(() => {
-        initProfileUI();
-        refreshPointsUI();
-        // Show name-capture modal for existing users who have no name set yet
-        if (state.user) {
-          const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-          if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
-            setTimeout(showNameModal, 700);
-          }
+      route();
+      // Show name-capture modal for existing users who have no name set yet
+      if (state.user) {
+        const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+          setTimeout(showNameModal, 700);
         }
-      });
+      }
     } else if (event === 'SIGNED_OUT') {
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
       window.location.hash = '';
