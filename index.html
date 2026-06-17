@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -767,18 +768,17 @@ const BADGE_DEFS = [
   { id:'check_in_1',        icon:'✅', name:'On Track',            desc:'Completed first monthly check-in',   pts:75  },
   { id:'check_in_3',        icon:'🔥', name:'Consistent',          desc:'3 monthly check-ins',                pts:150 },
   { id:'booked_session',    icon:'📅', name:'Getting Help',        desc:'Booked a coaching session',          pts:100 },
+  { id:'watched_video',     icon:'🎬', name:'Knowledge Seeker',    desc:'Watched a learning video',           pts:25  },
 ];
 
-function awardBadge(id) {
-  if (state.badges.earned.includes(id)) return;
-  const def = BADGE_DEFS.find(b => b.id === id);
-  if (!def) return;
-  state.badges.earned.push(id);
-  state.badges.points += def.pts;
-  saveBadges();
-  const el = document.getElementById('sb-pts');
-  if (el) el.textContent = state.badges.points;
-  showToast(`🏆 Badge earned: ${def.name} (+${def.pts} pts)`);
+async function awardBadge(id) {
+  const fresh = await KWBadges.award(id);
+  if (fresh.length) {
+    state.badges.earned.push(...fresh);
+    state.badges.points = KWBadges.pointsFor(state.badges.earned);
+    const el = document.getElementById('sb-pts');
+    if (el) el.textContent = state.badges.points;
+  }
 }
 
 function showToast(msg) {
@@ -993,47 +993,6 @@ VIEWS['assessment'] = function () {
   // Redirect to the standalone 8-dimension assessment
   openTool('wellness_assessment.html');
 };
-
-async function finishAssessment(answers) {
-  const total = answers.reduce((s,a)=>s+(a||0),0);
-  const score = Math.round((total/(QUESTIONS.length*4))*100);
-  const cats = ['Budgeting','Savings','Debt','Retirement','Insurance'];
-  const catScores = {};
-  cats.forEach(cat => {
-    const idxs = QUESTIONS.reduce((a,q,i)=>q.cat===cat?[...a,i]:a,[]);
-    const sum   = idxs.reduce((s,i)=>s+(answers[i]||0),0);
-    catScores[cat] = Math.round((sum/(idxs.length*4))*100);
-  });
-
-  const { data, error } = await sb.from('assessments').insert({
-    user_id: currentUser.id, score, cat_scores: catScores, answers, created_at: new Date().toISOString()
-  }).select().single();
-
-  if (!error && data) state.assessments.unshift(data);
-
-  // Estimate monthly expenses from localStorage budget snapshot if available
-  let _monthlyExp = 0;
-  try {
-    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
-    if (_snap.budget?.expenses) _monthlyExp = _snap.budget.expenses;
-    else {
-      const _bd = JSON.parse(localStorage.getItem('budget_planner_v2')||'{}');
-      const _bk = _bd.currentKey;
-      if (_bk && _bd.budgets?.[_bk]) {
-        _monthlyExp = Object.values(_bd.budgets[_bk].expenses||{}).reduce((s,v)=>s+Number(v||0),0);
-      }
-    }
-  } catch {}
-  state.user = { ...state.user, last_score: score, last_cat_scores: catScores, ...((_monthlyExp > 0) ? { monthly_expenses: _monthlyExp } : {}) };
-  await saveUser();
-
-  awardBadge('first_assessment');
-  if (score >= 75) awardBadge('high_scorer');
-  const bmap = { Budgeting:'budget_master', Savings:'savings_champ', Debt:'debt_destroyer', Retirement:'retirement_planner', Insurance:'insurance_hero' };
-  cats.forEach(cat => { if (catScores[cat]>=80) awardBadge(bmap[cat]); });
-
-  go('dashboard');
-}
 
 // ══════════════════════════════════════════════════
 //  VIEW: DASHBOARD — Financial Hub

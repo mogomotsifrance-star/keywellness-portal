@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Financial Wellness Assessment – Key Wellness</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
@@ -762,6 +763,17 @@ function calculateWellness(){
     {id:'spending',label:'Spending & Net Worth',icon:'📊',score:spendScore,w:12.5},
   ];
   const totalScore=Math.round(dims.reduce((s,d)=>s+d.score*d.w/100,0));
+
+  // Award badges (writes to Supabase via shared module)
+  const _earnedBadges = ['first_assessment'];
+  if (totalScore >= 75) _earnedBadges.push('high_scorer');
+  const dimScore = id => (dims.find(d => d.id === id)?.score || 0);
+  if (dimScore('savings')    >= 80) _earnedBadges.push('savings_champ');
+  if (dimScore('debt')       >= 80) _earnedBadges.push('debt_destroyer');
+  if (dimScore('retirement') >= 80) _earnedBadges.push('retirement_planner');
+  if (dimScore('insurance')  >= 80) _earnedBadges.push('insurance_hero');
+  // TODO: budget_master has no matching dimension — confirm whether to map to spending dim or to budget_planner
+  KWBadges.award(_earnedBadges);
 
   // Save result to localStorage for dashboard sync
   const _now = new Date().toISOString();

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Retirement Planner – Botswana Pula</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -516,6 +517,9 @@ function calculate() {
     barEl.style.width = Math.min(100, readiness * 100).toFixed(1) + '%';
     barEl.className   = 'readiness-bar ' + (readiness >= 0.9 ? 'good' : readiness >= 0.6 ? 'warn' : 'poor');
   }, 100);
+
+  // Award badge if readiness >= 80% (matches 80+ convention used elsewhere)
+  if (readiness >= 0.8) KWBadges.award('retirement_planner');
 
   // Action box
   let actionHtml = '';
