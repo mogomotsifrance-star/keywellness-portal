@@ -565,7 +565,7 @@ async function loadAllData() {
   const safe = q => q.catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
 
   const [pR, aR, cR, bR, sR] = await Promise.all([
-    safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
+    safe(sb.from('profiles').select('id,first_name,last_name,phone,created_at,updated_at').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
@@ -590,16 +590,27 @@ async function loadAllData() {
     localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
   }
 
-  // Restore phone + avatar from Supabase profile into localStorage cache
+  // Restore phone + name from Supabase profile into localStorage cache
   if (pR.data) {
     const cached = JSON.parse(localStorage.getItem('kw_profile') || '{}');
-    if (pR.data.phone)      cached.phone     = pR.data.phone;
-    if (pR.data.avatar_b64) cached.avatarB64 = pR.data.avatar_b64;
-    if (pR.data.first_name) cached.firstName  = pR.data.first_name;
-    if (pR.data.last_name)  cached.lastName   = pR.data.last_name;
+    if (pR.data.phone)      cached.phone    = pR.data.phone;
+    if (pR.data.first_name) cached.firstName = pR.data.first_name;
+    if (pR.data.last_name)  cached.lastName  = pR.data.last_name;
     cached.displayName = [pR.data.first_name, pR.data.last_name].filter(Boolean).join(' ');
     localStorage.setItem('kw_profile', JSON.stringify(cached));
   }
+
+  // Fetch avatar separately in the background (it's a large blob — don't block login)
+  sb.from('profiles').select('avatar_b64').eq('id', uid).maybeSingle()
+    .then(({ data }) => {
+      if (data?.avatar_b64) {
+        const cached = JSON.parse(localStorage.getItem('kw_profile') || '{}');
+        cached.avatarB64 = data.avatar_b64;
+        localStorage.setItem('kw_profile', JSON.stringify(cached));
+        if (state.user) state.user.avatar_b64 = data.avatar_b64;
+        initProfileUI();
+      }
+    }).catch(() => {});
 }
 
 async function saveUser() {
@@ -2907,25 +2918,40 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
-  if (currentUser) await loadAllData();
+  if (currentUser) {
+    // Seed from cache first for instant render, then sync from Supabase in background
+    const _c = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+    if (_c.firstName || _c.displayName) {
+      state.user = { first_name: _c.firstName||'', last_name: _c.lastName||'' };
+    }
+    loadAllData().then(() => initProfileUI()).catch(()=>{});
+  }
   initProfileUI();
   loadNotifications();
 
   sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user ?? null;
     if (event === 'SIGNED_IN') {
-      await loadAllData();
+      // Seed state.user from cache so route() doesn't redirect to onboarding for returning users
+      const _cached = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+      if ((_cached.firstName || _cached.displayName) && !state.user) {
+        state.user = { first_name: _cached.firstName||'', last_name: _cached.lastName||'' };
+      }
+      // Route immediately — don't wait for data to load
+      route();
       initProfileUI();
       loadNotifications();
-      route();
-      // Show name-capture modal for existing users who have no name set yet
-      // (new users going through onboarding will capture name there instead)
-      if (state.user) {
-        const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
-          setTimeout(showNameModal, 700);
+      // Load all data in the background
+      loadAllData().then(() => {
+        initProfileUI();
+        // Show name-capture modal for existing users who have no name set yet
+        if (state.user) {
+          const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+          if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+            setTimeout(showNameModal, 700);
+          }
         }
-      }
+      });
     } else if (event === 'SIGNED_OUT') {
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
       window.location.hash = '';
