@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Education Savings Calculator — Key Wellness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold2:#e8b85a;
+  --cream:#F7F4EE;--cream2:#ede7d9;--white:#ffffff;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--blue:#2563EB;
+  --text:#1a2744;--muted:#6b7280;--border:#ddd6c8;
+  --radius:12px;--radius-sm:8px;--shadow:0 2px 16px rgba(13,37,69,.10);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+input,select{font-family:'Inter',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── Header ── */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);padding:28px 32px;display:flex;align-items:center;gap:18px}
+.hero-icon{font-size:36px;background:rgba(200,153,26,.15);border-radius:12px;width:60px;height:60px;display:flex;align-items:center;justify-content:center}
+.hero h1{color:#fff;font-size:20px;font-weight:700;margin-bottom:3px}
+.hero p{color:rgba(255,255,255,.65);font-size:13px}
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1.5px solid rgba(255,255,255,.25);border-radius:var(--radius-sm);color:rgba(255,255,255,.8);font-size:12px;font-weight:600;background:transparent;margin-bottom:14px;text-decoration:none;cursor:pointer;transition:.15s}
+.back-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* ── Layout ── */
+.wrap{max-width:940px;margin:0 auto;padding:28px 20px}
+.cols{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start}
+@media(max-width:720px){.cols{grid-template-columns:1fr}}
+
+/* ── Cards ── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card-title .ct-icon{font-size:17px}
+
+/* ── Fields ── */
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.field label .hint{font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;font-size:10px;margin-left:4px}
+.iw{position:relative}
+.iw .prefix{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--muted);pointer-events:none}
+.iw input,.iw select{padding-left:34px}
+.iw.no-prefix input,.iw.no-prefix select{padding-left:11px}
+input[type=text],input[type=number],select{
+  width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;background:var(--cream);color:var(--text);outline:none;transition:.15s;
+}
+input:focus,select:focus{border-color:var(--gold);background:#fff}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input[type=range]{flex:1;accent-color:var(--gold)}
+.range-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--navy);min-width:42px;text-align:right}
+
+/* ── Preset tabs ── */
+.preset-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.preset-btn{padding:5px 12px;border-radius:99px;border:1.5px solid var(--border);font-size:11px;font-weight:600;color:var(--muted);background:transparent;transition:.15s;cursor:pointer}
+.preset-btn:hover{border-color:var(--gold);color:var(--gold)}
+.preset-btn.active{background:var(--navy);border-color:var(--navy);color:#fff}
+
+/* ── Child tabs ── */
+.child-tabs{display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:16px}
+.child-tab{flex:1;padding:8px 4px;font-size:12px;font-weight:600;border:none;background:transparent;color:var(--muted);cursor:pointer;transition:.15s;text-align:center}
+.child-tab.active{background:var(--navy);color:#fff}
+.add-child-btn{padding:8px 12px;font-size:12px;font-weight:600;border:2px dashed var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--muted);cursor:pointer;transition:.15s;margin-left:6px}
+.add-child-btn:hover{border-color:var(--gold);color:var(--gold)}
+
+/* ── Results ── */
+.result-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:var(--radius);padding:22px;margin-bottom:16px;color:#fff;text-align:center}
+.result-hero .rh-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.6);margin-bottom:6px}
+.result-hero .rh-val{font-family:'DM Mono',monospace;font-size:36px;font-weight:500;color:var(--gold2);line-height:1.1}
+.result-hero .rh-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:6px}
+
+.stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.stat-box{background:var(--cream);border-radius:var(--radius-sm);padding:12px 14px;border-left:3px solid var(--border)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .sv{color:var(--green)}
+.stat-box.red{border-left-color:var(--red)}.stat-box.red .sv{color:var(--red)}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .sv{color:var(--gold)}
+.stat-box.blue{border-left-color:var(--blue)}.stat-box.blue .sv{color:var(--blue)}
+.sv{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--navy)}
+.sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:3px}
+
+/* ── Progress ── */
+.prog-wrap{margin-bottom:14px}
+.prog-header{display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px}
+.prog-bar{background:var(--cream2);border-radius:99px;height:12px;overflow:hidden}
+.prog-fill{height:100%;border-radius:99px;background:var(--gold);transition:.5s}
+.prog-fill.green{background:var(--green)}
+.prog-fill.red{background:var(--red)}
+
+/* ── Milestones ── */
+.milestone-list{display:flex;flex-direction:column;gap:8px}
+.milestone{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:var(--radius-sm);background:var(--cream);border-left:3px solid var(--border)}
+.milestone.achieved{border-left-color:var(--green);background:#f0faf4}
+.milestone.danger{border-left-color:var(--red);background:#fdf2f2}
+.milestone .m-yr{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--muted);min-width:42px}
+.milestone .m-label{font-size:12px;font-weight:600;flex:1}
+.milestone .m-amt{font-family:'DM Mono',monospace;font-size:11px;color:var(--navy)}
+
+/* ── Notice ── */
+.notice{padding:12px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:14px}
+.notice-gold{background:#fffbf0;border-left:4px solid var(--gold);color:#7a4f00}
+.notice-green{background:#f0faf4;border-left:4px solid var(--green);color:#1a4a2e}
+.notice-red{background:#fdf2f2;border-left:4px solid var(--red);color:#7b1a1a}
+.notice-blue{background:#eff6ff;border-left:4px solid var(--blue);color:#1e3a8a}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto;max-height:320px;overflow-y:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:var(--navy);color:#fff;padding:9px 10px;text-align:right;font-size:11px;font-weight:600;position:sticky;top:0}
+th:first-child{text-align:left}
+td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace}
+td:first-child{text-align:left;font-family:'Inter',sans-serif;font-weight:600;font-size:11px}
+tr:last-child td{border-bottom:none}
+tr:nth-child(even) td{background:var(--cream)}
+tr.highlight td{background:#fffbf0 !important;font-weight:700;color:var(--navy)}
+tr.start-row td{background:rgba(200,153,26,.12)!important;font-weight:700}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:none;transition:.15s;cursor:pointer}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold2)}
+.btn-outline{background:transparent;color:var(--navy);border:2px solid var(--border)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-sm{padding:6px 14px;font-size:12px}
+
+/* ── Chart ── */
+.chart-box{position:relative;height:240px;margin-bottom:14px}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;opacity:0;transition:.3s;pointer-events:none;z-index:999}
+#toast.show{opacity:1}
+
+/* ── Scenario comparison ── */
+.scenario-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.scenario-card{border-radius:var(--radius-sm);padding:12px;border:2px solid var(--border);text-align:center;cursor:pointer;transition:.15s;background:var(--white)}
+.scenario-card:hover{border-color:var(--gold)}
+.scenario-card.active{border-color:var(--navy);background:var(--navy)}
+.scenario-card.active .sc-label,.scenario-card.active .sc-val{color:#fff}
+.scenario-card.active .sc-sub{color:rgba(255,255,255,.6)}
+.sc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+.sc-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:600;color:var(--navy);margin-bottom:2px}
+.sc-sub{font-size:10px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ── Hero ── -->
+<div class="hero">
+  <div style="flex:1">
+    <button class="back-btn" onclick="history.back()">← Back to Portal</button>
+    <div style="display:flex;align-items:center;gap:14px">
+      <div class="hero-icon">🎓</div>
+      <div>
+        <h1>Education Savings Calculator</h1>
+        <p>Project the cost of education, track your savings, and find your monthly contribution target.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="cols">
+
+    <!-- ══ LEFT: INPUTS ══ -->
+    <div>
+
+      <!-- Child tabs -->
+      <div class="card" style="padding:16px 18px 14px">
+        <div class="card-title"><span class="ct-icon">👶</span>Children</div>
+        <div style="display:flex;align-items:center;margin-bottom:0">
+          <div class="child-tabs" id="childTabs"></div>
+          <button class="add-child-btn" id="addChildBtn" onclick="addChild()" title="Add another child">+ Add</button>
+        </div>
+      </div>
+
+      <!-- Education Type preset -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">🏫</span>Education Type</div>
+        <div class="preset-row" id="presetRow">
+          <button class="preset-btn active" data-preset="local-uni"  onclick="applyPreset('local-uni',this)">Local University</button>
+          <button class="preset-btn"        data-preset="private"    onclick="applyPreset('private',this)">Private College</button>
+          <button class="preset-btn"        data-preset="sadc"       onclick="applyPreset('sadc',this)">Study in SA/SADC</button>
+          <button class="preset-btn"        data-preset="overseas"   onclick="applyPreset('overseas',this)">Overseas</button>
+          <button class="preset-btn"        data-preset="custom"     onclick="applyPreset('custom',this)">Custom</button>
+        </div>
+        <div class="notice notice-blue" id="presetNote" style="font-size:12px;margin-bottom:0">
+          Estimated <strong>University of Botswana / BIUST</strong> fees. Adjust below as needed.
+        </div>
+      </div>
+
+      <!-- Child details -->
+      <div class="card" id="childCard">
+        <div class="card-title"><span class="ct-icon">📝</span>Child Details</div>
+
+        <div class="field">
+          <label>Child's name <span class="hint">(optional)</span></label>
+          <div class="iw no-prefix"><input type="text" id="childName" placeholder="e.g. Lesego" oninput="updateChildTab()"></div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label>Current age <span class="hint">years</span></label>
+            <div class="iw no-prefix"><input type="number" id="childAge" value="5" min="0" max="17" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Study start age <span class="hint">years</span></label>
+            <div class="iw no-prefix"><input type="number" id="studyAge" value="18" min="5" max="30" oninput="calculate()"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Years of study</label>
+          <div class="range-row">
+            <input type="range" id="studyYears" min="1" max="6" value="4" oninput="document.getElementById('studyYearsVal').textContent=this.value+' yr'+(+this.value>1?'s':'');calculate()">
+            <span class="range-val" id="studyYearsVal">4 yrs</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Costs -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">💸</span>Annual Cost at Today's Prices</div>
+        <div class="notice notice-gold" style="font-size:12px;margin-bottom:12px">Enter amounts in today's BWP — we'll inflate them to the study start date.</div>
+
+        <div class="field">
+          <label>Tuition &amp; fees (per year)</label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="costTuition" value="25000" oninput="calculate()"></div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Accommodation</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="costAccom" value="18000" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Living &amp; meals</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="costLiving" value="12000" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Books &amp; supplies</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="costBooks" value="5000" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Travel &amp; misc</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="costMisc" value="6000" oninput="calculate()"></div>
+          </div>
+        </div>
+
+        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;color:var(--muted)">Total today (per year)</span>
+          <span class="mono" style="font-weight:600;color:var(--navy);font-size:15px" id="totalTodayAmt">P 66,000</span>
+        </div>
+      </div>
+
+      <!-- Rates -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">📊</span>Assumptions</div>
+
+        <div class="field">
+          <label>Education inflation rate <span class="hint">%/yr</span></label>
+          <div class="range-row">
+            <input type="range" id="eduInflation" min="2" max="15" value="7" step="0.5" oninput="document.getElementById('eduInflationVal').textContent=this.value+'%';calculate()">
+            <span class="range-val" id="eduInflationVal">7%</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Education costs typically rise faster than general inflation (Botswana avg ~6–8%).</div>
+        </div>
+
+        <div class="field">
+          <label>Investment return on savings <span class="hint">%/yr</span></label>
+          <div class="range-row">
+            <input type="range" id="investReturn" min="2" max="20" value="9" step="0.5" oninput="document.getElementById('investReturnVal').textContent=this.value+'%';calculate()">
+            <span class="range-val" id="investReturnVal">9%</span>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label>Current savings <span class="hint">already saved</span></label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="currentSavings" value="0" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Monthly contribution</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="monthlyContrib" value="0" oninput="calculate()"></div>
+          </div>
+        </div>
+
+        <div class="field" style="margin-bottom:0">
+          <label>Scholarship / bursary expected <span class="hint">% of total cost</span></label>
+          <div class="range-row">
+            <input type="range" id="scholarship" min="0" max="100" value="0" step="5" oninput="document.getElementById('scholarshipVal').textContent=this.value+'%';calculate()">
+            <span class="range-val" id="scholarshipVal">0%</span>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /left col -->
+
+    <!-- ══ RIGHT: RESULTS ══ -->
+    <div id="results">
+      <div class="notice notice-gold" style="text-align:center">Enter details on the left to see your education savings plan.</div>
+    </div>
+
+  </div><!-- /cols -->
+</div><!-- /wrap -->
+
+<div id="toast">✓ Saved to snapshot</div>
+
+<script>
+// ── State ──
+const children = [{ name:'', age:5, studyAge:18, studyYears:4 }];
+let activeChild = 0;
+
+// ── Presets (today's BWP estimates) ──
+const PRESETS = {
+  'local-uni':{ tuition:25000, accom:18000, living:12000, books:5000, misc:6000, note:'Estimated <strong>University of Botswana / BIUST</strong> fees. Adjust below as needed.', inflation:7 },
+  'private':  { tuition:55000, accom:24000, living:14000, books:6000, misc:7000, note:'Estimated <strong>private college / BCA / LIMKOKWING</strong> in Botswana. Adjust as needed.', inflation:7 },
+  'sadc':     { tuition:70000, accom:36000, living:24000, books:8000, misc:12000, note:'Estimated costs for <strong>study in South Africa or SADC</strong> (ZAR converted, transport included).', inflation:8 },
+  'overseas': { tuition:220000, accom:120000, living:80000, books:20000, misc:30000, note:'Estimated <strong>overseas university</strong> costs (UK/USA — converted to BWP). High variance — adjust to your destination.', inflation:6 },
+  'custom':   { note:'Enter your own cost estimates below.', inflation:7 },
+};
+
+function applyPreset(key, btn) {
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const p = PRESETS[key];
+  if (key !== 'custom') {
+    setVal('costTuition', p.tuition);
+    setVal('costAccom',   p.accom);
+    setVal('costLiving',  p.living);
+    setVal('costBooks',   p.books);
+    setVal('costMisc',    p.misc);
+  }
+  document.getElementById('eduInflation').value = p.inflation;
+  document.getElementById('eduInflationVal').textContent = p.inflation + '%';
+  document.getElementById('presetNote').innerHTML = p.note;
+  calculate();
+}
+
+function setVal(id, v) { document.getElementById(id).value = v; }
+function getNum(id) { return parseFloat(document.getElementById(id).value) || 0; }
+function fmt(n) { return 'P ' + Math.round(n).toLocaleString(); }
+function fmtK(n) { return n >= 1000 ? 'P ' + (n/1000).toFixed(0) + 'k' : fmt(n); }
+
+// ── Child tabs ──
+function renderChildTabs() {
+  const ct = document.getElementById('childTabs');
+  ct.innerHTML = children.map((c,i)=>`
+    <button class="child-tab${i===activeChild?' active':''}" onclick="switchChild(${i})">
+      ${c.name || 'Child '+(i+1)}
+      ${children.length>1?`<span onclick="event.stopPropagation();removeChild(${i})" style="margin-left:4px;opacity:.5;font-size:10px" title="Remove">✕</span>`:''}
+    </button>`).join('');
+  document.getElementById('addChildBtn').style.display = children.length >= 5 ? 'none' : '';
+}
+
+function switchChild(i) {
+  saveCurrentChild();
+  activeChild = i;
+  loadChild(i);
+  renderChildTabs();
+  calculate();
+}
+
+function addChild() {
+  saveCurrentChild();
+  children.push({ name:'', age:3, studyAge:18, studyYears:4 });
+  activeChild = children.length - 1;
+  loadChild(activeChild);
+  renderChildTabs();
+  calculate();
+}
+
+function removeChild(i) {
+  if (children.length === 1) return;
+  children.splice(i, 1);
+  activeChild = Math.min(activeChild, children.length-1);
+  loadChild(activeChild);
+  renderChildTabs();
+  calculate();
+}
+
+function saveCurrentChild() {
+  const c = children[activeChild];
+  c.name      = document.getElementById('childName').value.trim();
+  c.age       = getNum('childAge');
+  c.studyAge  = getNum('studyAge');
+  c.studyYears= getNum('studyYears');
+}
+
+function loadChild(i) {
+  const c = children[i];
+  document.getElementById('childName').value   = c.name;
+  document.getElementById('childAge').value    = c.age;
+  document.getElementById('studyAge').value    = c.studyAge;
+  document.getElementById('studyYears').value  = c.studyYears;
+  document.getElementById('studyYearsVal').textContent = c.studyYears + ' yr' + (c.studyYears > 1 ? 's' : '');
+}
+
+function updateChildTab() {
+  children[activeChild].name = document.getElementById('childName').value.trim();
+  renderChildTabs();
+}
+
+// ── Core calculation ──
+let chartInst = null;
+
+function calculate() {
+  saveCurrentChild();
+
+  const childAge   = getNum('childAge');
+  const studyAge   = getNum('studyAge');
+  const studyYears = getNum('studyYears');
+  const yrsToStudy = Math.max(0, studyAge - childAge);
+
+  const todayAnnual = getNum('costTuition') + getNum('costAccom') + getNum('costLiving') + getNum('costBooks') + getNum('costMisc');
+  document.getElementById('totalTodayAmt').textContent = fmt(todayAnnual);
+
+  const eduInfl   = getNum('eduInflation') / 100;
+  const invReturn = getNum('investReturn') / 100;
+  const mthReturn = invReturn / 12;
+  const currentSav= getNum('currentSavings');
+  const monthlyC  = getNum('monthlyContrib');
+  const scholPct  = getNum('scholarship') / 100;
+
+  // Inflate cost to study-start year
+  const inflatedAnnual = todayAnnual * Math.pow(1 + eduInfl, yrsToStudy);
+  // Total over study years (each subsequent year also inflates)
+  let totalGross = 0;
+  const yearCosts = [];
+  for (let y = 0; y < studyYears; y++) {
+    const c = inflatedAnnual * Math.pow(1 + eduInfl, y);
+    yearCosts.push(c);
+    totalGross += c;
+  }
+  const totalAfterScholarship = totalGross * (1 - scholPct);
+
+  // FV of existing savings at study start
+  const fvExisting = currentSav * Math.pow(1 + invReturn, yrsToStudy);
+
+  // FV of monthly contributions
+  let fvContribs = 0;
+  const mths = yrsToStudy * 12;
+  if (mthReturn > 0 && mths > 0) {
+    fvContribs = monthlyC * ((Math.pow(1 + mthReturn, mths) - 1) / mthReturn);
+  } else {
+    fvContribs = monthlyC * mths;
+  }
+
+  const projectedAtStart = fvExisting + fvContribs;
+  const gap = Math.max(0, totalAfterScholarship - projectedAtStart);
+  const surplus = Math.max(0, projectedAtStart - totalAfterScholarship);
+  const funded = totalAfterScholarship > 0 ? Math.min(100, (projectedAtStart / totalAfterScholarship) * 100) : 100;
+
+  // Monthly savings needed to fully fund (from now to study start)
+  let monthlyNeeded = 0;
+  if (mths > 0 && totalAfterScholarship > fvExisting) {
+    const remaining = totalAfterScholarship - fvExisting;
+    if (mthReturn > 0) {
+      monthlyNeeded = remaining / ((Math.pow(1 + mthReturn, mths) - 1) / mthReturn);
+    } else {
+      monthlyNeeded = remaining / mths;
+    }
+  }
+  monthlyNeeded = Math.max(0, monthlyNeeded);
+
+  // Year-by-year savings growth table
+  const rows = [];
+  let bal = currentSav;
+  const currentYear = new Date().getFullYear();
+  for (let yr = 0; yr <= yrsToStudy + studyYears; yr++) {
+    const age = childAge + yr;
+    const year = currentYear + yr;
+    const isStudyYear = yr >= yrsToStudy && yr < yrsToStudy + studyYears;
+    const withdrawal = isStudyYear ? yearCosts[yr - yrsToStudy] * (1 - scholPct) : 0;
+
+    const prevBal = bal;
+    if (yr > 0) {
+      // Grow balance
+      bal = bal * (1 + invReturn);
+      // Add monthly contributions (not during study years)
+      if (!isStudyYear || yr === yrsToStudy) {
+        bal += monthlyC * 12;
+      }
+      // Withdraw tuition
+      if (isStudyYear) bal -= withdrawal;
+    }
+
+    rows.push({ yr, year, age, bal: Math.max(0, bal), withdrawal, isStudyStart: yr === yrsToStudy });
+  }
+
+  // Build milestones
+  const milestones = [];
+  [25, 50, 75, 100].forEach(pct => {
+    const target = totalAfterScholarship * pct / 100;
+    const mRow = rows.find(r => r.bal >= target && r.yr <= yrsToStudy);
+    milestones.push({
+      pct,
+      year: mRow ? mRow.year : null,
+      age:  mRow ? mRow.age  : null,
+      target
+    });
+  });
+
+  // Render
+  renderResults({
+    childAge, studyAge, studyYears, yrsToStudy,
+    todayAnnual, inflatedAnnual, totalGross, totalAfterScholarship,
+    scholPct, projectedAtStart, gap, surplus, funded,
+    monthlyNeeded, monthlyC, rows, milestones, currentYear
+  });
+  saveSnapshot({ totalAfterScholarship, projectedAtStart, gap, monthlyNeeded, funded });
+}
+
+function renderResults(d) {
+  const el = document.getElementById('results');
+  const fundedCls = d.funded >= 90 ? 'green' : d.funded >= 60 ? 'gold' : 'red';
+  const fillCls   = d.funded >= 90 ? 'green' : d.funded >= 60 ? '' : 'red';
+  const childName = children[activeChild].name || 'your child';
+
+  const gapHtml = d.gap > 0
+    ? `<div class="notice notice-red" style="font-size:12px"><strong>Funding gap of ${fmt(d.gap)}</strong> — you need to save <strong>${fmt(d.monthlyNeeded)}/month</strong> to fully fund${d.monthlyC > 0 ? ` (currently saving ${fmt(d.monthlyC)}/month — increase by ${fmt(Math.max(0,d.monthlyNeeded-d.monthlyC))})` : ''}.${d.yrsToStudy<=0?' Studies start this year — prioritise immediate funding.':''}</div>`
+    : `<div class="notice notice-green" style="font-size:12px"><strong>You are on track!</strong> Projected savings of ${fmt(d.projectedAtStart)} will cover the full ${fmt(d.totalAfterScholarship)} — with a ${fmt(d.surplus)} surplus.</div>`;
+
+  const studyStartYear = d.currentYear + d.yrsToStudy;
+  const tableRows = d.rows.map(r => {
+    const cls = r.isStudyStart ? 'start-row' : '';
+    const wdraw = r.withdrawal > 0 ? `<span style="color:var(--red)">−${fmtK(r.withdrawal)}</span>` : '—';
+    return `<tr class="${cls}"><td>${r.year}${r.isStudyStart?'<span style="font-size:9px;background:var(--gold);color:#fff;border-radius:4px;padding:1px 5px;margin-left:5px">START</span>':''}</td><td>Age ${r.age}</td><td>${fmtK(r.bal)}</td><td>${wdraw}</td></tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <!-- Hero total -->
+    <div class="result-hero">
+      <div class="rh-label">Total education cost (inflation-adjusted)</div>
+      <div class="rh-val">${fmt(d.totalAfterScholarship)}</div>
+      <div class="rh-sub">
+        ${d.studyYears} years at ${d.studyAge}${d.scholPct>0 ? ` · after ${d.scholPct*100}% scholarship` : ''} · starts ${studyStartYear} (${d.yrsToStudy} yr${d.yrsToStudy!==1?'s':''} away)
+      </div>
+    </div>
+
+    <!-- Key stats -->
+    <div class="stat-row">
+      <div class="stat-box gold">
+        <div class="sv">${fmt(d.inflatedAnnual)}</div>
+        <div class="sl">Annual cost at ${studyStartYear}</div>
+      </div>
+      <div class="stat-box ${d.gap > 0 ? 'red' : 'green'}">
+        <div class="sv">${d.gap > 0 ? fmt(d.gap) : fmt(d.surplus)}</div>
+        <div class="sl">${d.gap > 0 ? 'Funding gap' : 'Projected surplus'}</div>
+      </div>
+      <div class="stat-box blue">
+        <div class="sv">${fmt(d.projectedAtStart)}</div>
+        <div class="sl">Projected at study start</div>
+      </div>
+      <div class="stat-box ${fundedCls}">
+        <div class="sv">${Math.round(d.funded)}%</div>
+        <div class="sl">Funded</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="prog-wrap">
+      <div class="prog-header">
+        <span style="font-size:12px;font-weight:600">Savings progress toward ${fmt(d.totalAfterScholarship)}</span>
+        <span style="font-size:12px;font-weight:700;color:var(--${fundedCls === 'green' ? 'green' : fundedCls === 'red' ? 'red' : 'gold'})">${Math.round(d.funded)}%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill ${fillCls}" style="width:${Math.min(100,d.funded).toFixed(1)}%"></div></div>
+    </div>
+
+    ${gapHtml}
+
+    <!-- Scenario: how much per month -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">💡</span>Monthly Savings Scenarios</div>
+      <div class="scenario-row">
+        <div class="scenario-card ${d.monthlyC >= d.monthlyNeeded ? 'active' : ''}" onclick="setMonthly(${Math.round(d.monthlyNeeded)})">
+          <div class="sc-label">Needed</div>
+          <div class="sc-val">${fmt(d.monthlyNeeded)}</div>
+          <div class="sc-sub">to fully fund</div>
+        </div>
+        <div class="scenario-card" onclick="setMonthly(${Math.round(d.monthlyNeeded*1.25)})">
+          <div class="sc-label">Comfortable</div>
+          <div class="sc-val">${fmt(d.monthlyNeeded*1.25)}</div>
+          <div class="sc-sub">25% buffer</div>
+        </div>
+        <div class="scenario-card" onclick="setMonthly(${Math.round(d.monthlyNeeded*0.5)})">
+          <div class="sc-label">Half-funded</div>
+          <div class="sc-val">${fmt(d.monthlyNeeded*0.5)}</div>
+          <div class="sc-sub">rest from bursary/loan</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted)">Click any scenario to apply it to the calculator.</div>
+    </div>
+
+    <!-- Chart -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">📈</span>Savings Growth Over Time</div>
+      <div class="chart-box"><canvas id="eduChart"></canvas></div>
+    </div>
+
+    <!-- Milestones -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">🏁</span>Savings Milestones</div>
+      <div class="milestone-list">
+        ${d.milestones.map(m=>`
+          <div class="milestone ${m.year ? 'achieved' : 'danger'}">
+            <span class="m-yr">${m.year ? m.year : '—'}</span>
+            <span class="m-label">${m.pct}% funded ${m.year ? `(${m.age-d.childAge+d.childAge === d.childAge ? '' : 'age '+( m.age)})` : '(not reached before studies)'}</span>
+            <span class="m-amt">${fmt(m.target)}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Year-by-year table -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">📋</span>Year-by-Year Breakdown</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th style="text-align:left">Year</th><th>Child's Age</th><th>Savings Balance</th><th>Tuition Withdrawn</th></tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cost breakdown -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">🧾</span>Cost Breakdown at ${studyStartYear}</div>
+      <div class="tbl-wrap" style="max-height:220px">
+        <table>
+          <thead><tr><th style="text-align:left">Category</th><th>Today</th><th>At Start</th><th>Total ${d.studyYears} yrs</th></tr></thead>
+          <tbody>
+            ${buildCostRows(d)}
+          </tbody>
+        </table>
+      </div>
+      ${d.scholPct > 0 ? `<div class="notice notice-green" style="font-size:12px;margin-top:12px;margin-bottom:0">After ${d.scholPct*100}% scholarship: total becomes ${fmt(d.totalAfterScholarship)}.</div>` : ''}
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-primary" onclick="calculate()">🔄 Recalculate</button>
+      <button class="btn btn-outline" onclick="window.open('index.html','_self')">← Back to Portal</button>
+    </div>
+  `;
+
+  renderChart(d);
+}
+
+function buildCostRows(d) {
+  const cats = [
+    { label:'Tuition & fees',   id:'costTuition' },
+    { label:'Accommodation',    id:'costAccom' },
+    { label:'Living & meals',   id:'costLiving' },
+    { label:'Books & supplies', id:'costBooks' },
+    { label:'Travel & misc',    id:'costMisc' },
+  ];
+  const rows = cats.map(c => {
+    const today = getNum(c.id);
+    const atStart = today * Math.pow(1 + getNum('eduInflation')/100, Math.max(0, getNum('studyAge')-getNum('childAge')));
+    const total = Array.from({length: getNum('studyYears')}, (_,i) => atStart * Math.pow(1 + getNum('eduInflation')/100, i)).reduce((a,b)=>a+b,0);
+    if (today === 0) return '';
+    return `<tr><td>${c.label}</td><td>${fmtK(today)}</td><td>${fmtK(atStart)}</td><td>${fmtK(total)}</td></tr>`;
+  }).join('');
+  const totalToday = getNum('costTuition')+getNum('costAccom')+getNum('costLiving')+getNum('costBooks')+getNum('costMisc');
+  const totalStart = totalToday * Math.pow(1+getNum('eduInflation')/100, Math.max(0,getNum('studyAge')-getNum('childAge')));
+  const grandTotal = Array.from({length:getNum('studyYears')},(_,i)=>totalStart*Math.pow(1+getNum('eduInflation')/100,i)).reduce((a,b)=>a+b,0);
+  return rows + `<tr style="font-weight:700;background:var(--cream)!important"><td>Total</td><td>${fmtK(totalToday)}</td><td>${fmtK(totalStart)}</td><td>${fmtK(grandTotal)}</td></tr>`;
+}
+
+function renderChart(d) {
+  const ctx = document.getElementById('eduChart');
+  if (!ctx) return;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const labels  = d.rows.map(r => r.year + '\n(Age ' + r.age + ')');
+  const balData = d.rows.map(r => Math.round(r.bal));
+  const costLine= d.rows.map(r => r.isStudyStart ? Math.round(d.totalAfterScholarship) : null);
+  const colors  = d.rows.map(r => r.yr >= d.yrsToStudy ? 'rgba(200,153,26,.7)' : 'rgba(26,140,91,.7)');
+
+  chartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Savings balance',
+          data: balData,
+          backgroundColor: colors,
+          borderRadius: 4,
+          order: 2,
+        },
+        {
+          label: 'Target (total cost)',
+          data: d.rows.map(()=>Math.round(d.totalAfterScholarship)),
+          type: 'line',
+          borderColor: '#C0392B',
+          borderDash: [5,4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          order: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode:'index', intersect:false },
+      plugins: {
+        legend: { labels:{ font:{size:11}, boxWidth:12, padding:12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.label + ': P ' + (ctx.raw||0).toLocaleString()
+          }
+        }
+      },
+      scales: {
+        y: { ticks:{ callback: v => 'P '+(v>=1000?(v/1000).toFixed(0)+'k':v) }, grid:{ color:'rgba(0,0,0,.05)' } },
+        x: { ticks:{ font:{size:9} } }
+      }
+    }
+  });
+}
+
+function setMonthly(v) {
+  document.getElementById('monthlyContrib').value = Math.round(Math.max(0,v));
+  calculate();
+}
+
+// ── Snapshot ──
+function saveSnapshot(d) {
+  try {
+    const snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    snap.educationSavings = {
+      children: children.map(c => c.name || 'Child'),
+      totalCost:    Math.round(d.totalAfterScholarship),
+      projected:    Math.round(d.projectedAtStart),
+      gap:          Math.round(d.gap),
+      monthlyNeeded:Math.round(d.monthlyNeeded),
+      funded:       Math.round(d.funded),
+      lastUpdated:  new Date().toISOString()
+    };
+    localStorage.setItem('kw_snapshot', JSON.stringify(snap));
+    showToast();
+  } catch(e){}
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ── Init ──
+renderChildTabs();
+calculate();
+</script>
+</body>
+</html>
