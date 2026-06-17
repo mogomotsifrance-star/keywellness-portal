@@ -551,6 +551,7 @@ body { font-family:'Inter',sans-serif; background:var(--cream); color:var(--navy
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
         <div>
           <h2>Your Financial Wellness Report</h2>
+          <p id="reportClient" style="font-size:.78rem;font-weight:600;color:rgba(255,255,255,.85);margin-bottom:2px;display:none"></p>
           <p>Botswana Pula · <span id="reportDate"></span></p>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -803,6 +804,8 @@ function calculateWellness(){
 
   currentStep=TOTAL_STEPS; showStep(TOTAL_STEPS);
   document.getElementById('reportDate').textContent=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
+  const _clientEl=document.getElementById('reportClient');
+  if(_clientEl&&window._toolFullName){_clientEl.textContent='Client: '+window._toolFullName;_clientEl.style.display='';}
 
   const circumference=477.5,offset=circumference-(totalScore/100)*circumference;
   const ringColor=totalScore>=70?'var(--green)':totalScore>=50?'var(--orange)':'var(--red)';
@@ -916,13 +919,13 @@ function exportPDF(){
   const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],GREEN=[26,140,91],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
-  doc.setFillColor(...NAVY);doc.rect(0,0,pageW,28,'F');
-  doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,12);
+  doc.setFillColor(...NAVY);doc.rect(0,0,pageW,32,'F');
+  doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,11);
   const _pdfName = window._toolFullName || '';
-  if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,153,26);doc.text('Client: '+_pdfName,pageW-14,12,{align:'right'}); }
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,19);
+  if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,210,220);doc.text('Client: '+_pdfName,14,18); }
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,_pdfName?24:18);
   const scoreColor=r.totalScore>=70?[26,140,91]:r.totalScore>=50?[217,119,6]:[192,57,43];
-  doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,4,34,20,3,3,'F');
+  doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,5,34,22,3,3,'F');
   doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
   doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});
   doc.setTextColor(...NAVY);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(r.grade.label.replace(/[^\w\s]/g,'').trim(),14,38);
