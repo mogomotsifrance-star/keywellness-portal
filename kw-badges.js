@@ -89,4 +89,37 @@
   }
 
   global.KWBadges = { BADGE_DEFS, DEF_MAP, pointsFor, award };
+
+  // Suppress browser autofill/autocomplete on financial inputs portal-wide.
+  // Runs after the DOM is ready on every page that includes this module.
+  // Auth fields (email, password) are intentionally skipped so password managers keep working.
+  function suppressFinancialAutofill() {
+    const sel = 'input[type="number"], input[type="text"], input[inputmode="decimal"], input[inputmode="numeric"]';
+    document.querySelectorAll(sel).forEach(function (el) {
+      const t  = (el.type  || '').toLowerCase();
+      const id = (el.id    || '').toLowerCase();
+      const nm = (el.name  || '').toLowerCase();
+      if (t === 'password' || t === 'email') return;
+      if (id.includes('email') || id.includes('password') ||
+          id.includes('login')  || id.includes('signin')  || id.includes('signup')) return;
+      if (nm.includes('email') || nm.includes('password')) return;
+
+      el.setAttribute('autocomplete',   'off');
+      el.setAttribute('autocorrect',    'off');
+      el.setAttribute('autocapitalize', 'off');
+      el.setAttribute('spellcheck',     'false');
+      el.setAttribute('data-form-type', 'other');
+      // Randomise name so the browser cannot match it to a remembered field.
+      // Safe because all tool inputs are read by id (getElementById / pf(id)), not by name.
+      if (el.id) {
+        el.setAttribute('name', 'kw_' + Math.random().toString(36).slice(2, 8));
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', suppressFinancialAutofill);
+  } else {
+    suppressFinancialAutofill();
+  }
 })(window);
