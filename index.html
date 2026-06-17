@@ -1694,7 +1694,7 @@ window.showArticle = function (idx) {
   const el = document.getElementById('page-content');
   const body = ARTICLE_BODIES[c.title] || `<p style="font-size:14px;line-height:1.8;color:#374151">${c.desc}</p>`;
   el.innerHTML = `
-    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:20px">← Back to Articles</button>
+    <button class="btn btn-outline btn-sm" onclick="VIEWS['learn']('articles')" style="margin-bottom:20px">← Back to Articles</button>
     <div style="max-width:700px">
       <div class="card" style="margin-bottom:0">
         <!-- Header -->
@@ -1714,7 +1714,7 @@ window.showArticle = function (idx) {
         <div style="margin-top:28px;padding-top:18px;border-top:2px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
           <button class="btn btn-outline" onclick="go('booking')">📅 Book a Coach</button>
-          <button class="btn btn-outline" onclick="go('learn')" style="margin-left:auto">← More Articles</button>
+          <button class="btn btn-outline" onclick="VIEWS['learn']('articles')" style="margin-left:auto">← More Articles</button>
         </div>
       </div>
     </div>`;
