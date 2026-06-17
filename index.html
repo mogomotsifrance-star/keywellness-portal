@@ -2960,11 +2960,8 @@ async function init() {
   currentUser = session?.user ?? null;
 
   if (currentUser) {
-    const _c = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-    if (_c.firstName || _c.displayName) {
-      state.user = { first_name: _c.firstName||'', last_name: _c.lastName||'' };
-    }
-    loadAllData().then(() => { rebuildBadges(); initProfileUI(); refreshPointsUI(); }).catch(()=>{});
+    await loadAllData();
+    rebuildBadges();
   }
   initProfileUI();
   refreshPointsUI();
@@ -2973,26 +2970,18 @@ async function init() {
   sb.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user ?? null;
     if (event === 'SIGNED_IN') {
-      // Seed state.user from cache so route() skips onboarding for returning users
-      const _cached = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-      if ((_cached.firstName || _cached.displayName) && !state.user) {
-        state.user = { first_name: _cached.firstName||'', last_name: _cached.lastName||'' };
-      }
-      // Route immediately for fast login, sync data in background
-      route();
+      await loadAllData();
+      rebuildBadges();
       initProfileUI();
+      refreshPointsUI();
       loadNotifications();
-      loadAllData().then(() => {
-        rebuildBadges();
-        initProfileUI();
-        refreshPointsUI();
-        if (state.user) {
-          const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-          if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
-            setTimeout(showNameModal, 700);
-          }
+      route();
+      if (state.user) {
+        const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+          setTimeout(showNameModal, 700);
         }
-      });
+      }
     } else if (event === 'SIGNED_OUT') {
       state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
       window.location.hash = '';
