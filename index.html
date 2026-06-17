@@ -1421,15 +1421,220 @@ const VIDEOS = [
 //  VIEW: LEARN
 // ══════════════════════════════════════════════════
 const CONTENT = [
-  { cat:'Budgeting',    icon:'📊', title:'The 50/30/20 Rule',          desc:'Allocate 50% to needs, 30% to wants, 20% to savings and debt repayment. A simple framework for any income level.' },
-  { cat:'Savings',      icon:'🏦', title:'Pay Yourself First',          desc:'Set up automatic savings transfers on payday before you spend. Treat savings as a non-negotiable expense.' },
-  { cat:'Debt',         icon:'⚔️',  title:'Avalanche vs Snowball',       desc:'Avalanche: pay highest-interest debt first (saves money). Snowball: pay smallest first (builds momentum).' },
-  { cat:'Emergency',    icon:'🆘', title:'Building Your Safety Net',    desc:'Target 3–6 months of essential expenses. Even P500/month adds up. Start small, stay consistent.' },
-  { cat:'Retirement',   icon:'🎯', title:'The Power of Compound Growth',desc:'Money invested early grows exponentially. P100/month at 25 is worth far more than P200/month at 40.' },
-  { cat:'Insurance',    icon:'🛡️',  title:'Why Insurance Matters',       desc:'Insurance protects your financial plan from catastrophic events. One medical emergency can erase years of savings.' },
-  { cat:'Investing',    icon:'📈', title:'Investment Basics',            desc:'Diversify across asset classes. Stocks for growth, bonds for stability. Never invest what you cannot afford to lose.' },
-  { cat:'Mindset',      icon:'🧠', title:'Financial Stress & Wellbeing',desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.' },
+  { cat:'Budgeting',   icon:'📊', mins:4,  title:'The 50/30/20 Rule',             desc:'Allocate 50% to needs, 30% to wants, 20% to savings and debt repayment. A simple framework for any income level.' },
+  { cat:'Savings',     icon:'🏦', mins:4,  title:'Pay Yourself First',             desc:'Set up automatic savings transfers on payday before you spend. Treat savings as a non-negotiable expense.' },
+  { cat:'Debt',        icon:'⚔️',  mins:4,  title:'Avalanche vs Snowball',          desc:'Avalanche: pay highest-interest debt first (saves money). Snowball: pay smallest first (builds momentum).' },
+  { cat:'Emergency',   icon:'🆘', mins:3,  title:'Building Your Safety Net',       desc:'Target 3–6 months of essential expenses. Even P500/month adds up. Start small, stay consistent.' },
+  { cat:'Retirement',  icon:'🎯', mins:5,  title:'The Power of Compound Growth',   desc:'Money invested early grows exponentially. P100/month at 25 is worth far more than P200/month at 40.' },
+  { cat:'Insurance',   icon:'🛡️',  mins:4,  title:'Why Insurance Matters',          desc:'Insurance protects your financial plan from catastrophic events. One medical emergency can erase years of savings.' },
+  { cat:'Investing',   icon:'📈', mins:5,  title:'Investment Basics',               desc:'Diversify across asset classes. Stocks for growth, bonds for stability. Never invest what you cannot afford to lose.' },
+  { cat:'Mindset',     icon:'🧠', mins:4,  title:'Financial Stress & Wellbeing',   desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.' },
+  { cat:'Payslip',     icon:'📄', mins:4,  title:'Understanding Your Payslip',     desc:'Your payslip tells the story of your income. Learn what every line means — gross pay, PAYE, pension, and net take-home.' },
+  { cat:'Tax',         icon:'🧾', mins:5,  title:'Tax Basics for Batswana',        desc:'Whether employed or self-employed, every earner has a tax obligation. Understand BURS, PAYE bands, and what you can deduct.' },
+  { cat:'Retirement',  icon:'🏛️', mins:5,  title:'Pension Funds Explained',        desc:'BPOPF, occupational funds, retirement annuities — how they work, what you are entitled to, and the one mistake that wrecks retirement.' },
+  { cat:'Property',    icon:'🏡', mins:5,  title:'Renting vs Buying in Botswana',  desc:'The rent vs buy decision is one of the biggest you will make. The right answer depends on your circumstances, not a blanket rule.' },
+  { cat:'Income',      icon:'💼', mins:4,  title:'Building a Side Income',         desc:'One salary is a single point of failure. A side income creates resilience and accelerates your financial goals.' },
+  { cat:'Family',      icon:'👨‍👩‍👧', mins:4,  title:'Teaching Kids About Money',      desc:'Financial habits are formed in childhood. A few simple conversations and habits now give your children a lifelong advantage.' },
 ];
+
+// ── Article body HTML (full content for each article) ──
+const _art = (body, tips, bw, cta) => `
+  <div style="font-size:14px;line-height:1.85;color:#374151">${body}</div>
+  <div style="background:#fffbf0;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:16px 18px;margin:22px 0">
+    <div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">💡 Key Takeaways</div>
+    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:2;color:#374151">${tips}</ul>
+  </div>
+  <div style="background:#eff6ff;border-left:4px solid #2563EB;border-radius:0 8px 8px 0;padding:16px 18px;margin:22px 0 0">
+    <div style="font-size:11px;font-weight:800;color:#1e3a8a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🇧🇼 In Botswana</div>
+    <div style="font-size:13px;line-height:1.75;color:#1e3a8a">${bw}</div>
+  </div>
+  ${cta ? `<div style="margin-top:18px">${cta}</div>` : ''}`;
+
+const ARTICLE_BODIES = {
+
+'The 50/30/20 Rule': _art(
+  `<p style="margin:0 0 14px">The 50/30/20 rule is one of the simplest budgeting frameworks ever devised. Divide your after-tax income into three buckets: <strong>50% for needs</strong>, <strong>30% for wants</strong>, and <strong>20% for savings and debt repayment</strong>. That's it. No tracking every coffee, no spreadsheet obsession.</p>
+   <p style="margin:0 0 14px"><strong>Needs</strong> are non-negotiables — rent or mortgage, groceries, electricity, water, transport to work, medical aid, and minimum debt repayments. If your needs exceed 50%, something major (usually rent) needs to change, or income needs to grow.</p>
+   <p style="margin:0 0 14px"><strong>Wants</strong> are everything that improves life but isn't strictly necessary — DSTV, dining out, gym, new clothes, weekends away. This isn't a guilty category. Enjoying your money is part of a sustainable plan.</p>
+   <p style="margin:0"><strong>Savings and debt</strong> builds your future. Emergency fund, retirement contributions, investments, and aggressive debt repayment above the minimum all count here.</p>`,
+  `<li>Track one month of spending first — know where you actually fall before adjusting</li>
+   <li>If needs exceed 50%, find one big expense to cut rather than ten small ones</li>
+   <li>Employer pension contributions count toward your 20%</li>
+   <li>The rule is a guide, not a law — adjust the percentages to your reality</li>`,
+  `Many Batswana find the needs category swells due to extended family obligations and remittances to relatives. These are real and valid — include them honestly in your budget. If family support pushes needs above 50%, look at the wants category first before cutting essentials.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('budget_planner.html')">📊 Try the Budget Planner →</button>`
+),
+
+'Pay Yourself First': _art(
+  `<p style="margin:0 0 14px">Most people budget by paying their bills, buying groceries, going about their month — and saving whatever is left. The problem is that there is almost never anything left. Lifestyle expands to fill available income, every time.</p>
+   <p style="margin:0 0 14px">"Pay yourself first" flips this entirely. On payday, before you touch a single pula for anything else, a fixed amount moves directly to a savings or investment account. Savings become a non-negotiable expense — like rent — rather than an afterthought.</p>
+   <p style="margin:0 0 14px">This works because of a psychological principle called lifestyle adaptation. Whatever lands in your account, you will spend it. By removing savings before you see it, you never miss it. Your lifestyle adjusts to what remains.</p>
+   <p style="margin:0">The key is <strong>automation</strong>. Set a standing order with your bank to transfer your savings the same day salary lands. You never have to make the decision — it happens automatically.</p>`,
+  `<li>Start with whatever you can — even P200/month builds the habit</li>
+   <li>Increase by 1% every time you receive a raise</li>
+   <li>Your pension contribution already does this for retirement — extend the habit to short-term savings</li>
+   <li>Keep savings in a separate account so it doesn't blend with spending money</li>`,
+  `Stanbic, FNB, ABSA, and BancABC Botswana all support standing debit orders — set yours to execute the day after salary arrives. A 32-day notice account is ideal for emergency and short-term savings: slightly better interest than a current account, and the notice period adds enough friction to prevent impulse withdrawals.`,
+  ``
+),
+
+'Avalanche vs Snowball': _art(
+  `<p style="margin:0 0 14px">If you carry multiple debts — a personal loan, a credit card, store accounts — you need a deliberate strategy for paying them off. Two methods dominate personal finance: the Avalanche and the Snowball.</p>
+   <p style="margin:0 0 14px">The <strong>Avalanche method</strong> targets your highest-interest debt first. Make minimum payments on all debts, then throw every extra pula at the most expensive one. Once paid off, roll that payment into the next highest-rate debt. Mathematically, this saves the most money in total interest.</p>
+   <p style="margin:0 0 14px">The <strong>Snowball method</strong> targets your smallest balance first, regardless of interest rate. Clear it completely, then roll that freed payment into the next smallest. Psychologically, this is powerful — quick wins build momentum and keep motivation high.</p>
+   <p style="margin:0">Research shows Snowball leads to higher completion rates even though you pay more interest. The best method is the one you will actually stick to.</p>`,
+  `<li>List all debts with balance, interest rate, and minimum payment before choosing a method</li>
+   <li>Never use credit to pay credit — cash advances on cards to service loans accelerate the problem</li>
+   <li>Try Snowball if you feel overwhelmed; try Avalanche if you are disciplined</li>
+   <li>Once a debt is cleared, do not replace it — redirect the payment to savings</li>`,
+  `Personal loans in Botswana often carry rates of 25–30% per year (NBFIRA caps unsecured credit at 30%). These are the debts to attack aggressively with the Avalanche method. Store accounts — Woolworths, Legae, and others — also carry high rates. Clear these before putting money into investments; no investment reliably returns 30%.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('debt_snowball_planner.html')">💳 Open Debt Planner →</button>`
+),
+
+'Building Your Safety Net': _art(
+  `<p style="margin:0 0 14px">An emergency fund is money set aside for unplanned expenses — a medical bill, a car repair, sudden job loss. It sits in a separate, accessible account and is touched only for genuine emergencies.</p>
+   <p style="margin:0 0 14px">Without one, every unexpected expense goes on credit. And credit-funded emergencies spiral: you borrow to fix the problem, pay interest for months, which tightens your budget, which leaves you with no savings, which means the next emergency also goes on credit.</p>
+   <p style="margin:0 0 14px">The target is <strong>3 to 6 months of essential living expenses</strong>. If your monthly needs are P6,000, your target is P18,000–P36,000. That sounds large. Start with P1,000 as your first milestone, then P5,000, then three months. The habit matters more than the size at the start.</p>
+   <p style="margin:0">Replenish it immediately after using it. An emergency fund you drain and never refill is a one-time loan to yourself.</p>`,
+  `<li>Keep the fund in a separate account — not your day-to-day account</li>
+   <li>Do not invest it in volatile assets — it must be accessible within 1–2 business days</li>
+   <li>A car repair, appliance breakdown, or medical expense are valid uses. A sale or holiday is not</li>
+   <li>Once you hit 3 months, keep going to 6 months for greater security</li>`,
+  `A 32-day notice account with a local bank is ideal — better interest than a current account, and the notice period adds friction against impulsive withdrawals. FNBB and Stanbic Botswana offer competitive notice account rates. Some people use a separate bank entirely so the balance is "out of sight, out of mind."`,
+  `<button class="btn btn-primary btn-sm" onclick="go('emergency')">🆘 Open Emergency Fund Planner →</button>`
+),
+
+'The Power of Compound Growth': _art(
+  `<p style="margin:0 0 14px">Compound growth means earning returns not just on your original investment, but on all previous returns as well. Growth on top of growth. Over time, the effect is staggering.</p>
+   <p style="margin:0 0 14px">A simple example: P1,000 invested at 10% per year becomes P1,100 after year one. In year two you earn 10% on P1,100 — that's P1,210. By year 30, that original P1,000 is worth over P17,000 — without adding another pula.</p>
+   <p style="margin:0 0 14px">Now apply this to monthly contributions. P500 per month invested from age 25 at 10% return grows to roughly P1.9 million by age 60. Start at 35 with the same P500/month and you end up with only P680,000. Same amount of money, ten years less time — and you lose over P1.2 million. <strong>Time is the most important variable.</strong></p>
+   <p style="margin:0">This is why retirement planning cannot wait. Every year you delay costs you exponentially — not just linearly.</p>`,
+  `<li>Start contributing to retirement the day you receive your first paycheck — even a small amount</li>
+   <li>Reinvest all dividends and interest — this is what accelerates compounding</li>
+   <li>Never withdraw retirement savings when changing jobs — preserve or transfer instead</li>
+   <li>Increase contributions with every salary increase before lifestyle adjusts</li>`,
+  `BPOPF (Botswana Public Officers Pension Fund) members are already benefiting from compound growth on a defined benefit basis. Private sector employees on defined contribution funds are more directly exposed to investment performance — and more vulnerable to the mistake of cashing out on resignation. Preserve your pension on every job change; transfer to a preservation fund rather than taking the cash.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('retirement_calculator.html')">🎯 Open Retirement Planner →</button>`
+),
+
+'Why Insurance Matters': _art(
+  `<p style="margin:0 0 14px">Insurance seems like an abstract expense right up until the moment you need it. Then it becomes the most important financial decision you ever made.</p>
+   <p style="margin:0 0 14px">Your financial plan rests on assumptions: you will keep earning, your health will hold, your car will run. Insurance protects those assumptions. A single catastrophic event — serious illness, disability, the death of a breadwinner — can erase years of savings in months.</p>
+   <p style="margin:0 0 14px"><strong>Life insurance</strong> replaces your income for dependants who rely on you. If you have a spouse, children, or parents who depend on your salary, cover is not optional. <strong>Medical aid</strong> protects you from the catastrophic cost of hospitalisation. <strong>Car insurance</strong> protects an asset you likely borrowed money to buy.</p>
+   <p style="margin:0">The key principle: insure what you cannot afford to replace or absorb. You can absorb a P500 phone repair. You cannot absorb a P400,000 cancer treatment.</p>`,
+  `<li>Start with life insurance and medical aid — highest impact first</li>
+   <li>Review coverage annually as life changes: marriage, children, salary increases</li>
+   <li>Read your policy before you need it — understand exclusions and waiting periods</li>
+   <li>Do not over-insure items you could self-insure (low-value electronics, minor gadgets)</li>`,
+  `Major life insurers in Botswana include Botswana Life, Metropolitan Life, Old Mutual Botswana, and Liberty Life. Government employees are covered by BPOPF for death and disability — private sector employees should check whether their employer provides group life cover and supplement where needed. PIMS and BIFM manage pension-linked insurance products. Use our Life Insurance Calculator to find your exact coverage need.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('life_insurance_calculator.html')">🛡️ Calculate Your Cover Need →</button>`
+),
+
+'Investment Basics': _art(
+  `<p style="margin:0 0 14px">Saving money preserves your wealth. Investing grows it. The distinction matters: savings instruments typically earn below-inflation returns, while investments in equities, property, or bonds aim to beat inflation over the long run — building real wealth.</p>
+   <p style="margin:0 0 14px">The foundation of investing is the <strong>risk vs return trade-off</strong>. Higher potential returns come with higher risk (more volatility). Lower-risk investments are more stable but grow more slowly. Your investment mix — your portfolio — should reflect your time horizon and how much volatility you can stomach emotionally.</p>
+   <p style="margin:0 0 14px"><strong>Asset classes to know:</strong> Equities (shares) offer the highest long-run returns with the most short-term volatility. Bonds (loans to governments or companies) are lower risk. Property is a good inflation hedge. Cash and money market accounts are stable but rarely beat inflation over 10+ years.</p>
+   <p style="margin:0"><strong>Diversification</strong> — spreading money across asset classes and geographies — reduces risk without proportionally reducing return. It is the closest thing to a free lunch in investing.</p>`,
+  `<li>Start with a unit trust or ETF if you are new — low cost and automatically diversified</li>
+   <li>Never invest money you might need within 2 years in volatile assets</li>
+   <li>Time in the market beats timing the market — stay invested through downturns</li>
+   <li>Reinvest all returns during the growth phase; only draw income when you need it</li>`,
+  `BIFM (Botswana Insurance Fund Management), Stanbic Investments, and Allan Gray Botswana all offer unit trusts and retirement annuities accessible to Batswana. The Botswana Stock Exchange (BSE) lists local shares including Letshego, Sefalana, Chobe Holdings, and ABSA Botswana. Explore options through a financial advisor registered with NBFIRA (Non-Bank Financial Institutions Regulatory Authority).`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('investment_calculator.html')">📈 Open Investment Calculator →</button>`
+),
+
+'Financial Stress & Wellbeing': _art(
+  `<p style="margin:0 0 14px">Money is the number one source of stress for most people globally — and Botswana is no exception. Financial stress affects sleep, relationships, work performance, and physical health. It is real, widespread, and nothing to be ashamed of.</p>
+   <p style="margin:0 0 14px">The first step is acknowledgement. Many people feel paralysed by financial stress and avoid looking at their situation entirely — unopened bank statements, ignored debt letters. Avoidance feels safer in the moment but compounds the problem. The numbers do not change because you are not looking; they just get worse without intervention.</p>
+   <p style="margin:0 0 14px">Financial wellbeing is not about being rich. It is about <strong>feeling in control of your money</strong>, being able to handle an unexpected expense, and feeling confident about your financial future. These things are achievable at almost any income level with the right habits and support.</p>
+   <p style="margin:0">Making a plan — even an imperfect one — immediately reduces the psychological weight of financial stress. Action is almost always less painful than anticipation.</p>`,
+  `<li>Name the source of stress specifically: is it debt, low income, overspending, or lack of savings?</li>
+   <li>Focus on one thing at a time — trying to fix everything at once leads to paralysis</li>
+   <li>Track spending for 30 days without judging yourself — awareness comes before action</li>
+   <li>Talk to someone: a trusted friend, a financial coach, or a wellness professional</li>`,
+  `Key Wellness offers one-on-one financial coaching sessions designed to help you make sense of your situation without judgement. If financial stress is significantly affecting your mental health, Employee Assistance Programmes (EAPs) offered through many Botswana employers also include counselling services. You are not alone — and you are not stuck.`,
+  `<button class="btn btn-primary btn-sm" onclick="go('booking')">📅 Book a Coaching Session →</button>`
+),
+
+'Understanding Your Payslip': _art(
+  `<p style="margin:0 0 14px">Your payslip is a monthly document most people glance at and file away. It contains critical information that every earner should understand — because what happens between your gross salary and your bank account has direct implications for your financial planning.</p>
+   <p style="margin:0 0 14px">Your <strong>gross salary</strong> is what you are contracted to earn before any deductions. This is the number in your employment offer and the figure banks use for bond and loan affordability calculations. Your <strong>net salary</strong> (take-home pay) is what actually arrives in your account — the difference can be 20–40% of gross.</p>
+   <p style="margin:0 0 14px"><strong>Common deductions:</strong> PAYE (income tax withheld by your employer on behalf of BURS), employee pension contribution (typically 5–10% of salary with employer matching), medical aid premium, and possibly a UB Levy or Skills Development Levy. Understanding each line tells you exactly where your money goes before you ever see it.</p>
+   <p style="margin:0">If any deduction looks incorrect, ask your HR or payroll department for a line-by-line breakdown. Errors do occur — particularly with pension contributions.</p>`,
+  `<li>Know your gross salary — it is the basis for all loan and bond applications</li>
+   <li>Verify your pension contribution appears every month — missing contributions are hard to recover later</li>
+   <li>Understand your medical aid deduction and what plan/tier you are on</li>
+   <li>Keep payslips for at least 3 years — needed for tax, loan applications, and audits</li>`,
+  `BURS administers PAYE in Botswana. If you earn under the tax-free threshold (approximately P36,000 per year, check burs.org.bw for the current figure), no PAYE is deducted. Above this, tax is calculated on tiered bands — 5%, 12.5%, 18.75%, and 25% depending on your income level. Your employer is responsible for correct deduction and remittance; errors are technically your employer's liability but affect your record if not caught early.`,
+  ``
+),
+
+'Tax Basics for Batswana': _art(
+  `<p style="margin:0 0 14px">Understanding tax is not just for accountants. Every working resident of Botswana either pays tax or has it withheld on their behalf — and knowing the basics helps you plan better, avoid surprises, and keep more of what you earn legally.</p>
+   <p style="margin:0 0 14px"><strong>PAYE (Pay As You Earn):</strong> If you are employed, your employer deducts income tax from each payslip and remits it to BURS (Botswana Unified Revenue Service) on your behalf. Most employees do not need to file a separate return unless they have income from other sources.</p>
+   <p style="margin:0 0 14px"><strong>Approximate tax bands (verify current bands at burs.org.bw):</strong> P0–P36,000/year at 0%; P36,001–P72,000 at 5%; P72,001–P108,000 at 12.5%; P108,001–P144,000 at 18.75%; above P144,000 at 25%. Tax is calculated on each band — you only pay the higher rate on income above the threshold, not on all income.</p>
+   <p style="margin:0"><strong>Self-employed / business income:</strong> If you run a business or have freelance income, you must register with BURS, file annual returns, and pay provisional tax in two instalments. Legitimate business expenses reduce your taxable income — keep all receipts.</p>`,
+  `<li>Register with BURS if you have any self-employment income — penalties for non-compliance compound quickly</li>
+   <li>Pension contributions to approved funds may be tax-deductible — check with your fund manager</li>
+   <li>Retain financial records for at least 5 years — BURS can audit prior years</li>
+   <li>Use a registered tax consultant for business returns or if you have multiple income sources</li>`,
+  `BURS has a self-service portal at burs.org.bw where you can register, file returns, and make payments. Tax compliance has become increasingly enforced in Botswana — late filing and payment attract penalties and interest that can compound significantly. If you are behind on tax, voluntary disclosure typically attracts reduced penalties compared to being discovered in an audit.`,
+  ``
+),
+
+'Pension Funds Explained': _art(
+  `<p style="margin:0 0 14px">A pension fund is a long-term savings vehicle designed specifically for retirement. Contributions are made during your working years, invested by professional fund managers, and paid out as a lump sum or monthly income when you retire.</p>
+   <p style="margin:0 0 14px"><strong>BPOPF (Botswana Public Officers Pension Fund)</strong> covers civil servants, teachers, nurses, police, and defence force. Both you and the government contribute. At retirement, you receive a lump sum and a monthly pension. BPOPF is a <em>defined benefit</em> fund — your benefit is calculated on years of service and final salary, providing predictable retirement income.</p>
+   <p style="margin:0 0 14px"><strong>Private sector funds</strong> are typically <em>defined contribution</em> — your retirement balance is the sum of what you and your employer contributed, plus investment returns. Performance matters more, and so do your contribution choices if your fund offers investment options.</p>
+   <p style="margin:0"><strong>The most costly pension mistake</strong>: cashing out when you change jobs. Many Batswana take their pension as a lump sum on resignation and spend it. This destroys years of compound growth and leaves you starting from zero at the next employer.</p>`,
+  `<li>Never cash out your pension when changing jobs — transfer to a preservation fund or new employer fund</li>
+   <li>Check your pension statement annually — verify contributions are correct and review investment options</li>
+   <li>Understand your vesting period — how long you must work before you are entitled to the employer portion</li>
+   <li>If self-employed, a Retirement Annuity (RA) is your pension equivalent</li>`,
+  `Private sector occupational funds in Botswana are regulated by NBFIRA. BIFM, Allan Gray, Stanlib, and Sanlam are among the major fund managers. If you are self-employed with no employer fund, a Retirement Annuity (RA) with a licensed provider builds retirement savings and may offer tax deductibility. Contributions are typically locked in until age 55, preserving the funds for their intended purpose.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('retirement_calculator.html')">🎯 Project Your Retirement →</button>`
+),
+
+'Renting vs Buying in Botswana': _art(
+  `<p style="margin:0 0 14px">Renting vs buying is one of the biggest financial decisions most people face. The right answer depends entirely on your circumstances — there is no universal rule, despite what many people tell you.</p>
+   <p style="margin:0 0 14px"><strong>Renting advantages:</strong> Flexibility to move, no maintenance liability, lower upfront commitment, and capital free for other investments. In a high-interest-rate environment, renting is often cheaper than servicing a bond on the same property — especially in the short term.</p>
+   <p style="margin:0 0 14px"><strong>Buying advantages:</strong> Builds equity over time, asset that may appreciate, fixed monthly payment, no landlord risk, and long-term stability. Over 20–30 years, owned property typically becomes a major wealth asset — particularly when the bond is paid off and you own the property outright.</p>
+   <p style="margin:0"><strong>The 5-year rule:</strong> If you plan to stay in one place for fewer than 5 years, renting is usually the better financial choice. The transaction costs of buying and selling — transfer duty, legal fees, estate agent commissions — erode any equity gained in the short term.</p>`,
+  `<li>Get pre-qualified for a bond before house hunting — know your budget before falling in love with a property</li>
+   <li>Factor in all buying costs: deposit (10–20%), transfer duty, legal fees, and bond registration</li>
+   <li>Monthly bond repayment should not exceed 30% of gross income under Botswana bank guidelines</li>
+   <li>Leasehold vs freehold title matters for finance — banks generally only lend on titled leasehold land</li>`,
+  `At ~8.75% prime rate, a P600,000 bond costs roughly P5,400–P5,800 per month over 20 years. SHHA provides subsidised housing for qualifying low-income earners in peri-urban areas. BHC (Botswana Housing Corporation) offers rental and rent-to-buy schemes in urban centres. For mortgage finance, compare rates from FNBB, Stanbic, ABSA, and Standard Chartered — rates and conditions vary and negotiation is possible, especially for large loans or long-standing clients.`,
+  `<button class="btn btn-primary btn-sm" onclick="openTool('rent_vs_buy.html')">🏡 Compare Rent vs Buy →</button>`
+),
+
+'Building a Side Income': _art(
+  `<p style="margin:0 0 14px">One salary is a single point of failure. If it disappears — through retrenchment, illness, or business closure — your entire income vanishes with it. A side income creates financial resilience, accelerates debt payoff, and speeds up every savings goal you have.</p>
+   <p style="margin:0 0 14px">A side income does not need to be a full business. It can be a skill you monetise occasionally, an asset that earns passively, or a small operation you run evenings and weekends. <strong>Skills-based</strong> options — tutoring, graphic design, writing, accounting, photography, hair, catering — can begin with zero capital using abilities you already have. <strong>Trading and retail</strong> — a tuck shop, produce stall, or re-selling — requires startup capital but serves established demand. <strong>Asset-based</strong> income — renting a room, a car, or equipment — earns while you are doing other things.</p>
+   <p style="margin:0 0 14px"><strong>Online and digital</strong> options have opened up significantly: Facebook Marketplace, freelancing on Upwork or Fiverr, creating content, online tutoring. Many Batswana now earn in foreign currency from international clients while living locally.</p>
+   <p style="margin:0">The most important rule: invest the side income. Do not let it simply fund a higher lifestyle. Route it directly to debt payoff, your emergency fund, or investments.</p>`,
+  `<li>Declare side income to BURS — undeclared income is a liability that compounds with penalties</li>
+   <li>Open a separate bank account for side income and expenses from day one</li>
+   <li>Do not quit your job until side income replaces at least 70% of your salary for 6+ consecutive months</li>
+   <li>Invest side income rather than lifestyle-inflating with it</li>`,
+  `Botswana has a growing SME support ecosystem. CEDA (Citizen Entrepreneurial Development Agency) offers subsidised funding and mentorship. LEA (Local Enterprise Authority) provides business training and market access support. If formalising a business, register with CIPA (Companies and Intellectual Property Authority) and BURS. Many of Botswana's thriving businesses started as someone's side income on evenings and weekends.`,
+  ``
+),
+
+'Teaching Kids About Money': _art(
+  `<p style="margin:0 0 14px">Financial habits are formed in childhood. Children who understand money before they reach adulthood have a significant advantage — and those lessons come primarily from home, not school. The conversations you have (and the ones you avoid) shape how your children will manage money for the rest of their lives.</p>
+   <p style="margin:0 0 14px">You do not need a curriculum. Children learn financial habits by watching how adults in their home treat money — how purchasing decisions are made, whether saving is normalised, and how stress about money is handled. <strong>Start early, keep it simple, and make it practical.</strong></p>
+   <p style="margin:0 0 14px">By <strong>ages 4–6:</strong> Introduce "enough money" and "not enough money." Use a clear jar so they can see coins accumulate. By <strong>ages 7–10:</strong> Give a small allowance and let them make spending decisions — and experience consequences. Introduce a three-jar system: spend, save, give. By <strong>ages 11–14:</strong> Open a junior savings account. Explain interest and saving toward a goal. By <strong>ages 15–18:</strong> Involve them in household budgeting conversations. Discuss how loans, debt, and compound growth work.</p>
+   <p style="margin:0">Let children make small financial mistakes while the stakes are low. A bad spending decision at age 9 is an education. The same decision at 25 is a crisis.</p>`,
+  `<li>Talk openly about money — secrecy creates anxiety and poor financial modelling</li>
+   <li>Let children experience the consequences of spending decisions (no bail-outs for blowing an allowance)</li>
+   <li>Frame saving as exciting ("your money is growing") not punishing ("you cannot spend this")</li>
+   <li>Match their savings contributions toward big goals — teaches the concept of employer matching and incentives</li>`,
+  `Several Botswana banks offer children's savings accounts with no monthly fees — Stanbic PureSave, FNBB Junior Savings, and ABSA Kids Account are worth exploring. Teaching a child to save P50 per week from age 10 to 18 builds a meaningful lump sum before university — and more importantly, a habit that lasts a lifetime. The goal is not the balance; it is the behaviour.`,
+  ``
+),
+
+};
 
 VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
@@ -1487,25 +1692,30 @@ VIEWS['learn'] = function (tab) {
 window.showArticle = function (idx) {
   const c = CONTENT[idx];
   const el = document.getElementById('page-content');
-  const extras = {
-    'The 50/30/20 Rule': `<div style="background:var(--cream);border-radius:var(--radius-sm);padding:18px;margin:16px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
-      <div><div style="font-size:26px;font-weight:800;color:var(--navy)">50%</div><div style="font-size:12px;font-weight:600">Needs</div><div style="font-size:11px;color:var(--muted)">Rent, food, bills</div></div>
-      <div><div style="font-size:26px;font-weight:800;color:var(--gold)">30%</div><div style="font-size:12px;font-weight:600">Wants</div><div style="font-size:11px;color:var(--muted)">Dining, leisure</div></div>
-      <div><div style="font-size:26px;font-weight:800;color:var(--green)">20%</div><div style="font-size:12px;font-weight:600">Savings</div><div style="font-size:11px;color:var(--muted)">Fund, debt, invest</div></div>
-    </div>`,
-    'Building Your Safety Net': `<button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="go('emergency')">Open Emergency Fund Planner →</button>`,
-  };
+  const body = ARTICLE_BODIES[c.title] || `<p style="font-size:14px;line-height:1.8;color:#374151">${c.desc}</p>`;
   el.innerHTML = `
-    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:18px">← Back to Learn</button>
-    <div class="card" style="max-width:680px">
-      <div style="font-size:44px;margin-bottom:10px">${c.icon}</div>
-      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">${c.cat}</div>
-      <h2 style="font-size:20px;margin-bottom:14px">${c.title}</h2>
-      <p style="font-size:14px;line-height:1.7;color:var(--muted)">${c.desc}</p>
-      ${extras[c.title]||''}
-      <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
-        <button class="btn btn-navy" onclick="go('booking')">📅 Book a Coach</button>
+    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:20px">← Back to Articles</button>
+    <div style="max-width:700px">
+      <div class="card" style="margin-bottom:0">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid var(--border)">
+          <div style="font-size:46px;line-height:1">${c.icon}</div>
+          <div>
+            <div style="font-size:10px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">${c.cat}</div>
+            <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px;line-height:1.3">${c.title}</h2>
+            <div style="font-size:11px;color:var(--muted)">⏱ ${c.mins || 4} min read &nbsp;·&nbsp; Key Wellness Financial Education</div>
+          </div>
+        </div>
+        <!-- Lead summary -->
+        <p style="font-size:14px;line-height:1.75;color:var(--muted);margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);font-style:italic">${c.desc}</p>
+        <!-- Full body -->
+        ${body}
+        <!-- Footer actions -->
+        <div style="margin-top:28px;padding-top:18px;border-top:2px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
+          <button class="btn btn-outline" onclick="go('booking')">📅 Book a Coach</button>
+          <button class="btn btn-outline" onclick="go('learn')" style="margin-left:auto">← More Articles</button>
+        </div>
       </div>
     </div>`;
 };
