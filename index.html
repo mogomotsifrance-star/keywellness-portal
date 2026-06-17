@@ -620,12 +620,21 @@ async function saveUser() {
 
 function saveBadges() {
   if (!currentUser) return;
-  sb.from('badges').upsert({
-    user_id: currentUser.id,
-    earned_badge_ids: state.badges.earned,
-    points: state.badges.points,
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id' }).then(() => {}).catch(console.error);
+  // Fetch existing row first to decide update vs insert (avoids duplicate rows)
+  sb.from('badges').select('id').eq('user_id', currentUser.id).maybeSingle()
+    .then(({ data }) => {
+      const payload = {
+        user_id: currentUser.id,
+        earned_badge_ids: state.badges.earned,
+        points: state.badges.points,
+        updated_at: new Date().toISOString()
+      };
+      if (data?.id) {
+        return sb.from('badges').update(payload).eq('id', data.id);
+      } else {
+        return sb.from('badges').insert(payload);
+      }
+    }).catch(console.error);
 }
 
 function saveEF(data) {
@@ -738,8 +747,13 @@ function buildNav(current) {
     <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="bn-icon">${n.icon}</span>${n.label}
     </div>`).join('');
-  document.getElementById('sb-pts').textContent = state.badges.points;
+  refreshPointsUI();
   document.getElementById('sb-email').textContent = currentUser?.email || '';
+}
+
+function refreshPointsUI() {
+  const el = document.getElementById('sb-pts');
+  if (el) el.textContent = state.badges.points || 0;
 }
 
 // ══════════════════════════════════════════════════
@@ -792,8 +806,7 @@ function awardBadge(id) {
   state.badges.earned.push(id);
   state.badges.points += def.pts;
   saveBadges();
-  const el = document.getElementById('sb-pts');
-  if (el) el.textContent = state.badges.points;
+  refreshPointsUI();
   showToast(`🏆 Badge earned: ${def.name} (+${def.pts} pts)`);
 }
 
@@ -2780,7 +2793,8 @@ window.markVideoWatched = function (btn, title) {
   const bk = JSON.parse(localStorage.getItem('kw_badges')||'{"earned":[],"points":0}');
   bk.points = state.badges.points;
   localStorage.setItem('kw_badges', JSON.stringify(bk));
-  document.getElementById('sb-pts').textContent = state.badges.points;
+  refreshPointsUI();
+  saveBadges();
   // Update button
   btn.textContent = '✓ Watched';
   btn.classList.add('watched');
@@ -2924,7 +2938,7 @@ async function init() {
     if (_c.firstName || _c.displayName) {
       state.user = { first_name: _c.firstName||'', last_name: _c.lastName||'' };
     }
-    loadAllData().then(() => initProfileUI()).catch(()=>{});
+    loadAllData().then(() => { initProfileUI(); refreshPointsUI(); }).catch(()=>{});
   }
   initProfileUI();
   loadNotifications();
@@ -2944,6 +2958,7 @@ async function init() {
       // Load all data in the background
       loadAllData().then(() => {
         initProfileUI();
+        refreshPointsUI();
         // Show name-capture modal for existing users who have no name set yet
         if (state.user) {
           const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
