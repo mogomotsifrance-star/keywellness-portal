@@ -385,6 +385,33 @@ input[type=range]{width:100%;accent-color:var(--gold)}
   </div>
 </div>
 
+<!-- ══ DATA PROTECTION CONSENT MODAL ══ -->
+<div id="consent-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1001;align-items:center;justify-content:center;padding:20px">
+  <div class="welcome-modal-box" style="max-width:520px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
+    <h2 style="margin-bottom:6px">🔒 Data Protection &amp; Confidentiality</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Please read and accept our data protection statement before accessing the portal.</p>
+    <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px;max-height:280px;overflow-y:auto;border:1px solid var(--border)">
+      <p style="font-weight:700;margin-bottom:8px">How We Protect Your Information</p>
+      <p style="margin-bottom:10px">Key Wellness is committed to protecting your personal and financial data. By using this portal, you agree to the following:</p>
+      <ul style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
+        <li><strong>Secure Storage:</strong> Your data is stored securely on encrypted servers (Supabase / PostgreSQL) and is accessible only by you and authorised Key Wellness advisors.</li>
+        <li><strong>Purpose Limitation:</strong> Your information is used exclusively for financial wellness coaching, assessments, and personalised recommendations. It will not be used for any other purpose.</li>
+        <li><strong>No Third-Party Sharing:</strong> Your personal and financial data will not be sold, rented, or shared with any third parties outside of Key Wellness without your explicit written consent.</li>
+        <li><strong>Advisor Access:</strong> Your assigned Key Wellness coach may view your wellness scores, goals, and assessment results to provide coaching support. This is limited to service delivery only.</li>
+        <li><strong>Your Rights:</strong> You have the right to request access to your data, correction of inaccuracies, and deletion of your account and all associated data at any time by contacting wellness@keywellness.co.bw.</li>
+        <li><strong>Botswana Data Protection:</strong> This portal operates in accordance with the data protection principles of the Republic of Botswana and applicable privacy legislation.</li>
+        <li><strong>Data Retention:</strong> Your data is retained for as long as your account is active. Upon account deletion, all personal data is removed within 30 days.</li>
+      </ul>
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="consent-check" style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="document.getElementById('consent-btn').disabled=!this.checked">
+      <span style="font-size:13px;font-weight:500;color:var(--navy)">I have read and agree to the Key Wellness Data Protection and Confidentiality Statement.</span>
+    </label>
+    <button id="consent-btn" class="btn btn-primary" style="width:100%;padding:12px;justify-content:center" disabled onclick="acceptConsent()">Continue to Portal →</button>
+  </div>
+</div>
+
 <!-- ══ WELCOME VIDEO MODAL ══ -->
 <div id="welcome-modal">
   <div class="welcome-modal-box">
@@ -394,10 +421,10 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <div id="welcome-video-area">
       <iframe class="video-embed" src="https://www.youtube.com/embed/xMV5CDMuHGU" title="Welcome to Key Wellness" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
     </div>
-    <div style="display:flex;gap:10px;margin-top:8px">
-      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
-      <button class="btn btn-outline" onclick="closeWelcome()">Skip</button>
+    <div id="welcome-start-wrap" style="display:none;margin-top:8px">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
     </div>
+    <div id="welcome-wait-msg" style="margin-top:8px;text-align:center;font-size:12px;color:var(--muted)">Please watch the video first — the button will appear shortly.</div>
   </div>
 </div>
 
@@ -803,12 +830,11 @@ function fmtDate(iso) {
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age_group:'', income_range:'', employment:'', goals:[] };
+  const profile = { first_name:'', last_name:'', age:'', income_range:'', employment:'', goals:[] };
 
   const steps = [
     { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
-    { q:'What is your age group?', hint:'Helps us tailor advice to your life stage.', key:'age_group', type:'single',
-      opts:[{i:'🎓',l:'18–25'},{i:'💼',l:'26–35'},{i:'🏠',l:'36–45'},{i:'📈',l:'46–55'},{i:'🌅',l:'56+'}] },
+    { q:'How old are you?', hint:'Your exact age helps us calculate accurate retirement projections and tailor advice to your life stage.', key:'age', type:'age' },
     { q:'What is your monthly income range?', hint:'In Botswana Pula (BWP).', key:'income_range', type:'single',
       opts:[{i:'💸',l:'Under P3,000'},{i:'💵',l:'P3,000–P8,000'},{i:'💰',l:'P8,000–P15,000'},{i:'🏦',l:'P15,000–P30,000'},{i:'💎',l:'Over P30,000'}] },
     { q:'What is your employment status?', hint:'We will personalise your plan.', key:'employment', type:'single',
@@ -827,7 +853,16 @@ VIEWS['onboarding'] = function () {
           <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of ${steps.length}</div>
           <div style="font-size:20px;font-weight:700;margin-bottom:6px">${s.q}</div>
           <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${s.hint}</div>
-          ${isNames ? `
+          ${s.type==='age' ? `
+            <div style="max-width:200px;margin-bottom:8px">
+              <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
+                style="width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:24px;font-weight:700;background:var(--cream);outline:none;font-family:'DM Mono',monospace;text-align:center"
+                oninput="document.getElementById('onb-age-err').style.display='none';document.getElementById('w-next').disabled=!this.value"
+                onkeydown="if(event.key==='Enter')wNext()">
+              <div style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">years old</div>
+            </div>
+            <p id="onb-age-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ Please enter your age (18–80).</p>
+          ` : isNames ? `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
               <div>
                 <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First Name <span style="color:var(--gold)">*</span></label>
@@ -855,7 +890,10 @@ VIEWS['onboarding'] = function () {
           </div>
         </div>
       </div>`;
-    if (!isNames) {
+    if (s.type === 'age') {
+      document.getElementById('w-next').disabled = !profile.age;
+      setTimeout(()=>document.getElementById('onb-age')?.focus(), 50);
+    } else if (!isNames) {
       const cg = document.getElementById('cg');
       const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
       cg.innerHTML = s.opts.map((o,i)=>`
@@ -886,6 +924,10 @@ VIEWS['onboarding'] = function () {
       if (!first) { document.getElementById('onb-name-err').style.display=''; return; }
       profile.first_name = first;
       profile.last_name  = last;
+    } else if (s.type === 'age') {
+      const ageVal = parseInt(document.getElementById('onb-age')?.value || '');
+      if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; return; }
+      profile.age = ageVal;
     }
     if (step < steps.length-1) { step++; render(); }
     else { finishOnboarding(); }
@@ -905,7 +947,12 @@ VIEWS['onboarding'] = function () {
       initProfileUI();
     }
     awardBadge('first_login');
-    showWelcomeVideo();
+    // Show consent before welcome video for new users
+    if (!state.user?.consent_accepted) {
+      showConsentModal();
+    } else {
+      showWelcomeVideo();
+    }
   }
 
   render();
@@ -960,7 +1007,20 @@ async function finishAssessment(answers) {
 
   if (!error && data) state.assessments.unshift(data);
 
-  state.user = { ...state.user, last_score: score, last_cat_scores: catScores };
+  // Estimate monthly expenses from localStorage budget snapshot if available
+  let _monthlyExp = 0;
+  try {
+    const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    if (_snap.budget?.expenses) _monthlyExp = _snap.budget.expenses;
+    else {
+      const _bd = JSON.parse(localStorage.getItem('budget_planner_v2')||'{}');
+      const _bk = _bd.currentKey;
+      if (_bk && _bd.budgets?.[_bk]) {
+        _monthlyExp = Object.values(_bd.budgets[_bk].expenses||{}).reduce((s,v)=>s+Number(v||0),0);
+      }
+    }
+  } catch {}
+  state.user = { ...state.user, last_score: score, last_cat_scores: catScores, ...((_monthlyExp > 0) ? { monthly_expenses: _monthlyExp } : {}) };
   await saveUser();
 
   awardBadge('first_assessment');
@@ -1340,15 +1400,43 @@ VIEWS['dashboard'] = async function () {
 };
 
 // ══════════════════════════════════════════════════
+//  DATA PROTECTION CONSENT
+// ══════════════════════════════════════════════════
+function showConsentModal() {
+  const el = document.getElementById('consent-modal');
+  if (el) el.style.display = 'flex';
+}
+
+window.acceptConsent = async function () {
+  const el = document.getElementById('consent-modal');
+  if (el) el.style.display = 'none';
+  const now = new Date().toISOString();
+  if (state.user) {
+    state.user.consent_accepted = true;
+    state.user.consent_date = now;
+    await saveUser();
+  } else if (currentUser) {
+    await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
+  }
+  showWelcomeVideo();
+};
+
+// ══════════════════════════════════════════════════
 //  WELCOME VIDEO
 // ══════════════════════════════════════════════════
 function showWelcomeVideo(){
-  // Personalise the welcome heading with first name if available
   const _wlp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
   const _wn  = _wlp.firstName || state.user?.first_name || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
   document.getElementById('welcome-modal').classList.add('visible');
+  // Show "Start" button after 60 seconds — no skip allowed
+  const _startWrap = document.getElementById('welcome-start-wrap');
+  const _waitMsg   = document.getElementById('welcome-wait-msg');
+  setTimeout(() => {
+    if (_startWrap) _startWrap.style.display = '';
+    if (_waitMsg)   _waitMsg.style.display   = 'none';
+  }, 60000);
 }
 window.closeWelcome = function(){
   document.getElementById('welcome-modal').classList.remove('visible');
@@ -1507,34 +1595,52 @@ window.showArticle = function (idx) {
 // ══════════════════════════════════════════════════
 VIEWS['tools'] = function () {
   const el = document.getElementById('page-content');
-  const tools = [
-    { icon:'💰', name:'Budget Planner',           desc:'Build your monthly budget using the 50/30/20 rule.',            file:'budget_planner.html' },
-    { icon:'📊', name:'Expense Tracker',           desc:'Log and categorise daily spending. Track where money goes.',    file:'expense_tracker.html' },
-    { icon:'🆘', name:'Emergency Fund Planner',    desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
-    { icon:'⚔️',  name:'Debt Snowball Planner',    desc:'List your debts and see your payoff order and timeline.',       file:'debt_snowball.html' },
-    { icon:'📐', name:'Debt-to-Income Calculator', desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
-    { icon:'🎯', name:'Retirement Calculator',     desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
-    { icon:'🏆', name:'Goal Planner',              desc:'Set SMART financial goals and track progress toward each one.', file:'goal_planner.html' },
-    { icon:'💎', name:'Net Worth Tracker',         desc:'Track assets vs liabilities and watch your net worth grow.',    file:'net_worth_tracker.html' },
-    { icon:'🧠', name:'Financial Stress Tracker',  desc:'Log your financial stress levels and spot patterns over time.', file:'financial_stress_tracker.html' },
-    { icon:'🏦', name:'Loan Calculator',           desc:'Calculate monthly repayments, total interest and amortisation.',  file:'loan_calculator.html' },
-    { icon:'📈', name:'Investment Calculator',     desc:'Project how a lump sum and monthly contributions grow over time.', file:'investment_calculator.html' },
-    { icon:'📅', name:'Book a Coach',              desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
+  const financialTools = [
+    { icon:'💰', name:'Budget Planner',         desc:'Build your monthly budget using the 50/30/20 rule.',             file:'budget_planner.html' },
+    { icon:'📊', name:'Expense Tracker',         desc:'Log and categorise daily spending. Track where money goes.',     file:'expense_tracker.html' },
+    { icon:'🏆', name:'Goal Planner',            desc:'Set SMART financial goals and track progress toward each one.',  file:'goal_planner.html' },
+    { icon:'💎', name:'Net Worth Tracker',       desc:'Track assets vs liabilities and watch your net worth grow.',     file:'net_worth_tracker.html' },
+    { icon:'⚔️',  name:'Debt Snowball Planner',  desc:'List your debts and see your payoff order and timeline.',        file:'debt_snowball.html' },
+    { icon:'🧠', name:'Financial Stress Tracker',desc:'Log your financial stress levels and spot patterns over time.',  file:'financial_stress_tracker.html' },
+    { icon:'🆘', name:'Emergency Fund Planner',  desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
   ];
+  const calculators = [
+    { icon:'📐', name:'DTI Calculator',          desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
+    { icon:'🎯', name:'Retirement Calculator',   desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
+    { icon:'🏦', name:'Loan Calculator',         desc:'Calculate monthly repayments, total interest and amortisation.',file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',   desc:'Project how a lump sum and monthly contributions grow over time.',file:'investment_calculator.html' },
+    { icon:'✅', name:'Affordability Calculator',desc:'Check whether you can afford a purchase based on your income.',  file:'affordability_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',             desc:'Compare the true cost of renting versus buying property.',       file:'rent_vs_buy.html' },
+  ];
+
+  function toolCard(t) {
+    return `<div class="card" style="cursor:default">
+      <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
+      <div class="card-title" style="margin-bottom:5px">${t.name}</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
+      ${t.view
+        ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open →</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`}
+    </div>`;
+  }
+
   el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
-      ${tools.map(t=>`
-        <div class="card" style="cursor:default">
-          <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
-          <div class="card-title" style="margin-bottom:5px">${t.name}</div>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
-          ${t.view
-            ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open →</button>`
-            : t.file
-              ? `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`
-              : `<button class="btn btn-outline btn-sm" disabled>Coming Soon</button>`}
-        </div>`).join('')}
+    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action on your finances.</div>
+
+    <div style="margin-bottom:8px">
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">📂 Financial Tools</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Interactive tools that save your data and track your progress over time.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-bottom:28px">
+        ${financialTools.map(toolCard).join('')}
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">🧮 Calculators</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Calculation-only tools to model scenarios — no data is saved.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+        ${calculators.map(toolCard).join('')}
+      </div>
     </div>`;
 };
 
@@ -1551,9 +1657,32 @@ VIEWS['emergency'] = async function () {
     ? { monthly: efData.monthly, current: efData.current_savings, contribution: efData.contribution, target: efData.target_months }
     : { monthly: 0, current: 0, contribution: 0, target: 3 };
 
+  // Pull monthly_expenses from profile for pre-calculated targets
+  const _efMonthlyExp = state.user?.monthly_expenses || 0;
+  const _ef3mo = _efMonthlyExp * 3;
+  const _ef6mo = _efMonthlyExp * 6;
+  const _efPrefill = _efMonthlyExp > 0 && !saved.monthly;
+
   el.innerHTML = `
     <div style="max-width:660px">
       <div class="notice notice-gold">🆘 <strong>Emergency Fund Planner</strong> — Know your target. Track your progress.</div>
+      ${_efMonthlyExp > 0 ? `
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-title">💡 Recommended Targets (from your profile)</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> from your assessment:</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--orange);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(3);efCalc()">
+            <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px">Minimum (3 months)</div>
+            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef3mo).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Click to use this target</div>
+          </div>
+          <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--green);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(6);efCalc()">
+            <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:4px">Recommended (6 months)</div>
+            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef6mo).toLocaleString()}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:3px">Click to use this target</div>
+          </div>
+        </div>
+      </div>` : ''}
       <div class="card">
         <div class="card-title">Your Target</div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">How many months of essential expenses do you want to cover?</p>
@@ -1565,8 +1694,8 @@ VIEWS['emergency'] = async function () {
         <div class="card-title">Your Numbers</div>
         <div class="field">
           <label>Monthly Essential Expenses (BWP)</label>
-          <input type="number" id="ef-m" value="${saved.monthly||''}" placeholder="e.g. 4500" min="0" oninput="efCalc()">
-          <div class="hint">Rent, food, transport, utilities — basics only, no luxuries</div>
+          <input type="number" id="ef-m" value="${_efPrefill ? _efMonthlyExp : (saved.monthly||'')}" placeholder="e.g. 4500" min="0" oninput="efCalc()">
+          <div class="hint">${_efPrefill ? '💡 Pre-filled from your assessment. Adjust if needed.' : 'Rent, food, transport, utilities — basics only, no luxuries'}</div>
         </div>
         <div class="field">
           <label>Current Emergency Savings (BWP)</label>
@@ -1727,7 +1856,32 @@ VIEWS['progress'] = function () {
   const asc = state.assessments.slice(0,8).reverse();
   const csc = state.checkins.slice(0,8).reverse();
 
+  // Next assessment notice
+  const _lastAssess = state.assessments[0];
+  let _assessNotice = '';
+  if (_lastAssess) {
+    const _daysSince = Math.floor((Date.now() - new Date(_lastAssess.created_at).getTime()) / 86400000);
+    const _nextDate  = new Date(_lastAssess.created_at); _nextDate.setDate(_nextDate.getDate() + 30);
+    if (_daysSince >= 30) {
+      _assessNotice = `<div class="notice notice-gold" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+        <span style="font-size:18px">⏰</span>
+        <div style="flex:1"><strong>Assessment due!</strong> Your last assessment was ${_daysSince} days ago. Regular re-assessments track your progress.</div>
+        <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Take Assessment Now →</button>
+      </div>`;
+    } else {
+      const _daysLeft = 30 - _daysSince;
+      _assessNotice = `<div class="notice notice-green" style="margin-bottom:18px">✅ <strong>You're on track.</strong> Your next assessment is recommended on <strong>${_nextDate.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</strong> (in ${_daysLeft} day${_daysLeft!==1?'s':''}).</div>`;
+    }
+  } else {
+    _assessNotice = `<div class="notice notice-gold" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+      <span style="font-size:18px">📋</span>
+      <div style="flex:1"><strong>No assessment yet.</strong> Complete your first assessment to start tracking your wellness score.</div>
+      <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>
+    </div>`;
+  }
+
   el.innerHTML = `
+    ${_assessNotice}
     <div class="card">
       <div class="card-title">📈 Wellness Score History</div>
       ${asc.length<2
@@ -1858,6 +2012,16 @@ VIEWS['booking'] = function () {
           👆 Your profile is missing ${[nameMissing?'a display name':null,phoneMissing?'a phone number':null].filter(Boolean).join(' and ')}.
           <button class="btn btn-outline btn-sm" onclick="go('profile')" style="margin-left:8px;font-size:.72rem">Complete Profile →</button>
         </div>` : ''}
+        <!-- Session Type -->
+        <div class="card">
+          <div class="card-title">Session Type <span style="color:var(--gold)">*</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <button id="bk-type-inperson" class="bk-type-btn" onclick="bkSetType('In-Person')" style="padding:16px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--cream);cursor:pointer;font-size:.88rem;font-weight:700;color:var(--navy);font-family:inherit;transition:.15s;text-align:center">🏢 In-Person Session</button>
+            <button id="bk-type-virtual" class="bk-type-btn" onclick="bkSetType('Virtual')" style="padding:16px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--cream);cursor:pointer;font-size:.88rem;font-weight:700;color:var(--navy);font-family:inherit;transition:.15s;text-align:center">💻 Virtual Session</button>
+          </div>
+          <div class="bk-field-err" id="bk-err-type" style="margin-top:8px">Please select a session type.</div>
+        </div>
+
         <div class="card">
           <div class="card-title">Select a Service <span style="color:var(--gold)">*</span></div>
           <div class="bk-services-grid">
@@ -1925,7 +2089,20 @@ VIEWS['booking'] = function () {
   document.getElementById('bk-date').min = d.toISOString().split('T')[0];
 };
 
-let _bkService = '', _bkTime = '';
+let _bkService = '', _bkTime = '', _bkSessionType = '';
+
+window.bkSetType = function(type) {
+  _bkSessionType = type;
+  document.getElementById('bk-err-type').classList.remove('show');
+  ['inperson','virtual'].forEach(k => {
+    const btn = document.getElementById('bk-type-'+k);
+    if (!btn) return;
+    const isSelected = (k === 'inperson' && type === 'In-Person') || (k === 'virtual' && type === 'Virtual');
+    btn.style.borderColor = isSelected ? 'var(--gold)' : 'var(--border)';
+    btn.style.background  = isSelected ? '#fffbf2' : 'var(--cream)';
+    btn.style.color       = isSelected ? 'var(--gold)' : 'var(--navy)';
+  });
+};
 
 window.bkSetService = function(val) {
   _bkService = val;
@@ -1954,7 +2131,9 @@ function bkValidate() {
   bkClearErr('date');
   document.getElementById('bk-err-service').classList.remove('show');
   document.getElementById('bk-err-time').classList.remove('show');
+  document.getElementById('bk-err-type').classList.remove('show');
   document.getElementById('bkErrBanner').classList.remove('show');
+  if(!_bkSessionType){ document.getElementById('bk-err-type').classList.add('show'); ok=false; }
   if(!_bkService){ document.getElementById('bk-err-service').classList.add('show'); ok=false; }
   if(!document.getElementById('bk-date').value){
     document.getElementById('bk-err-date').classList.add('show');
@@ -1981,7 +2160,8 @@ window.submitBooking = async function () {
   btn.disabled=true; btn.classList.add('bk-loading');
 
   // Client auto-reply message
-  const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n• Service: ${service}\n• Date: ${dateStr}\n• Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you need to make any changes or have questions, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nLooking forward to supporting your financial wellness journey.\n\nWarm regards,\nKey Wellness Team`;
+  const sessionType = _bkSessionType;
+  const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n• Service: ${service}\n• Session Type: ${sessionType}\n• Date: ${dateStr}\n• Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you need to make any changes or have questions, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nLooking forward to supporting your financial wellness journey.\n\nWarm regards,\nKey Wellness Team`;
 
   try {
     const res = await fetch('https://formsubmit.co/ajax/wellness@keywellness.co.bw', {
@@ -1992,6 +2172,7 @@ window.submitBooking = async function () {
         'Surname':         last,
         'Phone Number':    phone,
         'Email Address':   email,
+        'Session Type':    sessionType,
         'Service':         service,
         'Preferred Date':  dateStr,
         'Preferred Time':  time,
@@ -2014,8 +2195,21 @@ window.submitBooking = async function () {
   }
 
   const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
-  bookings.unshift({id:Date.now(),service,date,time,first,last,email,created:new Date().toISOString()});
+  bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
   localStorage.setItem('kw_bookings', JSON.stringify(bookings));
+  // Save to Supabase bookings table
+  if (currentUser) {
+    sb.from('bookings').insert({
+      user_id: currentUser.id,
+      user_name: `${first} ${last}`.trim(),
+      user_email: email,
+      service,
+      session_type: sessionType,
+      requested_date: date,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    }).then(()=>{}).catch(()=>{});
+  }
   awardBadge('booked_session');
 
   document.getElementById('bkForm').style.display='none';
@@ -2030,7 +2224,11 @@ window.submitBooking = async function () {
 };
 
 window.bkResetForm = function () {
-  _bkService=''; _bkTime='';
+  _bkService=''; _bkTime=''; _bkSessionType='';
+  ['inperson','virtual'].forEach(k => {
+    const btn = document.getElementById('bk-type-'+k);
+    if (btn) { btn.style.borderColor='var(--border)'; btn.style.background='var(--cream)'; btn.style.color='var(--navy)'; }
+  });
   document.getElementById('bkForm').style.display='';
   document.getElementById('bkSuccess').classList.remove('show');
   document.getElementById('bkErrBanner').classList.remove('show');
@@ -2067,9 +2265,23 @@ VIEWS['badges'] = function () {
 // ══════════════════════════════════════════════════
 //  VIEW: MY BOOKINGS
 // ══════════════════════════════════════════════════
-VIEWS['my-bookings'] = function () {
+VIEWS['my-bookings'] = async function () {
   const el = document.getElementById('page-content');
-  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading bookings…</div>';
+
+  // Load from Supabase first, fall back to localStorage
+  let bookings = [];
+  if (currentUser) {
+    const { data } = await sb.from('bookings').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    bookings = data || [];
+  }
+  // Merge localStorage bookings not yet in Supabase
+  const lsBookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  if (!bookings.length && lsBookings.length) bookings = lsBookings;
+
+  const statusColor = { pending:'var(--gold)', confirmed:'var(--green)', cancelled:'var(--red)' };
+  const statusBg    = { pending:'#fffbf2', confirmed:'#f0faf4', cancelled:'#fdf2f2' };
+
   if (!bookings.length) {
     el.innerHTML = `
       <div class="card" style="text-align:center;padding:40px">
@@ -2083,19 +2295,22 @@ VIEWS['my-bookings'] = function () {
   el.innerHTML = `
     <div class="notice notice-gold" style="margin-bottom:18px">🗓️ <strong>Your Sessions</strong> — all coaching sessions you have requested.</div>
     ${bookings.map(b=>{
-      const d = new Date(b.date||b.created);
-      const dateStr = b.date ? new Date(b.date).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—';
+      const status = b.status || 'pending';
+      const dateStr = (b.requested_date||b.date) ? new Date((b.requested_date||b.date)+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—';
       const timeStr = b.time || '—';
-      const createdStr = new Date(b.created).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
-      return `<div class="booking-hist-card">
-        <div class="bh-service">${b.service||'Coaching Session'}</div>
+      const createdStr = new Date(b.created_at||b.created).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      const sType = b.session_type || b.sessionType || '';
+      return `<div class="booking-hist-card" style="border-left-color:${statusColor[status]||'var(--gold)'}">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
+          <div class="bh-service">${b.service||'Coaching Session'}</div>
+          <span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;background:${statusBg[status]||statusBg.pending};color:${statusColor[status]||statusColor.pending}">${status}</span>
+        </div>
         <div class="bh-meta">
           <span>📅 ${dateStr}</span>
-          <span>🕐 ${timeStr}</span>
-          <span>👤 ${b.first||''} ${b.last||''}</span>
+          ${timeStr !== '—' ? `<span>🕐 ${timeStr}</span>` : ''}
+          ${sType ? `<span>${sType === 'Virtual' ? '💻' : '🏢'} ${sType}</span>` : ''}
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-          <div class="bh-status">Requested</div>
           <div style="font-size:11px;color:var(--muted)">Booked ${createdStr}</div>
         </div>
       </div>`;
@@ -2148,6 +2363,12 @@ VIEWS['profile'] = function () {
       </div>
 
       <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Age</label>
+        <input type="number" id="prof-age" min="18" max="80" value="${state.user?.age||''}" placeholder="e.g. 28" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Used for retirement projections</div>
+      </div>
+
+      <div class="field" style="margin-bottom:14px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Email</label>
         <input type="email" class="input" value="${currentUser?.email||''}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
       </div>
@@ -2192,6 +2413,7 @@ window.saveProfile = function () {
   const fname = (document.getElementById('prof-fname')?.value || '').trim();
   const lname = (document.getElementById('prof-lname')?.value || '').trim();
   const phone = document.getElementById('prof-phone').value.trim();
+  const ageVal = parseInt(document.getElementById('prof-age')?.value || '');
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
   prof.firstName   = fname;
   prof.lastName    = lname;
@@ -2202,6 +2424,7 @@ window.saveProfile = function () {
   if (state.user) {
     state.user.first_name = fname;
     state.user.last_name  = lname;
+    if (ageVal && ageVal >= 18 && ageVal <= 80) state.user.age = ageVal;
     saveUser().catch(()=>{});
   }
   const name = prof.displayName;
@@ -2412,12 +2635,15 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
-      // Show name-capture modal for existing users who have no name set yet
-      // (new users going through onboarding will capture name there instead)
       if (state.user) {
         const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+        // Show name-capture modal for existing users who have no name set yet
         if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
           setTimeout(showNameModal, 700);
+        }
+        // Show consent modal for users who haven't accepted yet
+        if (!state.user.consent_accepted) {
+          setTimeout(showConsentModal, 800);
         }
       }
     } else if (event === 'SIGNED_OUT') {

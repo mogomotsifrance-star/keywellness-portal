@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Key Wellness — Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--gold-light:#e8b85a;
+  --cream:#f5f0e8;--cream-dark:#ede7d9;--white:#ffffff;
+  --green:#2d8a4e;--red:#c0392b;--orange:#e67e22;--muted:#6b7280;
+  --text:#1a2744;--border:#ddd6c8;--radius:12px;--radius-sm:8px;
+  --shadow:0 2px 12px rgba(26,39,68,.10);--sidebar-w:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+input,select{font-family:'Inter',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── Sidebar ── */
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+.sb-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo h1{color:#fff;font-size:14px;font-weight:700}
+.sb-logo span{color:var(--gold);font-size:11px;font-weight:500;display:block;margin-top:2px}
+.sb-nav{flex:1;padding:12px 0}
+.sb-item{display:flex;align-items:center;gap:12px;padding:10px 20px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;cursor:pointer;transition:.15s;border-left:3px solid transparent}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.07)}
+.sb-item.active{color:#fff;background:rgba(200,151,58,.15);border-left-color:var(--gold)}
+.sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1)}
+.sb-user{color:rgba(255,255,255,.5);font-size:11px;margin-bottom:10px;word-break:break-all}
+.sb-logout{background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.6);font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;width:100%}
+.sb-logout:hover{background:rgba(255,255,255,.15);color:#fff}
+
+/* ── Main ── */
+#main{margin-left:var(--sidebar-w);flex:1;min-height:100vh}
+.page-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.page-header h2{font-size:19px;font-weight:700;flex:1}
+.page-content{padding:28px 32px}
+
+/* ── Cards ── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:16px;color:var(--navy)}
+
+/* ── Stat boxes ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+.stat-box{background:var(--white);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
+.stat-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--navy)}
+.stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .stat-val{color:var(--gold)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .stat-val{color:var(--green)}
+.stat-box.navy{border-left-color:var(--navy)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:none;transition:.15s;cursor:pointer}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold-light)}
+.btn-outline{background:transparent;color:var(--navy);border:2px solid var(--border)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-navy{background:var(--navy);color:#fff}
+.btn-navy:hover{background:var(--navy-light)}
+.btn-sm{padding:5px 11px;font-size:12px}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:24px}
+.tab{padding:10px 20px;font-size:13px;font-weight:600;border:none;background:transparent;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s}
+.tab.active{color:var(--navy);border-bottom-color:var(--gold)}
+
+/* ── Search ── */
+.search-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+.search-input{flex:1;min-width:200px;padding:9px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none}
+.search-input:focus{border-color:var(--gold);background:#fff}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--navy);color:rgba(255,255,255,.75);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:11px 14px;text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:.15s}
+tbody tr:hover{background:var(--cream)}
+tbody td{padding:12px 14px;vertical-align:middle}
+.score-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace}
+.score-green{background:#f0faf4;color:var(--green)}
+.score-gold{background:#fffbf2;color:var(--gold)}
+.score-orange{background:#fff8f0;color:var(--orange)}
+.score-red{background:#fdf2f2;color:var(--red)}
+.band-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:uppercase;letter-spacing:.04em}
+
+/* ── Status badges for bookings ── */
+.status-pill{display:inline-block;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em}
+.status-pending{background:#fffbf2;color:var(--gold)}
+.status-confirmed{background:#f0faf4;color:var(--green)}
+.status-cancelled{background:#fdf2f2;color:var(--red)}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--white);border-radius:16px;padding:32px;max-width:640px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-header h3{font-size:18px;font-weight:700}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;border-radius:6px}
+.modal-close:hover{color:var(--navy)}
+.modal-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);gap:12px}
+.modal-row:last-child{border-bottom:none}
+.modal-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.modal-val{font-size:14px;font-weight:600;color:var(--navy);text-align:right}
+
+/* ── Progress bar ── */
+.progress-bar{background:var(--cream-dark);border-radius:99px;height:8px;overflow:hidden;margin-top:4px}
+.progress-fill{height:100%;border-radius:99px;background:var(--gold);transition:.4s}
+
+/* ── Gauge mini ── */
+.gauge-wrap{text-align:center;margin-bottom:16px}
+
+/* ── Spinner ── */
+.spinner{display:flex;align-items:center;justify-content:center;padding:60px;color:var(--muted);font-size:14px;gap:10px}
+.spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Empty state ── */
+.empty{text-align:center;padding:48px;color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <h1>KEY WELLNESS</h1>
+    <span>Admin Dashboard</span>
+  </div>
+  <div class="sb-nav">
+    <div class="sb-item active" onclick="showTab('users')"><span>👥</span> Users</div>
+    <div class="sb-item" onclick="showTab('bookings')"><span>📅</span> Appointments</div>
+  </div>
+  <div class="sb-footer">
+    <div class="sb-user" id="sb-admin-email">Loading…</div>
+    <button class="sb-logout" onclick="doLogout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<div id="main">
+  <div class="page-header">
+    <h2 id="page-title">Admin Dashboard</h2>
+    <a href="index.html" style="font-size:12px;color:var(--muted);text-decoration:none">← Back to Portal</a>
+  </div>
+  <div class="page-content" id="page-content">
+    <div class="spinner"><div class="spin"></div> Loading admin data…</div>
+  </div>
+</div>
+
+<!-- ══ USER PROFILE MODAL ══ -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 id="modal-name">User Profile</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modal-body">Loading…</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+const { createClient } = window.supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let allUsers = [];
+let allAssessments = [];
+let allBadges = [];
+let allBookings = [];
+let activeTab = 'users';
+
+// ── Helpers ──
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+function scoreBand(s) {
+  if (s >= 76) return { label:'Thriving',    cls:'score-green',  color:'var(--green)'  };
+  if (s >= 51) return { label:'Progressing', cls:'score-gold',   color:'var(--gold)'   };
+  if (s >= 26) return { label:'Struggling',  cls:'score-orange', color:'var(--orange)' };
+  return             { label:'Critical',   cls:'score-red',    color:'var(--red)'    };
+}
+
+function svgGauge(score, color) {
+  const r = 60, cx = 80, cy = 80;
+  const angle = (score / 100) * 180;
+  const rad = (angle - 180) * Math.PI / 180;
+  const x = cx + r * Math.cos(rad), y = cy + r * Math.sin(rad);
+  return `<svg viewBox="0 0 160 88" width="160" height="88">
+    <path d="M 20 80 A 60 60 0 0 1 140 80" fill="none" stroke="#e5e7eb" stroke-width="12" stroke-linecap="round"/>
+    <path d="M 20 80 A 60 60 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
+    <text x="80" y="75" text-anchor="middle" font-family="DM Mono,monospace" font-size="24" fill="${color}" font-weight="500">${score}</text>
+    <text x="80" y="86" text-anchor="middle" font-family="Inter,sans-serif" font-size="9" fill="#9ca3af">out of 100</text>
+  </svg>`;
+}
+
+// ── Auth ──
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = 'index.html'; return; }
+  currentUser = session.user;
+
+  // Check admins table
+  const { data: adminRow } = await sb.from('admins').select('email').eq('email', currentUser.email).maybeSingle();
+  if (!adminRow) {
+    alert('Access denied. You are not an admin.');
+    window.location.href = 'index.html';
+    return;
+  }
+
+  document.getElementById('sb-admin-email').textContent = currentUser.email;
+  await loadAllData();
+  showTab('users');
+}
+
+async function loadAllData() {
+  const [uR, aR, bR, bkR] = await Promise.all([
+    sb.from('profiles').select('*').order('joined_at', { ascending: false }),
+    sb.from('assessments').select('*').order('created_at', { ascending: false }),
+    sb.from('badges').select('*'),
+    sb.from('bookings').select('*').order('created_at', { ascending: false }),
+  ]);
+  allUsers       = uR.data  || [];
+  allAssessments = aR.data  || [];
+  allBadges      = bR.data  || [];
+  allBookings    = bkR.data || [];
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  window.location.href = 'index.html';
+}
+
+// ── Stats ──
+function buildStats() {
+  const totalUsers = allUsers.length;
+  const assessedUsers = new Set(allAssessments.map(a => a.user_id)).size;
+  const scores = allAssessments.reduce((acc, a) => {
+    if (!acc[a.user_id] || new Date(a.created_at) > new Date(acc[a.user_id].created_at)) acc[a.user_id] = a;
+    return acc;
+  }, {});
+  const scoreVals = Object.values(scores).map(a => a.score);
+  const avgScore = scoreVals.length ? Math.round(scoreVals.reduce((s,v)=>s+v,0)/scoreVals.length) : 0;
+  const totalBookings = allBookings.length;
+
+  return `
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${totalUsers}</div><div class="stat-lbl">Total Users</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${assessedUsers}</div><div class="stat-lbl">Assessments Done</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${avgScore || '—'}</div><div class="stat-lbl">Avg Wellness Score</div></div>
+      <div class="stat-box"><div class="stat-val mono">${totalBookings}</div><div class="stat-lbl">Sessions Booked</div></div>
+    </div>`;
+}
+
+// ── Tab Router ──
+function showTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.sb-item').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && tab === 'users') || (i === 1 && tab === 'bookings'));
+  });
+  document.getElementById('page-title').textContent = tab === 'users' ? 'Users' : 'Appointments';
+  if (tab === 'users') renderUsers();
+  else renderBookings();
+}
+
+// ── Users View ──
+function renderUsers(filter = '', statusFilter = 'all') {
+  const el = document.getElementById('page-content');
+
+  // Build latest assessment lookup
+  const latestAssess = {};
+  allAssessments.forEach(a => {
+    if (!latestAssess[a.user_id] || new Date(a.created_at) > new Date(latestAssess[a.user_id].created_at)) {
+      latestAssess[a.user_id] = a;
+    }
+  });
+
+  const badgeLookup = {};
+  allBadges.forEach(b => { badgeLookup[b.user_id] = b; });
+
+  let users = allUsers;
+  if (filter) {
+    const q = filter.toLowerCase();
+    users = users.filter(u => {
+      const name = `${u.first_name||''} ${u.last_name||}`.toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }
+  if (statusFilter === 'assessed') users = users.filter(u => latestAssess[u.id]);
+  if (statusFilter === 'no-assess') users = users.filter(u => !latestAssess[u.id]);
+
+  el.innerHTML = `
+    ${buildStats()}
+    <div class="card">
+      <div class="card-title">All Users (${users.length})</div>
+      <div class="search-row">
+        <input class="search-input" type="text" placeholder="Search by name or email…" id="user-search" value="${filter}" oninput="renderUsers(this.value, document.getElementById('status-filter').value)">
+        <select id="status-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="renderUsers(document.getElementById('user-search').value, this.value)">
+          <option value="all"${statusFilter==='all'?' selected':''}>All Users</option>
+          <option value="assessed"${statusFilter==='assessed'?' selected':''}>Completed Assessment</option>
+          <option value="no-assess"${statusFilter==='no-assess'?' selected':''}>No Assessment Yet</option>
+        </select>
+      </div>
+      ${users.length === 0 ? '<div class="empty">No users found.</div>' : `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Full Name</th>
+              <th>Email</th>
+              <th>Wellness Score</th>
+              <th>Band</th>
+              <th>Last Assessment</th>
+              <th>Badges</th>
+              <th>Points</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(u => {
+              const a = latestAssess[u.id];
+              const b = badgeLookup[u.id];
+              const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || '—';
+              const score = a ? a.score : null;
+              const band = score !== null ? scoreBand(score) : null;
+              const badgeCount = b ? (b.earned_badge_ids || []).length : 0;
+              const points = b ? (b.points || 0) : 0;
+              return `<tr>
+                <td style="font-weight:600">${name}</td>
+                <td style="color:var(--muted);font-size:12px">${u.id ? (u.email || '—') : '—'}</td>
+                <td>${score !== null ? `<span class="score-badge ${band.cls}">${score}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
+                <td>${band ? `<span class="band-pill" style="background:${band.cls==='score-green'?'#f0faf4':band.cls==='score-gold'?'#fffbf2':band.cls==='score-orange'?'#fff8f0':'#fdf2f2'};color:${band.color}">${band.label}</span>` : '—'}</td>
+                <td style="font-size:12px;color:var(--muted)">${a ? fmtDate(a.created_at) : '—'}</td>
+                <td style="text-align:center">${badgeCount}</td>
+                <td class="mono" style="font-size:12px">${points}</td>
+                <td><button class="btn btn-outline btn-sm" onclick="openUserProfile('${u.id}')">View →</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    </div>`;
+}
+
+// ── User Profile Modal ──
+async function openUserProfile(userId) {
+  document.getElementById('profileModal').classList.add('open');
+  document.getElementById('modal-body').innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
+
+  const user = allUsers.find(u => u.id === userId);
+  if (!user) { document.getElementById('modal-body').innerHTML = '<p>User not found.</p>'; return; }
+  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Unknown';
+  document.getElementById('modal-name').textContent = name;
+
+  const userAssess = allAssessments.filter(a => a.user_id === userId).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const latest = userAssess[0] || null;
+  const userBadge = allBadges.find(b => b.user_id === userId);
+  const badgeCount = userBadge ? (userBadge.earned_badge_ids||[]).length : 0;
+  const points = userBadge ? (userBadge.points||0) : 0;
+
+  // Load EF
+  const { data: efData } = await sb.from('emergency_fund').select('*').eq('user_id', userId).maybeSingle();
+
+  const score = latest?.score ?? null;
+  const band = score !== null ? scoreBand(score) : null;
+
+  let dimHtml = '';
+  if (latest?.cat_scores) {
+    const dims = Object.entries(latest.cat_scores);
+    dimHtml = `<div style="margin-top:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px">Score by Dimension</div>
+      ${dims.map(([cat,s])=>{
+        const pct = s;
+        const col = s>=76?'var(--green)':s>=51?'var(--gold)':s>=26?'var(--orange)':'var(--red)';
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:3px">
+            <span>${cat}</span><span style="color:${col};font-family:'DM Mono',monospace">${s}</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${col}"></div></div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  let efHtml = '';
+  if (efData) {
+    const target = (efData.monthly||0) * (efData.target_months||6);
+    const current = efData.current_savings||0;
+    const pct = target>0 ? Math.min(100,Math.round((current/target)*100)) : 0;
+    efHtml = `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px">Emergency Fund</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+        <span>P${Math.round(current).toLocaleString()} saved</span>
+        <span style="color:var(--muted)">Target: P${Math.round(target).toLocaleString()}</span>
+      </div>
+      <div class="progress-bar" style="height:10px"><div class="progress-fill" style="width:${pct}%;background:${pct>=100?'var(--green)':pct>=50?'var(--gold)':'var(--red)'}"></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${pct}% funded · ${efData.target_months||6} month target</div>
+    </div>`;
+  }
+
+  document.getElementById('modal-body').innerHTML = `
+    ${score !== null ? `<div class="gauge-wrap">${svgGauge(score, band.color)}<div style="font-size:14px;font-weight:700;color:${band.color}">${band.label}</div></div>` : '<div style="text-align:center;padding:20px 0;color:var(--muted)">No assessment completed yet.</div>'}
+    <div class="modal-row"><div><div class="modal-label">Email</div><div class="modal-val" style="font-size:13px">${user.email || user.id}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Joined</div><div class="modal-val">${fmtDate(user.joined_at)}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Age</div><div class="modal-val">${user.age || '—'}</div></div><div><div class="modal-label">Income Range</div><div class="modal-val" style="font-size:12px">${user.income_range || '—'}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Badges</div><div class="modal-val">${badgeCount}</div></div><div><div class="modal-label">Points</div><div class="modal-val mono">${points}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Assessments</div><div class="modal-val">${userAssess.length}</div></div><div><div class="modal-label">Last Assessment</div><div class="modal-val">${fmtDate(latest?.created_at)}</div></div></div>
+    ${dimHtml}
+    ${efHtml}`;
+}
+
+function closeModal() {
+  document.getElementById('profileModal').classList.remove('open');
+}
+
+// ── Bookings View ──
+function renderBookings(filter = '', statusFilter = 'all') {
+  const el = document.getElementById('page-content');
+
+  let bookings = allBookings;
+  if (filter) {
+    const q = filter.toLowerCase();
+    bookings = bookings.filter(b => (b.user_name||'').toLowerCase().includes(q) || (b.user_email||'').toLowerCase().includes(q));
+  }
+  if (statusFilter !== 'all') bookings = bookings.filter(b => (b.status||'pending') === statusFilter);
+
+  el.innerHTML = `
+    ${buildStats()}
+    <div class="card">
+      <div class="card-title">Appointments (${bookings.length})</div>
+      <div class="search-row">
+        <input class="search-input" type="text" placeholder="Search by client name or email…" id="bk-search" value="${filter}" oninput="renderBookings(this.value, document.getElementById('bk-status-filter').value)">
+        <select id="bk-status-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="renderBookings(document.getElementById('bk-search').value, this.value)">
+          <option value="all"${statusFilter==='all'?' selected':''}>All Statuses</option>
+          <option value="pending"${statusFilter==='pending'?' selected':''}>Pending</option>
+          <option value="confirmed"${statusFilter==='confirmed'?' selected':''}>Confirmed</option>
+          <option value="cancelled"${statusFilter==='cancelled'?' selected':''}>Cancelled</option>
+        </select>
+      </div>
+      ${bookings.length === 0 ? '<div class="empty">No appointments found.</div>' : `
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Email</th>
+              <th>Service</th>
+              <th>Session Type</th>
+              <th>Requested Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bookings.map(b => {
+              const status = b.status || 'pending';
+              return `<tr>
+                <td style="font-weight:600">${b.user_name||'—'}</td>
+                <td style="font-size:12px;color:var(--muted)">${b.user_email||'—'}</td>
+                <td style="font-size:12px">${b.service||'—'}</td>
+                <td style="font-size:12px">${b.session_type||'—'}</td>
+                <td style="font-size:12px;color:var(--muted)">${fmtDate(b.requested_date||b.created_at)}</td>
+                <td><span class="status-pill status-${status}">${status}</span></td>
+                <td style="display:flex;gap:6px;flex-wrap:wrap">
+                  ${status==='pending'?`
+                    <button class="btn btn-green btn-sm" onclick="updateBookingStatus('${b.id}','confirmed')">✓ Confirm</button>
+                    <button class="btn btn-red btn-sm" onclick="updateBookingStatus('${b.id}','cancelled')">✕ Cancel</button>`
+                  : status==='confirmed'?`<button class="btn btn-red btn-sm" onclick="updateBookingStatus('${b.id}','cancelled')">✕ Cancel</button>`
+                  : `<button class="btn btn-outline btn-sm" onclick="updateBookingStatus('${b.id}','pending')">↩ Reset</button>`}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`}
+    </div>`;
+}
+
+async function updateBookingStatus(id, status) {
+  await sb.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  // Update local cache
+  const idx = allBookings.findIndex(b => b.id === id);
+  if (idx >= 0) allBookings[idx].status = status;
+  renderBookings(
+    document.getElementById('bk-search')?.value || '',
+    document.getElementById('bk-status-filter')?.value || 'all'
+  );
+}
+
+// ── Start ──
+init();
+</script>
+</body>
+</html>
