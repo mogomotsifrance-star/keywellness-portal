@@ -204,7 +204,8 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
       <h1>Expense Tracker</h1>
       <p>Botswana Pula (BWP) · Monthly budgets · Category breakdown · Trend history</p>
     </div>
-    <div class="header-actions">
+    <div class="header-actions" style="display:flex;align-items:center;gap:8px;">
+      <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid rgba(255,255,255,.25);border-radius:8px;color:rgba(255,255,255,.85);font-size:12px;font-weight:600;background:transparent;text-decoration:none;transition:.15s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='transparent'">← Portal</a>
       <button class="btn btn-ghost btn-sm" onclick="openBudgetModal()">
         <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
         Budgets
