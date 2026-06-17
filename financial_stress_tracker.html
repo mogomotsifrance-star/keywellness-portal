@@ -853,6 +853,8 @@ function exportPDF(){
   doc.setFillColor(...NAVY);doc.rect(0,0,pageW,26,'F');
   doc.setTextColor(...GOLD);doc.setFontSize(15);doc.setFont('helvetica','bold');
   doc.text('Financial Stress Report',14,11);
+  const _pdfName = window._toolFullName || '';
+  if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(...GOLD);doc.text('Client: '+_pdfName,pageW-14,11,{align:'right'}); }
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);
   doc.text(`Botswana Pula Portal  ·  Exported: ${today}`,14,18);
 
@@ -947,16 +949,18 @@ renderAll();
   _sb.auth.getSession().then(({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data, error }) => {
+      if (error) console.warn('Could not load profile for header:', error);
       window._toolProfile = data;
-      if (data) {
-        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-        window._toolFullName = name || session.user.email;
-        const nameEl = document.getElementById('tool-user-name');
-        const initEl = document.getElementById('tool-user-initial');
-        if (nameEl) nameEl.textContent = window._toolFullName;
-        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+      const name = data ? [data.first_name, data.last_name].filter(Boolean).join(' ') : '';
+      window._toolFullName = name || session.user.email || '';
+      const nameEl = document.getElementById('tool-user-name');
+      const initEl = document.getElementById('tool-user-initial');
+      if (nameEl) {
+        if (window._toolFullName) nameEl.textContent = window._toolFullName;
+        else nameEl.style.display = 'none';
       }
+      if (initEl) initEl.textContent = (window._toolFullName || '?').charAt(0).toUpperCase();
     });
   });
 })();

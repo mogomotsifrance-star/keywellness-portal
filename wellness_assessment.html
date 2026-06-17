@@ -918,6 +918,8 @@ function exportPDF(){
   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
   doc.setFillColor(...NAVY);doc.rect(0,0,pageW,28,'F');
   doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,12);
+  const _pdfName = window._toolFullName || '';
+  if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,153,26);doc.text('Client: '+_pdfName,pageW-14,12,{align:'right'}); }
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,19);
   const scoreColor=r.totalScore>=70?[26,140,91]:r.totalScore>=50?[217,119,6]:[192,57,43];
   doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,4,34,20,3,3,'F');
