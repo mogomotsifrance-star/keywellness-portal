@@ -772,7 +772,7 @@ function calculateWellness(){
   if (dimScore('debt')       >= 80) _earnedBadges.push('debt_destroyer');
   if (dimScore('retirement') >= 80) _earnedBadges.push('retirement_planner');
   if (dimScore('insurance')  >= 80) _earnedBadges.push('insurance_hero');
-  // TODO: budget_master has no matching dimension — confirm whether to map to spending dim or to budget_planner
+  if (dimScore('spending')   >= 80) _earnedBadges.push('budget_master');
   KWBadges.award(_earnedBadges);
 
   // Save result to localStorage for dashboard sync
