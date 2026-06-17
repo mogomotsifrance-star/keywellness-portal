@@ -620,13 +620,36 @@ async function saveUser() {
 
 function saveBadges() {
   if (!currentUser) return;
-  // Unique constraint on user_id is now in place — upsert works correctly
   sb.from('badges').upsert({
     user_id: currentUser.id,
     earned_badge_ids: state.badges.earned,
-    points: state.badges.points,
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'user_id' }).catch(console.error);
+    points: state.badges.points
+  }, { onConflict: 'user_id' })
+  .then(({ error }) => { if (error) console.error('[KW] saveBadges error:', error); })
+  .catch(e => console.error('[KW] saveBadges catch:', e));
+}
+
+// Auto-award any badges the user has already earned but weren't saved to Supabase
+function rebuildBadges() {
+  if (!currentUser) return;
+  let changed = false;
+  const award = (id) => {
+    if (state.badges.earned.includes(id)) return;
+    const def = BADGE_DEFS.find(b => b.id === id);
+    if (!def) return;
+    state.badges.earned.push(id);
+    state.badges.points += def.pts;
+    changed = true;
+  };
+  if (state.user?.first_name) award('first_login');
+  if (state.assessments.length >= 1) {
+    award('first_assessment');
+    const latest = state.assessments[0];
+    if (latest?.score >= 75) award('high_scorer');
+  }
+  if (state.checkins.length >= 1) award('check_in_1');
+  if (state.checkins.length >= 3) award('check_in_3');
+  if (changed) { saveBadges(); refreshPointsUI(); }
 }
 
 function saveEF(data) {
@@ -2929,7 +2952,7 @@ async function init() {
     if (_c.firstName || _c.displayName) {
       state.user = { first_name: _c.firstName||'', last_name: _c.lastName||'' };
     }
-    loadAllData().then(() => { initProfileUI(); refreshPointsUI(); }).catch(()=>{});
+    loadAllData().then(() => { rebuildBadges(); initProfileUI(); refreshPointsUI(); }).catch(()=>{});
   }
   initProfileUI();
   refreshPointsUI();
@@ -2948,6 +2971,7 @@ async function init() {
       initProfileUI();
       loadNotifications();
       loadAllData().then(() => {
+        rebuildBadges();
         initProfileUI();
         refreshPointsUI();
         if (state.user) {
