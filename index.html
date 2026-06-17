@@ -1907,11 +1907,17 @@ VIEWS['emergency'] = async function () {
 // ══════════════════════════════════════════════════
 VIEWS['checkin'] = function () {
   const el = document.getElementById('page-content');
-  const vals = { savings:5, debt:5, income:5, expenses:5, stress:5 };
+  const vals = { savings:5, debt:5, income:5, expenses:5 };
+
+  // Pull latest stress score from the standalone tracker
+  const _stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  const _latestStress = _stressLog.length ? _stressLog[_stressLog.length-1] : null;
+  const _stressScore = _latestStress ? _latestStress.level : null;
+  const _stressDays  = _latestStress ? Math.floor((Date.now()-new Date(_latestStress.date))/86400000) : null;
 
   el.innerHTML = `
     <div style="max-width:560px">
-      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month. Your score updates.</div>
+      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month across 4 dimensions. Your score updates the Progress page.</div>
       <div class="card">
         <div class="card-title">How did this month go?</div>
         ${[
@@ -1919,7 +1925,6 @@ VIEWS['checkin'] = function () {
           ['debt','Debt management','1=worsened, 10=improved'],
           ['income','Income stability','1=very unstable, 10=very stable'],
           ['expenses','Expense control','1=overspent, 10=well controlled'],
-          ['stress','Financial stress','1=very stressed, 10=calm'],
         ].map(([k,label,hint])=>`
           <div class="slider-row">
             <label>${label} <span id="v-${k}">5</span>/10</label>
@@ -1934,6 +1939,23 @@ VIEWS['checkin'] = function () {
           <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">50</span>/100</div>
         </div>
         <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()">Save Check-in</button>
+      </div>
+
+      <!-- Stress tracker card -->
+      <div class="card" style="border-left:4px solid var(--orange)">
+        <div class="card-title">😰 Financial Stress</div>
+        ${_latestStress ? `
+          <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+            <div style="font-family:'DM Mono',monospace;font-size:36px;font-weight:700;color:var(--navy)">${_stressScore}<span style="font-size:16px;color:var(--muted)">/10</span></div>
+            <div>
+              <div style="font-size:13px;font-weight:600">Last logged ${_stressDays===0?'today':_stressDays===1?'yesterday':_stressDays+' days ago'}</div>
+              <div style="font-size:12px;color:var(--muted)">${_stressDays>14?'⚠️ Due for an update':'✓ Up to date'}</div>
+            </div>
+          </div>` : `
+          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">You haven't logged a stress level yet. The Financial Stress Tracker helps you spot patterns over time.</p>`}
+        <button class="btn btn-outline" onclick="openTool('financial_stress_tracker.html')" style="width:100%;justify-content:center">
+          😰 ${_latestStress ? 'Update Stress Log' : 'Log Stress Level'} →
+        </button>
       </div>
     </div>`;
 
@@ -1972,6 +1994,10 @@ VIEWS['progress'] = function () {
   const asc = state.assessments.slice(0,8).reverse();
   const csc = state.checkins.slice(0,8).reverse();
 
+  // Stress data from standalone tracker
+  const _stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  const _stressChart = _stressLog.slice(-8);
+
   el.innerHTML = `
     <div class="card">
       <div class="card-title">📈 Wellness Score History</div>
@@ -1984,6 +2010,14 @@ VIEWS['progress'] = function () {
       ${csc.length<1
         ? `<div class="notice notice-gold">No check-ins yet. <button class="btn btn-primary btn-sm" onclick="go('checkin')" style="margin-left:8px">Do First Check-in</button></div>`
         : '<div class="chart-wrap"><canvas id="ci-chart"></canvas></div>'}
+    </div>
+    <div class="card" style="border-left:4px solid var(--orange)">
+      <div class="card-title">😰 Financial Stress History</div>
+      ${_stressChart.length<2
+        ? `<div class="notice notice-gold" style="margin-bottom:12px">Log at least 2 stress entries to see your trend.</div>
+           <button class="btn btn-outline" onclick="openTool('financial_stress_tracker.html')" style="justify-content:center">😰 Open Stress Tracker →</button>`
+        : `<div class="chart-wrap"><canvas id="stress-chart"></canvas></div>
+           <div style="margin-top:12px;text-align:right"><button class="btn btn-outline btn-sm" onclick="openTool('financial_stress_tracker.html')">😰 Open Full Stress Tracker →</button></div>`}
     </div>
     <div class="card">
       <div class="card-title">📅 Assessment Log</div>
@@ -2018,6 +2052,17 @@ VIEWS['progress'] = function () {
         data:{ labels: csc.map(c=>fmtDate(c.created_at)),
           datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score), backgroundColor:'rgba(200,151,58,.7)', borderColor:'#c8973a', borderWidth:2, borderRadius:6 }] },
         options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
+      });
+    }, 100);
+  }
+  if (_stressChart.length>=2) {
+    setTimeout(() => {
+      const ctx = document.getElementById('stress-chart');
+      if (ctx) new Chart(ctx, {
+        type:'line',
+        data:{ labels: _stressChart.map(s=>fmtDate(s.date)),
+          datasets:[{ label:'Stress Level', data: _stressChart.map(s=>s.level), borderColor:'#D97706', backgroundColor:'rgba(217,119,6,.1)', tension:.3, pointBackgroundColor:'#D97706', pointRadius:5, fill:true }] },
+        options:{ scales:{y:{min:1,max:10,ticks:{stepSize:1}}}, plugins:{legend:{display:false}} }
       });
     }, 100);
   }
@@ -2559,7 +2604,13 @@ function generateSmartNotifs() {
   // Stress check-in
   const sc = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
   if (!sc.length) {
-    notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'checkin'});
+    notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'_stress'});
+  } else {
+    const _lastStress = sc[sc.length-1];
+    const _stressDaysAgo = Math.floor((Date.now()-new Date(_lastStress.date))/86400000);
+    if (_stressDaysAgo > 14) {
+      notifs.push({id:'n_stress_due',title:'Stress Check-in Overdue',desc:`Last logged ${_stressDaysAgo} days ago. Log an update to track your trend.`,time:`${_stressDaysAgo}d ago`,link:'_stress'});
+    }
   }
 
   // Booking reminder
@@ -2592,7 +2643,7 @@ function loadNotifications() {
       <div class="notif-item-body">
         <div class="notif-item-title">${n.title}</div>
         <div class="notif-item-desc">${n.desc}</div>
-        ${n.link ? `<button class="btn btn-outline btn-sm" style="margin-top:6px;font-size:11px" onclick="closeNotifPanel();go('${n.link}')">Go →</button>` : ''}
+        ${n.link ? `<button class="btn btn-outline btn-sm" style="margin-top:6px;font-size:11px" onclick="closeNotifPanel();${n.link==='_stress'?`openTool('financial_stress_tracker.html')`:`go('${n.link}')`}">Go →</button>` : ''}
       </div>
       <button class="notif-dismiss" onclick="dismissNotif('${n.id}')" title="Dismiss">✕</button>
     </div>`).join('');
