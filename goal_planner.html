@@ -904,18 +904,17 @@ function exportPDF() {
 
   // ── Header banner ──
   doc.setFillColor(...NAVY);
-  doc.rect(0, 0, pageW, 22, 'F');
+  doc.rect(0, 0, pageW, 26, 'F');
   doc.setTextColor(...GOLD);
   doc.setFontSize(15);
   doc.setFont('helvetica', 'bold');
   doc.text('Goal-Based Financial Planner', 12, 10);
-  // Client name on PDF
   const _pdfName = window._toolFullName || '';
-  if (_pdfName) { doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(...GOLD); doc.text('Client: '+_pdfName,pageW-12,10,{align:'right'}); }
+  if (_pdfName) { doc.setFontSize(7); doc.setFont('helvetica','bold'); doc.setTextColor(200,210,220); doc.text('Client: '+_pdfName,12,16); }
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(200, 210, 220);
-  doc.text('Botswana Pula (BWP)  ·  Generated: ' + today, 12, 16);
+  doc.text('Botswana Pula (BWP)  ·  Generated: ' + today, 12, _pdfName ? 22 : 16);
 
   // ── Summary stats ──
   let totalMonthly = 0, totalTarget = 0, totalSaved = 0;
