@@ -976,16 +976,18 @@ loadDraft();
   _sb.auth.getSession().then(({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data, error }) => {
+      if (error) console.warn('Could not load profile for header:', error);
       window._toolProfile = data;
-      if (data) {
-        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-        window._toolFullName = name || session.user.email;
-        const nameEl = document.getElementById('tool-user-name');
-        const initEl = document.getElementById('tool-user-initial');
-        if (nameEl) nameEl.textContent = window._toolFullName;
-        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+      const name = data ? [data.first_name, data.last_name].filter(Boolean).join(' ') : '';
+      window._toolFullName = name || session.user.email || '';
+      const nameEl = document.getElementById('tool-user-name');
+      const initEl = document.getElementById('tool-user-initial');
+      if (nameEl) {
+        if (window._toolFullName) nameEl.textContent = window._toolFullName;
+        else nameEl.style.display = 'none';
       }
+      if (initEl) initEl.textContent = (window._toolFullName || '?').charAt(0).toUpperCase();
     });
   });
 })();
