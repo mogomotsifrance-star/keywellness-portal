@@ -2037,79 +2037,199 @@ VIEWS['progress'] = function () {
   const el = document.getElementById('page-content');
   const asc = state.assessments.slice(0,8).reverse();
   const csc = state.checkins.slice(0,8).reverse();
+  const latestCI  = state.checkins[0] || null;
+  const latestAss = state.assessments[0] || null;
 
-  // Stress data from standalone tracker
-  const _stressLog = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  const _stressLog   = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
   const _stressChart = _stressLog.slice(-8);
+  const _latestStress = _stressLog.length ? _stressLog[_stressLog.length-1] : null;
+
+  // Badges
+  const _badges = JSON.parse(localStorage.getItem('kw_badges')||'[]');
+  const BADGE_META = {
+    first_checkin:  { icon:'✅', label:'First Check-in' },
+    check_in_1:     { icon:'✅', label:'First Check-in' },
+    check_in_3:     { icon:'🔁', label:'3 Check-ins'    },
+    first_assess:   { icon:'📋', label:'Self-Assessed'  },
+    assess_3:       { icon:'🏅', label:'3 Assessments'  },
+    saver:          { icon:'🏦', label:'Saver'          },
+    debt_fighter:   { icon:'⚔️',  label:'Debt Fighter'  },
+    streak_7:       { icon:'🔥', label:'7-Day Streak'   },
+  };
+
+  // Dimension bar builder
+  const dimBar = (label, val) => {
+    const pct = Math.round((val/10)*100);
+    const col = val>=7?'var(--green)':val>=5?'#d4ac0d':'var(--orange)';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+        <span style="color:var(--text)">${label}</span>
+        <span style="font-weight:700;color:${col}">${val}/10</span>
+      </div>
+      <div style="background:#e5e7eb;border-radius:6px;height:8px">
+        <div style="width:${pct}%;background:${col};border-radius:6px;height:8px;transition:width .4s"></div>
+      </div>
+    </div>`;
+  };
+
+  const stressColor = (lv) => lv>=8?'var(--red)':lv>=6?'var(--orange)':lv>=4?'#d4ac0d':'var(--green)';
+  const stressLabel = (lv) => lv>=8?'High stress':lv>=6?'Elevated':lv>=4?'Moderate':'Low';
 
   el.innerHTML = `
+    <!-- ── SUMMARY STRIP ── -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div class="card" style="margin-bottom:0;text-align:center;padding:18px 12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:6px">Wellness Score</div>
+        ${latestAss
+          ? `<div style="font-size:30px;font-weight:700;color:${scoreBand(latestAss.score).color};font-family:'DM Mono',monospace">${latestAss.score}</div>
+             <div style="font-size:10px;color:var(--muted);margin-top:2px">${scoreBand(latestAss.score).label}</div>`
+          : `<div style="font-size:22px;color:var(--muted)">—</div><div style="font-size:10px;color:var(--muted)">Not assessed</div>`}
+      </div>
+      <div class="card" style="margin-bottom:0;text-align:center;padding:18px 12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:6px">Last Check-in</div>
+        ${latestCI
+          ? `<div style="font-size:30px;font-weight:700;color:var(--navy);font-family:'DM Mono',monospace">${latestCI.score}</div>
+             <div style="font-size:10px;color:var(--muted);margin-top:2px">${fmtDate(latestCI.created_at)}</div>`
+          : `<div style="font-size:22px;color:var(--muted)">—</div><div style="font-size:10px;color:var(--muted)">No check-ins</div>`}
+      </div>
+      <div class="card" style="margin-bottom:0;text-align:center;padding:18px 12px">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--orange);margin-bottom:6px">Stress Level</div>
+        ${_latestStress
+          ? `<div style="font-size:30px;font-weight:700;color:${stressColor(_latestStress.level)};font-family:'DM Mono',monospace">${_latestStress.level}/10</div>
+             <div style="font-size:10px;color:var(--muted);margin-top:2px">${stressLabel(_latestStress.level)}</div>`
+          : `<div style="font-size:22px;color:var(--muted)">—</div><div style="font-size:10px;color:var(--muted)">Not logged</div>`}
+      </div>
+    </div>
+
+    <!-- ── LATEST CHECK-IN BREAKDOWN ── -->
+    ${latestCI && latestCI.vals ? `
+    <div class="card">
+      <div class="card-title">📊 Latest Check-in Breakdown <span style="font-weight:400;font-size:12px;color:var(--muted)">${fmtDate(latestCI.created_at)}</span></div>
+      ${dimBar('💰 Savings Progress',   latestCI.vals.savings  || 5)}
+      ${dimBar('⚔️ Debt Management',    latestCI.vals.debt     || 5)}
+      ${dimBar('💼 Income Stability',   latestCI.vals.income   || 5)}
+      ${dimBar('🧾 Expense Control',    latestCI.vals.expenses || 5)}
+      ${latestCI.notes ? `<div style="margin-top:12px;padding:10px 14px;background:var(--cream);border-radius:6px;font-size:13px;color:var(--muted);font-style:italic">"${latestCI.notes}"</div>` : ''}
+    </div>` : ''}
+
+    <!-- ── WELLNESS SCORE CHART ── -->
     <div class="card">
       <div class="card-title">📈 Wellness Score History</div>
       ${asc.length<2
-        ? `<div class="notice notice-gold">Complete at least 2 assessments to see your trend. <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')" style="margin-left:8px">Take Assessment</button></div>`
+        ? `<div class="notice notice-gold">Complete at least 2 assessments to see your trend.</div>
+           <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')" style="margin-top:8px">Take Assessment →</button>`
         : '<div class="chart-wrap"><canvas id="score-chart"></canvas></div>'}
     </div>
+
+    <!-- ── CHECK-IN SCORES CHART ── -->
     <div class="card">
       <div class="card-title">✅ Monthly Check-in Scores</div>
       ${csc.length<1
-        ? `<div class="notice notice-gold">No check-ins yet. <button class="btn btn-primary btn-sm" onclick="go('checkin')" style="margin-left:8px">Do First Check-in</button></div>`
+        ? `<div class="notice notice-gold">No check-ins yet.</div>
+           <button class="btn btn-primary btn-sm" onclick="go('checkin')" style="margin-top:8px">Do First Check-in →</button>`
         : '<div class="chart-wrap"><canvas id="ci-chart"></canvas></div>'}
     </div>
+
+    <!-- ── STRESS CHART ── -->
     <div class="card" style="border-left:4px solid var(--orange)">
       <div class="card-title">😰 Financial Stress History</div>
-      ${_stressChart.length<2
-        ? `<div class="notice notice-gold" style="margin-bottom:12px">Log at least 2 stress entries to see your trend.</div>
-           <button class="btn btn-outline" onclick="openTool('financial_stress_tracker.html')" style="justify-content:center">😰 Open Stress Tracker →</button>`
+      ${_stressChart.length<1
+        ? `<p style="font-size:13px;color:var(--muted);margin-bottom:12px">No stress entries yet — your stress level is logged each time you complete a Check-in.</p>
+           <button class="btn btn-outline btn-sm" onclick="go('checkin')">Go to Check-in →</button>`
         : `<div class="chart-wrap"><canvas id="stress-chart"></canvas></div>
-           <div style="margin-top:12px;text-align:right"><button class="btn btn-outline btn-sm" onclick="openTool('financial_stress_tracker.html')">😰 Open Full Stress Tracker →</button></div>`}
+           ${_latestStress && _latestStress.tags && _latestStress.tags.length
+             ? `<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">${_latestStress.tags.map(t=>`<span style="font-size:11px;padding:3px 10px;background:rgba(217,119,6,.12);color:var(--orange);border-radius:20px;border:1px solid rgba(217,119,6,.3)">${t}</span>`).join('')}</div>`
+             : ''}`}
     </div>
+
+    <!-- ── BADGES ── -->
+    ${_badges.length>0 ? `
     <div class="card">
-      <div class="card-title">📅 Assessment Log</div>
-      ${state.assessments.length===0
-        ? '<p style="font-size:14px;color:var(--muted)">No assessments yet.</p>'
-        : state.assessments.map(a=>`
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--border)">
-              <div>
-                <div style="font-weight:600;font-size:14px">${fmtDate(a.created_at)}</div>
-                <div style="font-size:12px;color:var(--muted)"><span class="${scoreBand(a.score).cls}" style="font-weight:700">${scoreBand(a.score).label}</span></div>
-              </div>
-              <span style="font-family:'DM Mono',monospace;font-weight:600;color:${scoreBand(a.score).color}">${a.score}/100</span>
-            </div>`).join('')}
+      <div class="card-title">🏆 Badges Earned</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        ${_badges.map(b => {
+          const m = BADGE_META[b] || { icon:'🏅', label: b };
+          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--cream);border-radius:20px;border:1px solid var(--border)">
+            <span style="font-size:18px">${m.icon}</span>
+            <span style="font-size:12px;font-weight:600;color:var(--navy)">${m.label}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- ── HISTORY LOGS ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">📅 Assessment Log</div>
+        ${state.assessments.length===0
+          ? '<p style="font-size:13px;color:var(--muted)">No assessments yet.</p>'
+          : state.assessments.slice(0,6).map(a=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <div style="font-size:13px;font-weight:600">${fmtDate(a.created_at)}</div>
+                  <div style="font-size:11px;color:${scoreBand(a.score).color};font-weight:600">${scoreBand(a.score).label}</div>
+                </div>
+                <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:15px;color:${scoreBand(a.score).color}">${a.score}</span>
+              </div>`).join('')}
+      </div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">✅ Check-in Log</div>
+        ${state.checkins.length===0
+          ? '<p style="font-size:13px;color:var(--muted)">No check-ins yet.</p>'
+          : state.checkins.slice(0,6).map(c=>`
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <div style="font-size:13px;font-weight:600">${fmtDate(c.created_at)}</div>
+                  <div style="font-size:11px;color:var(--muted)">${scoreBand(c.score).label}</div>
+                </div>
+                <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:15px;color:var(--navy)">${c.score}</span>
+              </div>`).join('')}
+      </div>
     </div>`;
 
-  if (asc.length>=2) {
-    setTimeout(() => {
+  // ── Charts ──
+  setTimeout(() => {
+    if (asc.length>=2) {
       const ctx = document.getElementById('score-chart');
       if (ctx) new Chart(ctx, {
         type:'line',
         data:{ labels: asc.map(a=>fmtDate(a.created_at)),
-          datasets:[{ label:'Score', data: asc.map(a=>a.score), borderColor:'#c8973a', backgroundColor:'rgba(200,151,58,.1)', tension:.3, pointBackgroundColor:'#1a2744', pointRadius:5, fill:true }] },
-        options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
+          datasets:[{ label:'Wellness Score', data: asc.map(a=>a.score),
+            borderColor:'#C8991A', backgroundColor:'rgba(200,153,26,.1)',
+            tension:.35, pointBackgroundColor:'#0D2545', pointRadius:5, fill:true }] },
+        options:{ responsive:true, maintainAspectRatio:false,
+          scales:{y:{min:0,max:100,grid:{color:'rgba(0,0,0,.06)'}}},
+          plugins:{legend:{display:false}} }
       });
-    }, 100);
-  }
-  if (csc.length>=1) {
-    setTimeout(() => {
+    }
+    if (csc.length>=1) {
       const ctx = document.getElementById('ci-chart');
       if (ctx) new Chart(ctx, {
         type:'bar',
         data:{ labels: csc.map(c=>fmtDate(c.created_at)),
-          datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score), backgroundColor:'rgba(200,151,58,.7)', borderColor:'#c8973a', borderWidth:2, borderRadius:6 }] },
-        options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
+          datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score),
+            backgroundColor:'rgba(200,153,26,.75)', borderColor:'#C8991A',
+            borderWidth:2, borderRadius:6 }] },
+        options:{ responsive:true, maintainAspectRatio:false,
+          scales:{y:{min:0,max:100,grid:{color:'rgba(0,0,0,.06)'}}},
+          plugins:{legend:{display:false}} }
       });
-    }, 100);
-  }
-  if (_stressChart.length>=2) {
-    setTimeout(() => {
+    }
+    if (_stressChart.length>=1) {
       const ctx = document.getElementById('stress-chart');
       if (ctx) new Chart(ctx, {
-        type:'line',
+        type: _stressChart.length===1 ? 'bar' : 'line',
         data:{ labels: _stressChart.map(s=>fmtDate(s.date)),
-          datasets:[{ label:'Stress Level', data: _stressChart.map(s=>s.level), borderColor:'#D97706', backgroundColor:'rgba(217,119,6,.1)', tension:.3, pointBackgroundColor:'#D97706', pointRadius:5, fill:true }] },
-        options:{ scales:{y:{min:1,max:10,ticks:{stepSize:1}}}, plugins:{legend:{display:false}} }
+          datasets:[{ label:'Stress Level', data: _stressChart.map(s=>s.level),
+            borderColor:'#D97706', backgroundColor:'rgba(217,119,6,.15)',
+            tension:.35, pointBackgroundColor:'#D97706', pointRadius:5, fill:true,
+            borderRadius:6 }] },
+        options:{ responsive:true, maintainAspectRatio:false,
+          scales:{y:{min:1,max:10,ticks:{stepSize:1},grid:{color:'rgba(0,0,0,.06)'}}},
+          plugins:{legend:{display:false}} }
       });
-    }, 100);
-  }
+    }
+  }, 100);
 };
 
 // ══════════════════════════════════════════════════
