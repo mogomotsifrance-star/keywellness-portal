@@ -796,6 +796,37 @@ function calculateWellness(){
     localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
   } catch(e){}
 
+  // ── Save assessment to Supabase (POST to assessments table) ──
+  (async function() {
+    const _sb = window._toolSb;
+    const _user = window._toolUser;
+    if (!_sb || !_user) {
+      console.warn('Assessment: auth not ready, Supabase save skipped.');
+      return;
+    }
+    const catScores = {};
+    dims.forEach(d => { catScores[d.id] = d.score; });
+    const { data: inserted, error: insertErr } = await _sb.from('assessments').insert({
+      user_id: _user.id,
+      score: totalScore,
+      cat_scores: catScores,
+      answers: answers,
+      created_at: _now
+    }).select().single();
+    if (insertErr) {
+      console.error('Assessment insert failed:', insertErr);
+      showToast('Could not save to cloud: ' + insertErr.message);
+    } else {
+      console.log('Assessment saved to Supabase:', inserted);
+      showToast('Assessment saved');
+    }
+    // Update last_score snapshot on the profile row
+    const { error: profileErr } = await _sb.from('profiles')
+      .update({ last_score: totalScore, last_cat_scores: catScores })
+      .eq('id', _user.id);
+    if (profileErr) console.warn('Profile snapshot update failed:', profileErr);
+  })();
+
   const grade=totalScore>=85?{label:'Excellent 🌟',tagline:'You are in outstanding financial health. Continue your disciplined habits and focus on optimising your wealth strategy.',color:'var(--green)'}
     :totalScore>=70?{label:'Good 👍',tagline:'Your financial foundation is solid. A few targeted improvements will move you to excellent.',color:'var(--green)'}
     :totalScore>=55?{label:'Fair ⚠️',tagline:'You have a reasonable base but clear gaps. Follow the action plan below to strengthen your position.',color:'var(--orange)'}
