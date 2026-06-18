@@ -651,7 +651,6 @@ function rebuildBadges() {
     award('first_assessment');
     const latest = state.assessments[0];
     if (latest?.score >= 75) award('high_scorer');
-    if (latest?.score >= 75) award('financial_star');
     const bmap = { Budgeting:'budget_master', Savings:'savings_champ', Debt:'debt_destroyer', Retirement:'retirement_planner', Insurance:'insurance_hero' };
     const cats = latest?.cat_scores || {};
     Object.entries(bmap).forEach(([cat, id]) => { if ((cats[cat]||0) >= 80) award(id); });
@@ -824,6 +823,7 @@ const BADGE_DEFS = [
   { id:'check_in_1',        icon:'✅', name:'On Track',            desc:'Completed first monthly check-in',   pts:75  },
   { id:'check_in_3',        icon:'🔥', name:'Consistent',          desc:'3 monthly check-ins',                pts:150 },
   { id:'booked_session',    icon:'📅', name:'Getting Help',        desc:'Booked a coaching session',          pts:100 },
+  { id:'watched_video',     icon:'🎬', name:'First Lesson',        desc:'Watched a financial education video',pts:25  },
 ];
 
 function awardBadge(id) {
@@ -2136,16 +2136,8 @@ VIEWS['progress'] = function () {
 
   // Badges from Supabase state
   const _badges = state.badges.earned;
-  const BADGE_META = {
-    first_checkin:  { icon:'✅', label:'First Check-in' },
-    check_in_1:     { icon:'✅', label:'First Check-in' },
-    check_in_3:     { icon:'🔁', label:'3 Check-ins'    },
-    first_assess:   { icon:'📋', label:'Self-Assessed'  },
-    assess_3:       { icon:'🏅', label:'3 Assessments'  },
-    saver:          { icon:'🏦', label:'Saver'          },
-    debt_fighter:   { icon:'⚔️',  label:'Debt Fighter'  },
-    streak_7:       { icon:'🔥', label:'7-Day Streak'   },
-  };
+  // Keyed by the same IDs used in BADGE_DEFS
+  const BADGE_META = Object.fromEntries(BADGE_DEFS.map(b => [b.id, { icon: b.icon, label: b.name }]));
 
   // Dimension bar builder
   const dimBar = (label, val) => {
