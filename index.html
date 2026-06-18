@@ -1058,10 +1058,25 @@ VIEWS['dashboard'] = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = `<div class="spinner"><div class="spin"></div> Loading your financial hub…</div>`;
 
-  // ── Read localStorage tool data ──
+  // ── Read tool data from Supabase (falls back to localStorage) ──
   let budgetSurplus = null, budgetLabel = '';
+  let netWorth = null;
+  let stressScore = null;
+  let goalsOnTrack = null, totalGoals = 0;
+
+  // Fetch all 4 tool rows in one query
+  let _toolMap = {};
   try {
-    const bd = JSON.parse(localStorage.getItem('budget_planner_v2') || '{}');
+    const { data: _toolRows } = await sb.from('tool_data')
+      .select('tool, data')
+      .eq('user_id', state.user.id)
+      .in('tool', ['budget_planner', 'net_worth_tracker', 'financial_stress_tracker', 'goal_planner']);
+    if (_toolRows) _toolRows.forEach(r => { _toolMap[r.tool] = r.data; });
+  } catch {}
+
+  // Budget surplus — prefer Supabase, fall back to localStorage
+  try {
+    const bd = _toolMap['budget_planner'] || JSON.parse(localStorage.getItem('budget_planner_v2') || '{}');
     const key = bd.currentKey;
     if (key && bd.budgets?.[key]) {
       const b = bd.budgets[key];
@@ -1072,24 +1087,24 @@ VIEWS['dashboard'] = async function () {
     }
   } catch {}
 
-  let netWorth = null;
+  // Net worth — prefer Supabase, fall back to localStorage
   try {
-    const nw = JSON.parse(localStorage.getItem('kw_networth_v1') || '{}');
+    const nw = _toolMap['net_worth_tracker'] || JSON.parse(localStorage.getItem('kw_networth_v1') || '{}');
     const assets = (nw.assets || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
     const liabs  = (nw.liabilities || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
     if (assets || liabs) netWorth = assets - liabs;
   } catch {}
 
-  let stressScore = null;
+  // Stress score — prefer Supabase, fall back to localStorage
   try {
-    const fs = JSON.parse(localStorage.getItem('financial_stress_v1') || '{}');
+    const fs = _toolMap['financial_stress_tracker'] || JSON.parse(localStorage.getItem('financial_stress_v1') || '{}');
     const entries = fs.entries || [];
     if (entries.length) stressScore = entries[entries.length - 1].score;
   } catch {}
 
-  let goalsOnTrack = null, totalGoals = 0;
+  // Goals — prefer Supabase, fall back to localStorage
   try {
-    const gd = JSON.parse(localStorage.getItem('kw_goals') || '{}');
+    const gd = _toolMap['goal_planner'] || JSON.parse(localStorage.getItem('kw_goals') || '{}');
     const goals = gd.goals || [];
     totalGoals = goals.length;
     if (totalGoals > 0) {

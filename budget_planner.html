@@ -1081,7 +1081,10 @@ renderAll();
     if (toolRow?.data?.budgets && Object.keys(toolRow.data.budgets).length) {
       budgets = toolRow.data.budgets;
       currentKey = toolRow.data.currentKey || null;
+      localStorage.setItem(LS_KEY, JSON.stringify({ budgets, currentKey }));
       renderAll();
+    } else {
+      console.log('budget_planner: no cloud data found, using local state');
     }
   });
 })();
