@@ -1064,13 +1064,13 @@ VIEWS['dashboard'] = async function () {
   let stressScore = null;
   let goalsOnTrack = null, totalGoals = 0;
 
-  // Fetch all 4 tool rows in one query
+  // Fetch all tool rows in one query
   let _toolMap = {};
   try {
     const { data: _toolRows } = await sb.from('tool_data')
       .select('tool, data')
       .eq('user_id', state.user.id)
-      .in('tool', ['budget_planner', 'net_worth_tracker', 'financial_stress_tracker', 'goal_planner']);
+      .in('tool', ['budget_planner', 'net_worth_tracker', 'financial_stress_tracker', 'goal_planner', 'dti_calculator']);
     if (_toolRows) _toolRows.forEach(r => { _toolMap[r.tool] = r.data; });
   } catch {}
 
@@ -1139,8 +1139,29 @@ VIEWS['dashboard'] = async function () {
     }
   } catch {}
 
-  // ── kw_snapshot staleness ──
+  // ── Compute DTI + Savings Rate from Supabase budget data ──
+  let budgetDTI = null, budgetSavRate = null;
+  try {
+    const _bd = _toolMap['budget_planner'];
+    const _bk = _bd?.currentKey;
+    if (_bk && _bd?.budgets?.[_bk]) {
+      const _bm = _bd.budgets[_bk];
+      const _bInc = (_bm.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
+      const _bDebt = Number(_bm.expenses?.debt_min || 0);
+      const _savIds = ['emfund','retirement','invest','goals','debt_extra'];
+      const _bSav  = _savIds.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
+      if (_bInc > 0) {
+        budgetDTI    = +(_bDebt / _bInc * 100).toFixed(1);
+        budgetSavRate = +(_bSav  / _bInc * 100).toFixed(1);
+      }
+    }
+  } catch {}
+  // Fall back to localStorage snapshot if Supabase budget not available
   const snap = JSON.parse(localStorage.getItem('kw_snapshot') || '{}');
+  if (budgetDTI    === null) budgetDTI    = snap.budget?.dtiRatio    ?? null;
+  if (budgetSavRate === null) budgetSavRate = snap.budget?.savingsRate ?? null;
+
+  // ── kw_snapshot staleness (supplementary — used for freshness labels only) ──
   const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;
   const snapAge = {
     assessment: daysSince(snap.assessment?.lastUpdated),
@@ -1150,27 +1171,33 @@ VIEWS['dashboard'] = async function () {
   };
   const freshLabel = days => days === null ? null : days === 0 ? 'Updated today' : days === 1 ? 'Updated yesterday' : `${days}d ago`;
 
+  // ── Completion flags derived from Supabase data (not localStorage) ──
+  const hasAssessment = wellScore !== null || state.assessments.length > 0;
+  const hasBudget     = budgetSurplus !== null;
+  const hasStress     = stressScore !== null;
+  const hasDTI        = !!_toolMap['dti_calculator'];
+
   // ── Nudge generation ──
   const nudges = [];
   const curMonth = new Date().toISOString().slice(0,7);
-  if (!snap.assessment) {
+  if (!hasAssessment) {
     nudges.push({ pri:'high', icon:'📋', title:'Start your wellness assessment', desc:"Your financial health score hasn't been set — takes 5 minutes.", cta:'Start Now', click:`openTool('wellness_assessment.html')` });
-  } else if (snapAge.assessment > 90) {
+  } else if (snapAge.assessment !== null && snapAge.assessment > 90) {
     nudges.push({ pri:'medium', icon:'🔄', title:'Quarterly review due', desc:`Last assessed ${snapAge.assessment} days ago. Re-assess to measure your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
   }
-  if (!snap.budget) {
+  if (!hasBudget) {
     nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
-  } else if (snap.budget.month && snap.budget.month < curMonth) {
-    nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${snap.budget.month}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
-  } else if (snapAge.budget > 30) {
+  } else if (budgetLabel && budgetLabel < curMonth) {
+    nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${budgetLabel}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
+  } else if (snapAge.budget !== null && snapAge.budget > 30) {
     nudges.push({ pri:'medium', icon:'📊', title:'Budget not updated recently', desc:`Last saved ${snapAge.budget} days ago. Refresh your income and expenses.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
   }
-  if (!snap.stress) {
+  if (!hasStress) {
     nudges.push({ pri:'medium', icon:'😰', title:'Log your first stress check-in', desc:'Fortnightly stress tracking shows trends and helps your advisor spot patterns.', cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
-  } else if (snapAge.stress > 14) {
+  } else if (snapAge.stress !== null && snapAge.stress > 14) {
     nudges.push({ pri:'low', icon:'😰', title:'Stress check-in overdue', desc:`Last logged ${snapAge.stress} days ago. Your fortnightly check-in is due.`, cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
   }
-  if (!snap.dti && snap.budget) {
+  if (!hasDTI && hasBudget) {
     nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
   }
 
@@ -1235,34 +1262,34 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
 
-  // DTI — derived from budget snapshot
-  const budgetDTI = snap.budget?.dtiRatio ?? null;
+  // DTI — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
   if (budgetDTI !== null) {
     const dtiCls  = budgetDTI <= 35 ? 'green' : budgetDTI <= 50 ? 'gold' : budgetDTI <= 65 ? 'orange' : 'red';
     const dtiSub  = budgetDTI <= 35 ? 'Healthy' : budgetDTI <= 50 ? 'Acceptable' : budgetDTI <= 65 ? 'High Risk' : 'Critical';
-    hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: snap.budget?.month && snap.budget.month < curMonth, click:`openTool('dti_calculator.html')` });
-  } else if (snap.budget) {
+    hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
+  } else if (hasBudget) {
     hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
   }
 
-  // Savings Rate — from budget snapshot
-  const budgetSavRate = snap.budget?.savingsRate ?? null;
+  // Savings Rate — computed from Supabase budget data (budgetSavRate already set above, snap fallback applied)
   if (budgetSavRate !== null) {
     const srCls = budgetSavRate >= 20 ? 'green' : budgetSavRate >= 10 ? 'gold' : budgetSavRate > 0 ? 'orange' : 'red';
     const srSub = budgetSavRate >= 20 ? 'On target (20% rule)' : budgetSavRate >= 10 ? 'Building — aim for 20%' : budgetSavRate > 0 ? 'Low — increase contributions' : 'No savings budgeted';
-    hubCards.push({ cls:srCls, lbl:'Savings Rate', val:`${budgetSavRate}%`, sub:srSub, fresh:freshLabel(snapAge.budget), stale: snap.budget?.month && snap.budget.month < curMonth, click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:srCls, lbl:'Savings Rate', val:`${budgetSavRate}%`, sub:srSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('budget_planner.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
-  // Insurance Coverage — from assessment snapshot
+  // Insurance Coverage — from assessment snapshot (localStorage) or Supabase assessments
   const insCount = snap.assessment?.insCount ?? null;
   if (insCount !== null) {
     const insCls = insCount >= 5 ? 'green' : insCount >= 3 ? 'gold' : insCount >= 1 ? 'orange' : 'red';
     const insSub = insCount >= 5 ? 'Well covered' : insCount >= 3 ? 'Partial coverage' : insCount >= 1 ? 'Significant gaps' : 'No coverage recorded';
     hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insCount}/6`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
+  } else if (hasAssessment) {
+    hubCards.push({ cls:'gold', lbl:'Insurance Cover', val:'—', sub:'Re-open assessment to see details', click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -1281,7 +1308,7 @@ VIEWS['dashboard'] = async function () {
 
   // ── Build "What to do next" actions ──
   const actions = [];
-  if (!wellScore) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
+  if (!hasAssessment) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
   if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
   if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
