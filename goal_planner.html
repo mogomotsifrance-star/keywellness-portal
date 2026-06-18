@@ -443,6 +443,11 @@ function saveGoals() {
     }
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
+  (async()=>{
+    if(!window._toolSb||!window._toolUser)return;
+    const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'goal_planner',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
+    if(error)console.error('goal_planner save failed:',error);
+  })();
   showToast();
 }
 
@@ -1131,7 +1136,7 @@ document.getElementById('monthlyIncome').addEventListener('blur',    () => { if 
   const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
   const _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
   window._toolSb = _sb;
-  _sb.auth.getSession().then(({ data: { session } }) => {
+  _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
@@ -1145,6 +1150,8 @@ document.getElementById('monthlyIncome').addEventListener('blur',    () => { if 
         if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
       }
     });
+    const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'goal_planner').maybeSingle();
+    if (toolRow?.data) { localStorage.setItem(LS_KEY, JSON.stringify(toolRow.data)); loadGoals(); }
   });
 })();
 </script>
