@@ -577,7 +577,6 @@ let state = {
   user: null,
   assessments: [],
   checkins: [],
-  stressLogs: [],
   badges: { earned: [], points: 0 },
 };
 
@@ -612,34 +611,19 @@ async function loadAllData() {
   if (!currentUser) return;
   const uid = currentUser.id;
 
-  // Use allSettled so one failing query never blocks the rest from loading
-  const safe = q => Promise.resolve(q).catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
-
-  const [pR, aR, cR, bR, sR] = await Promise.all([
-    safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
-    safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
-    safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
-    safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
-    safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
+  const [pR, aR, cR, bR] = await Promise.all([
+    sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
+    sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+    sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+    sb.from('badges').select('*').eq('user_id', uid).maybeSingle(),
   ]);
 
-  state.user        = pR.data  || null;
-  state.assessments = aR.data  || [];
-  state.checkins    = cR.data  || [];
-  state.stressLogs  = (sR.data || []).map(r => ({
-    date:  r.created_at,
-    level: r.level,
-    tags:  r.tags  || [],
-    notes: r.notes || '',
-  }));
-  state.badges = bR.data
+  state.user        = pR.data || null;
+  state.assessments = aR.data || [];
+  state.checkins    = cR.data || [];
+  state.badges      = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
-
-  // Mirror stress logs to localStorage so standalone tracker can still read them
-  if (state.stressLogs.length) {
-    localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
-  }
 }
 
 async function saveUser() {
@@ -766,35 +750,31 @@ async function doLogout() {
 //  NAV
 // ══════════════════════════════════════════════════
 const NAV = [
-  { id:'dashboard',    icon:'🏠', label:'Dashboard' },
-  { id:'assessment',   icon:'📋', label:'Assessment' },
-  { id:'learn',        icon:'📚', label:'Learn' },
-  { id:'_sep_tools',   sep:true,  label:'TOOLS' },
-  { id:'tools',        icon:'🛠️', label:'Tools' },
-  { id:'calculators',  icon:'🧮', label:'Calculators' },
-  { id:'emergency',    icon:'🆘', label:'Emergency Fund' },
-  { id:'checkin',      icon:'✅', label:'Check-in' },
-  { id:'progress',     icon:'📈', label:'Progress' },
-  { id:'booking',      icon:'📅', label:'Book Session' },
-  { id:'my-bookings',  icon:'🗓️', label:'My Bookings' },
-  { id:'badges',       icon:'🏆', label:'Badges' },
-  { id:'profile',      icon:'👤', label:'My Profile' },
+  { id:'dashboard',   icon:'🏠', label:'Dashboard' },
+  { id:'assessment',  icon:'📋', label:'Assessment' },
+  { id:'learn',       icon:'📚', label:'Learn' },
+  { id:'tools',       icon:'🛠️',  label:'Tools' },
+  { id:'emergency',   icon:'🆘', label:'Emergency Fund' },
+  { id:'checkin',     icon:'✅', label:'Check-in' },
+  { id:'progress',    icon:'📈', label:'Progress' },
+  { id:'booking',     icon:'📅', label:'Book Session' },
+  { id:'my-bookings', icon:'🗓️', label:'My Bookings' },
+  { id:'badges',      icon:'🏆', label:'Badges' },
+  { id:'profile',     icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
-  { id:'dashboard',   icon:'🏠', label:'Home' },
-  { id:'assessment',  icon:'📋', label:'Assess' },
-  { id:'tools',       icon:'🛠️', label:'Tools' },
-  { id:'calculators', icon:'🧮', label:'Calc' },
-  { id:'booking',     icon:'📅', label:'Book' },
+  { id:'dashboard', icon:'🏠', label:'Home' },
+  { id:'assessment',icon:'📋', label:'Assess' },
+  { id:'emergency', icon:'🆘', label:'Emergency' },
+  { id:'booking',   icon:'📅', label:'Book' },
+  { id:'badges',    icon:'🏆', label:'Badges' },
 ];
 
 function buildNav(current) {
-  document.getElementById('sb-nav').innerHTML = NAV.map(n => {
-    if (n.sep) return `<div style="padding:10px 20px 4px;font-size:9px;font-weight:800;letter-spacing:.1em;color:rgba(255,255,255,.3);text-transform:uppercase;border-top:1px solid rgba(255,255,255,.07);margin-top:6px">${n.label}</div>`;
-    return `<div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
+  document.getElementById('sb-nav').innerHTML = NAV.map(n => `
+    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="icon">${n.icon}</span>${n.label}
-    </div>`;
-  }).join('');
+    </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
     <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
       <span class="bn-icon">${n.icon}</span>${n.label}
@@ -1626,184 +1606,16 @@ const VIDEOS = [
 //  VIEW: LEARN
 // ══════════════════════════════════════════════════
 const CONTENT = [
-  { cat:'Budgeting',   icon:'📊', mins:4,  title:'The 50/30/20 Rule',             desc:'Allocate 50% to needs, 30% to wants, 20% to savings and debt repayment. A simple framework for any income level.' },
-  { cat:'Savings',     icon:'🏦', mins:4,  title:'Pay Yourself First',             desc:'Set up automatic savings transfers on payday before you spend. Treat savings as a non-negotiable expense.' },
-  { cat:'Debt',        icon:'⚔️',  mins:4,  title:'Avalanche vs Snowball',          desc:'Avalanche: pay highest-interest debt first (saves money). Snowball: pay smallest first (builds momentum).' },
-  { cat:'Emergency',   icon:'🆘', mins:3,  title:'Building Your Safety Net',       desc:'Target 3–6 months of essential expenses. Even P500/month adds up. Start small, stay consistent.' },
-  { cat:'Retirement',  icon:'🎯', mins:5,  title:'The Power of Compound Growth',   desc:'Money invested early grows exponentially. P100/month at 25 is worth far more than P200/month at 40.' },
-  { cat:'Insurance',   icon:'🛡️',  mins:4,  title:'Why Insurance Matters',          desc:'Insurance protects your financial plan from catastrophic events. One medical emergency can erase years of savings.' },
-  { cat:'Investing',   icon:'📈', mins:5,  title:'Investment Basics',               desc:'Diversify across asset classes. Stocks for growth, bonds for stability. Never invest what you cannot afford to lose.' },
-  { cat:'Mindset',     icon:'🧠', mins:4,  title:'Financial Stress & Wellbeing',   desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.' },
-  { cat:'Payslip',     icon:'📄', mins:4,  title:'Understanding Your Payslip',     desc:'Your payslip tells the story of your income. Learn what every line means — gross pay, PAYE, pension, and net take-home.' },
-  { cat:'Tax',         icon:'🧾', mins:5,  title:'Tax Basics for Batswana',        desc:'Whether employed or self-employed, every earner has a tax obligation. Understand BURS, PAYE bands, and what you can deduct.' },
-  { cat:'Retirement',  icon:'🏛️', mins:5,  title:'Pension Funds Explained',        desc:'BPOPF, occupational funds, retirement annuities — how they work, what you are entitled to, and the one mistake that wrecks retirement.' },
-  { cat:'Property',    icon:'🏡', mins:5,  title:'Renting vs Buying in Botswana',  desc:'The rent vs buy decision is one of the biggest you will make. The right answer depends on your circumstances, not a blanket rule.' },
-  { cat:'Income',      icon:'💼', mins:4,  title:'Building a Side Income',         desc:'One salary is a single point of failure. A side income creates resilience and accelerates your financial goals.' },
-  { cat:'Family',      icon:'👨‍👩‍👧', mins:4,  title:'Teaching Kids About Money',      desc:'Financial habits are formed in childhood. A few simple conversations and habits now give your children a lifelong advantage.' },
+  { cat:'Budgeting',    icon:'📊', title:'The 50/30/20 Rule',          desc:'Allocate 50% to needs, 30% to wants, 20% to savings and debt repayment. A simple framework for any income level.' },
+  { cat:'Savings',      icon:'🏦', title:'Pay Yourself First',          desc:'Set up automatic savings transfers on payday before you spend. Treat savings as a non-negotiable expense.' },
+  { cat:'Debt',         icon:'⚔️',  title:'Avalanche vs Snowball',       desc:'Avalanche: pay highest-interest debt first (saves money). Snowball: pay smallest first (builds momentum).' },
+  { cat:'Emergency',    icon:'🆘', title:'Building Your Safety Net',    desc:'Target 3–6 months of essential expenses. Even P500/month adds up. Start small, stay consistent.' },
+  { cat:'Retirement',   icon:'🎯', title:'The Power of Compound Growth',desc:'Money invested early grows exponentially. P100/month at 25 is worth far more than P200/month at 40.' },
+  { cat:'Insurance',    icon:'🛡️',  title:'Why Insurance Matters',       desc:'Insurance protects your financial plan from catastrophic events. One medical emergency can erase years of savings.' },
+  { cat:'Investing',    icon:'📈', title:'Investment Basics',            desc:'Diversify across asset classes. Stocks for growth, bonds for stability. Never invest what you cannot afford to lose.' },
+  { cat:'Mindset',      icon:'🧠', title:'Financial Stress & Wellbeing',desc:'Financial stress is real. Acknowledge it, make a plan, seek help. You are not defined by your current numbers.' },
 ];
 
-// ── Article body HTML (full content for each article) ──
-const _art = (body, tips, bw, cta) => `
-  <div style="font-size:14px;line-height:1.85;color:#374151">${body}</div>
-  <div style="background:#fffbf0;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:16px 18px;margin:22px 0">
-    <div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">💡 Key Takeaways</div>
-    <ul style="margin:0;padding-left:18px;font-size:13px;line-height:2;color:#374151">${tips}</ul>
-  </div>
-  <div style="background:#eff6ff;border-left:4px solid #2563EB;border-radius:0 8px 8px 0;padding:16px 18px;margin:22px 0 0">
-    <div style="font-size:11px;font-weight:800;color:#1e3a8a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🇧🇼 In Botswana</div>
-    <div style="font-size:13px;line-height:1.75;color:#1e3a8a">${bw}</div>
-  </div>
-  ${cta ? `<div style="margin-top:18px">${cta}</div>` : ''}`;
-
-const ARTICLE_BODIES = {
-'The 50/30/20 Rule': _art(
-  `<p style="margin:0 0 14px">The 50/30/20 rule is one of the simplest budgeting frameworks ever devised. Divide your after-tax income into three buckets: <strong>50% for needs</strong>, <strong>30% for wants</strong>, and <strong>20% for savings and debt repayment</strong>. That's it.</p>
-   <p style="margin:0 0 14px"><strong>Needs</strong> are non-negotiables — rent or mortgage, groceries, electricity, water, transport to work, medical aid, and minimum debt repayments.</p>
-   <p style="margin:0 0 14px"><strong>Wants</strong> are everything that improves life but isn't strictly necessary — DSTV, dining out, gym, new clothes, weekends away.</p>
-   <p style="margin:0"><strong>Savings and debt</strong> builds your future. Emergency fund, retirement contributions, investments, and aggressive debt repayment above the minimum all count here.</p>`,
-  `<li>Track one month of spending first — know where you actually fall before adjusting</li>
-   <li>If needs exceed 50%, find one big expense to cut rather than ten small ones</li>
-   <li>Employer pension contributions count toward your 20%</li>
-   <li>The rule is a guide, not a law — adjust the percentages to your reality</li>`,
-  `Many Batswana find the needs category swells due to extended family obligations and remittances to relatives. These are real and valid — include them honestly in your budget.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('budget_planner.html')">📊 Try the Budget Planner →</button>`
-),
-'Pay Yourself First': _art(
-  `<p style="margin:0 0 14px">Most people budget by paying their bills, buying groceries, going about their month — and saving whatever is left. The problem is that there is almost never anything left.</p>
-   <p style="margin:0 0 14px">"Pay yourself first" flips this entirely. On payday, before you touch a single pula for anything else, a fixed amount moves directly to a savings or investment account.</p>
-   <p style="margin:0">The key is <strong>automation</strong>. Set a standing order with your bank to transfer your savings the same day salary lands.</p>`,
-  `<li>Start with whatever you can — even P200/month builds the habit</li>
-   <li>Increase by 1% every time you receive a raise</li>
-   <li>Your pension contribution already does this for retirement — extend the habit to short-term savings</li>
-   <li>Keep savings in a separate account so it doesn't blend with spending money</li>`,
-  `Stanbic, FNB, ABSA, and BancABC Botswana all support standing debit orders — set yours to execute the day after salary arrives.`,
-  ``
-),
-'Avalanche vs Snowball': _art(
-  `<p style="margin:0 0 14px">If you carry multiple debts — a personal loan, a credit card, store accounts — you need a deliberate strategy for paying them off.</p>
-   <p style="margin:0 0 14px">The <strong>Avalanche method</strong> targets your highest-interest debt first. Mathematically, this saves the most money in total interest.</p>
-   <p style="margin:0">The <strong>Snowball method</strong> targets your smallest balance first. Psychologically, this is powerful — quick wins build momentum and keep motivation high.</p>`,
-  `<li>List all debts with balance, interest rate, and minimum payment before choosing a method</li>
-   <li>Never use credit to pay credit</li>
-   <li>Try Snowball if you feel overwhelmed; try Avalanche if you are disciplined</li>
-   <li>Once a debt is cleared, do not replace it — redirect the payment to savings</li>`,
-  `Personal loans in Botswana often carry rates of 25–30% per year (NBFIRA caps unsecured credit at 30%). These are the debts to attack aggressively with the Avalanche method.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('debt_management_planner.html')">💳 Open Debt Planner →</button>`
-),
-'Building Your Safety Net': _art(
-  `<p style="margin:0 0 14px">An emergency fund is money set aside for unplanned expenses — a medical bill, a car repair, sudden job loss.</p>
-   <p style="margin:0 0 14px">The target is <strong>3 to 6 months of essential living expenses</strong>. Start with P1,000 as your first milestone, then P5,000, then three months.</p>
-   <p style="margin:0">Replenish it immediately after using it.</p>`,
-  `<li>Keep the fund in a separate account — not your day-to-day account</li>
-   <li>Do not invest it in volatile assets — it must be accessible within 1–2 business days</li>
-   <li>A car repair, appliance breakdown, or medical expense are valid uses. A sale or holiday is not</li>
-   <li>Once you hit 3 months, keep going to 6 months for greater security</li>`,
-  `A 32-day notice account with a local bank is ideal — FNBB and Stanbic Botswana offer competitive notice account rates.`,
-  `<button class="btn btn-primary btn-sm" onclick="go('emergency')">🆘 Open Emergency Fund Planner →</button>`
-),
-'The Power of Compound Growth': _art(
-  `<p style="margin:0 0 14px">Compound growth means earning returns not just on your original investment, but on all previous returns as well. P500 per month invested from age 25 at 10% grows to roughly P1.9 million by age 60. Start at 35 and you end up with only P680,000.</p>
-   <p style="margin:0"><strong>Time is the most important variable.</strong> This is why retirement planning cannot wait.</p>`,
-  `<li>Start contributing to retirement the day you receive your first paycheck — even a small amount</li>
-   <li>Reinvest all dividends and interest</li>
-   <li>Never withdraw retirement savings when changing jobs — preserve or transfer instead</li>
-   <li>Increase contributions with every salary increase before lifestyle adjusts</li>`,
-  `BPOPF members benefit from compound growth on a defined benefit basis. Private sector employees are more vulnerable to the mistake of cashing out on resignation — preserve your pension on every job change.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('retirement_calculator.html')">🎯 Open Retirement Planner →</button>`
-),
-'Why Insurance Matters': _art(
-  `<p style="margin:0 0 14px">Insurance protects your financial plan. A single catastrophic event — serious illness, disability, death of a breadwinner — can erase years of savings in months.</p>
-   <p style="margin:0">The key principle: insure what you cannot afford to replace or absorb.</p>`,
-  `<li>Start with life insurance and medical aid — highest impact first</li>
-   <li>Review coverage annually as life changes</li>
-   <li>Read your policy before you need it — understand exclusions and waiting periods</li>
-   <li>Do not over-insure items you could self-insure</li>`,
-  `Major life insurers in Botswana include Botswana Life, Metropolitan Life, Old Mutual Botswana, and Liberty Life.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('life_insurance_calculator.html')">🛡️ Calculate Your Cover Need →</button>`
-),
-'Investment Basics': _art(
-  `<p style="margin:0 0 14px">Saving money preserves your wealth. Investing grows it. Your investment mix should reflect your time horizon and how much volatility you can stomach.</p>
-   <p style="margin:0"><strong>Diversification</strong> — spreading money across asset classes and geographies — reduces risk without proportionally reducing return.</p>`,
-  `<li>Start with a unit trust or ETF if you are new — low cost and automatically diversified</li>
-   <li>Never invest money you might need within 2 years in volatile assets</li>
-   <li>Time in the market beats timing the market — stay invested through downturns</li>
-   <li>Reinvest all returns during the growth phase</li>`,
-  `BIFM, Stanbic Investments, and Allan Gray Botswana all offer unit trusts accessible to Batswana. Explore options through a financial advisor registered with NBFIRA.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('investment_calculator.html')">📈 Open Investment Calculator →</button>`
-),
-'Financial Stress & Wellbeing': _art(
-  `<p style="margin:0 0 14px">Financial stress affects sleep, relationships, work performance, and physical health. Making a plan — even an imperfect one — immediately reduces the psychological weight.</p>`,
-  `<li>Name the source of stress specifically: is it debt, low income, overspending, or lack of savings?</li>
-   <li>Focus on one thing at a time</li>
-   <li>Track spending for 30 days without judging yourself</li>
-   <li>Talk to someone: a trusted friend, a financial coach, or a wellness professional</li>`,
-  `Key Wellness offers one-on-one financial coaching sessions designed to help you make sense of your situation without judgement.`,
-  `<button class="btn btn-primary btn-sm" onclick="go('booking')">📅 Book a Coaching Session →</button>`
-),
-'Understanding Your Payslip': _art(
-  `<p style="margin:0 0 14px">Your <strong>gross salary</strong> is what you are contracted to earn before deductions. Your <strong>net salary</strong> is what arrives in your account — the difference can be 20–40% of gross.</p>
-   <p style="margin:0"><strong>Common deductions:</strong> PAYE, employee pension contribution, medical aid premium, and levies.</p>`,
-  `<li>Know your gross salary — it is the basis for all loan and bond applications</li>
-   <li>Verify your pension contribution appears every month</li>
-   <li>Understand your medical aid deduction and what plan/tier you are on</li>
-   <li>Keep payslips for at least 3 years</li>`,
-  `BURS administers PAYE in Botswana. Tax is calculated on tiered bands — 5%, 12.5%, 18.75%, and 25% depending on your income level.`,
-  ``
-),
-'Tax Basics for Batswana': _art(
-  `<p style="margin:0 0 14px"><strong>PAYE:</strong> If employed, your employer deducts income tax from each payslip and remits it to BURS on your behalf.</p>
-   <p style="margin:0"><strong>Self-employed:</strong> You must register with BURS, file annual returns, and pay provisional tax in two instalments.</p>`,
-  `<li>Register with BURS if you have any self-employment income</li>
-   <li>Pension contributions to approved funds may be tax-deductible</li>
-   <li>Retain financial records for at least 5 years</li>
-   <li>Use a registered tax consultant for business returns or multiple income sources</li>`,
-  `BURS has a self-service portal at burs.org.bw where you can register, file returns, and make payments.`,
-  ``
-),
-'Pension Funds Explained': _art(
-  `<p style="margin:0 0 14px"><strong>BPOPF</strong> covers civil servants on a defined benefit basis. <strong>Private sector funds</strong> are typically defined contribution — your balance is the sum of contributions plus investment returns.</p>
-   <p style="margin:0"><strong>The most costly mistake:</strong> cashing out when you change jobs. This destroys years of compound growth.</p>`,
-  `<li>Never cash out your pension when changing jobs — transfer to a preservation fund</li>
-   <li>Check your pension statement annually</li>
-   <li>Understand your vesting period</li>
-   <li>If self-employed, a Retirement Annuity (RA) is your pension equivalent</li>`,
-  `BIFM, Allan Gray, Stanlib, and Sanlam are among the major fund managers in Botswana.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('retirement_calculator.html')">🎯 Project Your Retirement →</button>`
-),
-'Renting vs Buying in Botswana': _art(
-  `<p style="margin:0 0 14px"><strong>The 5-year rule:</strong> If you plan to stay in one place for fewer than 5 years, renting is usually the better financial choice. Transaction costs of buying and selling erode any equity gained in the short term.</p>`,
-  `<li>Get pre-qualified for a bond before house hunting</li>
-   <li>Factor in all buying costs: deposit (10–20%), transfer duty, legal fees, and bond registration</li>
-   <li>Monthly bond repayment should not exceed 30% of gross income</li>
-   <li>Leasehold vs freehold title matters for finance</li>`,
-  `BHC (Botswana Housing Corporation) offers rental and rent-to-buy schemes in urban centres. For mortgage finance, compare rates from FNBB, Stanbic, ABSA, and Standard Chartered.`,
-  `<button class="btn btn-primary btn-sm" onclick="openTool('rent_vs_buy.html')">🏡 Compare Rent vs Buy →</button>`
-),
-'Building a Side Income': _art(
-  `<p style="margin:0 0 14px">One salary is a single point of failure. Skills-based, trading, asset-based, and digital options all create financial resilience.</p>
-   <p style="margin:0">The most important rule: invest the side income — do not let it fund a higher lifestyle.</p>`,
-  `<li>Declare side income to BURS</li>
-   <li>Open a separate bank account for side income and expenses from day one</li>
-   <li>Do not quit your job until side income replaces at least 70% of your salary for 6+ consecutive months</li>
-   <li>Invest side income rather than lifestyle-inflating with it</li>`,
-  `CEDA offers subsidised funding and mentorship. LEA provides business training and market access support. Many of Botswana's thriving businesses started as a side income.`,
-  ``
-),
-'Teaching Kids About Money': _art(
-  `<p style="margin:0 0 14px">Children learn financial habits by watching how adults in their home treat money. Start early, keep it simple, and make it practical.</p>
-   <p style="margin:0">Let children make small financial mistakes while the stakes are low. A bad spending decision at age 9 is an education.</p>`,
-  `<li>Talk openly about money — secrecy creates anxiety</li>
-   <li>Let children experience the consequences of spending decisions</li>
-   <li>Frame saving as exciting, not punishing</li>
-   <li>Match their savings contributions toward big goals</li>`,
-  `Several Botswana banks offer children's savings accounts — Stanbic PureSave, FNBB Junior Savings, and ABSA Kids Account are worth exploring.`,
-  ``
-),
-};
-
-// ══════════════════════════════════════════════════
-//  VIEW: LEARN
-// ══════════════════════════════════════════════════
 VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
   const activeTab = tab || 'articles';
@@ -1860,26 +1672,25 @@ VIEWS['learn'] = function (tab) {
 window.showArticle = function (idx) {
   const c = CONTENT[idx];
   const el = document.getElementById('page-content');
-  const body = ARTICLE_BODIES[c.title] || `<p style="font-size:14px;line-height:1.8;color:#374151">${c.desc}</p>`;
+  const extras = {
+    'The 50/30/20 Rule': `<div style="background:var(--cream);border-radius:var(--radius-sm);padding:18px;margin:16px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
+      <div><div style="font-size:26px;font-weight:800;color:var(--navy)">50%</div><div style="font-size:12px;font-weight:600">Needs</div><div style="font-size:11px;color:var(--muted)">Rent, food, bills</div></div>
+      <div><div style="font-size:26px;font-weight:800;color:var(--gold)">30%</div><div style="font-size:12px;font-weight:600">Wants</div><div style="font-size:11px;color:var(--muted)">Dining, leisure</div></div>
+      <div><div style="font-size:26px;font-weight:800;color:var(--green)">20%</div><div style="font-size:12px;font-weight:600">Savings</div><div style="font-size:11px;color:var(--muted)">Fund, debt, invest</div></div>
+    </div>`,
+    'Building Your Safety Net': `<button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="go('emergency')">Open Emergency Fund Planner →</button>`,
+  };
   el.innerHTML = `
-    <button class="btn btn-outline btn-sm" onclick="VIEWS['learn']('articles')" style="margin-bottom:20px">← Back to Articles</button>
-    <div style="max-width:700px">
-      <div class="card" style="margin-bottom:0">
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid var(--border)">
-          <div style="font-size:46px;line-height:1">${c.icon}</div>
-          <div>
-            <div style="font-size:10px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px">${c.cat}</div>
-            <h2 style="font-size:20px;font-weight:700;color:var(--navy);margin-bottom:4px;line-height:1.3">${c.title}</h2>
-            <div style="font-size:11px;color:var(--muted)">⏱ ${c.mins || 4} min read &nbsp;·&nbsp; Key Wellness Financial Education</div>
-          </div>
-        </div>
-        <p style="font-size:14px;line-height:1.75;color:var(--muted);margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);font-style:italic">${c.desc}</p>
-        ${body}
-        <div style="margin-top:28px;padding-top:18px;border-top:2px solid var(--border);display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
-          <button class="btn btn-outline" onclick="go('booking')">📅 Book a Coach</button>
-          <button class="btn btn-outline" onclick="VIEWS['learn']('articles')" style="margin-left:auto">← More Articles</button>
-        </div>
+    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:18px">← Back to Learn</button>
+    <div class="card" style="max-width:680px">
+      <div style="font-size:44px;margin-bottom:10px">${c.icon}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">${c.cat}</div>
+      <h2 style="font-size:20px;margin-bottom:14px">${c.title}</h2>
+      <p style="font-size:14px;line-height:1.7;color:var(--muted)">${c.desc}</p>
+      ${extras[c.title]||''}
+      <div style="margin-top:24px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="go('tools')">🛠️ Apply With Tools</button>
+        <button class="btn btn-navy" onclick="go('booking')">📅 Book a Coach</button>
       </div>
     </div>`;
 };
@@ -1889,61 +1700,52 @@ window.showArticle = function (idx) {
 // ══════════════════════════════════════════════════
 VIEWS['tools'] = function () {
   const el = document.getElementById('page-content');
-  const tools = [
-    { icon:'📊', name:'Budget Planner',          desc:'Build your monthly budget using the 50/30/20 rule.',             file:'budget_planner.html' },
-    { icon:'🎯', name:'Goal Planner',             desc:'Set SMART financial goals and track progress toward each one.',  file:'goal_planner.html' },
-    { icon:'💰', name:'Net Worth Tracker',        desc:'Track assets vs liabilities and watch your net worth grow.',     file:'net_worth_tracker.html' },
-    { icon:'🆘', name:'Emergency Fund',           desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
-    { icon:'💳', name:'Debt Repayment Planner',   desc:'List your debts and see your payoff order and timeline.',        file:'debt_management_planner.html' },
-    { icon:'📈', name:'Expense Tracker',          desc:'Log and categorise daily spending. Track where money goes.',     file:'expense_tracker.html' },
-    { icon:'🧮', name:'Debt-to-Income',           desc:'Check if your debt load is healthy relative to your income.',    file:'dti_calculator.html' },
-    { icon:'🏖️', name:'Retirement Planner',       desc:'Project how much you need and whether you are on track.',        file:'retirement_calculator.html' },
-    { icon:'😰', name:'Stress Tracker',           desc:'Log your financial stress levels and spot patterns over time.',  file:'financial_stress_tracker.html' },
-    { icon:'📋', name:'Assessment',               desc:'Take the 8-dimension financial wellness assessment.',             file:'wellness_assessment.html' },
-    { icon:'📚', name:'Learn',                    desc:'Explore guides and videos on personal finance fundamentals.',    view:'learn' },
-    { icon:'📅', name:'Book a Session',           desc:'Work one-on-one with a Key Wellness financial coach.',           view:'booking' },
+  const financialTools = [
+    { icon:'💰', name:'Budget Planner',         desc:'Build your monthly budget using the 50/30/20 rule.',             file:'budget_planner.html' },
+    { icon:'📊', name:'Expense Tracker',         desc:'Log and categorise daily spending. Track where money goes.',     file:'expense_tracker.html' },
+    { icon:'🏆', name:'Goal Planner',            desc:'Set SMART financial goals and track progress toward each one.',  file:'goal_planner.html' },
+    { icon:'💎', name:'Net Worth Tracker',       desc:'Track assets vs liabilities and watch your net worth grow.',     file:'net_worth_tracker.html' },
+    { icon:'⚔️',  name:'Debt Snowball Planner',  desc:'List your debts and see your payoff order and timeline.',        file:'debt_snowball.html' },
+    { icon:'🧠', name:'Financial Stress Tracker',desc:'Log your financial stress levels and spot patterns over time.',  file:'financial_stress_tracker.html' },
+    { icon:'🆘', name:'Emergency Fund Planner',  desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
   ];
-  el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action. Need a number? Check the <button class="btn btn-outline btn-sm" onclick="go('calculators')" style="margin-left:4px">🧮 Calculators →</button></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
-      ${tools.map(t=>`
-        <div class="card" style="cursor:default">
-          <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
-          <div class="card-title" style="margin-bottom:5px">${t.name}</div>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
-          ${t.view
-            ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open →</button>`
-            : t.file
-              ? `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`
-              : `<button class="btn btn-outline btn-sm" disabled>Coming Soon</button>`}
-        </div>`).join('')}
-    </div>`;
-};
+  const calculators = [
+    { icon:'📐', name:'DTI Calculator',          desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
+    { icon:'🎯', name:'Retirement Calculator',   desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
+    { icon:'🏦', name:'Loan Calculator',         desc:'Calculate monthly repayments, total interest and amortisation.',file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',   desc:'Project how a lump sum and monthly contributions grow over time.',file:'investment_calculator.html' },
+    { icon:'✅', name:'Affordability Calculator',desc:'Check whether you can afford a purchase based on your income.',  file:'affordability_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',             desc:'Compare the true cost of renting versus buying property.',       file:'rent_vs_buy.html' },
+  ];
 
-// ══════════════════════════════════════════════════
-//  VIEW: CALCULATORS
-// ══════════════════════════════════════════════════
-VIEWS['calculators'] = function () {
-  const el = document.getElementById('page-content');
-  const calcs = [
-    { icon:'🏦', name:'Loan Calculator',               desc:'Calculate monthly bond or loan repayments, total interest and full amortisation schedule. Includes extra payments and lump sums.', file:'loan_calculator.html' },
-    { icon:'📈', name:'Investment Calculator',          desc:'Project how a lump sum and monthly contributions grow over time. Inflation-adjusted view with year-by-year breakdown.', file:'investment_calculator.html' },
-    { icon:'🏠', name:'Rent vs Buy',                   desc:'Compare the true long-term cost of renting vs buying property. Find the break-even year and net wealth position.', file:'rent_vs_buy.html' },
-    { icon:'✅', name:'Affordability Calculator',       desc:'Find out the maximum bond you can qualify for using Botswana lending rules — 35% DTI cap and residual income test.', file:'affordability_calculator.html' },
-    { icon:'🎓', name:'Education Savings Calculator',   desc:'Project the inflation-adjusted cost of university or college, set a monthly savings target, and track milestones for each child.', file:'education_savings_calculator.html' },
-    { icon:'🛡️', name:'Life Insurance Calculator',      desc:'Calculate exactly how much life cover your family needs using the DIME method, and see your coverage gap and estimated monthly premium.', file:'life_insurance_calculator.html' },
-    { icon:'📊', name:'Lifestyle Inflation Calculator', desc:'See how much of your salary increase went to lifestyle spending vs. savings. Score your lifestyle creep and project the opportunity cost of investing the difference.', file:'lifestyle_inflation_calculator.html' },
-  ];
+  function toolCard(t) {
+    return `<div class="card" style="cursor:default">
+      <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
+      <div class="card-title" style="margin-bottom:5px">${t.name}</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
+      ${t.view
+        ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open →</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`}
+    </div>`;
+  }
+
   el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">🧮 <strong>Run the numbers.</strong> Use these calculators to make informed financial decisions. Ready to act? <button class="btn btn-outline btn-sm" onclick="go('tools')" style="margin-left:4px">🛠️ Open Tools →</button></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px">
-      ${calcs.map(t=>`
-        <div class="card" style="cursor:default">
-          <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
-          <div class="card-title" style="margin-bottom:5px">${t.name}</div>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.55">${t.desc}</p>
-          <button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>
-        </div>`).join('')}
+    <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action on your finances.</div>
+
+    <div style="margin-bottom:8px">
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">📂 Financial Tools</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Interactive tools that save your data and track your progress over time.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-bottom:28px">
+        ${financialTools.map(toolCard).join('')}
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">🧮 Calculators</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Calculation-only tools to model scenarios — no data is saved.</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+        ${calculators.map(toolCard).join('')}
+      </div>
     </div>`;
 };
 
@@ -2094,68 +1896,33 @@ VIEWS['emergency'] = async function () {
 // ══════════════════════════════════════════════════
 VIEWS['checkin'] = function () {
   const el = document.getElementById('page-content');
-  const vals = { savings:5, debt:5, income:5, expenses:5 };
-  let stressVal = 5;
-  let selectedTags = new Set();
-
-  const TAGS = ['😰 Stressed','😟 Anxious','😤 Frustrated','😔 Overwhelmed','😌 Calm','😊 Confident','🌟 Hopeful','😤 Worried','😮‍💨 Relieved'];
-  const STRESS_LABEL = ['','Very calm','Calm','Mostly calm','Slightly stressed','Moderate stress','Notable stress','Quite stressed','Very stressed','Highly stressed','Extremely stressed'];
+  const vals = { savings:5, debt:5, income:5, expenses:5, stress:5 };
 
   el.innerHTML = `
-    <div style="max-width:580px">
-      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate your finances and stress level in one place. Everything saves together.</div>
+    <div style="max-width:560px">
+      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month. Your score updates.</div>
       <div class="card">
-        <div class="card-title">💼 Financial Scores</div>
-        <div style="font-size:12px;color:var(--muted);margin:-8px 0 14px">Rate how this month went across each area</div>
+        <div class="card-title">How did this month go?</div>
         ${[
-          ['savings','Savings progress','1 = saved nothing · 10 = saved a lot'],
-          ['debt','Debt management','1 = worsened · 10 = improved significantly'],
-          ['income','Income stability','1 = very unstable · 10 = rock solid'],
-          ['expenses','Expense control','1 = overspent · 10 = well within budget'],
+          ['savings','Savings progress','1=none, 10=great'],
+          ['debt','Debt management','1=worsened, 10=improved'],
+          ['income','Income stability','1=very unstable, 10=very stable'],
+          ['expenses','Expense control','1=overspent, 10=well controlled'],
+          ['stress','Financial stress','1=very stressed, 10=calm'],
         ].map(([k,label,hint])=>`
           <div class="slider-row">
-            <label>${label} <span id="v-${k}" style="color:var(--navy);font-weight:700">5</span>/10</label>
+            <label>${label} <span id="v-${k}">5</span>/10</label>
             <input type="range" min="1" max="10" value="5" id="sl-${k}" oninput="slUpdate('${k}',this.value)">
             <div style="font-size:11px;color:var(--muted);margin-top:2px">${hint}</div>
           </div>`).join('')}
-
-        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:12px 16px;margin:10px 0 18px;display:flex;align-items:center;gap:16px">
-          <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:24px;font-weight:700;color:var(--navy)">50</span>/100</div>
-        </div>
-
-        <div style="border-top:2px solid var(--border);padding-top:18px;margin-top:4px">
-          <div class="card-title" style="margin-bottom:4px">😰 Financial Stress</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:14px">How stressed are you about your finances right now?</div>
-
-          <div class="slider-row">
-            <label>Stress level <span id="v-stress" style="color:var(--orange);font-weight:700">5</span>/10
-              <span id="stress-label" style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">Moderate stress</span>
-            </label>
-            <input type="range" min="1" max="10" value="5" id="sl-stress" oninput="stressUpdate(this.value)"
-              style="accent-color:var(--orange)">
-            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
-              <span>1 = Very calm</span><span>10 = Extremely stressed</span>
-            </div>
-          </div>
-
-          <div style="margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--text)">How are you feeling? <span style="font-weight:400;color:var(--muted)">(pick any)</span></div>
-          <div id="tag-container" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-            ${TAGS.map(t=>`
-              <button type="button" class="tag-btn" data-tag="${t}" onclick="toggleTag('${t}')"
-                style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--border);background:#fff;font-size:12px;cursor:pointer;transition:all .15s">
-                ${t}
-              </button>`).join('')}
-          </div>
-        </div>
-
-        <div class="field">
+        <div class="field" style="margin-top:6px">
           <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-          <textarea id="ci-notes" rows="3" placeholder="What went well? What was challenging? What's causing stress?"></textarea>
+          <textarea id="ci-notes" rows="3" placeholder="What went well? What was challenging?"></textarea>
         </div>
-
-        <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()" style="width:100%;justify-content:center;margin-top:6px">
-          💾 Save Check-in
-        </button>
+        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:14px;margin:14px 0;display:flex;align-items:center;gap:16px">
+          <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">50</span>/100</div>
+        </div>
+        <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()">Save Check-in</button>
       </div>
     </div>`;
 
@@ -2166,52 +1933,28 @@ VIEWS['checkin'] = function () {
     document.getElementById('ci-score').textContent = avg;
   };
 
-  window.stressUpdate = function (val) {
-    stressVal = parseInt(val);
-    document.getElementById('v-stress').textContent = val;
-    document.getElementById('stress-label').textContent = STRESS_LABEL[stressVal] || '';
-  };
-
-  window.toggleTag = function (tag) {
-    if (selectedTags.has(tag)) { selectedTags.delete(tag); } else { selectedTags.add(tag); }
-    document.querySelectorAll('.tag-btn').forEach(btn => {
-      const active = selectedTags.has(btn.dataset.tag);
-      btn.style.background  = active ? 'var(--orange)' : '#fff';
-      btn.style.color       = active ? '#fff' : 'inherit';
-      btn.style.borderColor = active ? 'var(--orange)' : 'var(--border)';
-    });
-  };
-
   window.submitCheckin = async function () {
     const avg   = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length*10);
     const notes = document.getElementById('ci-notes').value;
     const btn   = document.getElementById('ci-btn');
     btn.disabled = true; btn.textContent = 'Saving…';
 
-    // 1. Save financial check-in to Supabase
     const { data, error } = await sb.from('checkins').insert({
       user_id: currentUser.id, vals: {...vals}, score: avg, notes, created_at: new Date().toISOString()
     }).select().single();
 
-    if (!error && data) state.checkins.unshift(data);
+    if (error) {
+      console.error('checkin save failed:', error);
+      showToast('⚠️ Check-in could not be saved. Please try again.');
+      btn.disabled = false; btn.textContent = 'Save Check-in';
+      return;
+    }
+    if (data) state.checkins.unshift(data);
 
     if (state.checkins.length===1) awardBadge('check_in_1');
     if (state.checkins.length>=3)  awardBadge('check_in_3');
 
-    // 2. Save stress entry to Supabase stress_logs
-    const stressEntry = {
-      user_id:    currentUser.id,
-      level:      stressVal,
-      tags:       [...selectedTags],
-      notes:      notes,
-      created_at: new Date().toISOString(),
-    };
-    await sb.from('stress_logs').insert(stressEntry);
-    const stressRecord = { date: stressEntry.created_at, level: stressVal, tags: [...selectedTags], notes };
-    state.stressLogs.push(stressRecord);
-    localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
-
-    showToast('✅ Check-in & stress level saved!');
+    showToast('✅ Check-in saved! Keep it up.');
     go('progress');
   };
 };
