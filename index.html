@@ -630,11 +630,13 @@ async function saveUser() {
 function saveBadges() {
   if (!currentUser) return;
   // Badges are ONLY ever written here — never via saveUser().
-  sb.from('profiles').update({
+  // Use upsert (not update) so badges save even if the profile row doesn't exist yet.
+  sb.from('profiles').upsert({
+    id: currentUser.id,
     badges_earned: state.badges.earned,
     badges_points: state.badges.points,
     updated_at: new Date().toISOString()
-  }).eq('id', currentUser.id)
+  }, { onConflict: 'id' })
   .then(({ error }) => { if (error) console.error('[KW] saveBadges error:', error.message); })
   .catch(e => console.error('[KW] saveBadges catch:', e));
 }
@@ -1518,15 +1520,15 @@ window.saveNameModal = function () {
   prof.displayName = last ? `${first} ${last}` : first;
   localStorage.setItem('kw_profile', JSON.stringify(prof));
 
-  // Save to Supabase state.user
-  if (state.user) {
-    state.user.first_name = first;
-    state.user.last_name  = last;
-    saveUser().catch(()=>{});
-  } else {
-    // Fallback: update Supabase auth metadata
-    sb.auth.updateUser({ data: { first_name: first, last_name: last, full_name: prof.displayName } }).catch(()=>{});
-  }
+  // Save to Supabase — always upsert profile so the row is created if it doesn't exist yet
+  if (!state.user) state.user = {};
+  state.user.first_name = first;
+  state.user.last_name  = last;
+  saveUser().catch(()=>{});
+  // Also update auth metadata
+  sb.auth.updateUser({ data: { first_name: first, last_name: last, full_name: prof.displayName } }).catch(()=>{});
+  // Award first_login badge now that we have a name
+  awardBadge('first_login');
 
   initProfileUI();
   document.getElementById('name-modal').classList.remove('visible');
