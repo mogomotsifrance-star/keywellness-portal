@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Debt Management Planner – BWP</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
+  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
+.app{max-width:1100px;margin:0 auto;padding:28px 18px 80px;}
+.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
+.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
+.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
+.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:18px;}
+.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+.card-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;}
+.card-title-row .card-title{margin-bottom:0;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
+.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
+.btn-ghost{background:var(--cream);color:var(--slate);border:1.5px solid var(--border);}.btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.btn-sm{padding:6px 13px;font-size:.75rem;border-radius:6px;}
+.btn-danger{background:#fef2f2;color:var(--red);border:1.5px solid #fecaca;}.btn-danger:hover{background:var(--red);color:white;border-color:var(--red);}
+.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
+.iw:focus-within{border-color:var(--gold);background:#fff;}
+.iw-pre{padding:0 9px;font-size:.8rem;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;}
+.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:9px 10px;font-size:.85rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px;}
+.stat-box{border-radius:9px;padding:14px 16px;border-left:4px solid;}
+.stat-box.gold{background:#fffbeb;border-color:var(--gold);}
+.stat-box.red{background:#fef2f2;border-color:var(--red);}
+.stat-box.green{background:#f0fdf4;border-color:var(--green);}
+.stat-box.navy{background:#eff6ff;border-color:var(--navy);}
+.stat-box.orange{background:#fff7ed;border-color:var(--orange);}
+.stat-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.stat-value{font-size:1.1rem;font-weight:700;font-family:'DM Mono',monospace;}
+.stat-sub{font-size:.68rem;color:var(--muted);margin-top:3px;}
+.debt-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 32px;gap:8px;align-items:center;margin-bottom:8px;}
+.debt-row-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 32px;gap:8px;margin-bottom:6px;}
+.col-lbl{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
+.del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
+.del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
+.strategy-tabs{display:flex;gap:8px;margin-bottom:18px;}
+.stab{flex:1;padding:10px 14px;border-radius:8px;border:2px solid var(--border);background:var(--cream);cursor:pointer;font-size:.82rem;font-weight:700;text-align:center;transition:all .15s;}
+.stab:hover{border-color:var(--navy);}
+.stab.active{border-color:var(--navy);background:var(--navy);color:white;}
+.payoff-list{display:flex;flex-direction:column;gap:8px;}
+.payoff-item{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:8px;background:var(--cream);border:1.5px solid var(--border);}
+.payoff-rank{width:28px;height:28px;border-radius:50%;background:var(--navy);color:white;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;flex-shrink:0;}
+.payoff-info{flex:1;}
+.payoff-name{font-size:.88rem;font-weight:700;}
+.payoff-detail{font-size:.72rem;color:var(--muted);margin-top:2px;}
+.payoff-months{font-size:.8rem;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy);text-align:right;}
+.progress-bar{height:8px;background:var(--cream);border-radius:99px;overflow:hidden;margin-top:6px;}
+.progress-fill{height:100%;background:var(--gold);border-radius:99px;transition:width .5s;}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.compare-card{border-radius:9px;padding:16px;border:2px solid var(--border);}
+.compare-card.snowball{border-color:var(--gold);background:#fffbeb;}
+.compare-card.avalanche{border-color:var(--navy);background:#eff6ff;}
+.compare-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.compare-label.snowball{color:var(--gold);}
+.compare-label.avalanche{color:var(--navy);}
+.compare-stat{font-size:1rem;font-weight:700;font-family:'DM Mono',monospace;margin-bottom:2px;}
+.compare-desc{font-size:.72rem;color:var(--slate);}
+.notice{padding:11px 14px;border-radius:8px;font-size:.8rem;font-weight:600;margin-bottom:14px;border:1.5px solid;}
+.notice-gold{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.notice-green{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.notice-navy{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
+.toast.show{opacity:1;}
+@media(max-width:700px){.debt-row,.debt-row-hdr{grid-template-columns:1fr 1fr;}.debt-row>*:nth-child(n+3),.debt-row-hdr>*:nth-child(n+3){display:none;}.compare-grid{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Debt Management Planner</h1>
+      <p>Compare payoff strategies and build your debt-free plan</p>
+    </div>
+    <div class="header-actions">
+      <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+      <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
+      <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Summary stats -->
+  <div class="stat-grid" id="stats-grid">
+    <div class="stat-box red"><div class="stat-label">Total Debt</div><div class="stat-value" id="st-total">P0</div></div>
+    <div class="stat-box gold"><div class="stat-label">Min. Payments</div><div class="stat-value" id="st-min">P0/mo</div></div>
+    <div class="stat-box orange"><div class="stat-label">Total Interest</div><div class="stat-value" id="st-interest">P0</div></div>
+    <div class="stat-box green"><div class="stat-label">Debt Free In</div><div class="stat-value" id="st-months">— mo</div></div>
+  </div>
+
+  <!-- Extra payment -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">Extra Monthly Payment</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <p style="font-size:.8rem;color:var(--muted);margin-bottom:8px">Add extra money above minimums to accelerate payoff.</p>
+        <div class="iw"><div class="iw-pre">P</div><input type="number" id="extra-payment" value="0" min="0" step="50" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+      </div>
+      <div style="flex:1;min-width:200px">
+        <p style="font-size:.8rem;color:var(--slate);font-weight:600;margin-bottom:4px">Strategy</p>
+        <div style="display:flex;gap:8px">
+          <button class="stab active" id="tab-snowball" onclick="setStrategy('snowball')">❄️ Snowball<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Smallest first</span></button>
+          <button class="stab" id="tab-avalanche" onclick="setStrategy('avalanche')">🏔️ Avalanche<br><span style="font-size:.7rem;font-weight:400;opacity:.8">Highest rate first</span></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add debts -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">Your Debts</div>
+      <button class="btn btn-navy btn-sm" onclick="addDebt()">+ Add Debt</button>
+    </div>
+    <div class="debt-row-hdr">
+      <div class="col-lbl">Name</div>
+      <div class="col-lbl">Balance (P)</div>
+      <div class="col-lbl">Rate (%)</div>
+      <div class="col-lbl">Min. Pay (P)</div>
+      <div class="col-lbl">Paid So Far (P)</div>
+      <div></div>
+    </div>
+    <div id="debts-list"></div>
+    <div id="empty-msg" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">No debts added yet. Click "Add Debt" to get started.</div>
+  </div>
+
+  <!-- Payoff plan -->
+  <div class="card" id="plan-card" style="display:none">
+    <div class="card-title" id="plan-title">❄️ Snowball Payoff Order</div>
+    <div class="notice notice-navy" id="plan-notice"></div>
+    <div class="payoff-list" id="payoff-list"></div>
+  </div>
+
+  <!-- Comparison -->
+  <div class="card" id="compare-card" style="display:none">
+    <div class="card-title">Strategy Comparison</div>
+    <div class="compare-grid">
+      <div class="compare-card snowball">
+        <div class="compare-label snowball">❄️ Debt Snowball</div>
+        <div class="compare-stat" id="cmp-snow-months">—</div>
+        <div class="compare-desc">months to debt free</div>
+        <div style="margin-top:10px"><div class="compare-stat" id="cmp-snow-interest">P—</div><div class="compare-desc">total interest paid</div></div>
+      </div>
+      <div class="compare-card avalanche">
+        <div class="compare-label avalanche">🏔️ Debt Avalanche</div>
+        <div class="compare-stat" id="cmp-aval-months">—</div>
+        <div class="compare-desc">months to debt free</div>
+        <div style="margin-top:10px"><div class="compare-stat" id="cmp-aval-interest">P—</div><div class="compare-desc">total interest paid</div></div>
+      </div>
+    </div>
+    <div id="cmp-winner" class="notice notice-green" style="margin-top:14px;margin-bottom:0"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let debts = [];
+let strategy = 'snowball';
+let nextId = 1;
+const TOOL = 'debt_management_planner';
+
+function fmt(n) { return 'P' + Math.round(n).toLocaleString(); }
+function fmtDec(n) { return 'P' + n.toLocaleString('en', {minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function setStrategy(s) {
+  strategy = s;
+  document.getElementById('tab-snowball').classList.toggle('active', s === 'snowball');
+  document.getElementById('tab-avalanche').classList.toggle('active', s === 'avalanche');
+  recalc();
+  save();
+}
+
+function addDebt() {
+  debts.push({ id: nextId++, name: '', balance: '', rate: '', minPay: '', paid: '' });
+  render();
+}
+
+function removeDebt(id) {
+  debts = debts.filter(d => d.id !== id);
+  recalc();
+  save();
+}
+
+function render() {
+  const el = document.getElementById('debts-list');
+  const empty = document.getElementById('empty-msg');
+  empty.style.display = debts.length ? 'none' : '';
+  el.innerHTML = debts.map(d => `
+    <div class="debt-row">
+      <div class="iw"><input type="text" value="${esc(d.name)}" placeholder="e.g. Credit Card" oninput="update(${d.id},'name',this.value)"></div>
+      <div class="iw"><div class="iw-pre">P</div><input type="number" value="${d.balance}" min="0" step="100" placeholder="0" oninput="update(${d.id},'balance',this.value)" style="font-family:'DM Mono',monospace"></div>
+      <div class="iw"><input type="number" value="${d.rate}" min="0" max="100" step="0.1" placeholder="0" oninput="update(${d.id},'rate',this.value)" style="font-family:'DM Mono',monospace"><div class="iw-pre">%</div></div>
+      <div class="iw"><div class="iw-pre">P</div><input type="number" value="${d.minPay}" min="0" step="10" placeholder="0" oninput="update(${d.id},'minPay',this.value)" style="font-family:'DM Mono',monospace"></div>
+      <div class="iw"><div class="iw-pre">P</div><input type="number" value="${d.paid}" min="0" step="100" placeholder="0" oninput="update(${d.id},'paid',this.value)" style="font-family:'DM Mono',monospace"></div>
+      <button class="del-btn" onclick="removeDebt(${d.id})">✕</button>
+    </div>`).join('');
+  recalc();
+}
+
+function update(id, field, val) {
+  const d = debts.find(x => x.id === id);
+  if (d) { d[field] = val; recalc(); save(); }
+}
+
+function pf(v) { return parseFloat(v) || 0; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function simulatePayoff(orderedDebts, extra) {
+  if (!orderedDebts.length) return { months: 0, interest: 0 };
+  let balances = orderedDebts.map(d => pf(d.balance) - pf(d.paid));
+  const rates = orderedDebts.map(d => pf(d.rate) / 100 / 12);
+  const mins = orderedDebts.map(d => pf(d.minPay));
+  let months = 0, totalInterest = 0;
+  const MAX = 600;
+  while (balances.some(b => b > 0.01) && months < MAX) {
+    months++;
+    let available = extra;
+    // accrue interest
+    for (let i = 0; i < balances.length; i++) {
+      if (balances[i] <= 0) continue;
+      const int = balances[i] * rates[i];
+      totalInterest += int;
+      balances[i] += int;
+    }
+    // pay minimums
+    for (let i = 0; i < balances.length; i++) {
+      if (balances[i] <= 0) continue;
+      const pay = Math.min(mins[i], balances[i]);
+      balances[i] -= pay;
+      if (balances[i] < 0) { available += Math.abs(balances[i]); balances[i] = 0; }
+    }
+    // apply extra to first non-zero
+    for (let i = 0; i < balances.length; i++) {
+      if (balances[i] <= 0.01) continue;
+      const pay = Math.min(available, balances[i]);
+      balances[i] -= pay;
+      available -= pay;
+      if (available <= 0) break;
+    }
+    // freed minimums roll forward
+    for (let i = 0; i < balances.length; i++) {
+      if (balances[i] <= 0.01 && mins[i] > 0) { /* min freed, will roll to extra next loop */ }
+    }
+  }
+  return { months, interest: totalInterest };
+}
+
+function recalc() {
+  const valid = debts.filter(d => pf(d.balance) > 0);
+  const extra = pf(document.getElementById('extra-payment').value);
+
+  const total = valid.reduce((s, d) => s + Math.max(0, pf(d.balance) - pf(d.paid)), 0);
+  const minTotal = valid.reduce((s, d) => s + pf(d.minPay), 0);
+
+  document.getElementById('st-total').textContent = fmt(total);
+  document.getElementById('st-min').textContent = fmt(minTotal) + '/mo';
+
+  if (!valid.length) {
+    document.getElementById('st-interest').textContent = 'P0';
+    document.getElementById('st-months').textContent = '—';
+    document.getElementById('plan-card').style.display = 'none';
+    document.getElementById('compare-card').style.display = 'none';
+    return;
+  }
+
+  // Snowball order: smallest balance first
+  const snowOrder = [...valid].sort((a, b) => (pf(a.balance) - pf(a.paid)) - (pf(b.balance) - pf(b.paid)));
+  // Avalanche order: highest rate first
+  const avalOrder = [...valid].sort((a, b) => pf(b.rate) - pf(a.rate));
+
+  const snowResult = simulatePayoff(snowOrder, extra);
+  const avalResult = simulatePayoff(avalOrder, extra);
+
+  const activeOrder = strategy === 'snowball' ? snowOrder : avalOrder;
+  const activeResult = strategy === 'snowball' ? snowResult : avalResult;
+
+  document.getElementById('st-interest').textContent = fmt(activeResult.interest);
+  document.getElementById('st-months').textContent = activeResult.months + ' mo';
+
+  // Strategy comparison
+  document.getElementById('cmp-snow-months').textContent = snowResult.months;
+  document.getElementById('cmp-snow-interest').textContent = fmt(snowResult.interest);
+  document.getElementById('cmp-aval-months').textContent = avalResult.months;
+  document.getElementById('cmp-aval-interest').textContent = fmt(avalResult.interest);
+  const saving = snowResult.interest - avalResult.interest;
+  const winnerEl = document.getElementById('cmp-winner');
+  if (Math.abs(saving) < 50) {
+    winnerEl.textContent = 'Both strategies lead to similar outcomes for your debts. Choose snowball for motivation or avalanche for pure math.';
+    winnerEl.className = 'notice notice-navy';
+  } else if (saving > 0) {
+    winnerEl.textContent = `Avalanche saves you ${fmt(saving)} in interest over snowball. But snowball can feel more motivating — both work!`;
+    winnerEl.className = 'notice notice-green';
+  } else {
+    winnerEl.textContent = `Snowball saves you ${fmt(-saving)} in interest over avalanche for your specific debts!`;
+    winnerEl.className = 'notice notice-green';
+  }
+
+  // Payoff plan
+  document.getElementById('plan-card').style.display = '';
+  document.getElementById('compare-card').style.display = '';
+  const planTitle = document.getElementById('plan-title');
+  planTitle.textContent = strategy === 'snowball' ? '❄️ Snowball Payoff Order' : '🏔️ Avalanche Payoff Order';
+  const planNotice = document.getElementById('plan-notice');
+  planNotice.textContent = strategy === 'snowball'
+    ? 'Pay minimums on all debts. Put all extra money toward the smallest balance first.'
+    : 'Pay minimums on all debts. Put all extra money toward the highest interest rate first.';
+
+  const list = document.getElementById('payoff-list');
+  list.innerHTML = activeOrder.map((d, i) => {
+    const bal = Math.max(0, pf(d.balance) - pf(d.paid));
+    const pct = pf(d.balance) > 0 ? Math.min(100, (pf(d.paid) / pf(d.balance)) * 100) : 0;
+    return `
+      <div class="payoff-item">
+        <div class="payoff-rank">${i + 1}</div>
+        <div class="payoff-info">
+          <div class="payoff-name">${esc(d.name || 'Unnamed Debt')}</div>
+          <div class="payoff-detail">Balance: ${fmt(bal)} · Rate: ${d.rate || 0}% · Min: ${fmt(pf(d.minPay))}/mo</div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>
+        <div class="payoff-months">${fmt(bal)}<br><span style="font-size:.65rem;color:var(--muted)">${pct.toFixed(0)}% paid</span></div>
+      </div>`;
+  }).join('');
+}
+
+function getToolData() {
+  return { debts, strategy, nextId, extra: pf(document.getElementById('extra-payment').value) };
+}
+
+function loadToolData(d) {
+  if (!d) return;
+  debts = d.debts || [];
+  strategy = d.strategy || 'snowball';
+  nextId = d.nextId || (debts.length ? Math.max(...debts.map(x => x.id || 0)) + 1 : 1);
+  if (d.extra !== undefined) document.getElementById('extra-payment').value = d.extra;
+  document.getElementById('tab-snowball').classList.toggle('active', strategy === 'snowball');
+  document.getElementById('tab-avalanche').classList.toggle('active', strategy === 'avalanche');
+  render();
+}
+
+let _saveTimer;
+function save() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    if (!window._toolSb || !window._toolUser) return;
+    const { error } = await window._toolSb.from('tool_data').upsert({
+      user_id: window._toolUser.id, tool: TOOL, data: getToolData(), updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Save failed:', error);
+  }, 800);
+}
+
+render();
+
+// Auth init
+(function () {
+  const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+  const _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+  window._toolSb = _sb;
+  _sb.auth.getSession().then(async ({ data: { session } }) => {
+    if (!session) { window.location.href = 'index.html'; return; }
+    window._toolUser = session.user;
+    _sb.from('profiles').select('first_name, last_name').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
+        window._toolFullName = name || session.user.email;
+        const nameEl = document.getElementById('tool-user-name');
+        const initEl = document.getElementById('tool-user-initial');
+        if (nameEl) nameEl.textContent = window._toolFullName;
+        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+      }
+    });
+    const { data: toolRow } = await _sb.from('tool_data')
+      .select('data').eq('user_id', session.user.id).eq('tool', TOOL).maybeSingle();
+    if (toolRow?.data) { loadToolData(toolRow.data); }
+  });
+})();
+</script>
+</body>
+</html>

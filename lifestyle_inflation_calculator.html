@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lifestyle Inflation Calculator – BWP</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
+  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
+.app{max-width:1000px;margin:0 auto;padding:28px 18px 80px;}
+.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
+.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
+.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
+.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:18px;}
+.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+.card-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:8px;flex-wrap:wrap;}
+.card-title-row .card-title{margin-bottom:0;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
+.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
+.btn-ghost{background:var(--cream);color:var(--slate);border:1.5px solid var(--border);}.btn-ghost:hover{border-color:var(--navy);color:var(--navy);}
+.btn-sm{padding:6px 13px;font-size:.75rem;border-radius:6px;}
+.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
+.iw:focus-within{border-color:var(--gold);background:#fff;}
+.iw-pre{padding:0 9px;font-size:.8rem;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;}
+.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:9px 10px;font-size:.85rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+.stat-box{border-radius:9px;padding:14px 16px;border-left:4px solid;}
+.stat-box.gold{background:#fffbeb;border-color:var(--gold);}
+.stat-box.green{background:#f0fdf4;border-color:var(--green);}
+.stat-box.red{background:#fef2f2;border-color:var(--red);}
+.stat-box.orange{background:#fff7ed;border-color:var(--orange);}
+.stat-box.navy{background:#eff6ff;border-color:var(--navy);}
+.stat-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px;}
+.stat-value{font-size:1.1rem;font-weight:700;font-family:'DM Mono',monospace;}
+.stat-sub{font-size:.68rem;color:var(--muted);margin-top:3px;}
+.year-row{display:grid;grid-template-columns:80px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:8px;}
+.year-row-hdr{display:grid;grid-template-columns:80px 1fr 1fr 90px 32px;gap:8px;margin-bottom:6px;}
+.col-lbl{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
+.del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
+.del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
+.savings-pct{font-size:.82rem;font-weight:700;font-family:'DM Mono',monospace;text-align:center;}
+.insight-list{display:flex;flex-direction:column;gap:8px;}
+.insight-item{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border-radius:8px;font-size:.8rem;line-height:1.5;border:1px solid;}
+.insight-item.good{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.insight-item.warn{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.insight-item.alert{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+.insight-item.info{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
+.notice{padding:11px 14px;border-radius:8px;font-size:.8rem;font-weight:600;border:1.5px solid;margin-bottom:14px;}
+.notice-gold{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.notice-green{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
+.toast.show{opacity:1;}
+@media(max-width:640px){.year-row,.year-row-hdr{grid-template-columns:60px 1fr 1fr 32px;}.year-row>*:nth-child(4),.year-row-hdr>*:nth-child(4){display:none;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Lifestyle Inflation Calculator</h1>
+      <p>See how income growth compares to spending growth</p>
+    </div>
+    <div class="header-actions">
+      <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+      <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
+      <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    </div>
+  </div>
+
+  <div class="notice notice-gold">💡 <strong>What is lifestyle inflation?</strong> When your spending grows as fast as (or faster than) your income, raises don't actually improve your financial position — they just fund a more expensive lifestyle.</div>
+
+  <!-- Summary stats -->
+  <div class="stat-grid">
+    <div class="stat-box navy"><div class="stat-label">Income Growth</div><div class="stat-value" id="st-inc-growth">—%</div><div class="stat-sub">over tracked period</div></div>
+    <div class="stat-box red"><div class="stat-label">Spending Growth</div><div class="stat-value" id="st-exp-growth">—%</div><div class="stat-sub">over tracked period</div></div>
+    <div class="stat-box gold"><div class="stat-label">Raises Saved</div><div class="stat-value" id="st-raise-saved">—%</div><div class="stat-sub">of income increases saved</div></div>
+    <div class="stat-box green"><div class="stat-label">Lost to Lifestyle</div><div class="stat-value" id="st-lost">P0</div><div class="stat-sub">cumulative extra spending</div></div>
+  </div>
+
+  <!-- Year data entry -->
+  <div class="card">
+    <div class="card-title-row">
+      <div class="card-title">Income &amp; Spending by Year</div>
+      <button class="btn btn-navy btn-sm" onclick="addYear()">+ Add Year</button>
+    </div>
+    <div class="year-row-hdr">
+      <div class="col-lbl">Year</div>
+      <div class="col-lbl">Monthly Income (P)</div>
+      <div class="col-lbl">Monthly Spending (P)</div>
+      <div class="col-lbl">Savings %</div>
+      <div></div>
+    </div>
+    <div id="years-list"></div>
+    <div id="empty-msg" style="text-align:center;padding:24px;color:var(--muted);font-size:.85rem">Add at least 2 years to see your lifestyle inflation trend.</div>
+  </div>
+
+  <!-- Projection -->
+  <div class="card" id="projection-card" style="display:none">
+    <div class="card-title-row">
+      <div class="card-title">Missed Savings Projection</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:.75rem;color:var(--muted)">Investment return:</span>
+        <div class="iw" style="width:100px"><input type="number" id="proj-rate" value="8" min="0" max="20" step="0.5" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">%</div></div>
+        <span style="font-size:.75rem;color:var(--muted)">over</span>
+        <div class="iw" style="width:100px"><input type="number" id="proj-years" value="20" min="1" max="40" step="1" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">yrs</div></div>
+      </div>
+    </div>
+    <p style="font-size:.8rem;color:var(--muted);margin-bottom:16px">If you had saved the extra lifestyle spending instead, and invested it at the rate above, you'd have:</p>
+    <div style="background:var(--navy);border-radius:10px;padding:20px;text-align:center;color:white;margin-bottom:16px">
+      <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;color:rgba(200,153,26,.8);font-weight:700;margin-bottom:6px">Potential Extra Wealth</div>
+      <div style="font-size:2rem;font-weight:700;font-family:'DM Mono',monospace;color:#F0C842" id="proj-wealth">P0</div>
+    </div>
+    <canvas id="proj-chart" height="200"></canvas>
+  </div>
+
+  <!-- Insights -->
+  <div class="card" id="insights-card" style="display:none">
+    <div class="card-title">Insights</div>
+    <div class="insight-list" id="insights-list"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let years = [];
+let nextId = 1;
+let chartInst = null;
+const TOOL = 'lifestyle_inflation';
+
+function fmt(n) { return 'P' + Math.round(n).toLocaleString(); }
+function pct(n) { return n.toFixed(1) + '%'; }
+function pf(v) { return parseFloat(v) || 0; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function addYear() {
+  const lastYear = years.length ? Math.max(...years.map(y => parseInt(y.year) || 2020)) : new Date().getFullYear() - 1;
+  years.push({ id: nextId++, year: String(lastYear + 1), income: '', spending: '' });
+  render();
+}
+
+function removeYear(id) {
+  years = years.filter(y => y.id !== id);
+  recalc(); save();
+}
+
+function update(id, field, val) {
+  const y = years.find(x => x.id === id);
+  if (y) { y[field] = val; recalc(); save(); }
+}
+
+function render() {
+  const el = document.getElementById('years-list');
+  const empty = document.getElementById('empty-msg');
+  empty.style.display = years.length ? 'none' : '';
+  el.innerHTML = years.map(y => {
+    const inc = pf(y.income), exp = pf(y.spending);
+    const savPct = inc > 0 ? ((inc - exp) / inc * 100) : 0;
+    const savColor = savPct >= 20 ? '#1A8C5B' : savPct >= 10 ? '#D97706' : '#C0392B';
+    return `
+      <div class="year-row">
+        <div class="iw"><input type="number" value="${esc(y.year)}" min="2000" max="2099" step="1" oninput="update(${y.id},'year',this.value)" style="font-family:'DM Mono',monospace;text-align:center"></div>
+        <div class="iw"><div class="iw-pre">P</div><input type="number" value="${y.income}" min="0" step="500" placeholder="0" oninput="update(${y.id},'income',this.value)" style="font-family:'DM Mono',monospace"></div>
+        <div class="iw"><div class="iw-pre">P</div><input type="number" value="${y.spending}" min="0" step="500" placeholder="0" oninput="update(${y.id},'spending',this.value)" style="font-family:'DM Mono',monospace"></div>
+        <div class="savings-pct" style="color:${savColor}">${inc > 0 ? pct(savPct) : '—'}</div>
+        <button class="del-btn" onclick="removeYear(${y.id})">✕</button>
+      </div>`;
+  }).join('');
+  recalc();
+}
+
+function recalc() {
+  const valid = years.filter(y => pf(y.income) > 0 && pf(y.spending) > 0)
+    .sort((a, b) => parseInt(a.year) - parseInt(b.year));
+
+  if (valid.length < 2) {
+    document.getElementById('projection-card').style.display = 'none';
+    document.getElementById('insights-card').style.display = 'none';
+    document.getElementById('st-inc-growth').textContent = '—%';
+    document.getElementById('st-exp-growth').textContent = '—%';
+    document.getElementById('st-raise-saved').textContent = '—%';
+    document.getElementById('st-lost').textContent = 'P0';
+    return;
+  }
+
+  const first = valid[0], last = valid[valid.length - 1];
+  const incGrowth = (pf(last.income) - pf(first.income)) / pf(first.income) * 100;
+  const expGrowth = (pf(last.spending) - pf(first.spending)) / pf(first.spending) * 100;
+
+  // Calculate total extra spending above baseline spending rate
+  const baseSpendRate = pf(first.spending) / pf(first.income);
+  let extraSpending = 0;
+  valid.forEach(y => {
+    const baselineSpend = pf(y.income) * baseSpendRate;
+    const actualSpend = pf(y.spending);
+    extraSpending += Math.max(0, actualSpend - baselineSpend) * 12; // annualised
+  });
+
+  // % of income raises that were saved
+  const totalRaise = (pf(last.income) - pf(first.income)) * 12;
+  const totalExpRaise = (pf(last.spending) - pf(first.spending)) * 12;
+  const raiseSavedPct = totalRaise > 0 ? Math.max(0, (totalRaise - totalExpRaise) / totalRaise * 100) : 0;
+
+  document.getElementById('st-inc-growth').textContent = pct(incGrowth);
+  document.getElementById('st-exp-growth').textContent = pct(expGrowth);
+  document.getElementById('st-raise-saved').textContent = pct(raiseSavedPct);
+  document.getElementById('st-lost').textContent = fmt(extraSpending);
+
+  // Projection
+  const projRate = pf(document.getElementById('proj-rate').value) / 100;
+  const projYears = pf(document.getElementById('proj-years').value);
+  const monthlyExtra = extraSpending / (valid.length * 12);
+  const r = projRate / 12;
+  const months = projYears * 12;
+  const fv = monthlyExtra * (r > 0 ? ((Math.pow(1 + r, months) - 1) / r) : months);
+  document.getElementById('proj-wealth').textContent = fmt(fv);
+  document.getElementById('projection-card').style.display = '';
+
+  // Chart
+  const labels = valid.map(y => y.year);
+  const incomes = valid.map(y => pf(y.income));
+  const spendings = valid.map(y => pf(y.spending));
+  const savings = valid.map(y => Math.max(0, pf(y.income) - pf(y.spending)));
+  const ctx = document.getElementById('proj-chart').getContext('2d');
+  if (chartInst) chartInst.destroy();
+  chartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Spending', data: spendings, backgroundColor: 'rgba(192,57,43,.7)', borderRadius: 4 },
+        { label: 'Savings', data: savings, backgroundColor: 'rgba(26,140,91,.7)', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'top' }, tooltip: { callbacks: { label: ctx => ' P' + Math.round(ctx.raw).toLocaleString() + '/mo' } } },
+      scales: {
+        x: { stacked: true },
+        y: { stacked: true, ticks: { callback: v => 'P' + (v/1000).toFixed(0) + 'k' } }
+      }
+    }
+  });
+
+  // Insights
+  document.getElementById('insights-card').style.display = '';
+  const insights = [];
+  if (expGrowth >= incGrowth) insights.push({ type: 'alert', icon: '🚨', text: `Your spending has grown ${pct(expGrowth)} while income grew ${pct(incGrowth)}. Spending is outpacing income — lifestyle inflation is actively hurting you.` });
+  else if (expGrowth > incGrowth * 0.7) insights.push({ type: 'warn', icon: '⚠️', text: `Spending growth (${pct(expGrowth)}) is close to income growth (${pct(incGrowth)}). You're capturing less than 30% of your raises as savings.` });
+  else insights.push({ type: 'good', icon: '✅', text: `Income grew ${pct(incGrowth)} while spending only grew ${pct(expGrowth)}. You're keeping lifestyle inflation in check — great work!` });
+
+  if (raiseSavedPct < 20) insights.push({ type: 'warn', icon: '💡', text: `You're saving only ${pct(raiseSavedPct)} of each raise. Financial wisdom suggests saving at least 50% of any income increase.` });
+  else if (raiseSavedPct >= 50) insights.push({ type: 'good', icon: '🏆', text: `Excellent — you're saving ${pct(raiseSavedPct)} of your income raises. Keep this habit and your wealth will compound significantly.` });
+
+  if (fv > 500000) insights.push({ type: 'info', icon: '📊', text: `If you'd invested that extra lifestyle spending at ${pf(document.getElementById('proj-rate').value)}%/yr, you'd have ${fmt(fv)} extra in ${projYears} years.` });
+
+  document.getElementById('insights-list').innerHTML = insights.map(i =>
+    `<div class="insight-item ${i.type}"><span>${i.icon}</span><span>${i.text}</span></div>`
+  ).join('');
+}
+
+function getToolData() {
+  return {
+    years,
+    nextId,
+    projRate: pf(document.getElementById('proj-rate').value),
+    projYears: pf(document.getElementById('proj-years').value)
+  };
+}
+
+function loadToolData(d) {
+  if (!d) return;
+  years = d.years || [];
+  nextId = d.nextId || (years.length ? Math.max(...years.map(x => x.id || 0)) + 1 : 1);
+  if (d.projRate) document.getElementById('proj-rate').value = d.projRate;
+  if (d.projYears) document.getElementById('proj-years').value = d.projYears;
+  render();
+}
+
+let _saveTimer;
+function save() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    if (!window._toolSb || !window._toolUser) return;
+    const { error } = await window._toolSb.from('tool_data').upsert({
+      user_id: window._toolUser.id, tool: TOOL, data: getToolData(), updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Save failed:', error);
+  }, 800);
+}
+
+render();
+
+(function () {
+  const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+  const _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+  window._toolSb = _sb;
+  _sb.auth.getSession().then(async ({ data: { session } }) => {
+    if (!session) { window.location.href = 'index.html'; return; }
+    window._toolUser = session.user;
+    _sb.from('profiles').select('first_name, last_name').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
+        window._toolFullName = name || session.user.email;
+        const nameEl = document.getElementById('tool-user-name');
+        const initEl = document.getElementById('tool-user-initial');
+        if (nameEl) nameEl.textContent = window._toolFullName;
+        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+      }
+    });
+    const { data: toolRow } = await _sb.from('tool_data')
+      .select('data').eq('user_id', session.user.id).eq('tool', TOOL).maybeSingle();
+    if (toolRow?.data) { loadToolData(toolRow.data); }
+  });
+})();
+</script>
+</body>
+</html>

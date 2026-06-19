@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Life Insurance Calculator – BWP</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-badges.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
+  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
+  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
+.app{max-width:960px;margin:0 auto;padding:28px 18px 80px;}
+.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
+.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
+.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
+.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:18px;}
+.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;}
+.btn:active{transform:scale(.98);}
+.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
+.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
+.btn-sm{padding:6px 13px;font-size:.75rem;border-radius:6px;}
+.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
+.iw:focus-within{border-color:var(--gold);background:#fff;}
+.iw-pre{padding:0 9px;font-size:.8rem;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;}
+.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:9px 10px;font-size:.85rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-field label{display:block;font-size:.74rem;font-weight:600;color:var(--slate);margin-bottom:6px;}
+.form-field .hint{font-size:.68rem;color:var(--muted);margin-top:4px;}
+.result-hero{background:var(--navy);border-radius:12px;padding:28px;text-align:center;color:white;margin-bottom:18px;}
+.result-hero .label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(200,153,26,.8);margin-bottom:8px;}
+.result-hero .amount{font-size:2.2rem;font-weight:700;font-family:'DM Mono',monospace;color:#F0C842;margin-bottom:4px;}
+.result-hero .sub{font-size:.82rem;color:rgba(255,255,255,.7);}
+.breakdown-list{display:flex;flex-direction:column;gap:10px;}
+.breakdown-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--border);}
+.breakdown-item-label{font-size:.82rem;font-weight:600;}
+.breakdown-item-sub{font-size:.7rem;color:var(--muted);margin-top:2px;}
+.breakdown-item-val{font-size:.9rem;font-weight:700;font-family:'DM Mono',monospace;}
+.notice{padding:11px 14px;border-radius:8px;font-size:.8rem;font-weight:600;border:1.5px solid;}
+.notice-gold{background:#fffbeb;border-color:#fde68a;color:#92400e;}
+.notice-green{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+.notice-red{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+.notice-navy{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
+.method-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px;}
+.mtab{padding:10px 8px;border-radius:8px;border:2px solid var(--border);background:var(--cream);cursor:pointer;font-size:.76rem;font-weight:700;text-align:center;transition:all .15s;line-height:1.3;}
+.mtab:hover{border-color:var(--navy);}
+.mtab.active{border-color:var(--navy);background:var(--navy);color:white;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
+.toast.show{opacity:1;}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.method-tabs{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-icon">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Life Insurance Calculator</h1>
+      <p>Estimate how much life insurance coverage you need</p>
+    </div>
+    <div class="header-actions">
+      <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+      <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
+      <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    </div>
+  </div>
+
+  <div class="notice notice-gold" style="margin-bottom:18px">⚠️ This tool provides an estimate only. Consult a licensed insurance advisor for a personalised recommendation.</div>
+
+  <!-- Method selector -->
+  <div class="card">
+    <div class="card-title">Calculation Method</div>
+    <div class="method-tabs">
+      <div class="mtab active" id="m-hlv" onclick="setMethod('hlv')">Human Life Value<br><span style="font-size:.66rem;opacity:.7">Income × years remaining</span></div>
+      <div class="mtab" id="m-dime" onclick="setMethod('dime')">DIME Method<br><span style="font-size:.66rem;opacity:.7">Debt+Income+Mortgage+Education</span></div>
+      <div class="mtab" id="m-10x" onclick="setMethod('10x')">10× Income Rule<br><span style="font-size:.66rem;opacity:.7">Simple quick estimate</span></div>
+    </div>
+    <p id="method-desc" style="font-size:.8rem;color:var(--muted)"></p>
+  </div>
+
+  <!-- Inputs -->
+  <div class="card">
+    <div class="card-title">Your Details</div>
+
+    <!-- HLV inputs -->
+    <div id="inputs-hlv">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Annual Income (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="hlv-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Years to Retirement</label>
+          <div class="iw"><input type="number" id="hlv-years" value="25" min="1" max="45" step="1" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">yrs</div></div>
+        </div>
+        <div class="form-field">
+          <label>Existing Coverage (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="hlv-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+          <div class="hint">What your employer or existing policy covers</div>
+        </div>
+        <div class="form-field">
+          <label>Discount Rate (%/yr)</label>
+          <div class="iw"><input type="number" id="hlv-rate" value="7" min="1" max="20" step="0.5" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">%</div></div>
+          <div class="hint">Expected investment return (default 7%)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIME inputs -->
+    <div id="inputs-dime" style="display:none">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Total Debt (excl. mortgage) (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-debt" value="0" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Annual Income (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Years Dependents Need Support</label>
+          <div class="iw"><input type="number" id="dime-years" value="15" min="1" max="40" step="1" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">yrs</div></div>
+        </div>
+        <div class="form-field">
+          <label>Mortgage / Home Loan Balance (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-mortgage" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Children's Education Costs (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-edu" value="0" min="0" step="5000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Existing Coverage (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 10x inputs -->
+    <div id="inputs-10x" style="display:none">
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Annual Income (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="tenx-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+        <div class="form-field">
+          <label>Existing Coverage (P)</label>
+          <div class="iw"><div class="iw-pre">P</div><input type="number" id="tenx-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div id="result-section">
+    <div class="result-hero">
+      <div class="label">Recommended Coverage</div>
+      <div class="amount" id="result-amount">P—</div>
+      <div class="sub" id="result-sub">Enter your details above to calculate</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Breakdown</div>
+      <div class="breakdown-list" id="breakdown-list"></div>
+    </div>
+  </div>
+
+  <!-- Info cards -->
+  <div class="card">
+    <div class="card-title">Types of Life Insurance in Botswana</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
+        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Term Life</div>
+        <div style="font-size:.75rem;color:var(--slate)">Covers a fixed period (e.g. 20 years). Pure protection — no cash value. Usually the most affordable option.</div>
+      </div>
+      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
+        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Whole Life</div>
+        <div style="font-size:.75rem;color:var(--slate)">Covers your entire life and builds cash value over time. Higher premiums but includes a savings component.</div>
+      </div>
+      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
+        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Group Cover</div>
+        <div style="font-size:.75rem;color:var(--slate)">Often provided by employers in Botswana. Usually 2–4× annual salary. Check if it's portable if you leave your job.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let method = 'hlv';
+const TOOL = 'life_insurance';
+
+function fmt(n) { return 'P' + Math.round(n).toLocaleString(); }
+function pf(v) { return parseFloat(v) || 0; }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+const methodDescs = {
+  hlv: 'Human Life Value: calculates the present value of your future income — what your family would lose. Best for primary earners.',
+  dime: 'DIME Method: adds up Debt + Income needs + Mortgage + Education costs. A comprehensive needs-based approach.',
+  '10x': '10× Income Rule: a quick rule of thumb. Multiply annual income by 10 for a rough minimum coverage estimate.'
+};
+
+function setMethod(m) {
+  method = m;
+  ['hlv', 'dime', '10x'].forEach(x => {
+    document.getElementById('m-' + x)?.classList.toggle('active', x === m);
+    document.getElementById('inputs-' + x).style.display = x === m ? '' : 'none';
+  });
+  document.getElementById('method-desc').textContent = methodDescs[m];
+  recalc();
+  save();
+}
+
+function recalc() {
+  let coverage = 0;
+  let breakdown = [];
+
+  if (method === 'hlv') {
+    const income = pf(document.getElementById('hlv-income').value);
+    const years = pf(document.getElementById('hlv-years').value);
+    const existing = pf(document.getElementById('hlv-existing').value);
+    const rate = pf(document.getElementById('hlv-rate').value) / 100;
+    // Present value of annuity
+    const pv = rate > 0 ? income * ((1 - Math.pow(1 + rate, -years)) / rate) : income * years;
+    coverage = Math.max(0, pv - existing);
+    breakdown = [
+      { label: 'Present Value of Future Income', sub: `${fmt(income)}/yr × ${years} yrs @ ${(rate*100).toFixed(1)}%`, val: fmt(pv) },
+      { label: 'Less Existing Coverage', sub: 'Employer / current policy', val: '-' + fmt(existing) },
+      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
+    ];
+  } else if (method === 'dime') {
+    const debt = pf(document.getElementById('dime-debt').value);
+    const income = pf(document.getElementById('dime-income').value);
+    const years = pf(document.getElementById('dime-years').value);
+    const mortgage = pf(document.getElementById('dime-mortgage').value);
+    const edu = pf(document.getElementById('dime-edu').value);
+    const existing = pf(document.getElementById('dime-existing').value);
+    const gross = debt + income * years + mortgage + edu;
+    coverage = Math.max(0, gross - existing);
+    breakdown = [
+      { label: 'D — Total Debt', sub: 'Credit cards, loans, etc.', val: fmt(debt) },
+      { label: 'I — Income Replacement', sub: `${fmt(income)}/yr × ${years} yrs`, val: fmt(income * years) },
+      { label: 'M — Mortgage Balance', sub: 'Home loan outstanding', val: fmt(mortgage) },
+      { label: 'E — Education Costs', sub: 'Children\'s schooling & university', val: fmt(edu) },
+      { label: 'Gross DIME Total', sub: '', val: fmt(gross) },
+      { label: 'Less Existing Coverage', sub: '', val: '-' + fmt(existing) },
+      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
+    ];
+  } else {
+    const income = pf(document.getElementById('tenx-income').value);
+    const existing = pf(document.getElementById('tenx-existing').value);
+    const gross = income * 10;
+    coverage = Math.max(0, gross - existing);
+    breakdown = [
+      { label: '10× Annual Income', sub: `${fmt(income)} × 10`, val: fmt(gross) },
+      { label: 'Less Existing Coverage', sub: '', val: '-' + fmt(existing) },
+      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
+    ];
+  }
+
+  const amountEl = document.getElementById('result-amount');
+  const subEl = document.getElementById('result-sub');
+  if (coverage > 0) {
+    amountEl.textContent = fmt(coverage);
+    subEl.textContent = coverage > 5000000
+      ? 'Significant coverage needed — speak to an advisor about phased options.'
+      : coverage > 1000000
+        ? 'Consider term life insurance for cost-effective coverage at this level.'
+        : 'A basic term life policy should adequately meet this need.';
+  } else {
+    amountEl.textContent = 'P0';
+    subEl.textContent = 'Your existing coverage appears sufficient. Review annually as circumstances change.';
+  }
+
+  const bEl = document.getElementById('breakdown-list');
+  bEl.innerHTML = breakdown.map(b => `
+    <div class="breakdown-item" ${b.highlight ? 'style="border-color:var(--gold);background:#fffbeb"' : ''}>
+      <div><div class="breakdown-item-label"${b.highlight ? ' style="color:var(--navy)"' : ''}>${b.label}</div>${b.sub ? `<div class="breakdown-item-sub">${b.sub}</div>` : ''}</div>
+      <div class="breakdown-item-val"${b.highlight ? ' style="color:var(--gold)"' : ''}>${b.val}</div>
+    </div>`).join('');
+
+  save();
+}
+
+function getToolData() {
+  return {
+    method,
+    hlv: { income: pf(document.getElementById('hlv-income').value), years: pf(document.getElementById('hlv-years').value), existing: pf(document.getElementById('hlv-existing').value), rate: pf(document.getElementById('hlv-rate').value) },
+    dime: { debt: pf(document.getElementById('dime-debt').value), income: pf(document.getElementById('dime-income').value), years: pf(document.getElementById('dime-years').value), mortgage: pf(document.getElementById('dime-mortgage').value), edu: pf(document.getElementById('dime-edu').value), existing: pf(document.getElementById('dime-existing').value) },
+    tenx: { income: pf(document.getElementById('tenx-income').value), existing: pf(document.getElementById('tenx-existing').value) }
+  };
+}
+
+function loadToolData(d) {
+  if (!d) return;
+  if (d.method) setMethod(d.method);
+  if (d.hlv) {
+    if (d.hlv.income) document.getElementById('hlv-income').value = d.hlv.income;
+    if (d.hlv.years) document.getElementById('hlv-years').value = d.hlv.years;
+    if (d.hlv.existing) document.getElementById('hlv-existing').value = d.hlv.existing;
+    if (d.hlv.rate) document.getElementById('hlv-rate').value = d.hlv.rate;
+  }
+  if (d.dime) {
+    ['debt','income','years','mortgage','edu','existing'].forEach(k => { if (d.dime[k]) document.getElementById('dime-'+k).value = d.dime[k]; });
+  }
+  if (d.tenx) {
+    if (d.tenx.income) document.getElementById('tenx-income').value = d.tenx.income;
+    if (d.tenx.existing) document.getElementById('tenx-existing').value = d.tenx.existing;
+  }
+  recalc();
+}
+
+let _saveTimer;
+function save() {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    if (!window._toolSb || !window._toolUser) return;
+    const { error } = await window._toolSb.from('tool_data').upsert({
+      user_id: window._toolUser.id, tool: TOOL, data: getToolData(), updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Save failed:', error);
+  }, 800);
+}
+
+// Init
+setMethod('hlv');
+
+(function () {
+  const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+  const _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+  window._toolSb = _sb;
+  _sb.auth.getSession().then(async ({ data: { session } }) => {
+    if (!session) { window.location.href = 'index.html'; return; }
+    window._toolUser = session.user;
+    _sb.from('profiles').select('first_name, last_name').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+      if (data) {
+        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
+        window._toolFullName = name || session.user.email;
+        const nameEl = document.getElementById('tool-user-name');
+        const initEl = document.getElementById('tool-user-initial');
+        if (nameEl) nameEl.textContent = window._toolFullName;
+        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+      }
+    });
+    const { data: toolRow } = await _sb.from('tool_data')
+      .select('data').eq('user_id', session.user.id).eq('tool', TOOL).maybeSingle();
+    if (toolRow?.data) { loadToolData(toolRow.data); }
+  });
+})();
+</script>
+</body>
+</html>
