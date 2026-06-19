@@ -617,12 +617,22 @@ async function loadAllData() {
 
 async function saveUser() {
   if (!currentUser || !state.user) return;
-  await sb.from('profiles').upsert({ id: currentUser.id, ...state.user, updated_at: new Date().toISOString() });
+  await sb.from('profiles').upsert({
+    id: currentUser.id,
+    ...state.user,
+    badges_earned: state.badges.earned,
+    badges_points: state.badges.points,
+    updated_at: new Date().toISOString()
+  });
 }
 
 function saveBadges() {
   if (!currentUser) return;
-  // Store badges in profiles table — already syncing correctly, no separate table needed
+  // Keep state.user in sync so saveUser() never overwrites badge data with stale values
+  if (state.user) {
+    state.user.badges_earned = state.badges.earned;
+    state.user.badges_points = state.badges.points;
+  }
   sb.from('profiles').update({
     badges_earned: state.badges.earned,
     badges_points: state.badges.points,
