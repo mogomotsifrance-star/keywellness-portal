@@ -820,11 +820,28 @@ function calculateWellness(){
       console.log('Assessment saved to Supabase:', inserted);
       showToast('Assessment saved');
     }
-    // Update last_score snapshot on the profile row
+    // Seed all shared financial figures into the profile (single source of truth)
+    const _totSavings = pf('totalSavings');
     const { error: profileErr } = await _sb.from('profiles')
-      .update({ last_score: totalScore, last_cat_scores: catScores })
+      .update({
+        last_score:        totalScore,
+        last_cat_scores:   catScores,
+        // Shared financial figures — assessment is authoritative seed
+        gross_income:      gross      || null,
+        net_income:        net        || null,
+        other_income:      other      || null,
+        monthly_income:    net || gross || null,   // hub uses net as primary income
+        monthly_expenses:  expenses   || null,
+        total_assets:      totalAssets      || null,
+        total_liabilities: totalLiabilities || null,
+        monthly_debt:      totalDebtPayments || null,
+        total_savings:     _totSavings || null,
+        monthly_savings:   monthlySavings   || null,
+        fin_updated_at:    _now,
+      })
       .eq('id', _user.id);
-    if (profileErr) console.warn('Profile snapshot update failed:', profileErr);
+    if (profileErr) console.warn('Profile seed update failed:', profileErr);
+    else console.log('Profile shared figures seeded from assessment.');
   })();
 
   const grade=totalScore>=85?{label:'Excellent 🌟',tagline:'You are in outstanding financial health. Continue your disciplined habits and focus on optimising your wealth strategy.',color:'var(--green)'}

@@ -414,11 +414,15 @@ function showToast(msg='Saved', dur=1600){
 }
 function save(){
   localStorage.setItem(LS_KEY, JSON.stringify({budgets, currentKey}));
-  // ── Sync income to Supabase profile ──
+  // ── Sync income + expenses to Supabase profile (silent, no confirmation needed — budget is the source of truth) ──
   if (window._toolUser && currentKey && budgets[currentKey]) {
-    const _inc = calcTotals(budgets[currentKey]).totalIncome;
-    if (_inc > 0) {
-      window._toolSb && window._toolSb.from('profiles').update({ monthly_income: _inc }).eq('id', window._toolUser.id).then(() => {}).catch(() => {});
+    const _t = calcTotals(budgets[currentKey]);
+    const _profilePatch = {};
+    if (_t.totalIncome  > 0) _profilePatch.monthly_income   = _t.totalIncome;
+    if (_t.totalExpenses > 0) _profilePatch.monthly_expenses = _t.totalExpenses;
+    if (Object.keys(_profilePatch).length) {
+      _profilePatch.fin_updated_at = new Date().toISOString();
+      window._toolSb && window._toolSb.from('profiles').update(_profilePatch).eq('id', window._toolUser.id).then(() => {}).catch(() => {});
     }
   }
   // ── Upsert full budget state to Supabase tool_data ──

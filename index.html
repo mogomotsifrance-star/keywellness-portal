@@ -636,20 +636,30 @@ async function saveUser() {
   // Whitelist known columns so unknown keys never cause RLS/schema rejections
   const u = state.user || {};
   const payload = {
-    id:               currentUser.id,
-    first_name:       u.first_name       ?? null,
-    last_name:        u.last_name        ?? null,
-    age:              u.age              ?? null,
-    monthly_income:   u.monthly_income   ?? null,
-    monthly_expenses: u.monthly_expenses ?? null,
-    last_score:       u.last_score       ?? null,
-    last_cat_scores:  u.last_cat_scores  ?? null,
-    consent_accepted: u.consent_accepted ?? false,
-    consent_date:     u.consent_date     ?? null,
-    welcome_seen:     u.welcome_seen     ?? false,
-    onboarded:        u.onboarded        ?? false,
-    joined_at:        u.joined_at        ?? null,
-    updated_at:       new Date().toISOString(),
+    id:                currentUser.id,
+    first_name:        u.first_name        ?? null,
+    last_name:         u.last_name         ?? null,
+    age:               u.age               ?? null,
+    monthly_income:    u.monthly_income    ?? null,
+    monthly_expenses:  u.monthly_expenses  ?? null,
+    last_score:        u.last_score        ?? null,
+    last_cat_scores:   u.last_cat_scores   ?? null,
+    consent_accepted:  u.consent_accepted  ?? false,
+    consent_date:      u.consent_date      ?? null,
+    welcome_seen:      u.welcome_seen      ?? false,
+    onboarded:         u.onboarded         ?? false,
+    joined_at:         u.joined_at         ?? null,
+    // Shared financial figures (two-way sync)
+    gross_income:      u.gross_income      ?? null,
+    net_income:        u.net_income        ?? null,
+    other_income:      u.other_income      ?? null,
+    total_assets:      u.total_assets      ?? null,
+    total_liabilities: u.total_liabilities ?? null,
+    monthly_debt:      u.monthly_debt      ?? null,
+    total_savings:     u.total_savings     ?? null,
+    monthly_savings:   u.monthly_savings   ?? null,
+    fin_updated_at:    u.fin_updated_at    ?? null,
+    updated_at:        new Date().toISOString(),
   };
   const { data, error } = await sb
     .from('profiles')
@@ -1166,6 +1176,23 @@ VIEWS['dashboard'] = async function () {
   const snap = JSON.parse(localStorage.getItem('kw_snapshot') || '{}');
   if (budgetDTI    === null) budgetDTI    = snap.budget?.dtiRatio    ?? null;
   if (budgetSavRate === null) budgetSavRate = snap.budget?.savingsRate ?? null;
+
+  // ── Shared profile figures as fallback (fills gaps when tools haven't been opened yet) ──
+  const _prof = state.user || {};
+  const _profIncome = _prof.net_income || _prof.monthly_income || null;
+  if (budgetSurplus === null && _profIncome && _prof.monthly_expenses) {
+    budgetSurplus = _profIncome - _prof.monthly_expenses;
+    budgetLabel   = 'from profile';
+  }
+  if (netWorth === null && (_prof.total_assets != null || _prof.total_liabilities != null)) {
+    netWorth = (_prof.total_assets || 0) - (_prof.total_liabilities || 0);
+  }
+  if (budgetDTI === null && _profIncome && _prof.monthly_debt) {
+    budgetDTI = +(_prof.monthly_debt / _profIncome * 100).toFixed(1);
+  }
+  if (budgetSavRate === null && _profIncome && _prof.monthly_savings) {
+    budgetSavRate = +(_prof.monthly_savings / _profIncome * 100).toFixed(1);
+  }
 
   // ── kw_snapshot staleness (supplementary — used for freshness labels only) ──
   const daysSince = iso => iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : null;

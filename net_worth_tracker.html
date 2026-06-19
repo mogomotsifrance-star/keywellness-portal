@@ -6,6 +6,7 @@
 <title>Net Worth Tracker — Key Wellness</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-profile-sync.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--cream:#f5f0e8;--cream-dark:#ede7d9;--white:#fff;--green:#2d8a4e;--red:#c0392b;--muted:#6b7280;--border:#ddd6c8;--radius:12px;--radius-sm:8px;--shadow:0 2px 12px rgba(26,39,68,.1)}
@@ -173,6 +174,17 @@ function save(){
     if(!window._toolSb||!window._toolUser)return;
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'net_worth_tracker',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error)console.error('net_worth_tracker save failed:',error);
+    // Offer to write computed asset/liability totals back to shared profile
+    const totalAssets = data.assets.reduce((s,a)=>s+Number(a.amt||0),0);
+    const totalLiabs  = data.liabilities.reduce((s,l)=>s+Number(l.amt||0),0);
+    if (totalAssets > 0 || totalLiabs > 0) {
+      const changes = [
+        { col: 'total_assets',      newVal: totalAssets },
+        { col: 'total_liabilities', newVal: totalLiabs  },
+      ];
+      const ok = await KWProfile.confirm(changes);
+      if (ok) await KWProfile.writeBack(changes);
+    }
   })();
 }
 function fmt(n){ return (n<0?'-':'')+'P'+Math.abs(Math.round(n)).toLocaleString(); }

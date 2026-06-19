@@ -6,6 +6,7 @@
 <title>Debt-to-Income Calculator – Botswana Pula</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-profile-sync.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -477,6 +478,12 @@ function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').re
 // ──────────────────────────────────────────────
 const LS_DATA = 'dti_data';
 
+const _DTI_INCOME_MAPPINGS = [
+  { inputId: 'grossSalary', col: 'gross_income' },
+  { inputId: 'netSalary',   col: 'net_income'   },
+  { inputId: 'otherIncome', col: 'other_income'  },
+];
+
 function saveData() {
   const data = {
     debts, nextId,
@@ -489,6 +496,15 @@ function saveData() {
     if(!window._toolSb||!window._toolUser)return;
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'dti_calculator',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error)console.error('dti_calculator save failed:',error);
+    // Offer to write changed income fields + total debt back to shared profile
+    const incomeChanges = KWProfile.detectChanges(_DTI_INCOME_MAPPINGS);
+    const totalDebt = debts.reduce((s, d) => s + (d.monthly || 0), 0);
+    const debtChange = (totalDebt > 0) ? [{ col: 'monthly_debt', newVal: totalDebt }] : [];
+    const allChanges = [...incomeChanges, ...debtChange];
+    if (allChanges.length) {
+      const ok = await KWProfile.confirm(allChanges);
+      if (ok) await KWProfile.writeBack(allChanges);
+    }
   })();
   showToast();
 }
@@ -908,28 +924,13 @@ loadData();
     });
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'dti_calculator').maybeSingle();
     if (toolRow?.data) { localStorage.setItem(LS_DATA, JSON.stringify(toolRow.data)); loadData(); }
+    else {
+      // No saved tool data — prefill from shared profile
+      await KWProfile.load();
+      KWProfile.prefill(_DTI_INCOME_MAPPINGS);
+    }
   });
 })();
-
-// ── Income Prefill ──
-document.addEventListener('DOMContentLoaded', function() {
-  window._toolSb && window._toolSb.auth.getSession().then(({ data: { session } }) => {
-    if (!session) return;
-    window._toolSb.from('profiles').select('monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
-      if (!data || !data.monthly_income) return;
-      const val = Number(data.monthly_income).toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
-      ['grossSalary','monthlySalary','monthlyIncome','grossIncome','income','salary','monthlyGross'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.tagName === 'INPUT') {
-          el.value = val;
-          el.dispatchEvent(new Event('input'));
-        }
-      });
-      const notice = document.getElementById('income-prefill-notice');
-      if (notice) notice.style.display = '';
-    });
-  });
-});
 </script>
 </body>
 </html>
