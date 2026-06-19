@@ -1233,6 +1233,25 @@ VIEWS['dashboard'] = async function () {
   if (!hasDTI && hasBudget) {
     nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
   }
+  if (netWorth === null) {
+    nudges.push({ pri:'medium', icon:'💎', title:'Track your net worth', desc:'Enter your assets and liabilities to see your true financial position — updated every time you save.', cta:'Open Net Worth', click:`openTool('net_worth_tracker.html')` });
+  }
+  if (efMonths === null) {
+    nudges.push({ pri:'high', icon:'🆘', title:'Set up your emergency fund', desc:'An emergency fund is your #1 financial safety net. Set a target and start tracking your progress.', cta:'Set Up Now', click:`go('emergency')` });
+  } else if (efMonths < 3) {
+    nudges.push({ pri:'high', icon:'🆘', title:`Emergency fund below 3 months (${efMonths.toFixed(1)} mo)`, desc:'Aim for at least 3 months of expenses. Increase your monthly contribution to close the gap.', cta:'View Fund', click:`go('emergency')` });
+  }
+  if (totalGoals === 0) {
+    nudges.push({ pri:'medium', icon:'🎯', title:'Add your first financial goal', desc:'Goals give your money direction. Set a target — a home, education, holiday — and track progress.', cta:'Add Goal', click:`openTool('goal_planner.html')` });
+  }
+  if (!retSnap && hasAssessment) {
+    nudges.push({ pri:'low', icon:'🏖️', title:'Run the retirement calculator', desc:'See if you are on track for retirement. Enter your age, salary, and current savings — takes 2 minutes.', cta:'Calculate', click:`openTool('retirement_calculator.html')` });
+  }
+  if (insCount === null && hasAssessment) {
+    nudges.push({ pri:'medium', icon:'🛡️', title:'Check your insurance coverage', desc:'Re-take the assessment to see how many of the 6 key insurance types you currently hold.', cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
+  } else if (insCount !== null && insCount < 3) {
+    nudges.push({ pri:'medium', icon:'🛡️', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps to address.', cta:'Learn More', click:`go('learn')` });
+  }
 
   // ── Helper formatters ──
   const fmtP = v => {
