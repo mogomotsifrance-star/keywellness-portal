@@ -617,22 +617,19 @@ async function loadAllData() {
 
 async function saveUser() {
   if (!currentUser || !state.user) return;
+  // NEVER include badge columns here — badges are managed only by saveBadges().
+  // Destructure them out so they cannot accidentally overwrite the badges stored by saveBadges().
+  const { badges_earned, badges_points, created_at, ...profileFields } = state.user;
   await sb.from('profiles').upsert({
     id: currentUser.id,
-    ...state.user,
-    badges_earned: state.badges.earned,
-    badges_points: state.badges.points,
+    ...profileFields,
     updated_at: new Date().toISOString()
   });
 }
 
 function saveBadges() {
   if (!currentUser) return;
-  // Keep state.user in sync so saveUser() never overwrites badge data with stale values
-  if (state.user) {
-    state.user.badges_earned = state.badges.earned;
-    state.user.badges_points = state.badges.points;
-  }
+  // Badges are ONLY ever written here — never via saveUser().
   sb.from('profiles').update({
     badges_earned: state.badges.earned,
     badges_points: state.badges.points,
