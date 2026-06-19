@@ -577,6 +577,7 @@ let state = {
   user: null,
   assessments: [],
   checkins: [],
+  stressLogs: [],
   badges: { earned: [], points: 0 },
 };
 
@@ -611,19 +612,23 @@ async function loadAllData() {
   if (!currentUser) return;
   const uid = currentUser.id;
 
-  const [pR, aR, cR, bR] = await Promise.all([
-    sb.from('profiles').select('*').eq('id', uid).maybeSingle(),
-    sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
-    sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
-    sb.from('badges').select('*').eq('user_id', uid).maybeSingle(),
+  const safe = q => Promise.resolve(q).catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
+  const [pR, aR, cR, bR, sR] = await Promise.all([
+    safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
+    safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
+    safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
+    safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
+    safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
   ]);
 
-  state.user        = pR.data || null;
-  state.assessments = aR.data || [];
-  state.checkins    = cR.data || [];
-  state.badges      = bR.data
+  state.user        = pR.data  || null;
+  state.assessments = aR.data  || [];
+  state.checkins    = cR.data  || [];
+  state.stressLogs  = (sR.data || []).map(r => ({ date: r.created_at, level: r.level, tags: r.tags || [], notes: r.notes || '' }));
+  state.badges = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
+  if (state.stressLogs.length) localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 }
 
 async function saveUser() {
@@ -754,6 +759,7 @@ const NAV = [
   { id:'assessment',  icon:'📋', label:'Assessment' },
   { id:'learn',       icon:'📚', label:'Learn' },
   { id:'tools',       icon:'🛠️',  label:'Tools' },
+  { id:'calculators', icon:'🧮', label:'Calculators' },
   { id:'emergency',   icon:'🆘', label:'Emergency Fund' },
   { id:'checkin',     icon:'✅', label:'Check-in' },
   { id:'progress',    icon:'📈', label:'Progress' },
@@ -763,11 +769,11 @@ const NAV = [
   { id:'profile',     icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
-  { id:'dashboard', icon:'🏠', label:'Home' },
-  { id:'assessment',icon:'📋', label:'Assess' },
-  { id:'emergency', icon:'🆘', label:'Emergency' },
-  { id:'booking',   icon:'📅', label:'Book' },
-  { id:'badges',    icon:'🏆', label:'Badges' },
+  { id:'dashboard',   icon:'🏠', label:'Home' },
+  { id:'assessment',  icon:'📋', label:'Assess' },
+  { id:'tools',       icon:'🛠️',  label:'Tools' },
+  { id:'calculators', icon:'🧮', label:'Calc' },
+  { id:'booking',     icon:'📅', label:'Book' },
 ];
 
 function buildNav(current) {
@@ -1710,12 +1716,16 @@ VIEWS['tools'] = function () {
     { icon:'🆘', name:'Emergency Fund Planner',  desc:'Calculate your target and track progress toward 3–6 months.',   view:'emergency' },
   ];
   const calculators = [
-    { icon:'📐', name:'DTI Calculator',          desc:'Check if your debt load is healthy relative to your income.',   file:'dti_calculator.html' },
-    { icon:'🎯', name:'Retirement Calculator',   desc:'Project how much you need and whether you are on track.',       file:'retirement_calculator.html' },
-    { icon:'🏦', name:'Loan Calculator',         desc:'Calculate monthly repayments, total interest and amortisation.',file:'loan_calculator.html' },
-    { icon:'📈', name:'Investment Calculator',   desc:'Project how a lump sum and monthly contributions grow over time.',file:'investment_calculator.html' },
-    { icon:'✅', name:'Affordability Calculator',desc:'Check whether you can afford a purchase based on your income.',  file:'affordability_calculator.html' },
-    { icon:'🏠', name:'Rent vs Buy',             desc:'Compare the true cost of renting versus buying property.',       file:'rent_vs_buy.html' },
+    { icon:'📐', name:'DTI Calculator',              desc:'Check if your debt load is healthy relative to your income.',        file:'dti_calculator.html' },
+    { icon:'🎯', name:'Retirement Calculator',       desc:'Project how much you need and whether you are on track.',           file:'retirement_calculator.html' },
+    { icon:'🏦', name:'Loan Calculator',             desc:'Calculate monthly repayments, total interest and amortisation.',    file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',       desc:'Project how a lump sum and monthly contributions grow over time.',  file:'investment_calculator.html' },
+    { icon:'✅', name:'Affordability Calculator',    desc:'Check whether you can afford a purchase based on your income.',     file:'affordability_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',                 desc:'Compare the true cost of renting versus buying property.',          file:'rent_vs_buy.html' },
+    { icon:'💳', name:'Debt Management Planner',     desc:'Compare avalanche vs snowball payoff strategies side by side.',     file:'debt_management_planner.html' },
+    { icon:'🎓', name:'Education Savings Calculator',desc:'Plan and project savings for your children\'s education costs.',    file:'education_savings_calculator.html' },
+    { icon:'🛡️', name:'Life Insurance Calculator',   desc:'Estimate how much life cover your family needs.',                  file:'life_insurance_calculator.html' },
+    { icon:'💸', name:'Lifestyle Inflation Tracker', desc:'See how lifestyle creep erodes your long-term wealth.',             file:'lifestyle_inflation_calculator.html' },
   ];
 
   function toolCard(t) {
@@ -1746,6 +1756,35 @@ VIEWS['tools'] = function () {
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
         ${calculators.map(toolCard).join('')}
       </div>
+    </div>`;
+};
+
+// ══════════════════════════════════════════════════
+//  VIEW: CALCULATORS
+// ══════════════════════════════════════════════════
+VIEWS['calculators'] = function () {
+  const el = document.getElementById('page-content');
+  const items = [
+    { icon:'📐', name:'DTI Calculator',              desc:'Check if your debt load is healthy relative to your income.',        file:'dti_calculator.html' },
+    { icon:'🎯', name:'Retirement Calculator',       desc:'Project how much you need and whether you are on track.',           file:'retirement_calculator.html' },
+    { icon:'🏦', name:'Loan Calculator',             desc:'Calculate monthly repayments, total interest and amortisation.',    file:'loan_calculator.html' },
+    { icon:'📈', name:'Investment Calculator',       desc:'Project how a lump sum and monthly contributions grow over time.',  file:'investment_calculator.html' },
+    { icon:'✅', name:'Affordability Calculator',    desc:'Check whether you can afford a purchase based on your income.',     file:'affordability_calculator.html' },
+    { icon:'🏠', name:'Rent vs Buy',                 desc:'Compare the true cost of renting versus buying property.',          file:'rent_vs_buy.html' },
+    { icon:'💳', name:'Debt Management Planner',     desc:'Compare avalanche vs snowball payoff strategies side by side.',     file:'debt_management_planner.html' },
+    { icon:'🎓', name:'Education Savings Calculator',desc:'Plan and project savings for your children\'s education costs.',    file:'education_savings_calculator.html' },
+    { icon:'🛡️', name:'Life Insurance Calculator',   desc:'Estimate how much life cover your family needs.',                  file:'life_insurance_calculator.html' },
+    { icon:'💸', name:'Lifestyle Inflation Tracker', desc:'See how lifestyle creep erodes your long-term wealth.',             file:'lifestyle_inflation_calculator.html' },
+  ];
+  el.innerHTML = `
+    <div class="notice notice-gold" style="margin-bottom:18px">🧮 <strong>Calculators</strong> — Model scenarios and plan ahead. These tools do not save data.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+      ${items.map(t => `<div class="card" style="cursor:default">
+        <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
+        <div class="card-title" style="margin-bottom:5px">${t.name}</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
+        <button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>
+      </div>`).join('')}
     </div>`;
 };
 
@@ -1897,64 +1936,106 @@ VIEWS['emergency'] = async function () {
 VIEWS['checkin'] = function () {
   const el = document.getElementById('page-content');
   const vals = { savings:5, debt:5, income:5, expenses:5, stress:5 };
+  const STRESS_TAGS = ['Overspending','Debt pressure','Job/income worry','Unexpected expense','Housing costs','Medical bills','Family pressure','Nothing specific'];
+  let selectedTags = [];
+  let stressLevel = 5;
+
+  const stressLabel = v => ['','Barely coping','Very stressed','Stressed','Quite stressed','A bit uneasy','Neutral','Fairly calm','Calm','Very calm','Completely at ease'][+v] || '';
 
   el.innerHTML = `
     <div style="max-width:560px">
       <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month. Your score updates.</div>
+
+      <div class="card" style="margin-bottom:18px">
+        <div class="card-title">💆 Financial Stress Check</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">How stressed have you felt about money lately?</p>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:8px">
+          <input type="range" min="1" max="10" value="5" id="stress-slider" style="flex:1" oninput="updateStressUI(this.value)">
+          <span id="stress-val" class="mono" style="font-size:28px;font-weight:700;color:var(--navy);min-width:32px">5</span>
+        </div>
+        <div id="stress-label" style="font-size:13px;color:var(--muted);margin-bottom:14px">Neutral</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">What's causing stress? <span style="font-weight:400;color:var(--muted)">(optional)</span></div>
+        <div id="stress-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+          ${STRESS_TAGS.map(t => `<button class="btn btn-outline btn-sm" onclick="toggleTag(this,'${t}')" style="font-size:12px">${t}</button>`).join('')}
+        </div>
+        <div class="field">
+          <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <textarea id="stress-notes" rows="2" placeholder="Anything else on your mind?"></textarea>
+        </div>
+      </div>
+
       <div class="card">
-        <div class="card-title">How did this month go?</div>
+        <div class="card-title">How did this month go overall?</div>
         ${[
           ['savings','Savings progress','1=none, 10=great'],
           ['debt','Debt management','1=worsened, 10=improved'],
           ['income','Income stability','1=very unstable, 10=very stable'],
           ['expenses','Expense control','1=overspent, 10=well controlled'],
-          ['stress','Financial stress','1=very stressed, 10=calm'],
-        ].map(([k,label,hint])=>`
+        ].map(([k,label,hint]) => `
           <div class="slider-row">
             <label>${label} <span id="v-${k}">5</span>/10</label>
             <input type="range" min="1" max="10" value="5" id="sl-${k}" oninput="slUpdate('${k}',this.value)">
             <div style="font-size:11px;color:var(--muted);margin-top:2px">${hint}</div>
           </div>`).join('')}
         <div class="field" style="margin-top:6px">
-          <label>Notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-          <textarea id="ci-notes" rows="3" placeholder="What went well? What was challenging?"></textarea>
+          <label>Monthly notes <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+          <textarea id="ci-notes" rows="2" placeholder="What went well? What was challenging?"></textarea>
         </div>
-        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:14px;margin:14px 0;display:flex;align-items:center;gap:16px">
+        <div style="background:var(--cream);border-radius:var(--radius-sm);padding:14px;margin:14px 0">
           <div style="font-size:13px">Check-in Score: <span id="ci-score" class="mono" style="font-size:22px;font-weight:700;color:var(--navy)">50</span>/100</div>
         </div>
         <button class="btn btn-primary" id="ci-btn" onclick="submitCheckin()">Save Check-in</button>
       </div>
     </div>`;
 
+  window.updateStressUI = function (v) {
+    stressLevel = +v;
+    document.getElementById('stress-val').textContent = v;
+    document.getElementById('stress-label').textContent = stressLabel(v);
+  };
+  window.toggleTag = function (btn, tag) {
+    if (selectedTags.includes(tag)) {
+      selectedTags = selectedTags.filter(t => t !== tag);
+      btn.classList.remove('btn-navy'); btn.classList.add('btn-outline');
+    } else {
+      selectedTags.push(tag);
+      btn.classList.remove('btn-outline'); btn.classList.add('btn-navy');
+    }
+  };
   window.slUpdate = function (key, val) {
     vals[key] = parseInt(val);
     document.getElementById('v-'+key).textContent = val;
-    const avg = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length*10);
+    const avg = Math.round(Object.values(vals).reduce((a,b) => a+b, 0) / Object.keys(vals).length * 10);
     document.getElementById('ci-score').textContent = avg;
   };
 
   window.submitCheckin = async function () {
-    const avg   = Math.round(Object.values(vals).reduce((a,b)=>a+b,0)/Object.keys(vals).length*10);
+    const avg   = Math.round(Object.values(vals).reduce((a,b) => a+b, 0) / Object.keys(vals).length * 10);
     const notes = document.getElementById('ci-notes').value;
+    const stressNotes = document.getElementById('stress-notes').value;
     const btn   = document.getElementById('ci-btn');
     btn.disabled = true; btn.textContent = 'Saving…';
+    const now = new Date().toISOString();
 
-    const { data, error } = await sb.from('checkins').insert({
-      user_id: currentUser.id, vals: {...vals}, score: avg, notes, created_at: new Date().toISOString()
-    }).select().single();
+    const [ciRes, slRes] = await Promise.all([
+      sb.from('checkins').insert({ user_id: currentUser.id, vals: {...vals, stress: stressLevel}, score: avg, notes, created_at: now }).select().single(),
+      sb.from('stress_logs').insert({ user_id: currentUser.id, level: stressLevel, tags: selectedTags, notes: stressNotes, created_at: now }),
+    ]);
 
-    if (error) {
-      console.error('checkin save failed:', error);
-      showToast('⚠️ Check-in could not be saved. Please try again.');
+    if (ciRes.error) {
+      console.error('checkin save failed:', ciRes.error);
+      showToast('Check-in could not be saved. Please try again.');
       btn.disabled = false; btn.textContent = 'Save Check-in';
       return;
     }
-    if (data) state.checkins.unshift(data);
+    if (ciRes.data) state.checkins.unshift(ciRes.data);
+    state.stressLogs.push({ date: now, level: stressLevel, tags: selectedTags, notes: stressNotes });
+    localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
-    if (state.checkins.length===1) awardBadge('check_in_1');
-    if (state.checkins.length>=3)  awardBadge('check_in_3');
+    if (state.checkins.length === 1) awardBadge('check_in_1');
+    if (state.checkins.length >= 3)  awardBadge('check_in_3');
 
-    showToast('✅ Check-in saved! Keep it up.');
+    showToast('Check-in saved! Keep it up.');
     go('progress');
   };
 };
