@@ -564,11 +564,10 @@ async function loadAllData() {
   // Use allSettled so one failing query never blocks the rest from loading
   const safe = q => q.catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
 
-  const [pR, aR, cR, bR, sR] = await Promise.all([
-    safe(sb.from('profiles').select('id,first_name,last_name,phone,created_at,updated_at').eq('id', uid).maybeSingle()),
+  const [pR, aR, cR, sR] = await Promise.all([
+    safe(sb.from('profiles').select('id,first_name,last_name,phone,badges_earned,badges_points,created_at,updated_at').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
-    safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
     safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
   ]);
 
@@ -581,9 +580,12 @@ async function loadAllData() {
     tags:  r.tags  || [],
     notes: r.notes || '',
   }));
-  state.badges = bR.data
-    ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
-    : { earned: [], points: 0 };
+  // Badges stored in profiles table — no separate badges table needed
+  const earnedRaw = pR.data?.badges_earned;
+  state.badges = {
+    earned: Array.isArray(earnedRaw) ? earnedRaw : (earnedRaw ? [] : []),
+    points: pR.data?.badges_points || 0,
+  };
 
   // Mirror stress logs to localStorage so standalone tracker can still read them
   if (state.stressLogs.length) {
@@ -620,12 +622,13 @@ async function saveUser() {
 
 function saveBadges() {
   if (!currentUser) return;
-  sb.from('badges').upsert({
-    user_id: currentUser.id,
-    earned_badge_ids: state.badges.earned,
-    points: state.badges.points
-  }, { onConflict: 'user_id' })
-  .then(({ error }) => { if (error) console.error('[KW] saveBadges error:', error); })
+  // Store badges in profiles table — already syncing correctly, no separate table needed
+  sb.from('profiles').update({
+    badges_earned: state.badges.earned,
+    badges_points: state.badges.points,
+    updated_at: new Date().toISOString()
+  }).eq('id', currentUser.id)
+  .then(({ error }) => { if (error) console.error('[KW] saveBadges error:', error.message); })
   .catch(e => console.error('[KW] saveBadges catch:', e));
 }
 
