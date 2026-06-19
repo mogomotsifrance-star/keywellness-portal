@@ -613,7 +613,7 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   // Use allSettled so one failing query never blocks the rest from loading
-  const safe = q => q.catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
+  const safe = q => Promise.resolve(q).catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
 
   const [pR, aR, cR, bR, sR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
