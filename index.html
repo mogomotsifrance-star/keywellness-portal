@@ -642,8 +642,8 @@ function saveBadges() {
   .catch(e => console.error('[KW] saveBadges catch:', e));
 }
 
-// Auto-award any badges the user has earned based on their Supabase data.
-// Needed because the assessment runs in a standalone file and never calls awardBadge().
+// Auto-award any badges the user has earned based on their Supabase data
+// AND localStorage (standalone assessment saves there, not to Supabase).
 function rebuildBadges() {
   if (!currentUser) return;
   let changed = false;
@@ -659,14 +659,57 @@ function rebuildBadges() {
   // Profile / onboarding
   if (state.user?.first_name) award('first_login');
 
-  // Assessment badges — assessment runs in standalone file, so check state.assessments
+  // ── Gather assessment data from Supabase AND localStorage ──
+  // wellness_assessment.html saves to localStorage (kw_assessment_result), not Supabase.
+  let hasAssessment = false;
+  let bestScore = 0;
+  const dimScores = {}; // dim_id → best score seen
+
+  // 1. Supabase assessments table (handles both old and new assessment formats)
   if (state.assessments.length >= 1) {
-    award('first_assessment');
+    hasAssessment = true;
     const latest = state.assessments[0];
-    if (latest?.score >= 75) award('high_scorer');
-    const bmap = { Budgeting:'budget_master', Savings:'savings_champ', Debt:'debt_destroyer', Retirement:'retirement_planner', Insurance:'insurance_hero' };
+    bestScore = Math.max(bestScore, latest?.score || 0);
     const cats = latest?.cat_scores || {};
-    Object.entries(bmap).forEach(([cat, id]) => { if ((cats[cat]||0) >= 80) award(id); });
+    // Old format: { Budgeting, Savings, Debt, Retirement, Insurance }
+    if (cats.Budgeting)  dimScores.budget      = Math.max(dimScores.budget      ||0, cats.Budgeting);
+    if (cats.Savings)    dimScores.savings      = Math.max(dimScores.savings     ||0, cats.Savings);
+    if (cats.Debt)       dimScores.debt         = Math.max(dimScores.debt        ||0, cats.Debt);
+    if (cats.Retirement) dimScores.retirement   = Math.max(dimScores.retirement  ||0, cats.Retirement);
+    if (cats.Insurance)  dimScores.insurance    = Math.max(dimScores.insurance   ||0, cats.Insurance);
+    // New format (from standalone assessment): { savings, debt, retirement, insurance, spending, ... }
+    if (cats.savings)    dimScores.savings      = Math.max(dimScores.savings     ||0, cats.savings);
+    if (cats.debt)       dimScores.debt         = Math.max(dimScores.debt        ||0, cats.debt);
+    if (cats.retirement) dimScores.retirement   = Math.max(dimScores.retirement  ||0, cats.retirement);
+    if (cats.insurance)  dimScores.insurance    = Math.max(dimScores.insurance   ||0, cats.insurance);
+    if (cats.spending)   dimScores.budget       = Math.max(dimScores.budget      ||0, cats.spending);
+  }
+
+  // 2. localStorage (standalone wellness_assessment.html saves here)
+  try {
+    const lsR = JSON.parse(localStorage.getItem('kw_assessment_result') || 'null');
+    if (lsR?.score) {
+      hasAssessment = true;
+      bestScore = Math.max(bestScore, lsR.score);
+      // New assessment dims: income, savings, emergency, debt, retirement, insurance, goals, spending
+      (lsR.dims || []).forEach(d => {
+        dimScores[d.id] = Math.max(dimScores[d.id] || 0, d.score);
+      });
+      // Map 'spending' → budget proxy (closest equivalent)
+      if (lsR.dims?.find(d => d.id === 'spending')) {
+        dimScores.budget = Math.max(dimScores.budget || 0, dimScores.spending || 0);
+      }
+    }
+  } catch(e) {}
+
+  if (hasAssessment) {
+    award('first_assessment');
+    if (bestScore >= 75) award('high_scorer');
+    if ((dimScores.budget     ||0) >= 80) award('budget_master');
+    if ((dimScores.savings    ||0) >= 80) award('savings_champ');
+    if ((dimScores.debt       ||0) >= 80) award('debt_destroyer');
+    if ((dimScores.retirement ||0) >= 80) award('retirement_planner');
+    if ((dimScores.insurance  ||0) >= 80) award('insurance_hero');
   }
 
   // Check-in badges
