@@ -2,347 +2,775 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Life Insurance Calculator – BWP</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Life Insurance Needs Calculator — Key Wellness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#F0C842;
-  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
-  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#FFFFFF;
-  --radius:10px;--shadow:0 4px 24px rgba(13,37,69,.12);
+  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold2:#e8b85a;
+  --cream:#F7F4EE;--cream2:#ede7d9;--white:#ffffff;
+  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--blue:#2563EB;--purple:#7C3AED;
+  --text:#1a2744;--muted:#6b7280;--border:#ddd6c8;
+  --radius:12px;--radius-sm:8px;--shadow:0 2px 16px rgba(13,37,69,.10);
 }
-body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;}
-.app{max-width:960px;margin:0 auto;padding:28px 18px 80px;}
-.header{display:flex;align-items:center;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
-.header-icon{width:52px;height:52px;background:var(--navy);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.header h1{font-size:1.45rem;font-weight:700;letter-spacing:-.02em;}
-.header p{font-size:.82rem;color:var(--muted);margin-top:3px;}
-.header-actions{margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:18px;}
-.card-title{font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 18px;border:none;border-radius:8px;font-size:.84rem;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;}
-.btn:active{transform:scale(.98);}
-.btn-navy{background:var(--navy);color:white;}.btn-navy:hover{background:var(--navy2);}
-.btn-gold{background:var(--gold);color:var(--navy);}.btn-gold:hover{background:#b8870f;}
-.btn-sm{padding:6px 13px;font-size:.75rem;border-radius:6px;}
-.iw{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:7px;background:var(--cream);overflow:hidden;transition:border-color .15s;}
-.iw:focus-within{border-color:var(--gold);background:#fff;}
-.iw-pre{padding:0 9px;font-size:.8rem;font-weight:700;color:var(--muted);font-family:'DM Mono',monospace;flex-shrink:0;}
-.iw input,.iw select{flex:1;border:none;outline:none;background:transparent;padding:9px 10px;font-size:.85rem;color:var(--navy);min-width:0;font-family:'Inter',sans-serif;}
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-.form-field label{display:block;font-size:.74rem;font-weight:600;color:var(--slate);margin-bottom:6px;}
-.form-field .hint{font-size:.68rem;color:var(--muted);margin-top:4px;}
-.result-hero{background:var(--navy);border-radius:12px;padding:28px;text-align:center;color:white;margin-bottom:18px;}
-.result-hero .label{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(200,153,26,.8);margin-bottom:8px;}
-.result-hero .amount{font-size:2.2rem;font-weight:700;font-family:'DM Mono',monospace;color:#F0C842;margin-bottom:4px;}
-.result-hero .sub{font-size:.82rem;color:rgba(255,255,255,.7);}
-.breakdown-list{display:flex;flex-direction:column;gap:10px;}
-.breakdown-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--border);}
-.breakdown-item-label{font-size:.82rem;font-weight:600;}
-.breakdown-item-sub{font-size:.7rem;color:var(--muted);margin-top:2px;}
-.breakdown-item-val{font-size:.9rem;font-weight:700;font-family:'DM Mono',monospace;}
-.notice{padding:11px 14px;border-radius:8px;font-size:.8rem;font-weight:600;border:1.5px solid;}
-.notice-gold{background:#fffbeb;border-color:#fde68a;color:#92400e;}
-.notice-green{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
-.notice-red{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
-.notice-navy{background:#eff6ff;border-color:#bfdbfe;color:#1e3a8a;}
-.method-tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:18px;}
-.mtab{padding:10px 8px;border-radius:8px;border:2px solid var(--border);background:var(--cream);cursor:pointer;font-size:.76rem;font-weight:700;text-align:center;transition:all .15s;line-height:1.3;}
-.mtab:hover{border-color:var(--navy);}
-.mtab.active{border-color:var(--navy);background:var(--navy);color:white;}
-.toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:white;padding:10px 18px;border-radius:8px;font-size:.78rem;font-weight:600;box-shadow:var(--shadow);opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
-.toast.show{opacity:1;}
-@media(max-width:600px){.form-grid{grid-template-columns:1fr;}.method-tabs{grid-template-columns:1fr;}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+input,select,textarea{font-family:'Inter',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── Hero ── */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy2) 100%);padding:28px 32px}
+.hero-inner{display:flex;align-items:center;gap:14px}
+.hero-icon{font-size:36px;background:rgba(200,153,26,.15);border-radius:12px;width:60px;height:60px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.hero h1{color:#fff;font-size:20px;font-weight:700;margin-bottom:3px}
+.hero p{color:rgba(255,255,255,.65);font-size:13px}
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:1.5px solid rgba(255,255,255,.25);border-radius:var(--radius-sm);color:rgba(255,255,255,.8);font-size:12px;font-weight:600;background:transparent;margin-bottom:14px;cursor:pointer;transition:.15s}
+.back-btn:hover{background:rgba(255,255,255,.1);color:#fff}
+
+/* ── Method banner ── */
+.method-banner{background:var(--navy2);padding:12px 32px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.method-pill{padding:5px 14px;border-radius:99px;font-size:11px;font-weight:700;border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);cursor:pointer;transition:.15s}
+.method-pill.active{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.method-label{font-size:11px;color:rgba(255,255,255,.45);margin-right:6px;font-weight:600}
+
+/* ── Layout ── */
+.wrap{max-width:960px;margin:0 auto;padding:24px 20px}
+.cols{display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start}
+@media(max-width:760px){.cols{grid-template-columns:1fr}}
+
+/* ── Cards ── */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;margin-bottom:16px}
+.card-title{font-size:14px;font-weight:700;color:var(--navy);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.ct-icon{font-size:17px}
+.section-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px}
+.tag-blue{background:#eff6ff;color:var(--blue);border:1px solid #bfdbfe}
+.tag-green{background:#f0faf4;color:var(--green);border:1px solid #a7f3d0}
+.tag-red{background:#fdf2f2;color:var(--red);border:1px solid #fca5a5}
+
+/* ── Fields ── */
+.field{margin-bottom:13px}
+.field label{display:block;font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.field label .hint{font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;font-size:10px;margin-left:4px}
+.iw{position:relative}
+.iw .prefix{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--muted);pointer-events:none}
+.iw .suffix{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none}
+.iw input,.iw select{padding-left:34px}
+.iw.suf input{padding-right:36px}
+.iw.no-prefix input,.iw.no-prefix select{padding-left:11px}
+input[type=text],input[type=number],select{
+  width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:var(--radius-sm);
+  font-size:14px;background:var(--cream);color:var(--text);outline:none;transition:.15s;
+}
+input:focus,select:focus{border-color:var(--gold);background:#fff}
+input[type=number]::-webkit-inner-spin-button{opacity:.4}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input[type=range]{flex:1;accent-color:var(--gold);height:4px}
+.range-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--navy);min-width:44px;text-align:right}
+
+/* ── Debt rows ── */
+.debt-list{display:flex;flex-direction:column;gap:8px}
+.debt-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:var(--cream);border-radius:var(--radius-sm);padding:8px 10px}
+.debt-row input{background:#fff;font-size:13px}
+.debt-label{font-size:12px;font-weight:600;color:var(--navy)}
+.remove-btn{width:24px;height:24px;border-radius:50%;border:none;background:rgba(192,57,43,.1);color:var(--red);font-size:14px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s;flex-shrink:0}
+.remove-btn:hover{background:var(--red);color:#fff}
+.add-row-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;border:2px dashed var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:.15s;width:100%;justify-content:center;margin-top:8px}
+.add-row-btn:hover{border-color:var(--gold);color:var(--gold)}
+
+/* ── Results ── */
+.result-hero{background:linear-gradient(135deg,var(--navy),var(--navy2));border-radius:var(--radius);padding:24px;margin-bottom:14px;color:#fff;text-align:center}
+.rh-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,.6);margin-bottom:6px}
+.rh-val{font-family:'DM Mono',monospace;font-size:38px;font-weight:500;color:var(--gold2);line-height:1.1}
+.rh-sub{font-size:12px;color:rgba(255,255,255,.55);margin-top:6px}
+
+.stat-row{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+.stat-box{background:var(--cream);border-radius:var(--radius-sm);padding:12px 14px;border-left:3px solid var(--border)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .sv{color:var(--green)}
+.stat-box.red{border-left-color:var(--red)}.stat-box.red .sv{color:var(--red)}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .sv{color:var(--gold)}
+.stat-box.blue{border-left-color:var(--blue)}.stat-box.blue .sv{color:var(--blue)}
+.stat-box.purple{border-left-color:var(--purple)}.stat-box.purple .sv{color:var(--purple)}
+.sv{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;color:var(--navy)}
+.sl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-top:3px}
+
+/* ── DIME breakdown ── */
+.dime-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.dime-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);background:var(--cream)}
+.dime-letter{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0}
+.dime-desc{flex:1}
+.dime-desc .d-title{font-size:12px;font-weight:700;color:var(--navy)}
+.dime-desc .d-sub{font-size:10px;color:var(--muted)}
+.dime-amt{font-family:'DM Mono',monospace;font-size:14px;font-weight:600;color:var(--navy);text-align:right}
+.dime-bar{height:4px;border-radius:99px;margin-top:4px;background:var(--cream2);overflow:hidden}
+.dime-fill{height:100%;border-radius:99px}
+
+/* ── Scenarios ── */
+.scenario-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.sc-card{border:2px solid var(--border);border-radius:var(--radius-sm);padding:14px;text-align:center;cursor:pointer;transition:.15s;background:var(--white)}
+.sc-card:hover{border-color:var(--gold)}
+.sc-card.active{border-color:var(--navy);background:var(--navy)}
+.sc-card.active .sc-label,.sc-card.active .sc-val,.sc-card.active .sc-tag{color:#fff}
+.sc-card.active .sc-sub{color:rgba(255,255,255,.6)}
+.sc-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}
+.sc-val{font-family:'DM Mono',monospace;font-size:16px;font-weight:600;color:var(--navy);margin-bottom:3px}
+.sc-sub{font-size:10px;color:var(--muted);margin-bottom:5px}
+.sc-tag{font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;background:rgba(200,153,26,.15);color:var(--gold)}
+
+/* ── Premium estimate ── */
+.premium-table{width:100%;border-collapse:collapse;font-size:12px}
+.premium-table th{background:var(--cream2);padding:8px 10px;text-align:right;font-size:11px;font-weight:700;color:var(--navy)}
+.premium-table th:first-child{text-align:left}
+.premium-table td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-size:12px}
+.premium-table td:first-child{text-align:left;font-family:'Inter',sans-serif;font-weight:600}
+.premium-table tr:last-child td{border-bottom:none;font-weight:700;background:var(--cream)}
+
+/* ── Chart ── */
+.chart-box{position:relative;height:220px;margin-bottom:10px}
+
+/* ── Notices ── */
+.notice{padding:11px 14px;border-radius:var(--radius-sm);font-size:12px;line-height:1.55;margin-bottom:12px}
+.notice-gold{background:#fffbf0;border-left:4px solid var(--gold);color:#7a4f00}
+.notice-green{background:#f0faf4;border-left:4px solid var(--green);color:#1a4a2e}
+.notice-red{background:#fdf2f2;border-left:4px solid var(--red);color:#7b1a1a}
+.notice-blue{background:#eff6ff;border-left:4px solid var(--blue);color:#1e3a8a}
+
+/* ── Progress ── */
+.prog-bar{background:var(--cream2);border-radius:99px;height:10px;overflow:hidden;margin-top:5px}
+.prog-fill{height:100%;border-radius:99px;background:var(--gold);transition:.5s}
+.prog-fill.green{background:var(--green)}
+.prog-fill.red{background:var(--red)}
+.prog-fill.orange{background:var(--orange)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:none;transition:.15s;cursor:pointer}
+.btn-primary{background:var(--gold);color:var(--navy)}
+.btn-primary:hover{background:var(--gold2)}
+.btn-outline{background:transparent;color:var(--navy);border:2px solid var(--border)}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-sm{padding:6px 14px;font-size:12px}
+
+/* ── Toggle ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.toggle-label{font-size:13px;font-weight:600;color:var(--navy)}
+.toggle{position:relative;width:38px;height:20px;cursor:pointer}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:var(--border);border-radius:99px;transition:.3s}
+.slider:before{content:'';position:absolute;left:3px;bottom:3px;width:14px;height:14px;border-radius:50%;background:#fff;transition:.3s}
+.toggle input:checked + .slider{background:var(--green)}
+.toggle input:checked + .slider:before{transform:translateX(18px)}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:12px 20px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;opacity:0;transition:.3s;pointer-events:none;z-index:999;box-shadow:0 4px 20px rgba(0,0,0,.2)}
+#toast.show{opacity:1}
 </style>
 </head>
 <body>
-<div class="app">
-  <div class="header">
-    <div class="header-icon">
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="1.8">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-      </svg>
-    </div>
+
+<div class="hero">
+  <button class="back-btn" onclick="window.location.href='index.html#dashboard'">← Back to Portal</button>
+  <div class="hero-inner">
+    <div class="hero-icon">🛡️</div>
     <div>
-      <h1>Life Insurance Calculator</h1>
-      <p>Estimate how much life insurance coverage you need</p>
-    </div>
-    <div class="header-actions">
-      <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
-      <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
-      <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
-    </div>
-  </div>
-
-  <div class="notice notice-gold" style="margin-bottom:18px">⚠️ This tool provides an estimate only. Consult a licensed insurance advisor for a personalised recommendation.</div>
-
-  <!-- Method selector -->
-  <div class="card">
-    <div class="card-title">Calculation Method</div>
-    <div class="method-tabs">
-      <div class="mtab active" id="m-hlv" onclick="setMethod('hlv')">Human Life Value<br><span style="font-size:.66rem;opacity:.7">Income × years remaining</span></div>
-      <div class="mtab" id="m-dime" onclick="setMethod('dime')">DIME Method<br><span style="font-size:.66rem;opacity:.7">Debt+Income+Mortgage+Education</span></div>
-      <div class="mtab" id="m-10x" onclick="setMethod('10x')">10× Income Rule<br><span style="font-size:.66rem;opacity:.7">Simple quick estimate</span></div>
-    </div>
-    <p id="method-desc" style="font-size:.8rem;color:var(--muted)"></p>
-  </div>
-
-  <!-- Inputs -->
-  <div class="card">
-    <div class="card-title">Your Details</div>
-
-    <!-- HLV inputs -->
-    <div id="inputs-hlv">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Annual Income (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="hlv-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Years to Retirement</label>
-          <div class="iw"><input type="number" id="hlv-years" value="25" min="1" max="45" step="1" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">yrs</div></div>
-        </div>
-        <div class="form-field">
-          <label>Existing Coverage (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="hlv-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-          <div class="hint">What your employer or existing policy covers</div>
-        </div>
-        <div class="form-field">
-          <label>Discount Rate (%/yr)</label>
-          <div class="iw"><input type="number" id="hlv-rate" value="7" min="1" max="20" step="0.5" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">%</div></div>
-          <div class="hint">Expected investment return (default 7%)</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- DIME inputs -->
-    <div id="inputs-dime" style="display:none">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Total Debt (excl. mortgage) (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-debt" value="0" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Annual Income (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Years Dependents Need Support</label>
-          <div class="iw"><input type="number" id="dime-years" value="15" min="1" max="40" step="1" oninput="recalc()" style="font-family:'DM Mono',monospace"><div class="iw-pre">yrs</div></div>
-        </div>
-        <div class="form-field">
-          <label>Mortgage / Home Loan Balance (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-mortgage" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Children's Education Costs (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-edu" value="0" min="0" step="5000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Existing Coverage (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="dime-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 10x inputs -->
-    <div id="inputs-10x" style="display:none">
-      <div class="form-grid">
-        <div class="form-field">
-          <label>Annual Income (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="tenx-income" value="" placeholder="180000" min="0" step="1000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-        <div class="form-field">
-          <label>Existing Coverage (P)</label>
-          <div class="iw"><div class="iw-pre">P</div><input type="number" id="tenx-existing" value="0" min="0" step="10000" oninput="recalc()" style="font-family:'DM Mono',monospace"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Result -->
-  <div id="result-section">
-    <div class="result-hero">
-      <div class="label">Recommended Coverage</div>
-      <div class="amount" id="result-amount">P—</div>
-      <div class="sub" id="result-sub">Enter your details above to calculate</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Breakdown</div>
-      <div class="breakdown-list" id="breakdown-list"></div>
-    </div>
-  </div>
-
-  <!-- Info cards -->
-  <div class="card">
-    <div class="card-title">Types of Life Insurance in Botswana</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
-        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Term Life</div>
-        <div style="font-size:.75rem;color:var(--slate)">Covers a fixed period (e.g. 20 years). Pure protection — no cash value. Usually the most affordable option.</div>
-      </div>
-      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
-        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Whole Life</div>
-        <div style="font-size:.75rem;color:var(--slate)">Covers your entire life and builds cash value over time. Higher premiums but includes a savings component.</div>
-      </div>
-      <div style="background:var(--cream);padding:14px;border-radius:8px;border:1.5px solid var(--border)">
-        <div style="font-size:.82rem;font-weight:700;margin-bottom:4px">Group Cover</div>
-        <div style="font-size:.75rem;color:var(--slate)">Often provided by employers in Botswana. Usually 2–4× annual salary. Check if it's portable if you leave your job.</div>
-      </div>
+      <h1>Life Insurance Needs Calculator</h1>
+      <p>Find out exactly how much cover your family needs — and how much gap you have today.</p>
     </div>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<!-- Method selector -->
+<div class="method-banner">
+  <span class="method-label">Method:</span>
+  <button class="method-pill active" id="pill-dime"  onclick="setMethod('dime',this)">DIME (Comprehensive)</button>
+  <button class="method-pill"        id="pill-income" onclick="setMethod('income',this)">Income Multiplier</button>
+  <button class="method-pill"        id="pill-hlv"    onclick="setMethod('hlv',this)">Human Life Value</button>
+</div>
+
+<div class="wrap">
+  <div class="cols">
+
+    <!-- ══ LEFT: INPUTS ══ -->
+    <div>
+
+      <!-- Personal profile -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">👤</span>Your Profile</div>
+        <div class="row2">
+          <div class="field">
+            <label>Current age</label>
+            <div class="iw no-prefix"><input type="number" id="myAge" value="35" min="18" max="70" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Retirement age</label>
+            <div class="iw no-prefix"><input type="number" id="retireAge" value="65" min="40" max="75" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Annual gross income <span class="hint">BWP</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="annualIncome" value="180000" oninput="calculate()"></div>
+        </div>
+        <div class="field">
+          <label>Employment type</label>
+          <div class="iw no-prefix">
+            <select id="empType" onchange="calculate()">
+              <option value="employed">Employed (salary)</option>
+              <option value="self">Self-employed / Business owner</option>
+              <option value="govt">Government employee</option>
+            </select>
+          </div>
+        </div>
+        <div class="toggle-row">
+          <span class="toggle-label">I have a spouse / partner</span>
+          <label class="toggle"><input type="checkbox" id="hasSpouse" onchange="toggleSpouse();calculate()"><span class="slider"></span></label>
+        </div>
+        <div id="spouseSection" style="display:none">
+          <div class="field" style="margin-bottom:8px">
+            <label>Spouse annual income <span class="hint">BWP</span></label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="spouseIncome" value="120000" oninput="calculate()"></div>
+          </div>
+          <div class="notice notice-blue" style="margin-bottom:0;font-size:11px">Spouse income reduces the replacement cover needed. We deduct its present value from the total.</div>
+        </div>
+      </div>
+
+      <!-- Dependants -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">👨‍👩‍👧</span>Dependants</div>
+        <div class="row2">
+          <div class="field">
+            <label>No. of children</label>
+            <div class="iw no-prefix"><input type="number" id="numChildren" value="2" min="0" max="10" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Youngest child age</label>
+            <div class="iw no-prefix"><input type="number" id="youngestAge" value="5" min="0" max="17" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Other dependants <span class="hint">parents, siblings, etc.</span></label>
+          <div class="iw no-prefix"><input type="number" id="otherDeps" value="0" min="0" oninput="calculate()"></div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Monthly cost to support other dependants <span class="hint">BWP</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="depCost" value="0" oninput="calculate()"></div>
+        </div>
+      </div>
+
+      <!-- Income replacement -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">💵</span>Income Replacement</div>
+        <div class="field">
+          <label>% of income to replace <span class="hint">typically 70–80%</span></label>
+          <div class="range-row">
+            <input type="range" id="replaceRate" min="50" max="100" value="75" step="5" oninput="document.getElementById('replaceRateVal').textContent=this.value+'%';calculate()">
+            <span class="range-val" id="replaceRateVal">75%</span>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Your family won't need 100% — mortgage, work expenses, and your personal costs fall away.</div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Discount rate for PV calculation <span class="hint">%/yr</span></label>
+          <div class="range-row">
+            <input type="range" id="discountRate" min="2" max="12" value="7" step="0.5" oninput="document.getElementById('discountRateVal').textContent=this.value+'%';calculate()">
+            <span class="range-val" id="discountRateVal">7%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Debts & liabilities -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">💳</span>Debts to Clear on Death</div>
+        <div class="notice notice-gold" style="margin-bottom:12px;font-size:11px">These are settled from the policy payout so your family inherits debt-free.</div>
+        <div class="debt-list" id="debtList"></div>
+        <button class="add-row-btn" onclick="addDebt()">+ Add debt / obligation</button>
+      </div>
+
+      <!-- Final expenses -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">⚰️</span>Final &amp; Estate Expenses</div>
+        <div class="row2">
+          <div class="field">
+            <label>Funeral costs</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="funeralCost" value="35000" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Estate / admin costs</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="estateCost" value="15000" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Outstanding medical bills <span class="hint">estimated</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="medicalCost" value="0" oninput="calculate()"></div>
+        </div>
+      </div>
+
+      <!-- Education for children -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">🎓</span>Children's Education Fund</div>
+        <div class="field">
+          <label>Target per child <span class="hint">total, today's BWP</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="eduPerChild" value="200000" oninput="calculate()"></div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Existing education savings <span class="hint">already saved</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="eduSaved" value="0" oninput="calculate()"></div>
+        </div>
+      </div>
+
+      <!-- Assets to offset -->
+      <div class="card">
+        <div class="card-title"><span class="ct-icon">🏦</span>Assets That Offset the Need</div>
+        <div class="notice notice-blue" style="margin-bottom:12px;font-size:11px">These reduce what insurance needs to cover. Include only liquid / realisable assets.</div>
+        <div class="row2">
+          <div class="field">
+            <label>Savings &amp; investments</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="savings" value="50000" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Existing life cover</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="existingCover" value="0" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Pension / provident fund</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="pension" value="80000" oninput="calculate()"></div>
+          </div>
+          <div class="field">
+            <label>Death-in-service benefit</label>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="disb" value="0" oninput="calculate()"></div>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Other liquid assets <span class="hint">property equity, etc.</span></label>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="otherAssets" value="0" oninput="calculate()"></div>
+        </div>
+      </div>
+
+    </div><!-- /left col -->
+
+    <!-- ══ RIGHT: RESULTS ══ -->
+    <div id="results">
+      <div class="notice notice-gold" style="text-align:center">Fill in your details on the left to see your insurance needs analysis.</div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast">✓ Saved to snapshot</div>
 
 <script>
-let method = 'hlv';
-const TOOL = 'life_insurance';
+// ── State ──
+let method = 'dime';
+let debts  = [
+  { label:'Home bond / mortgage', amount:0 },
+  { label:'Vehicle finance',      amount:0 },
+  { label:'Personal loans',       amount:0 },
+  { label:'Credit cards',         amount:0 },
+];
+let chartInst = null;
 
-function fmt(n) { return 'P' + Math.round(n).toLocaleString(); }
-function pf(v) { return parseFloat(v) || 0; }
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-const methodDescs = {
-  hlv: 'Human Life Value: calculates the present value of your future income — what your family would lose. Best for primary earners.',
-  dime: 'DIME Method: adds up Debt + Income needs + Mortgage + Education costs. A comprehensive needs-based approach.',
-  '10x': '10× Income Rule: a quick rule of thumb. Multiply annual income by 10 for a rough minimum coverage estimate.'
-};
-
-function setMethod(m) {
+// ── Method ──
+function setMethod(m, btn) {
   method = m;
-  ['hlv', 'dime', '10x'].forEach(x => {
-    document.getElementById('m-' + x)?.classList.toggle('active', x === m);
-    document.getElementById('inputs-' + x).style.display = x === m ? '' : 'none';
-  });
-  document.getElementById('method-desc').textContent = methodDescs[m];
-  recalc();
-  save();
+  document.querySelectorAll('.method-pill').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active');
+  calculate();
 }
 
-function recalc() {
-  let coverage = 0;
-  let breakdown = [];
+// ── Spouse toggle ──
+function toggleSpouse() {
+  document.getElementById('spouseSection').style.display =
+    document.getElementById('hasSpouse').checked ? '' : 'none';
+}
 
-  if (method === 'hlv') {
-    const income = pf(document.getElementById('hlv-income').value);
-    const years = pf(document.getElementById('hlv-years').value);
-    const existing = pf(document.getElementById('hlv-existing').value);
-    const rate = pf(document.getElementById('hlv-rate').value) / 100;
-    // Present value of annuity
-    const pv = rate > 0 ? income * ((1 - Math.pow(1 + rate, -years)) / rate) : income * years;
-    coverage = Math.max(0, pv - existing);
-    breakdown = [
-      { label: 'Present Value of Future Income', sub: `${fmt(income)}/yr × ${years} yrs @ ${(rate*100).toFixed(1)}%`, val: fmt(pv) },
-      { label: 'Less Existing Coverage', sub: 'Employer / current policy', val: '-' + fmt(existing) },
-      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
-    ];
-  } else if (method === 'dime') {
-    const debt = pf(document.getElementById('dime-debt').value);
-    const income = pf(document.getElementById('dime-income').value);
-    const years = pf(document.getElementById('dime-years').value);
-    const mortgage = pf(document.getElementById('dime-mortgage').value);
-    const edu = pf(document.getElementById('dime-edu').value);
-    const existing = pf(document.getElementById('dime-existing').value);
-    const gross = debt + income * years + mortgage + edu;
-    coverage = Math.max(0, gross - existing);
-    breakdown = [
-      { label: 'D — Total Debt', sub: 'Credit cards, loans, etc.', val: fmt(debt) },
-      { label: 'I — Income Replacement', sub: `${fmt(income)}/yr × ${years} yrs`, val: fmt(income * years) },
-      { label: 'M — Mortgage Balance', sub: 'Home loan outstanding', val: fmt(mortgage) },
-      { label: 'E — Education Costs', sub: 'Children\'s schooling & university', val: fmt(edu) },
-      { label: 'Gross DIME Total', sub: '', val: fmt(gross) },
-      { label: 'Less Existing Coverage', sub: '', val: '-' + fmt(existing) },
-      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
-    ];
-  } else {
-    const income = pf(document.getElementById('tenx-income').value);
-    const existing = pf(document.getElementById('tenx-existing').value);
-    const gross = income * 10;
-    coverage = Math.max(0, gross - existing);
-    breakdown = [
-      { label: '10× Annual Income', sub: `${fmt(income)} × 10`, val: fmt(gross) },
-      { label: 'Less Existing Coverage', sub: '', val: '-' + fmt(existing) },
-      { label: 'Recommended Additional Coverage', sub: '', val: fmt(coverage), highlight: true },
-    ];
-  }
-
-  const amountEl = document.getElementById('result-amount');
-  const subEl = document.getElementById('result-sub');
-  if (coverage > 0) {
-    amountEl.textContent = fmt(coverage);
-    subEl.textContent = coverage > 5000000
-      ? 'Significant coverage needed — speak to an advisor about phased options.'
-      : coverage > 1000000
-        ? 'Consider term life insurance for cost-effective coverage at this level.'
-        : 'A basic term life policy should adequately meet this need.';
-  } else {
-    amountEl.textContent = 'P0';
-    subEl.textContent = 'Your existing coverage appears sufficient. Review annually as circumstances change.';
-  }
-
-  const bEl = document.getElementById('breakdown-list');
-  bEl.innerHTML = breakdown.map(b => `
-    <div class="breakdown-item" ${b.highlight ? 'style="border-color:var(--gold);background:#fffbeb"' : ''}>
-      <div><div class="breakdown-item-label"${b.highlight ? ' style="color:var(--navy)"' : ''}>${b.label}</div>${b.sub ? `<div class="breakdown-item-sub">${b.sub}</div>` : ''}</div>
-      <div class="breakdown-item-val"${b.highlight ? ' style="color:var(--gold)"' : ''}>${b.val}</div>
+// ── Debt rows ──
+function renderDebts() {
+  const list = document.getElementById('debtList');
+  list.innerHTML = debts.map((d,i)=>`
+    <div class="debt-row">
+      <input type="text" value="${d.label}" placeholder="Debt name"
+        oninput="debts[${i}].label=this.value;calculate()" style="padding:7px 10px">
+      <div style="position:relative">
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none">P</span>
+        <input type="number" value="${d.amount}" min="0"
+          oninput="debts[${i}].amount=+this.value||0;calculate()"
+          style="padding:7px 8px 7px 24px;width:130px">
+      </div>
+      <button class="remove-btn" onclick="removeDebt(${i})">✕</button>
     </div>`).join('');
-
-  save();
 }
 
-function getToolData() {
-  return {
-    method,
-    hlv: { income: pf(document.getElementById('hlv-income').value), years: pf(document.getElementById('hlv-years').value), existing: pf(document.getElementById('hlv-existing').value), rate: pf(document.getElementById('hlv-rate').value) },
-    dime: { debt: pf(document.getElementById('dime-debt').value), income: pf(document.getElementById('dime-income').value), years: pf(document.getElementById('dime-years').value), mortgage: pf(document.getElementById('dime-mortgage').value), edu: pf(document.getElementById('dime-edu').value), existing: pf(document.getElementById('dime-existing').value) },
-    tenx: { income: pf(document.getElementById('tenx-income').value), existing: pf(document.getElementById('tenx-existing').value) }
-  };
+function addDebt() {
+  debts.push({ label:'', amount:0 });
+  renderDebts();
+}
+function removeDebt(i) {
+  debts.splice(i, 1);
+  renderDebts();
+  calculate();
 }
 
-function loadToolData(d) {
-  if (!d) return;
-  if (d.method) setMethod(d.method);
-  if (d.hlv) {
-    if (d.hlv.income) document.getElementById('hlv-income').value = d.hlv.income;
-    if (d.hlv.years) document.getElementById('hlv-years').value = d.hlv.years;
-    if (d.hlv.existing) document.getElementById('hlv-existing').value = d.hlv.existing;
-    if (d.hlv.rate) document.getElementById('hlv-rate').value = d.hlv.rate;
+// ── Helpers ──
+function getNum(id) { return parseFloat(document.getElementById(id)?.value)||0; }
+function fmt(n)  { return 'P ' + Math.round(Math.max(0,n)).toLocaleString(); }
+function fmtM(n) { return 'P ' + (Math.round(Math.max(0,n)/1000)).toLocaleString()+'k'; }
+function pvAnnuity(pmt, r, n) {
+  if (r <= 0) return pmt * n;
+  return pmt * (1 - Math.pow(1+r, -n)) / r;
+}
+
+// ── Core calculation ──
+function calculate() {
+  const myAge     = getNum('myAge');
+  const retAge    = getNum('retireAge');
+  const income    = getNum('annualIncome');
+  const spIncome  = document.getElementById('hasSpouse').checked ? getNum('spouseIncome') : 0;
+  const replRate  = getNum('replaceRate') / 100;
+  const discount  = getNum('discountRate') / 100;
+  const numChild  = getNum('numChildren');
+  const youngAge  = getNum('youngestAge');
+  const otherDeps = getNum('otherDeps');
+  const depCost   = getNum('depCost');
+
+  const funeralCost  = getNum('funeralCost');
+  const estateCost   = getNum('estateCost');
+  const medicalCost  = getNum('medicalCost');
+
+  const eduPerChild  = getNum('eduPerChild');
+  const eduSaved     = getNum('eduSaved');
+
+  const savings      = getNum('savings');
+  const existingCover= getNum('existingCover');
+  const pension      = getNum('pension');
+  const disb         = getNum('disb');
+  const otherAssets  = getNum('otherAssets');
+
+  const yrsToRetire  = Math.max(0, retAge - myAge);
+  const yrsChildren  = Math.max(0, 25 - youngAge); // support until 25
+  const depYrs       = yrsChildren;
+
+  // ── Components ──
+
+  // D — Debts
+  const totalDebt = debts.reduce((s,d)=>s+d.amount, 0);
+
+  // I — Income replacement (PV of income stream minus spouse income)
+  const netIncome = income * replRate;
+  const spPV      = spIncome > 0 ? pvAnnuity(spIncome * 0.5, discount, yrsToRetire) : 0; // spouse covers 50% of their own income for family
+  const incomeReplacement = Math.max(0, pvAnnuity(netIncome, discount, yrsToRetire) - spPV);
+
+  // M — Mortgage: already in debts (not double-counted separately)
+  // We treat the mortgage as part of D; we note it separately for display
+
+  // E — Education
+  const eduNeed = Math.max(0, numChild * eduPerChild - eduSaved);
+
+  // Final expenses
+  const finalExpenses = funeralCost + estateCost + medicalCost;
+
+  // Other dependants PV
+  const depCostPV = otherDeps > 0 ? pvAnnuity(depCost * 12, discount, yrsChildren) : 0;
+
+  // Emergency buffer (6 months income)
+  const emergencyBuffer = income / 2;
+
+  // Total DIME need
+  let grossNeed = 0;
+  if (method === 'dime') {
+    grossNeed = totalDebt + incomeReplacement + eduNeed + finalExpenses + depCostPV + emergencyBuffer;
+  } else if (method === 'income') {
+    // Simple multiplier: 10× income (common rule), adjusted for age
+    const multiplier = myAge < 30 ? 15 : myAge < 40 ? 12 : myAge < 50 ? 10 : 7;
+    grossNeed = income * multiplier + totalDebt + finalExpenses;
+  } else {
+    // Human Life Value: PV of future earnings after tax (approx 30%)
+    const netIncomePV = pvAnnuity(income * 0.70, discount, yrsToRetire);
+    grossNeed = netIncomePV + totalDebt + finalExpenses + eduNeed;
   }
-  if (d.dime) {
-    ['debt','income','years','mortgage','edu','existing'].forEach(k => { if (d.dime[k]) document.getElementById('dime-'+k).value = d.dime[k]; });
-  }
-  if (d.tenx) {
-    if (d.tenx.income) document.getElementById('tenx-income').value = d.tenx.income;
-    if (d.tenx.existing) document.getElementById('tenx-existing').value = d.tenx.existing;
-  }
-  recalc();
+
+  // Total assets
+  const totalAssets = savings + pension + disb + otherAssets + existingCover;
+  const gap = Math.max(0, grossNeed - totalAssets);
+  const surplus = Math.max(0, totalAssets - grossNeed);
+  const covered = grossNeed > 0 ? Math.min(100, (totalAssets / grossNeed) * 100) : 100;
+
+  // ── Premium estimates (rough actuarial bands, BWP) ──
+  // Term life rates by age band (% of sum assured per annum, non-smoker estimate)
+  const ageBands = [
+    { max:30, rate:0.0015 },
+    { max:35, rate:0.0022 },
+    { max:40, rate:0.0035 },
+    { max:45, rate:0.0055 },
+    { max:50, rate:0.0085 },
+    { max:55, rate:0.0130 },
+    { max:60, rate:0.0200 },
+    { max:99, rate:0.0320 },
+  ];
+  const rate = (ageBands.find(b=>myAge<=b.max)||ageBands[ageBands.length-1]).rate;
+  const premGap     = gap * rate / 12;
+  const premMin     = gap * 0.5 * rate / 12;
+  const premComfort = gap * 1.25 * rate / 12;
+
+  renderResults({
+    method, myAge, retAge, yrsToRetire, income, numChild, depYrs,
+    totalDebt, incomeReplacement, eduNeed, finalExpenses, depCostPV, emergencyBuffer,
+    grossNeed, totalAssets, existingCover, gap, surplus, covered,
+    rate, premGap, premMin, premComfort,
+    savings, pension, disb, otherAssets
+  });
+
+  saveSnapshot({ grossNeed, gap, surplus, covered, existingCover });
 }
 
-let _saveTimer;
-function save() {
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(async () => {
-    if (!window._toolSb || !window._toolUser) return;
-    const { error } = await window._toolSb.from('tool_data').upsert({
-      user_id: window._toolUser.id, tool: TOOL, data: getToolData(), updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,tool' });
-    if (error) console.error('Save failed:', error);
-  }, 800);
+function renderResults(d) {
+  const el = document.getElementById('results');
+  const covCls = d.covered >= 90 ? 'green' : d.covered >= 60 ? 'gold' : 'red';
+  const fillCls= d.covered >= 90 ? 'green' : d.covered >= 60 ? '' : 'red';
+  const totalDebt = debts.reduce((s,b)=>s+b.amount,0);
+
+  // DIME component sizes for bar widths
+  const comps = [
+    { letter:'D', color:'#C0392B', label:'Debt',              sub:'Mortgages, loans, credit cards', amt: totalDebt },
+    { letter:'I', color:'#2563EB', label:'Income Replacement', sub:`${Math.round(getNum('replaceRate'))}% × ${d.yrsToRetire} yrs (PV)`, amt: d.incomeReplacement },
+    { letter:'M', color:'#D97706', label:'Mortgage (in D)',    sub:'Already counted in Debt above',  amt: 0, note:true },
+    { letter:'E', color:'#1A8C5B', label:'Education',          sub:`${getNum('numChildren')} child${getNum('numChildren')!==1?'ren':''} × P${Math.round(getNum('eduPerChild')).toLocaleString()}`, amt: d.eduNeed },
+    { letter:'+', color:'#7C3AED', label:'Final Expenses',     sub:'Funeral, estate, medical',       amt: d.finalExpenses },
+    { letter:'+', color:'#0D2545', label:'Emergency Buffer',   sub:'6 months income',                amt: d.emergencyBuffer },
+  ];
+  const maxComp = Math.max(...comps.map(c=>c.amt));
+  const dimeRows = method === 'dime' ? comps.filter(c=>!c.note).map(c=>`
+    <div class="dime-row">
+      <div class="dime-letter" style="background:${c.color}">${c.letter}</div>
+      <div class="dime-desc">
+        <div class="d-title">${c.label}</div>
+        <div class="d-sub">${c.sub}</div>
+        <div class="dime-bar"><div class="dime-fill" style="background:${c.color};width:${maxComp>0?Math.round(c.amt/maxComp*100):0}%"></div></div>
+      </div>
+      <div class="dime-amt">${fmt(c.amt)}</div>
+    </div>`).join('') : '';
+
+  const methodNote = method === 'income'
+    ? `<div class="notice notice-blue" style="font-size:11px;margin-bottom:12px">Using the <strong>Income Multiplier</strong> method: ${myAge < 30 ? '15×' : myAge < 40 ? '12×' : myAge < 50 ? '10×' : '7×'} your annual income, adjusted for age. This is a quick estimate — the DIME method gives a more accurate result.</div>`
+    : method === 'hlv'
+    ? `<div class="notice notice-blue" style="font-size:11px;margin-bottom:12px">Using the <strong>Human Life Value</strong> method: present value of your future net earnings (30% tax assumed) plus debts, final expenses, and education.</div>`
+    : '';
+
+  const gapHtml = d.gap > 0
+    ? `<div class="notice notice-red">You are <strong>underinsured by ${fmt(d.gap)}</strong>. Your family would face a significant shortfall. Consider a term life policy to close this gap — estimated premium of ${fmt(d.premGap)}/month (see below).</div>`
+    : `<div class="notice notice-green"><strong>You appear to be covered!</strong> Your assets and existing policies exceed the calculated need by ${fmt(d.surplus)}. Review annually as circumstances change.</div>`;
+
+  el.innerHTML = `
+    <!-- Hero -->
+    <div class="result-hero">
+      <div class="rh-label">Total life cover needed</div>
+      <div class="rh-val">${fmt(d.grossNeed)}</div>
+      <div class="rh-sub">${method === 'dime' ? 'DIME method' : method === 'income' ? 'Income multiplier' : 'Human Life Value'} · ${d.yrsToRetire} working years remaining</div>
+    </div>
+
+    <!-- Key stats -->
+    <div class="stat-row">
+      <div class="stat-box ${d.gap>0?'red':'green'}">
+        <div class="sv">${d.gap>0 ? fmt(d.gap) : fmt(d.surplus)}</div>
+        <div class="sl">${d.gap>0 ? 'Coverage gap' : 'Coverage surplus'}</div>
+      </div>
+      <div class="stat-box ${covCls}">
+        <div class="sv">${Math.round(d.covered)}%</div>
+        <div class="sl">Currently covered</div>
+      </div>
+      <div class="stat-box blue">
+        <div class="sv">${fmt(d.totalAssets)}</div>
+        <div class="sl">Total assets / cover</div>
+      </div>
+      <div class="stat-box gold">
+        <div class="sv">${fmt(d.existingCover)}</div>
+        <div class="sl">Existing life policy</div>
+      </div>
+    </div>
+
+    <!-- Coverage progress -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px">
+        <span style="font-weight:600">Coverage: ${fmt(d.totalAssets)} of ${fmt(d.grossNeed)}</span>
+        <span style="font-weight:700;color:var(--${covCls==='gold'?'gold':covCls})">${Math.round(d.covered)}%</span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill ${fillCls}" style="width:${Math.min(100,d.covered).toFixed(1)}%"></div></div>
+    </div>
+
+    ${gapHtml}
+    ${methodNote}
+
+    <!-- DIME breakdown -->
+    ${method === 'dime' ? `
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">🧮</span>DIME Breakdown</div>
+      <div class="dime-grid">${dimeRows}</div>
+      <div style="display:flex;justify-content:space-between;padding:10px 14px;background:var(--navy);border-radius:var(--radius-sm);color:#fff">
+        <span style="font-weight:700;font-size:13px">Total Cover Needed</span>
+        <span class="mono" style="font-size:15px;color:var(--gold2)">${fmt(d.grossNeed)}</span>
+      </div>
+    </div>` : ''}
+
+    <!-- Scenario cards -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">💡</span>Coverage Scenarios</div>
+      <div class="scenario-row">
+        <div class="sc-card" onclick="">
+          <div class="sc-label">Minimum</div>
+          <div class="sc-val">${fmt(d.gap * 0.5)}</div>
+          <div class="sc-sub">Cover debts &amp; final costs only</div>
+          <div class="sc-tag">~${fmt(d.premMin)}/mo</div>
+        </div>
+        <div class="sc-card active">
+          <div class="sc-label">Recommended</div>
+          <div class="sc-val">${fmt(d.gap)}</div>
+          <div class="sc-sub">Full gap — family fully protected</div>
+          <div class="sc-tag">~${fmt(d.premGap)}/mo</div>
+        </div>
+        <div class="sc-card">
+          <div class="sc-label">Comprehensive</div>
+          <div class="sc-val">${fmt(d.gap * 1.25)}</div>
+          <div class="sc-sub">25% buffer for inflation &amp; surprises</div>
+          <div class="sc-tag">~${fmt(d.premComfort)}/mo</div>
+        </div>
+      </div>
+      <div class="notice notice-gold" style="margin-bottom:0;font-size:11px">
+        ⚠ Premium estimates are indicative — based on ${Math.round(d.rate*100*100)/100}% annual rate for age ${Math.round(getNum('myAge'))}, non-smoker, term life. Get a formal quote from a licensed insurer.
+      </div>
+    </div>
+
+    <!-- Premium table by age -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">📋</span>Estimated Monthly Premium by Cover Amount</div>
+      <table class="premium-table">
+        <thead><tr><th style="text-align:left">Sum Assured</th><th>Min cover</th><th>Full gap</th><th>Comprehensive</th></tr></thead>
+        <tbody>
+          ${[0.5,0.75,1.0,1.25].map(mult=>{
+            const sa = d.gap * mult;
+            const mo = sa * d.rate / 12;
+            return `<tr${mult===1?' style="background:rgba(200,153,26,.08);font-weight:700"':''}><td>${fmt(sa)}</td><td></td><td>${mult===1?fmt(mo):'—'}</td><td></td></tr>`;
+          }).join('')}
+          <tr><td>Full gap (${fmt(d.gap)})</td><td>${fmt(d.premMin)}</td><td>${fmt(d.premGap)}</td><td>${fmt(d.premComfort)}</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- What your assets cover -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">🏦</span>Your Current Assets vs Needs</div>
+      <div class="chart-box"><canvas id="insChart"></canvas></div>
+    </div>
+
+    <!-- Key tips -->
+    <div class="card">
+      <div class="card-title"><span class="ct-icon">💬</span>Key Considerations</div>
+      ${getTips(d)}
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
+      <button class="btn btn-primary" onclick="calculate()">🔄 Recalculate</button>
+      <button class="btn btn-outline" onclick="window.open('index.html','_self')">← Back to Portal</button>
+    </div>
+  `;
+
+  renderChart(d);
 }
 
-// Init
-setMethod('hlv');
+function getTips(d) {
+  const tips = [];
+  const emp = document.getElementById('empType').value;
+  if (d.gap > 0)            tips.push({ icon:'🚨', text:`<strong>Close your gap of ${fmt(d.gap)}</strong> — a term life policy is the most cost-effective way to do this while you are young and healthy.` });
+  if (emp === 'self')       tips.push({ icon:'⚠', text:'<strong>Self-employed:</strong> No employer death-in-service benefit. You should also consider income protection / disability cover alongside life insurance.' });
+  if (emp === 'govt')       tips.push({ icon:'📄', text:'<strong>Government employees:</strong> Check your BPOPF death benefit carefully — it may already cover 3–5× salary. Update your beneficiary nomination regularly.' });
+  if (getNum('pension')<1)  tips.push({ icon:'🏦', text:'Start contributing to a pension or provident fund — it doubles as part of your death benefit for dependants.' });
+  if (getNum('numChildren')>0) tips.push({ icon:'🎓', text:`With ${Math.round(getNum('numChildren'))} child${getNum('numChildren')!==1?'ren':''}, education cover is critical. Consider an endowment policy ringfenced for fees.` });
+  tips.push({ icon:'📅', text:'Review your cover every 3 years or after major life events: marriage, children, property purchase, or income change.' });
+  tips.push({ icon:'🛡️', text:'Botswana-licensed insurers: Botswana Life, Metropolitan Life, Old Mutual, Liberty Life, BIFM. Always compare quotes and read policy exclusions.' });
+  return `<div style="display:flex;flex-direction:column;gap:8px">` +
+    tips.map(t=>`<div style="display:flex;gap:10px;padding:9px 12px;background:var(--cream);border-radius:var(--radius-sm);font-size:12px;line-height:1.5">
+      <span style="font-size:16px;flex-shrink:0">${t.icon}</span><div>${t.text}</div>
+    </div>`).join('') + `</div>`;
+}
 
+function renderChart(d) {
+  const ctx = document.getElementById('insChart');
+  if (!ctx) return;
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  const totalDebt = debts.reduce((s,b)=>s+b.amount,0);
+  chartInst = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Income\nReplacement','Debts','Education','Final\nExpenses','Other\nNeeds','Savings','Pension\n& DISB','Existing\nCover'],
+      datasets:[
+        {
+          label:'Cover Needed',
+          data:[d.incomeReplacement, totalDebt, d.eduNeed, d.finalExpenses, d.depCostPV+d.emergencyBuffer, 0, 0, 0],
+          backgroundColor:'rgba(192,57,43,.75)',
+          borderRadius:4,
+        },
+        {
+          label:'Assets / Cover',
+          data:[0, 0, 0, 0, 0, d.savings, d.pension+d.disb, d.existingCover+d.otherAssets],
+          backgroundColor:'rgba(26,140,91,.75)',
+          borderRadius:4,
+        }
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{font:{size:11},boxWidth:12,padding:12}},
+        tooltip:{callbacks:{label:ctx=>'P '+(ctx.raw||0).toLocaleString()}}
+      },
+      scales:{
+        y:{ticks:{callback:v=>'P '+(v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v)},grid:{color:'rgba(0,0,0,.05)'}},
+        x:{ticks:{font:{size:9}}}
+      }
+    }
+  });
+}
+
+function saveSnapshot(d) {
+  try {
+    const snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
+    snap.insurance = {
+      needTotal:      Math.round(d.grossNeed),
+      existingCover:  Math.round(d.existingCover),
+      gap:            Math.round(d.gap),
+      covered:        Math.round(d.covered),
+      lastUpdated:    new Date().toISOString()
+    };
+    localStorage.setItem('kw_snapshot', JSON.stringify(snap));
+    showToast();
+  } catch(e){}
+  // Save full state to Supabase
+  if (window._toolSb && window._toolUser) {
+    const ids = ['income','age','yearsToRetire','spouseIncome','replaceRate','discountRate',
+                 'funeralCost','estateSettle','emergencyFund','empType'];
+    const inputs = {};
+    ids.forEach(id => { const el = document.getElementById(id); if (el) inputs[id] = el.value; });
+    const fullState = { method, debts, inputs, hasSpouse: document.getElementById('hasSpouse')?.checked };
+    window._toolSb.from('tool_data').upsert({
+      user_id: window._toolUser.id, tool: 'life_insurance', data: fullState, updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,tool' }).then(({ error }) => { if (error) console.error('Save failed:', error); });
+  }
+}
+
+function showToast() {
+  const t = document.getElementById('toast');
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+// ── Init ──
+renderDebts();
+calculate();
+
+// ── Auth + Supabase init ──
 (function () {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
   const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
@@ -351,19 +779,24 @@ setMethod('hlv');
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name').eq('id', session.user.id).maybeSingle().then(({ data }) => {
-      if (data) {
-        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-        window._toolFullName = name || session.user.email;
-        const nameEl = document.getElementById('tool-user-name');
-        const initEl = document.getElementById('tool-user-initial');
-        if (nameEl) nameEl.textContent = window._toolFullName;
-        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
-      }
-    });
     const { data: toolRow } = await _sb.from('tool_data')
-      .select('data').eq('user_id', session.user.id).eq('tool', TOOL).maybeSingle();
-    if (toolRow?.data) { loadToolData(toolRow.data); }
+      .select('data').eq('user_id', session.user.id).eq('tool', 'life_insurance').maybeSingle();
+    if (toolRow?.data) {
+      const d = toolRow.data;
+      if (d.method) setMethod(d.method);
+      if (d.debts?.length) { debts = d.debts; renderDebts(); }
+      if (d.inputs) {
+        Object.entries(d.inputs).forEach(([id, val]) => {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+        });
+      }
+      if (d.hasSpouse !== undefined) {
+        const el = document.getElementById('hasSpouse');
+        if (el) { el.checked = d.hasSpouse; document.getElementById('spouseSection').style.display = d.hasSpouse ? '' : 'none'; }
+      }
+      calculate();
+    }
   });
 })();
 </script>
