@@ -612,7 +612,7 @@ async function loadAllData() {
   if (!currentUser) return;
   const uid = currentUser.id;
 
-  const safe = q => Promise.resolve(q).catch(e => { console.warn('[KW] query error:', e); return { data: null, error: e }; });
+  const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
   const [pR, aR, cR, bR, sR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
