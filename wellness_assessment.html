@@ -806,6 +806,7 @@ function calculateWellness(){
     }
     const catScores = {};
     dims.forEach(d => { catScores[d.id] = d.score; });
+    catScores._insCount = insuranceSet.size;   // persist so dashboard doesn't need localStorage
     const { data: inserted, error: insertErr } = await _sb.from('assessments').insert({
       user_id: _user.id,
       score: totalScore,

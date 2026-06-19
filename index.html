@@ -1315,8 +1315,10 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
-  // Insurance Coverage — from assessment snapshot (localStorage) or Supabase assessments
-  const insCount = snap.assessment?.insCount ?? null;
+  // Insurance Coverage — from assessment snapshot (localStorage) or Supabase assessments cat_scores
+  const insCount = snap.assessment?.insCount
+    ?? state.assessments[0]?.cat_scores?._insCount
+    ?? null;
   if (insCount !== null) {
     const insCls = insCount >= 5 ? 'green' : insCount >= 3 ? 'gold' : insCount >= 1 ? 'orange' : 'red';
     const insSub = insCount >= 5 ? 'Well covered' : insCount >= 3 ? 'Partial coverage' : insCount >= 1 ? 'Significant gaps' : 'No coverage recorded';
