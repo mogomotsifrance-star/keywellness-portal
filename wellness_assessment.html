@@ -210,7 +210,7 @@ body { font-family:'Inter',sans-serif; background:var(--cream); color:var(--navy
         <div class="field">
           <label>Gross Monthly Salary</label>
           <div class="input-wrap" id="wrap_grossSalary"><span class="input-prefix">P</span>
-            <input type="text" id="grossSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+            <input type="text" id="grossSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);onGrossChange()" onblur="finalizeInput(this);onGrossChange()" onfocus="this.select()">
           </div>
           <div class="hint">Before tax (PAYE)</div>
           <div class="field-error" id="err_grossSalary">Please enter your salary.</div>
@@ -218,9 +218,9 @@ body { font-family:'Inter',sans-serif; background:var(--cream); color:var(--navy
         <div class="field">
           <label>Net Monthly Take-home Pay</label>
           <div class="input-wrap" id="wrap_netSalary"><span class="input-prefix">P</span>
-            <input type="text" id="netSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
+            <input type="text" id="netSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);onNetManual()" onblur="finalizeInput(this)" onfocus="this.select()">
           </div>
-          <div class="hint">After PAYE &amp; statutory deductions</div>
+          <div class="hint">Estimated take-home (gross minus PAYE tax). Adjust if you know your exact net pay.</div>
           <div class="field-error" id="err_netSalary">Please enter your take-home pay.</div>
         </div>
         <div class="field">
@@ -623,6 +623,52 @@ function pf(id){ return parseFloat(document.getElementById(id)?.value.replace(/,
 function pfi(id){ return parseInt(document.getElementById(id)?.value||'0')||0; }
 function clamp(v,lo,hi){ return Math.max(lo,Math.min(hi,v)); }
 
+/* ===================================================================
+   BURS PAYE TAX BANDS — UPDATE THIS CONSTANT EACH TAX YEAR (1 Jul–30 Jun).
+   Top marginal rate rose to 26.5% for 2025/26. Figures below are
+   BEST-ESTIMATE annual bands — confirm against the official BURS table
+   before going live with real clients. Models TAX ONLY (not pension /
+   medical aid), so derived net runs slightly high vs a real payslip —
+   that is why the net field is user-editable.
+   =================================================================== */
+const BURS_TAX_BANDS = [
+  { upTo:  48000, rate: 0.000, base:     0 },  // tax-free threshold (VERIFY)
+  { upTo:  84000, rate: 0.050, base:     0 },  // VERIFY band + rate
+  { upTo: 120000, rate: 0.125, base:  1800 },  // VERIFY
+  { upTo: 156000, rate: 0.1875,base:  6300 },  // VERIFY
+  { upTo: 192000, rate: 0.2125,base: 13050 },  // VERIFY
+  { upTo: Infinity,rate:0.265, base: 20700 },  // top rate 26.5% (VERIFY base)
+];
+function bursAnnualTax(annualGross) {
+  for (let i = 0; i < BURS_TAX_BANDS.length; i++) {
+    const b = BURS_TAX_BANDS[i];
+    if (annualGross <= b.upTo) {
+      const prevCap = i === 0 ? 0 : BURS_TAX_BANDS[i-1].upTo;
+      return b.base + (annualGross - prevCap) * b.rate;
+    }
+  }
+  return 0;
+}
+function monthlyNetFromGross(monthlyGross) {
+  const annualTax = bursAnnualTax(monthlyGross * 12);
+  return Math.max(0, monthlyGross - annualTax / 12);
+}
+// Auto-fill net from gross (only when user hasn't manually edited net)
+function onGrossChange() {
+  const grossEl = document.getElementById('grossSalary');
+  const netEl   = document.getElementById('netSalary');
+  if (!grossEl || !netEl || netEl._netIsManual) return;
+  const gross = parseFloat(grossEl.value.replace(/,/g,'')) || 0;
+  if (gross <= 0) return;
+  const net = monthlyNetFromGross(gross);
+  netEl.value = net.toLocaleString('en-BW', { minimumFractionDigits:2, maximumFractionDigits:2 });
+}
+// Called when user manually edits the net field
+function onNetManual() {
+  const netEl = document.getElementById('netSalary');
+  if (netEl) netEl._netIsManual = true;
+}
+
 const TOTAL_STEPS = 8;
 let answers = {};
 let insuranceSet = new Set();
@@ -821,28 +867,36 @@ function calculateWellness(){
       console.log('Assessment saved to Supabase:', inserted);
       showToast('Assessment saved');
     }
-    // Seed all shared financial figures into the profile (single source of truth)
+    // Seed ALL shared financial figures into the profile (single source of truth)
     const _totSavings = pf('totalSavings');
+    const _netIsManual = document.getElementById('netSalary')?._netIsManual === true;
     const { error: profileErr } = await _sb.from('profiles')
       .update({
-        last_score:        totalScore,
-        last_cat_scores:   catScores,
-        // Shared financial figures — assessment is authoritative seed
-        gross_income:      gross      || null,
-        net_income:        net        || null,
-        other_income:      other      || null,
-        monthly_income:    net || gross || null,   // hub uses net as primary income
-        monthly_expenses:  expenses   || null,
-        total_assets:      totalAssets      || null,
-        total_liabilities: totalLiabilities || null,
-        monthly_debt:      totalDebtPayments || null,
-        total_savings:     _totSavings || null,
-        monthly_savings:   monthlySavings   || null,
-        fin_updated_at:    _now,
+        last_score:           totalScore,
+        last_cat_scores:      catScores,
+        // Shared financial figures — assessment is authoritative seed (most-recent-edit-wins)
+        gross_income:         gross                  || null,
+        net_income:           net                    || null,
+        other_income:         other                  || null,
+        monthly_income:       net || gross           || null,
+        monthly_expenses:     expenses               || null,
+        essential_expenses:   essentialExp           || null,
+        total_assets:         totalAssets            || null,
+        total_liabilities:    totalLiabilities       || null,
+        monthly_debt:         totalDebtPayments      || null,
+        total_debt_balance:   totalDebtBalance       || null,
+        total_savings:        _totSavings            || null,
+        monthly_savings:      monthlySavings         || null,
+        net_is_manual:        _netIsManual,
+        fin_updated_at:       _now,
       })
       .eq('id', _user.id);
-    if (profileErr) console.warn('Profile seed update failed:', profileErr);
-    else console.log('Profile shared figures seeded from assessment.');
+    if (profileErr) {
+      console.error('Profile seed update failed:', profileErr);
+      showToast('⚠️ Scores saved but profile figures could not be updated.');
+    } else {
+      console.log('Profile shared figures seeded from assessment.');
+    }
   })();
 
   const grade=totalScore>=85?{label:'Excellent 🌟',tagline:'You are in outstanding financial health. Continue your disciplined habits and focus on optimising your wealth strategy.',color:'var(--green)'}

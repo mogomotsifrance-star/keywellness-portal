@@ -650,15 +650,18 @@ async function saveUser() {
     onboarded:         u.onboarded         ?? false,
     joined_at:         u.joined_at         ?? null,
     // Shared financial figures (two-way sync)
-    gross_income:      u.gross_income      ?? null,
-    net_income:        u.net_income        ?? null,
-    other_income:      u.other_income      ?? null,
-    total_assets:      u.total_assets      ?? null,
-    total_liabilities: u.total_liabilities ?? null,
-    monthly_debt:      u.monthly_debt      ?? null,
-    total_savings:     u.total_savings     ?? null,
-    monthly_savings:   u.monthly_savings   ?? null,
-    fin_updated_at:    u.fin_updated_at    ?? null,
+    gross_income:         u.gross_income         ?? null,
+    net_income:           u.net_income           ?? null,
+    other_income:         u.other_income         ?? null,
+    essential_expenses:   u.essential_expenses   ?? null,
+    total_assets:         u.total_assets         ?? null,
+    total_liabilities:    u.total_liabilities    ?? null,
+    monthly_debt:         u.monthly_debt         ?? null,
+    total_debt_balance:   u.total_debt_balance   ?? null,
+    total_savings:        u.total_savings        ?? null,
+    monthly_savings:      u.monthly_savings      ?? null,
+    net_is_manual:        u.net_is_manual        ?? false,
+    fin_updated_at:       u.fin_updated_at       ?? null,
     updated_at:        new Date().toISOString(),
   };
   const { data, error } = await sb
@@ -838,8 +841,8 @@ const BADGE_DEFS = [
   { id:'ef_started',        icon:'🆘', name:'Safety Net Started',  desc:'Opened Emergency Fund Planner',      pts:75  },
   { id:'ef_halfway',        icon:'🛟', name:'Halfway Safe',        desc:'Emergency fund 50% funded',          pts:150 },
   { id:'ef_complete',       icon:'🏰', name:'Fortress Built',      desc:'Emergency fund fully funded',        pts:300 },
-  { id:'check_in_1',        icon:'✅', name:'On Track',            desc:'Completed first monthly check-in',   pts:75  },
-  { id:'check_in_3',        icon:'🔥', name:'Consistent',          desc:'3 monthly check-ins',                pts:150 },
+  { id:'check_in_1',        icon:'✅', name:'On Track',            desc:'Completed first fortnightly check-in',   pts:75  },
+  { id:'check_in_3',        icon:'🔥', name:'Consistent',          desc:'3 fortnightly check-ins',                pts:150 },
   { id:'booked_session',    icon:'📅', name:'Getting Help',        desc:'Booked a coaching session',          pts:100 },
   { id:'watched_video',     icon:'🎬', name:'Knowledge Seeker',    desc:'Watched a learning video',           pts:25  },
 ];
@@ -1178,20 +1181,21 @@ VIEWS['dashboard'] = async function () {
   if (budgetSavRate === null) budgetSavRate = snap.budget?.savingsRate ?? null;
 
   // ── Shared profile figures as fallback (fills gaps when tools haven't been opened yet) ──
-  const _prof = state.user || {};
-  const _profIncome = _prof.net_income || _prof.monthly_income || null;
-  if (budgetSurplus === null && _profIncome && _prof.monthly_expenses) {
-    budgetSurplus = _profIncome - _prof.monthly_expenses;
+  const _prof      = state.user || {};
+  const _profNet   = _prof.net_income   || _prof.monthly_income || null;  // surplus + savings rate
+  const _profGross = _prof.gross_income || _profNet             || null;  // DTI uses gross
+  if (budgetSurplus === null && _profNet && _prof.monthly_expenses) {
+    budgetSurplus = _profNet - _prof.monthly_expenses;
     budgetLabel   = 'from profile';
   }
   if (netWorth === null && (_prof.total_assets != null || _prof.total_liabilities != null)) {
     netWorth = (_prof.total_assets || 0) - (_prof.total_liabilities || 0);
   }
-  if (budgetDTI === null && _profIncome && _prof.monthly_debt) {
-    budgetDTI = +(_prof.monthly_debt / _profIncome * 100).toFixed(1);
+  if (budgetDTI === null && _profGross && _prof.monthly_debt) {
+    budgetDTI = +(_prof.monthly_debt / _profGross * 100).toFixed(1);
   }
-  if (budgetSavRate === null && _profIncome && _prof.monthly_savings) {
-    budgetSavRate = +(_prof.monthly_savings / _profIncome * 100).toFixed(1);
+  if (budgetSavRate === null && _profNet && _prof.monthly_savings) {
+    budgetSavRate = +(_prof.monthly_savings / _profNet * 100).toFixed(1);
   }
 
   // ── kw_snapshot staleness (supplementary — used for freshness labels only) ──
@@ -1259,9 +1263,10 @@ VIEWS['dashboard'] = async function () {
 
   // ── Helper formatters ──
   const fmtP = v => {
-    const abs = Math.abs(v);
-    const s = abs >= 1e6 ? (abs/1e6).toFixed(1)+'M' : abs >= 1e3 ? (abs/1e3).toFixed(0)+'K' : abs.toFixed(0);
-    return (v < 0 ? '-' : '') + 'P' + s;
+    const n = Math.round(v);
+    const abs = Math.abs(n);
+    if (abs >= 1e6) return (n < 0 ? '-' : '') + 'P' + (abs/1e6).toFixed(1) + 'M';
+    return (n < 0 ? '-' : '') + 'P' + abs.toLocaleString();
   };
 
   // ── Build summary hub cards ──
@@ -1372,7 +1377,7 @@ VIEWS['dashboard'] = async function () {
   if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
-  if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your monthly check-in and review your goals.', click:`go('checkin')` });
+  if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
 
   // ── Dashboard greeting ──
   const _dProf = JSON.parse(localStorage.getItem('kw_profile')||'{}');
@@ -1507,7 +1512,7 @@ VIEWS['dashboard'] = async function () {
     <div class="card">
       <div class="card-title">⚡ Quick Actions</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px">
-        <button class="btn btn-primary" onclick="go('checkin')">✅ Monthly Check-in</button>
+        <button class="btn btn-primary" onclick="go('checkin')">✅ Fortnightly Check-in</button>
         <button class="btn btn-outline" onclick="go('emergency')">🆘 Emergency Fund</button>
         <button class="btn btn-outline" onclick="go('learn')">📚 Learn</button>
         <button class="btn btn-navy"    onclick="go('booking')">📅 Book Coaching</button>
@@ -2243,7 +2248,7 @@ VIEWS['checkin'] = function () {
 
   el.innerHTML = `
     <div style="max-width:560px">
-      <div class="notice notice-gold">✅ <strong>Monthly Check-in</strong> — Rate this month. Your score updates.</div>
+      <div class="notice notice-gold">✅ <strong>Fortnightly Check-in</strong> — Rate this fortnight. Your score updates.</div>
 
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">💆 Financial Stress Check</div>
@@ -2380,7 +2385,7 @@ VIEWS['progress'] = function () {
         : '<div class="chart-wrap"><canvas id="score-chart"></canvas></div>'}
     </div>
     <div class="card">
-      <div class="card-title">✅ Monthly Check-in Scores</div>
+      <div class="card-title">✅ Fortnightly Check-in Scores</div>
       ${csc.length<1
         ? `<div class="notice notice-gold">No check-ins yet. <button class="btn btn-primary btn-sm" onclick="go('checkin')" style="margin-left:8px">Do First Check-in</button></div>`
         : '<div class="chart-wrap"><canvas id="ci-chart"></canvas></div>'}
