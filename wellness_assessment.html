@@ -1084,7 +1084,7 @@ loadDraft();
   _sb.auth.getSession().then(({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data, error }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income, gross_income, net_income, age, employment').eq('id', session.user.id).maybeSingle().then(({ data, error }) => {
       if (error) console.warn('Could not load profile for header:', error);
       window._toolProfile = data;
       const name = data ? [data.first_name, data.last_name].filter(Boolean).join(' ') : '';
@@ -1096,6 +1096,20 @@ loadDraft();
         else nameEl.style.display = 'none';
       }
       if (initEl) initEl.textContent = (window._toolFullName || '?').charAt(0).toUpperCase();
+      // Pre-fill age from profile so it's not asked twice
+      if (data?.age) {
+        const ageEl = document.getElementById('age');
+        if (ageEl && !ageEl.value) ageEl.value = data.age;
+      }
+      // Pre-fill gross/net if assessment page already visible and fields empty
+      if (data?.gross_income) {
+        const gEl = document.getElementById('grossSalary');
+        if (gEl && !gEl.value) { gEl.value = Number(data.gross_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      }
+      if (data?.net_income) {
+        const nEl = document.getElementById('netSalary');
+        if (nEl && !nEl.value) { nEl.value = Number(data.net_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      }
     });
   });
 })();

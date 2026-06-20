@@ -650,6 +650,8 @@ async function saveUser() {
     onboarded:         u.onboarded         ?? false,
     joined_at:         u.joined_at         ?? null,
     // Shared financial figures (two-way sync)
+    employment:           u.employment           ?? null,
+    goals:                u.goals                ?? null,
     gross_income:         u.gross_income         ?? null,
     net_income:           u.net_income           ?? null,
     other_income:         u.other_income         ?? null,
@@ -906,13 +908,11 @@ function fmtDate(iso) {
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age:'', income_range:'', employment:'', goals:[] };
+  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[] };
 
   const steps = [
     { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
     { q:'How old are you?', hint:'Your exact age helps us calculate accurate retirement projections and tailor advice to your life stage.', key:'age', type:'age' },
-    { q:'What is your monthly income range?', hint:'In Botswana Pula (BWP).', key:'income_range', type:'single',
-      opts:[{i:'💸',l:'Under P3,000'},{i:'💵',l:'P3,000–P8,000'},{i:'💰',l:'P8,000–P15,000'},{i:'🏦',l:'P15,000–P30,000'},{i:'💎',l:'Over P30,000'}] },
     { q:'What is your employment status?', hint:'We will personalise your plan.', key:'employment', type:'single',
       opts:[{i:'🏢',l:'Employed (full-time)'},{i:'⏰',l:'Employed (part-time)'},{i:'💼',l:'Self-employed'},{i:'📚',l:'Student'},{i:'🏡',l:'Not currently employed'}] },
     { q:'What are your financial goals?', hint:'Select all that apply.', key:'goals', type:'multi',
@@ -1259,6 +1259,16 @@ VIEWS['dashboard'] = async function () {
     nudges.push({ pri:'medium', icon:'🛡️', title:'Check your insurance coverage', desc:'Re-take the assessment to see how many of the 6 key insurance types you currently hold.', cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
   } else if (insCount !== null && insCount < 3) {
     nudges.push({ pri:'medium', icon:'🛡️', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps to address.', cta:'Learn More', click:`go('learn')` });
+  }
+
+  // ── Employment-tailored nudges ──
+  const _emp = (state.user?.employment || '').toLowerCase();
+  if (_emp.includes('self-employed')) {
+    nudges.push({ pri:'medium', icon:'💼', title:'Self-employed: plan your retirement & tax', desc:'Consider a Retirement Annuity (RA) — no employer pension means it is on you. Remember provisional tax with BURS twice a year.', cta:'Retirement Calculator', click:`openTool('retirement_calculator.html')` });
+  } else if (_emp.includes('student')) {
+    nudges.push({ pri:'medium', icon:'📚', title:'Start strong: build the savings habit now', desc:'Even P100–P200/month invested consistently from a young age compounds into significant wealth. An emergency fund is your first milestone.', cta:'Set Up Emergency Fund', click:`go('emergency')` });
+  } else if (_emp.includes('not currently employed')) {
+    nudges.push({ pri:'high', icon:'🏡', title:'Focus on your emergency fund first', desc:'With variable income, 3–6 months of essential expenses in a separate account is your most important financial buffer.', cta:'Emergency Fund', click:`go('emergency')` });
   }
 
   // ── Helper formatters ──

@@ -365,6 +365,9 @@
       <h2>Your Goals</h2>
       <span class="goal-count-badge" id="goalCountBadge">0 goals</span>
     </div>
+    <div id="goals-seed-notice" style="display:none;background:#fffbf0;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#374151">
+      💡 <strong>We've started these goals from your onboarding selections.</strong> Add target amounts and dates to start tracking your progress.
+    </div>
     <div class="goals-list" id="goalsList"></div>
 
     <!-- ══ SUMMARY DASHBOARD ══ -->
@@ -1139,19 +1142,46 @@ document.getElementById('monthlyIncome').addEventListener('blur',    () => { if 
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
-      window._toolProfile = data;
-      if (data) {
-        const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
-        window._toolFullName = name || session.user.email;
-        const nameEl = document.getElementById('tool-user-name');
-        const initEl = document.getElementById('tool-user-initial');
-        if (nameEl) nameEl.textContent = window._toolFullName;
-        if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
-      }
-    });
+    const { data: profileData } = await _sb.from('profiles').select('first_name, last_name, monthly_income, goals').eq('id', session.user.id).maybeSingle();
+    window._toolProfile = profileData;
+    if (profileData) {
+      const name = [profileData.first_name, profileData.last_name].filter(Boolean).join(' ');
+      window._toolFullName = name || session.user.email;
+      const nameEl = document.getElementById('tool-user-name');
+      const initEl = document.getElementById('tool-user-initial');
+      if (nameEl) nameEl.textContent = window._toolFullName;
+      if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
+    }
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'goal_planner').maybeSingle();
-    if (toolRow?.data) { localStorage.setItem(LS_KEY, JSON.stringify(toolRow.data)); loadGoals(); }
+    if (toolRow?.data) {
+      localStorage.setItem(LS_KEY, JSON.stringify(toolRow.data));
+      loadGoals();
+    } else {
+      // First visit — seed starter goals from onboarding selections
+      loadGoals(); // load localStorage in case exists
+      if (goals.length === 0 && profileData?.goals?.length) {
+        const GOAL_MAP = {
+          'Pay off debt':        { icon:'💳', name:'Pay Off My Debt',           cat:'Debt' },
+          'Build savings':       { icon:'🏦', name:'Build My Savings',          cat:'Savings' },
+          'Buy property':        { icon:'🏠', name:'Buy Property',              cat:'Property' },
+          'Emergency fund':      { icon:'🆘', name:'Build Emergency Fund',      cat:'Emergency' },
+          'Retirement planning': { icon:'🎯', name:'Save for Retirement',       cat:'Retirement' },
+          'Invest & grow wealth':{ icon:'📈', name:'Grow My Investments',       cat:'Investments' },
+        };
+        profileData.goals.forEach(label => {
+          const template = GOAL_MAP[label];
+          if (!template) return;
+          goals.push({ id: nextId++, icon: template.icon, name: template.name, cat: template.cat, target: '', date: '', saved: 0, monthly: '' });
+        });
+        if (goals.length) {
+          saveGoals();
+          renderAll();
+          // Show seeding notice
+          const noticeEl = document.getElementById('goals-seed-notice');
+          if (noticeEl) noticeEl.style.display = '';
+        }
+      }
+    }
   });
 })();
 </script>
