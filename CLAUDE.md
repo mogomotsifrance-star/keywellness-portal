@@ -8,7 +8,7 @@
 Key Wellness is a financial wellness portal for clients in Botswana. It helps users understand and improve their financial health through assessments, tools, coaching bookings, and progress tracking. The platform is built for a Botswana audience — currency is BWP (Pula), and the tone is warm, professional, and empowering.
 
 **Live site:** https://mogomotsifrance-star.github.io/keywellness-portal
-**Test site:** https://keywellness-dev.netlify.app
+**Test site:** https://keywellness-portal.mogomotsifrance.workers.dev (Cloudflare Pages — replaces Netlify which ran out of credits)
 **Contact email:** wellness@keywellness.co.bw
 
 ---
@@ -17,7 +17,7 @@ Key Wellness is a financial wellness portal for clients in Botswana. It helps us
 
 - **NEVER commit or push to `main` directly**
 - Always work on the `dev` branch
-- `dev` → deploys automatically to Netlify test site
+- `dev` → deploys to Cloudflare Pages test site
 - `main` → deploys automatically to GitHub Pages (live site)
 - Only merge `dev` into `main` when changes are tested and approved
 
