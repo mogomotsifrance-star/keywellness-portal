@@ -1210,8 +1210,9 @@ VIEWS['dashboard'] = async function () {
   const hasStress     = stressScore !== null;
   const hasDTI        = !!_toolMap['dti_calculator'];
 
-  // Hoist retSnap here so nudges block can reference it
-  const retSnap = snap.retirement ?? null;
+  // Hoist retSnap and insCount here so nudges block can reference them
+  const retSnap  = snap.retirement ?? null;
+  const insCount = snap.assessment?.insCount ?? state.assessments[0]?.cat_scores?._insCount ?? null;
 
   // ── Nudge generation ──
   const nudges = [];
@@ -1337,10 +1338,7 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
-  // Insurance Coverage — from assessment snapshot (localStorage) or Supabase assessments cat_scores
-  const insCount = snap.assessment?.insCount
-    ?? state.assessments[0]?.cat_scores?._insCount
-    ?? null;
+  // Insurance Coverage — insCount hoisted above nudges block
   if (insCount !== null) {
     const insCls = insCount >= 5 ? 'green' : insCount >= 3 ? 'gold' : insCount >= 1 ? 'orange' : 'red';
     const insSub = insCount >= 5 ? 'Well covered' : insCount >= 3 ? 'Partial coverage' : insCount >= 1 ? 'Significant gaps' : 'No coverage recorded';
@@ -2005,7 +2003,7 @@ window.showArticle = function (idx) {
   const body = ARTICLE_BODIES[c.title] || bodies[c.title] || '<p style="font-size:14px;line-height:1.7;color:var(--muted)">' + c.desc + '</p>';
 
   el.innerHTML = `
-    <button class="btn btn-outline btn-sm" onclick="go('learn')" style="margin-bottom:18px">Back to Learn</button>
+    <button class="btn btn-outline btn-sm" onclick="VIEWS['learn']()" style="margin-bottom:18px">← Back to Learn</button>
     <div class="card" style="max-width:680px">
       <div style="font-size:44px;margin-bottom:10px">${c.icon}</div>
       <div style="font-size:10px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">${c.cat}</div>
