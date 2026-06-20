@@ -2055,21 +2055,9 @@ VIEWS['tools'] = function () {
 
   el.innerHTML = `
     <div class="notice notice-gold" style="margin-bottom:18px">🛠️ <strong>Apply what you have learned.</strong> Use these tools to take real action on your finances.</div>
-
-    <div style="margin-bottom:8px">
-      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">📂 Financial Tools</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Interactive tools that save your data and track your progress over time.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-bottom:28px">
-        ${financialTools.map(toolCard).join('')}
-      </div>
-    </div>
-
-    <div>
-      <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">🧮 Calculators</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:14px">Calculation-only tools to model scenarios — no data is saved.</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
-        ${calculators.map(toolCard).join('')}
-      </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:18px">These tools save your data and track your progress over time. For calculators, visit the <button class="btn btn-outline btn-sm" onclick="go('calculators')" style="display:inline;padding:2px 10px;font-size:12px">Calculators</button> page.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px">
+      ${financialTools.map(toolCard).join('')}
     </div>`;
 };
 
