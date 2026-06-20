@@ -1210,6 +1210,9 @@ VIEWS['dashboard'] = async function () {
   const hasStress     = stressScore !== null;
   const hasDTI        = !!_toolMap['dti_calculator'];
 
+  // Hoist retSnap here so nudges block can reference it
+  const retSnap = snap.retirement ?? null;
+
   // ── Nudge generation ──
   const nudges = [];
   const curMonth = new Date().toISOString().slice(0,7);
@@ -1348,8 +1351,7 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
   }
 
-  // Retirement Readiness — from retirement snapshot
-  const retSnap = snap.retirement ?? null;
+  // Retirement Readiness — from retirement snapshot (retSnap declared above nudges)
   if (retSnap) {
     const retPct  = retSnap.readinessPct;
     const retCls  = retPct >= 80 ? 'green' : retPct >= 50 ? 'gold' : retPct >= 25 ? 'orange' : 'red';
@@ -1965,7 +1967,11 @@ window.showArticle = function (idx) {
   const c = CONTENT[idx];
   const el = document.getElementById('page-content');
 
-  // Legacy helpers kept for any articles not yet in ARTICLE_BODIES
+  // Legacy helpers used by the bodies fallback object below
+  const keybox = items => `<div style="background:#fffbf0;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:14px 16px;margin:18px 0"><div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">💡 Key Takeaways</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:2;color:#374151">${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+  const bwbox  = text  => `<div style="background:#eff6ff;border-left:4px solid #2563EB;border-radius:0 8px 8px 0;padding:14px 16px;margin:18px 0 0"><div style="font-size:11px;font-weight:800;color:#1e3a8a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🇧🇼 In Botswana</div><div style="font-size:13px;line-height:1.75;color:#1e3a8a">${text}</div></div>`;
+
+  // Legacy bodies fallback (ARTICLE_BODIES is preferred — this handles any gap)
   const bodies = {
     'The 50/30/20 Rule': '<p style="font-size:14px;line-height:1.85">The 50/30/20 rule is a simple budgeting framework. Split your <em>take-home</em> pay into three buckets every month.</p><div style="background:var(--cream);border-radius:var(--radius-sm);padding:18px;margin:16px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center"><div><div style="font-size:26px;font-weight:800;color:var(--navy)">50%</div><div style="font-size:12px;font-weight:600">Needs</div><div style="font-size:11px;color:var(--muted)">Rent, food, transport, bills</div></div><div><div style="font-size:26px;font-weight:800;color:var(--gold)">30%</div><div style="font-size:12px;font-weight:600">Wants</div><div style="font-size:11px;color:var(--muted)">Dining, subscriptions, leisure</div></div><div><div style="font-size:26px;font-weight:800;color:var(--green)">20%</div><div style="font-size:12px;font-weight:600">Save & Pay Debt</div><div style="font-size:11px;color:var(--muted)">Emergency fund, investments</div></div></div>' + keybox(['Needs are non-negotiable expenses — if rent exceeds 50%, adjust your wants category.','The 20% includes both savings AND extra debt repayments.','Start tracking for one month before judging — most people are surprised.']) + bwbox('With rising food and fuel costs in Botswana, many households find the 50% needs bucket tight. If yours is, aim for a 60/20/20 split until income grows. Use the Budget Planner to map your real numbers.') + '<button class="btn btn-primary btn-sm" onclick="window.open(\'budget_planner.html\',\'_blank\')">Open Budget Planner</button>',
 
