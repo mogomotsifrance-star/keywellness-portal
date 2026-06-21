@@ -41,6 +41,9 @@
 
   async function getClient() {
     if (_client) return _client;
+    // Reuse shared client from index.html or tool pages if available
+    if (global._kwSb)   { _client = global._kwSb;   return _client; }
+    if (global._toolSb) { _client = global._toolSb; return _client; }
     await ensureSupabase();
     _client = global.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     return _client;

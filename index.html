@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Key Wellness — Financial Portal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -469,16 +470,35 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 
     <!-- Login -->
     <div id="auth-login-form">
-      <div class="field"><label>Email</label><input type="email" id="a-email" placeholder="you@example.com"></div>
-      <div class="field"><label>Password</label><input type="password" id="a-pass" placeholder="Your password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="field"><label for="a-email">Email</label><input type="email" id="a-email" placeholder="you@example.com" aria-label="Email address"></div>
+      <div class="field">
+        <label for="a-pass">Password</label>
+        <input type="password" id="a-pass" placeholder="Your password" aria-label="Password" onkeydown="if(event.key==='Enter')doLogin()">
+        <div style="text-align:right;margin-top:5px"><button type="button" style="background:none;border:none;color:var(--gold);font-size:12px;font-weight:600;cursor:pointer;padding:0" onclick="toggleForgotPanel()">Forgot password?</button></div>
+      </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="login-btn" onclick="doLogin()">Sign In</button>
+    </div>
+
+    <!-- Forgot password panel -->
+    <div id="forgot-panel" style="display:none;margin-top:16px;background:var(--cream);border-radius:var(--radius-sm);padding:16px">
+      <p style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your email to receive a reset link.</p>
+      <div class="field" style="margin-bottom:10px"><label for="fp-email">Email</label><input type="email" id="fp-email" placeholder="you@example.com" aria-label="Email for password reset"></div>
+      <button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" onclick="doForgotPassword()">Send reset link</button>
+    </div>
+
+    <!-- Password reset form (shown when redirected back with recovery token) -->
+    <div id="auth-reset-form" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Enter a new password for your account.</p>
+      <div class="field"><label for="r-pass">New Password</label><input type="password" id="r-pass" placeholder="At least 6 characters" aria-label="New password"></div>
+      <div class="field"><label for="r-pass2">Confirm Password</label><input type="password" id="r-pass2" placeholder="Repeat new password" aria-label="Confirm new password" onkeydown="if(event.key==='Enter')doResetPassword()"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
     </div>
 
     <!-- Signup -->
     <div id="auth-signup-form" style="display:none">
-      <div class="field"><label>Email</label><input type="email" id="b-email" placeholder="you@example.com"></div>
-      <div class="field"><label>Password</label><input type="password" id="b-pass" placeholder="At least 6 characters"></div>
-      <div class="field"><label>Confirm Password</label><input type="password" id="b-pass2" placeholder="Repeat password" onkeydown="if(event.key==='Enter')doSignup()"></div>
+      <div class="field"><label for="b-email">Email</label><input type="email" id="b-email" placeholder="you@example.com" aria-label="Email address"></div>
+      <div class="field"><label for="b-pass">Password</label><input type="password" id="b-pass" placeholder="At least 6 characters" aria-label="Password"></div>
+      <div class="field"><label for="b-pass2">Confirm Password</label><input type="password" id="b-pass2" placeholder="Repeat password" aria-label="Confirm password" onkeydown="if(event.key==='Enter')doSignup()"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="signup-btn" onclick="doSignup()">Create Account</button>
     </div>
   </div>
@@ -548,7 +568,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <h2 id="page-title">Dashboard</h2>
     <div id="header-actions"></div>
     <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
-      <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications">
+      <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications" aria-label="Notifications">
         <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
         <span class="notif-badge hidden" id="notifBadge">0</span>
       </button>
@@ -568,6 +588,7 @@ const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
 const { createClient } = window.supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+window._kwSb = sb; // shared client — kw-badges.js and tool pages reuse this
 
 // ══════════════════════════════════════════════════
 //  STATE
@@ -629,6 +650,12 @@ async function loadAllData() {
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
   if (state.stressLogs.length) localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
+
+  // Admin check
+  try {
+    const { data: adminRow } = await sb.from('admins').select('email').eq('email', currentUser.email).maybeSingle();
+    window._isAdmin = !!adminRow;
+  } catch (_) { window._isAdmin = false; }
 }
 
 async function saveUser() {
@@ -766,6 +793,37 @@ async function doLogout() {
   await sb.auth.signOut();
 }
 
+function toggleForgotPanel() {
+  const p = document.getElementById('forgot-panel');
+  p.style.display = p.style.display === 'none' ? '' : 'none';
+  clearAuthMsg();
+}
+
+async function doForgotPassword() {
+  const email = document.getElementById('fp-email').value.trim();
+  if (!email) { authErr('Please enter your email address.'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://keywellness-portal.mogomotsifrance.workers.dev'
+  });
+  if (error) { authErr(error.message); return; }
+  authOk('Check your email for a password reset link.');
+  document.getElementById('forgot-panel').style.display = 'none';
+}
+
+async function doResetPassword() {
+  const pass  = document.getElementById('r-pass').value;
+  const pass2 = document.getElementById('r-pass2').value;
+  if (pass.length < 6) { authErr('Password must be at least 6 characters.'); return; }
+  if (pass !== pass2)  { authErr('Passwords do not match.'); return; }
+  const btn = document.getElementById('reset-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await sb.auth.updateUser({ password: pass });
+  btn.disabled = false; btn.textContent = 'Set New Password';
+  if (error) { authErr(error.message); return; }
+  authOk('Password updated! Signing you in…');
+  setTimeout(() => { window.location.hash = 'dashboard'; }, 1500);
+}
+
 // ══════════════════════════════════════════════════
 //  NAV
 // ══════════════════════════════════════════════════
@@ -792,13 +850,15 @@ const MOBILE_NAV = [
 ];
 
 function buildNav(current) {
-  document.getElementById('sb-nav').innerHTML = NAV.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
-      <span class="icon">${n.icon}</span>${n.label}
+  const navItems = [...NAV];
+  if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
+  document.getElementById('sb-nav').innerHTML = navItems.map(n => `
+    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`window.open('admin.html','_blank')`:`go('${n.id}')`}" aria-label="${n.label}">
+      <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
-    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}">
-      <span class="bn-icon">${n.icon}</span>${n.label}
+    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+      <span class="bn-icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('sb-pts').textContent = state.badges.points;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
@@ -3126,6 +3186,20 @@ window.addCustomReminder = function () {
 //  INIT
 // ══════════════════════════════════════════════════
 async function init() {
+  // Handle Supabase password-recovery redirect (hash contains access_token + type=recovery)
+  const _hash = window.location.hash;
+  if (_hash.includes('type=recovery') && _hash.includes('access_token')) {
+    showAuthScreen(true);
+    document.getElementById('auth-login-form').style.display = 'none';
+    document.getElementById('auth-signup-form').style.display = 'none';
+    document.getElementById('forgot-panel').style.display = 'none';
+    document.getElementById('auth-reset-form').style.display = '';
+    document.querySelector('.auth-tabs').style.display = 'none';
+    document.querySelector('.auth-box h2').textContent = 'Set New Password';
+    document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
+    return; // Supabase SDK will fire PASSWORD_RECOVERY event via onAuthStateChange below
+  }
+
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
@@ -3159,6 +3233,16 @@ async function init() {
           setTimeout(showConsentModal, 800);
         }
       }
+    } else if (event === 'PASSWORD_RECOVERY') {
+      // User arrived via the reset-link email — show set-new-password form
+      showAuthScreen(true);
+      document.getElementById('auth-login-form').style.display = 'none';
+      document.getElementById('auth-signup-form').style.display = 'none';
+      document.getElementById('forgot-panel').style.display = 'none';
+      document.getElementById('auth-reset-form').style.display = '';
+      document.querySelector('.auth-tabs').style.display = 'none';
+      document.querySelector('.auth-box h2').textContent = 'Set New Password';
+      document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
     } else if (event === 'SIGNED_OUT') {
       clearLocalUserCache();
       currentUser = null;
