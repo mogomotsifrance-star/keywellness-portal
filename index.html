@@ -1705,6 +1705,7 @@ window.saveNameModal = function () {
   if (state.user) {
     state.user.first_name = first;
     state.user.last_name  = last;
+    state.user.onboarded  = true;   // M-1: capturing a name counts as onboarded so the flag is authoritative
     saveUser().catch(()=>{});
   } else {
     // Fallback: update Supabase auth metadata
@@ -3212,6 +3213,9 @@ async function init() {
   currentUser = session?.user ?? null;
 
   if (currentUser) await loadAllData();
+  // Admins get a streamlined practitioner experience — never the member journey.
+  // Route them to the admin home before any member onboarding/consent/dashboard renders.
+  if (currentUser && window._isAdmin) { window.location.replace('admin.html'); return; }
   initProfileUI();
   loadNotifications();
 
@@ -3221,6 +3225,9 @@ async function init() {
       currentUser = session?.user ?? null;
       if (currentUser) enforceUserScope(currentUser.id);
       await loadAllData();
+      // Admins skip onboarding, consent, the welcome video, assessment nags and all
+      // member surfaces — send them straight to the admin home.
+      if (window._isAdmin) { window.location.replace('admin.html'); return; }
       initProfileUI();
       loadNotifications();
       route();

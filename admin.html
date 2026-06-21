@@ -292,7 +292,7 @@ function renderUsers(filter = '', statusFilter = 'all') {
   if (filter) {
     const q = filter.toLowerCase();
     users = users.filter(u => {
-      const name = `${u.first_name||''} ${u.last_name||}`.toLowerCase();
+      const name = `${u.first_name||''} ${u.last_name||''}`.toLowerCase();
       const email = (u.email || '').toLowerCase();
       return name.includes(q) || email.includes(q);
     });
