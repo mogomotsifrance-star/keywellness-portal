@@ -488,7 +488,12 @@ function renderBookings(filter = '', statusFilter = 'all') {
 }
 
 async function updateBookingStatus(id, status) {
-  await sb.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await sb.from('bookings').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) {
+    console.error('Booking status update failed:', error);
+    alert('Could not update booking status: ' + (error.message || 'unknown error'));
+    return;
+  }
   // Update local cache
   const idx = allBookings.findIndex(b => b.id === id);
   if (idx >= 0) allBookings[idx].status = status;

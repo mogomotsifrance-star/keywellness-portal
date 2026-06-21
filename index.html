@@ -2760,12 +2760,10 @@ window.submitBooking = async function () {
     return;
   }
 
-  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
-  bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
-  localStorage.setItem('kw_bookings', JSON.stringify(bookings));
-  // Save to Supabase bookings table
+  // Save to Supabase bookings table — this is the SOURCE OF TRUTH.
+  // A DB failure must NOT be shown to the user as a success.
   if (currentUser) {
-    sb.from('bookings').insert({
+    const { error: bkErr } = await sb.from('bookings').insert({
       user_id: currentUser.id,
       user_name: `${first} ${last}`.trim(),
       user_email: email,
@@ -2774,10 +2772,21 @@ window.submitBooking = async function () {
       requested_date: date,
       status: 'pending',
       created_at: new Date().toISOString()
-    })
-      .then(({ error }) => { if (error) console.error('booking save failed:', error); })
-      .catch(console.error);
+    });
+    if (bkErr) {
+      console.error('Booking insert failed:', bkErr);
+      document.getElementById('bkErrMsg').textContent = '⚠️ Your booking could not be saved. Please try again, or email wellness@keywellness.co.bw';
+      document.getElementById('bkErrBanner').classList.add('show');
+      btn.disabled = false; btn.classList.remove('bk-loading');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return; // do NOT show the success screen if the DB write failed
+    }
   }
+
+  // Local cache for fast render only — Supabase (above) is the source of truth.
+  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
+  localStorage.setItem('kw_bookings', JSON.stringify(bookings));
   awardBadge('booked_session');
 
   document.getElementById('bkForm').style.display='none';
@@ -2837,15 +2846,14 @@ VIEWS['my-bookings'] = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading bookings…</div>';
 
-  // Load from Supabase first, fall back to localStorage
+  // Supabase is the SOURCE OF TRUTH. localStorage is only a write cache and must
+  // never be the reason a booking appears here — doing so would hide cross-device loss.
   let bookings = [];
   if (currentUser) {
-    const { data } = await sb.from('bookings').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    const { data, error } = await sb.from('bookings').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    if (error) console.error('My Bookings load failed:', error);
     bookings = data || [];
   }
-  // Merge localStorage bookings not yet in Supabase
-  const lsBookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
-  if (!bookings.length && lsBookings.length) bookings = lsBookings;
 
   const statusColor = { pending:'var(--gold)', confirmed:'var(--green)', cancelled:'var(--red)' };
   const statusBg    = { pending:'#fffbf2', confirmed:'#f0faf4', cancelled:'#fdf2f2' };
