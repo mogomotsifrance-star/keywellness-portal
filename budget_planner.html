@@ -490,8 +490,27 @@ function fmtInput(el){
 function finalizeInput(el){const n=pf(el.value);if(!isNaN(n)&&n>0)el.value=n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});else el.value='';}
 
 function getBudget(key){ return budgets[key] || newEmptyBudget(); }
+function profilePrimaryIncome(){
+  const p = window._toolProfile || {};
+  const v = Number(p.net_income ?? p.monthly_income ?? 0);   // ideally net (take-home) salary
+  return (isFinite(v) && v > 0) ? Math.round(v) : 0;
+}
 function newEmptyBudget(){
-  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, notes:'', collapsed:{} };
+  return { income:[{id:Date.now(),label:'Primary Salary',amount:profilePrimaryIncome()}], expenses:{}, notes:'', collapsed:{} };
+}
+// Seed Primary Salary from the profile's net income on a freshly auto-created, untouched budget.
+// No-op once edited/seeded, on real budgets, or before the profile has loaded (handles the load race).
+function maybeSeedPrimaryIncome(){
+  const inc = profilePrimaryIncome();
+  if (!inc || !currentKey) return;
+  const b = budgets[currentKey];
+  if (!b || !b.income || b.income.length !== 1) return;
+  const row = b.income[0];
+  const untouched = row.label === 'Primary Salary' && (!row.amount || Number(row.amount) === 0)
+    && (!b.expenses || Object.keys(b.expenses).length === 0);
+  if (!untouched) return;
+  row.amount = inc;   // user-editable; not force-saved until the user interacts
+  renderAll();
 }
 function sortedKeys(){ return Object.keys(budgets).sort(); }
 
@@ -1068,7 +1087,7 @@ renderAll();
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     // Load profile for header
-    _sb.from('profiles').select('first_name, last_name, monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income, net_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
       window._toolProfile = data;
       if (data) {
         const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
@@ -1078,6 +1097,7 @@ renderAll();
         if (nameEl) nameEl.textContent = window._toolFullName;
         if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
       }
+      maybeSeedPrimaryIncome();   // seed Primary Salary from profile net income on a fresh, untouched budget
     });
     // Load budget data from Supabase (overrides localStorage if cloud data exists)
     const { data: toolRow, error: loadErr } = await _sb.from('tool_data')
@@ -1090,6 +1110,7 @@ renderAll();
       renderAll();
     } else {
       console.log('budget_planner: no cloud data found, using local state');
+      maybeSeedPrimaryIncome();   // fresh user / no saved budget — seed Primary Salary from profile
     }
   });
 })();
