@@ -587,23 +587,43 @@ function toggleSched() {
   });
 })();
 
-// ── Income Prefill ──
+// ── Income Prefill + cross-device persistence (Supabase tool_data: 'rent_vs_buy') ──
+let _toolSaveTimer;
+function _toolSave(){
+  const sb = window._toolSb, u = window._toolUser;
+  if (!sb || !u) return;
+  const inputs = {};
+  document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  clearTimeout(_toolSaveTimer);
+  _toolSaveTimer = setTimeout(async () => {
+    const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'rent_vs_buy', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Rent-vs-buy save to Supabase failed:', error);
+  }, 500);
+}
 document.addEventListener('DOMContentLoaded', function() {
-  window._toolSb && window._toolSb.auth.getSession().then(({ data: { session } }) => {
+  window._toolSb && window._toolSb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) return;
-    window._toolSb.from('profiles').select('monthly_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
-      if (!data || !data.monthly_income) return;
-      const val = Number(data.monthly_income).toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
-      ['grossSalary','monthlySalary','monthlyIncome','grossIncome','income','salary','monthlyGross'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && el.tagName === 'INPUT') {
-          el.value = val;
-          el.dispatchEvent(new Event('input'));
-        }
-      });
-      const notice = document.getElementById('income-prefill-notice');
-      if (notice) notice.style.display = '';
-    });
+    window._toolUser = session.user;
+    // Profile income prefill (convenience for first use)
+    try {
+      const { data } = await window._toolSb.from('profiles').select('monthly_income').eq('id', session.user.id).maybeSingle();
+      if (data && data.monthly_income) {
+        const val = Number(data.monthly_income).toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
+        ['grossSalary','monthlySalary','monthlyIncome','grossIncome','income','salary','monthlyGross'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el && el.tagName === 'INPUT') { el.value = val; el.dispatchEvent(new Event('input')); }
+        });
+        const notice = document.getElementById('income-prefill-notice');
+        if (notice) notice.style.display = '';
+      }
+    } catch(e){ console.warn('Income prefill failed:', e); }
+    // Restore saved inputs (source of truth — overrides income prefill), then persist on change
+    try {
+      const { data: row, error } = await window._toolSb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'rent_vs_buy').maybeSingle();
+      if (error) console.warn('Rent-vs-buy load from Supabase failed:', error);
+      else { const _inp = row && row.data && row.data.inputs; if (_inp) { Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); } }
+    } catch(e){ console.warn('Rent-vs-buy restore error:', e); }
+    document.addEventListener('input', _toolSave);
   });
 });
 </script>

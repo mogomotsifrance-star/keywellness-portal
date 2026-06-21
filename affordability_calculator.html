@@ -481,6 +481,28 @@ const _AFF_MAPPINGS = [
   { inputId: 'livingExp',   col: 'monthly_expenses'   },
 ];
 
+// ── Cross-device persistence (Supabase tool_data: 'affordability') ──
+let _toolSaveTimer;
+function _toolSave(){
+  const sb = window._toolSb, u = window._toolUser;
+  if (!sb || !u) return;
+  const inputs = {};
+  document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  clearTimeout(_toolSaveTimer);
+  _toolSaveTimer = setTimeout(async () => {
+    const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'affordability', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Affordability save to Supabase failed:', error);
+  }, 500);
+}
+async function _toolRestore(_sb, uid){
+  try {
+    const { data, error } = await _sb.from('tool_data').select('data').eq('user_id', uid).eq('tool', 'affordability').maybeSingle();
+    if (error) { console.warn('Affordability load from Supabase failed:', error); return; }
+    const _inp = data && data.data && data.data.inputs;
+    if (_inp) { Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); }
+  } catch(e){ console.warn('Affordability restore error:', e); }
+}
+
 // ── Auth init ──
 (function() {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
@@ -503,6 +525,9 @@ const _AFF_MAPPINGS = [
     // Prefill income + expenses from shared profile
     await KWProfile.load();
     KWProfile.prefill(_AFF_MAPPINGS);
+    // Cross-device: restore saved inputs (source of truth), then persist on change
+    await _toolRestore(_sb, session.user.id);
+    document.addEventListener('input', _toolSave);
   });
 })();
 </script>

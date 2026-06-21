@@ -635,6 +635,8 @@ function calculate() {
       lastUpdated:   new Date().toISOString()
     };
     localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
+    window._retLastSnap = _snap.retirement;
+    if (window._retSave) window._retSave();   // persist inputs + snapshot to Supabase tool_data
   } catch(e){}
 
   // Offer to write changed salary/contributions back to shared profile
@@ -665,6 +667,22 @@ const _RET_MAPPINGS = [
   { inputId: 'monthlyContrib', col: 'monthly_savings' },
 ];
 
+// ── Cross-device persistence helper (Supabase tool_data: 'retirement') ──
+let _retSaveTimer;
+window._retLastSnap = window._retLastSnap || null;
+window._retSave = function(){
+  const sb = window._toolSb, u = window._toolUser;
+  if (!sb || !u) return;
+  const inputs = {};
+  document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  clearTimeout(_retSaveTimer);
+  const data = { inputs, snapshot: window._retLastSnap || null };
+  _retSaveTimer = setTimeout(async () => {
+    const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'retirement', data, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
+    if (error) console.error('Retirement save to Supabase failed:', error);
+  }, 500);
+};
+
 // ── Auth init ──
 (function() {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
@@ -687,6 +705,17 @@ const _RET_MAPPINGS = [
     });
     await KWProfile.load();
     KWProfile.prefill(_RET_MAPPINGS);
+    // Cross-device: restore saved inputs (source of truth — overrides profile prefill), then persist on change
+    try {
+      const { data, error } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'retirement').maybeSingle();
+      if (error) console.warn('Retirement load from Supabase failed:', error);
+      else if (data && data.data) {
+        const _inp = data.data.inputs;
+        if (_inp) Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; });
+        if (data.data.snapshot) window._retLastSnap = data.data.snapshot;
+      }
+    } catch(e) { console.warn('Retirement load error:', e); }
+    document.addEventListener('input', window._retSave);
   });
 })();
 </script>

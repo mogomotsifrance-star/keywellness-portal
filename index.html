@@ -1149,7 +1149,7 @@ VIEWS['dashboard'] = async function () {
     const { data: _toolRows } = await sb.from('tool_data')
       .select('tool, data')
       .eq('user_id', state.user.id)
-      .in('tool', ['budget_planner', 'net_worth_tracker', 'financial_stress_tracker', 'goal_planner', 'dti_calculator']);
+      .in('tool', ['budget_planner', 'net_worth_tracker', 'financial_stress_tracker', 'goal_planner', 'dti_calculator', 'retirement']);
     if (_toolRows) _toolRows.forEach(r => { _toolMap[r.tool] = r.data; });
   } catch {}
 
@@ -1199,13 +1199,23 @@ VIEWS['dashboard'] = async function () {
     }
   } catch {}
 
-  // ── Wellness score from localStorage (new assessment) or Supabase ──
+  // ── Wellness score — Supabase is the source of truth (latest assessment row, then profile), localStorage fallback ──
   let wellScore = null, wellDate = null, wellDims = null;
-  try {
-    const wr = JSON.parse(localStorage.getItem('kw_assessment_result') || '{}');
-    if (wr.score) { wellScore = wr.score; wellDate = wr.date; wellDims = wr.dims; }
-  } catch {}
-  if (!wellScore) { wellScore = state.user?.last_score ?? null; }
+  const _latestAssess = state.assessments?.[0];
+  if (_latestAssess && _latestAssess.score != null) {
+    wellScore = _latestAssess.score;
+    wellDate  = _latestAssess.created_at;
+    wellDims  = _latestAssess.cat_scores || state.user?.last_cat_scores || null;
+  } else if (state.user?.last_score != null) {
+    wellScore = state.user.last_score;
+    wellDims  = state.user.last_cat_scores || null;
+  }
+  if (wellScore == null) {  // nothing server-side yet — fall back to this browser's cache
+    try {
+      const wr = JSON.parse(localStorage.getItem('kw_assessment_result') || '{}');
+      if (wr.score) { wellScore = wr.score; wellDate = wr.date; wellDims = wr.dims; }
+    } catch {}
+  }
 
   // ── Emergency fund from Supabase ──
   let efMonths = null, efTarget = null, efCurrent = null;
@@ -1275,7 +1285,7 @@ VIEWS['dashboard'] = async function () {
   const hasDTI        = !!_toolMap['dti_calculator'];
 
   // Hoist retSnap and insCount here so nudges block can reference them
-  const retSnap  = snap.retirement ?? null;
+  const retSnap  = _toolMap['retirement']?.snapshot ?? snap.retirement ?? null;  // Supabase source of truth, localStorage fallback
   const insCount = snap.assessment?.insCount ?? state.assessments[0]?.cat_scores?._insCount ?? null;
 
   // ── Nudge generation ──
@@ -1429,7 +1439,7 @@ VIEWS['dashboard'] = async function () {
     const retPct  = retSnap.readinessPct;
     const retCls  = retPct >= 80 ? 'green' : retPct >= 50 ? 'gold' : retPct >= 25 ? 'orange' : 'red';
     const retSub  = retPct >= 80 ? `On track · retire at ${retSnap.retireAge}` : retPct >= 50 ? `${retSnap.yrsToRetire}y to retire · gap exists` : `Significant shortfall · ${retSnap.yrsToRetire}y left`;
-    const retAge  = snap.retirement?.lastUpdated;
+    const retAge  = retSnap.lastUpdated ?? snap.retirement?.lastUpdated;
     hubCards.push({ cls:retCls, lbl:'Retirement Readiness', val:`${retPct}%`, sub:retSub, fresh:freshLabel(daysSince(retAge)), click:`openTool('retirement_calculator.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'—', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
@@ -1451,7 +1461,7 @@ VIEWS['dashboard'] = async function () {
 
   // ── Dashboard greeting ──
   const _dProf = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  const _dFirst = _dProf.firstName || state.user?.first_name || _dProf.displayName?.split(' ')[0] || '';
+  const _dFirst = state.user?.first_name || _dProf.firstName || _dProf.displayName?.split(' ')[0] || '';
   const _hr = new Date().getHours();
   const _greet = _hr < 12 ? 'Good morning' : _hr < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -1637,7 +1647,7 @@ function _showStartButton() {
 
 function showWelcomeVideo(){
   const _wlp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  const _wn  = _wlp.firstName || state.user?.first_name || '';
+  const _wn  = state.user?.first_name || _wlp.firstName || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
   // Reset button state
@@ -2518,8 +2528,8 @@ VIEWS['booking'] = function () {
   const el = document.getElementById('page-content');
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
   // Prefer explicit first/last — avoids mis-splitting compound names
-  const _bkFirst    = prof.firstName  || state.user?.first_name || '';
-  const _bkLast     = prof.lastName   || state.user?.last_name  || '';
+  const _bkFirst    = state.user?.first_name || prof.firstName  || '';
+  const _bkLast     = state.user?.last_name  || prof.lastName   || '';
   const _bkFullName = (_bkFirst || _bkLast)
     ? `${_bkFirst} ${_bkLast}`.trim()
     : prof.displayName || currentUser?.user_metadata?.full_name || '';
@@ -2904,7 +2914,7 @@ VIEWS['profile'] = function () {
   const el = document.getElementById('page-content');
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
   // Derive first/last from parts or split displayName as fallback
-  const _dn = prof.displayName || state.user?.first_name && (state.user.last_name ? `${state.user.first_name} ${state.user.last_name}` : state.user.first_name) || currentUser?.user_metadata?.full_name || '';
+  const _dn = (state.user?.first_name ? (state.user.last_name ? `${state.user.first_name} ${state.user.last_name}` : state.user.first_name) : '') || prof.displayName || currentUser?.user_metadata?.full_name || '';
   const _parts = _dn.split(' ');
   const firstName   = prof.firstName   || state.user?.first_name || _parts[0] || '';
   const lastName    = prof.lastName    || state.user?.last_name  || _parts.slice(1).join(' ') || '';
