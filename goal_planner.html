@@ -669,6 +669,10 @@ function renderAll() {
 // Render one goal card
 // ──────────────────────────────────────────────
 function renderGoalCard(g) {
+  // Normalize legacy/seeded goals so a missing field can't throw and break all rendering
+  if (g.priority == null) g.priority = 'medium';
+  if (g.type == null) g.type = 'custom';
+  if (g.annualReturn === undefined) g.annualReturn = null;
   const calc    = calcGoal(g);
   const meta    = TYPE_META[g.type] || TYPE_META.custom;
   const defReturn = parseFloat(document.getElementById('globalReturn').value) || 8;
@@ -1162,17 +1166,19 @@ document.getElementById('monthlyIncome').addEventListener('blur',    () => { if 
       loadGoals(); // load localStorage in case exists
       if (goals.length === 0 && profileData?.goals?.length) {
         const GOAL_MAP = {
-          'Pay off debt':        { icon:'💳', name:'Pay Off My Debt',           cat:'Debt' },
-          'Build savings':       { icon:'🏦', name:'Build My Savings',          cat:'Savings' },
-          'Buy property':        { icon:'🏠', name:'Buy Property',              cat:'Property' },
-          'Emergency fund':      { icon:'🆘', name:'Build Emergency Fund',      cat:'Emergency' },
-          'Retirement planning': { icon:'🎯', name:'Save for Retirement',       cat:'Retirement' },
-          'Invest & grow wealth':{ icon:'📈', name:'Grow My Investments',       cat:'Investments' },
+          'Pay off debt':        { type:'custom',    name:'Pay Off My Debt' },
+          'Build savings':       { type:'custom',    name:'Build My Savings' },
+          'Buy property':        { type:'home',      name:'Buy Property' },
+          'Emergency fund':      { type:'emergency', name:'Build Emergency Fund' },
+          'Retirement planning': { type:'custom',    name:'Save for Retirement' },
+          'Invest & grow wealth':{ type:'custom',    name:'Grow My Investments' },
         };
         profileData.goals.forEach(label => {
           const template = GOAL_MAP[label];
           if (!template) return;
-          goals.push({ id: nextId++, icon: template.icon, name: template.name, cat: template.cat, target: '', date: '', saved: 0, monthly: '' });
+          // Must match the shape addGoal produces — a missing `priority`/`type`/`annualReturn`
+          // makes renderGoalCard/calcGoal throw, which breaks rendering of ALL goals.
+          goals.push({ id: nextId++, type: template.type, name: template.name, target: '', saved: 0, months: '', annualReturn: null, priority: 'medium' });
         });
         if (goals.length) {
           saveGoals();
