@@ -2736,10 +2736,51 @@ window.submitBooking = async function () {
   const btn = document.getElementById('bkSubmitBtn');
   btn.disabled=true; btn.classList.add('bk-loading');
 
-  // Client auto-reply message
   const sessionType = _bkSessionType;
-  const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n• Service: ${service}\n• Session Type: ${sessionType}\n• Date: ${dateStr}\n• Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you need to make any changes or have questions, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nLooking forward to supporting your financial wellness journey.\n\nWarm regards,\nKey Wellness Team`;
 
+  // ── 1) Supabase bookings insert is the SOURCE OF TRUTH — run it FIRST and await it. ──
+  //     The admin panel and My Bookings read from this row, so a DB failure is the only real failure.
+  if (currentUser) {
+    const { error: bkErr } = await sb.from('bookings').insert({
+      user_id: currentUser.id,
+      user_name: `${first} ${last}`.trim(),
+      user_email: email,
+      service,
+      session_type: sessionType,
+      requested_date: date,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+    if (bkErr) {
+      console.error('Booking insert failed:', bkErr);
+      document.getElementById('bkErrMsg').textContent = '⚠️ Your booking could not be saved. Please try again, or email wellness@keywellness.co.bw';
+      document.getElementById('bkErrBanner').classList.add('show');
+      btn.disabled = false; btn.classList.remove('bk-loading');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return; // genuine DB failure — do not show the success screen
+    }
+  }
+
+  // ── 2) Booking is saved. Cache, award badge, and show the success screen. ──
+  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
+  localStorage.setItem('kw_bookings', JSON.stringify(bookings));
+  awardBadge('booked_session');
+
+  document.getElementById('bkForm').style.display='none';
+  const s = document.getElementById('bkSuccess'); s.classList.add('show');
+  document.getElementById('bs-name').textContent    = first+' '+last;
+  document.getElementById('bs-service').textContent = service;
+  document.getElementById('bs-date').textContent    = dateStr;
+  document.getElementById('bs-time').textContent    = time;
+  document.getElementById('bs-email').textContent   = email;
+  btn.disabled=false; btn.classList.remove('bk-loading');
+  window.scrollTo({top:0,behavior:'smooth'});
+
+  // ── 3) Notification email is SECONDARY — it must NEVER hide a saved booking. ──
+  //     FormSubmit returns HTTP 200 with success:"false" ("This form needs Activation") until the
+  //     recipient activates the form, so a failure here is warned-only; the booking is already saved.
+  const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n• Service: ${service}\n• Session Type: ${sessionType}\n• Date: ${dateStr}\n• Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you need to make any changes or have questions, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nLooking forward to supporting your financial wellness journey.\n\nWarm regards,\nKey Wellness Team`;
   try {
     const res = await fetch('https://formsubmit.co/ajax/wellness@keywellness.co.bw', {
       method: 'POST',
@@ -2762,53 +2803,13 @@ window.submitBooking = async function () {
         '_captcha':        'false'
       })
     });
-    const data = await res.json();
-    if (!res.ok || data.success === 'false') throw new Error('server');
-  } catch(e) {
-    document.getElementById('bkErrMsg').textContent = 'Could not submit. Please try again or email wellness@keywellness.co.bw';
-    document.getElementById('bkErrBanner').classList.add('show');
-    btn.disabled=false; btn.classList.remove('bk-loading');
-    return;
-  }
-
-  // Save to Supabase bookings table — this is the SOURCE OF TRUTH.
-  // A DB failure must NOT be shown to the user as a success.
-  if (currentUser) {
-    const { error: bkErr } = await sb.from('bookings').insert({
-      user_id: currentUser.id,
-      user_name: `${first} ${last}`.trim(),
-      user_email: email,
-      service,
-      session_type: sessionType,
-      requested_date: date,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    });
-    if (bkErr) {
-      console.error('Booking insert failed:', bkErr);
-      document.getElementById('bkErrMsg').textContent = '⚠️ Your booking could not be saved. Please try again, or email wellness@keywellness.co.bw';
-      document.getElementById('bkErrBanner').classList.add('show');
-      btn.disabled = false; btn.classList.remove('bk-loading');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return; // do NOT show the success screen if the DB write failed
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === 'false') {
+      console.warn('Booking saved; notification email NOT sent (FormSubmit):', data && data.message);
     }
+  } catch(e) {
+    console.warn('Booking saved; notification email failed to send:', e);
   }
-
-  // Local cache for fast render only — Supabase (above) is the source of truth.
-  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
-  bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
-  localStorage.setItem('kw_bookings', JSON.stringify(bookings));
-  awardBadge('booked_session');
-
-  document.getElementById('bkForm').style.display='none';
-  const s = document.getElementById('bkSuccess'); s.classList.add('show');
-  document.getElementById('bs-name').textContent    = first+' '+last;
-  document.getElementById('bs-service').textContent = service;
-  document.getElementById('bs-date').textContent    = dateStr;
-  document.getElementById('bs-time').textContent    = time;
-  document.getElementById('bs-email').textContent   = email;
-  btn.disabled=false; btn.classList.remove('bk-loading');
-  window.scrollTo({top:0,behavior:'smooth'});
 };
 
 window.bkResetForm = function () {
