@@ -790,7 +790,18 @@ async function doLogin() {
   btn.disabled = true; btn.textContent = 'Signing in…';
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   btn.disabled = false; btn.textContent = 'Sign In';
-  if (error) { authErr(error.message); return; }
+  if (error) {
+    const m = (error.message || '').toLowerCase();
+    if (error.code === 'email_not_confirmed' || m.includes('not confirmed')) {
+      authErr('Please confirm your email first — check your inbox (and spam) for the confirmation link.');
+    } else if (m.includes('invalid login credentials') || m.includes('invalid')) {
+      // Supabase intentionally returns one message for both wrong password and no-such-account
+      authErr('Incorrect email or password. Please check and try again, or create an account.');
+    } else {
+      authErr(error.message || 'Could not sign in. Please try again.');
+    }
+    return;
+  }
   // onAuthStateChange handles the rest
 }
 
@@ -1273,31 +1284,12 @@ VIEWS['dashboard'] = async function () {
     }
   } catch {}
 
-  // ── Compute DTI + Savings Rate from Supabase budget data ──
-  let budgetDTI = null, budgetSavRate = null;
-  try {
-    const _bd = _toolMap['budget_planner'];
-    const _bk = _bd?.currentKey;
-    if (_bk && _bd?.budgets?.[_bk]) {
-      const _bm = _bd.budgets[_bk];
-      const _bInc = (_bm.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
-      const _bDebt = Number(_bm.expenses?.debt_min || 0);
-      const _savIds = ['emfund','retirement','invest','goals','debt_extra'];
-      const _bSav  = _savIds.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
-      if (_bInc > 0) {
-        budgetDTI    = +(_bDebt / _bInc * 100).toFixed(1);
-        budgetSavRate = +(_bSav  / _bInc * 100).toFixed(1);
-      }
-    }
-  } catch {}
-  // Fall back to localStorage snapshot if Supabase budget not available
+  // ── kw_snapshot: freshness labels + last-resort retirement fallback only (NOT a value source of truth) ──
   const snap = JSON.parse(localStorage.getItem('kw_snapshot') || '{}');
-  if (budgetDTI    === null) budgetDTI    = snap.budget?.dtiRatio    ?? null;
-  if (budgetSavRate === null) budgetSavRate = snap.budget?.savingsRate ?? null;
 
-  // ── Shared profile figures as fallback (fills gaps when tools haven't been opened yet) ──
+  // ── Shared profile / assessment figures (Supabase) — fill cards the tools haven't covered ──
   const _prof      = state.user || {};
-  const _profNet   = _prof.net_income   || _prof.monthly_income || null;  // surplus + savings rate
+  const _profNet   = _prof.net_income   || _prof.monthly_income || null;  // surplus + savings rate use net
   const _profGross = _prof.gross_income || _profNet             || null;  // DTI uses gross
   if (budgetSurplus === null && _profNet && _prof.monthly_expenses) {
     budgetSurplus = _profNet - _prof.monthly_expenses;
@@ -1306,6 +1298,36 @@ VIEWS['dashboard'] = async function () {
   if (netWorth === null && (_prof.total_assets != null || _prof.total_liabilities != null)) {
     netWorth = (_prof.total_assets || 0) - (_prof.total_liabilities || 0);
   }
+
+  // ── Debt-to-Income & Savings Rate — Supabase only: DTI Calculator → budget line items → assessment/profile ──
+  let budgetDTI = null, budgetSavRate = null;
+  // 1) DTI Calculator tool (most specific — sum of entered debts ÷ income)
+  try {
+    const _dc = _toolMap['dti_calculator'];
+    if (_dc && Array.isArray(_dc.debts) && _dc.debts.length) {
+      const _pf = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
+      const _dcDebt  = _dc.debts.reduce((s, d) => s + Number(d.monthly || 0), 0);
+      const _dcGross = _pf(_dc.grossSalary) + _pf(_dc.otherIncome);
+      if (_dcGross > 0) budgetDTI = +(_dcDebt / _dcGross * 100).toFixed(1);
+    }
+  } catch {}
+  // 2) Budget line items — ONLY when explicitly entered (a blank debt/savings line must not read as 0%)
+  try {
+    const _bd = _toolMap['budget_planner'];
+    const _bk = _bd?.currentKey;
+    if (_bk && _bd?.budgets?.[_bk]) {
+      const _bm = _bd.budgets[_bk];
+      const _bInc  = (_bm.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
+      const _bDebt = Number(_bm.expenses?.debt_min || 0);
+      const _savIds = ['emfund','retirement','invest','goals','debt_extra'];
+      const _bSav  = _savIds.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
+      if (_bInc > 0) {
+        if (budgetDTI === null && _bDebt > 0) budgetDTI = +(_bDebt / _bInc * 100).toFixed(1);
+        if (_bSav > 0) budgetSavRate = +(_bSav / _bInc * 100).toFixed(1);
+      }
+    }
+  } catch {}
+  // 3) Assessment / shared profile figures fill any remaining gap
   if (budgetDTI === null && _profGross && _prof.monthly_debt) {
     budgetDTI = +(_prof.monthly_debt / _profGross * 100).toFixed(1);
   }
@@ -1329,9 +1351,13 @@ VIEWS['dashboard'] = async function () {
   const hasStress     = stressScore !== null;
   const hasDTI        = !!_toolMap['dti_calculator'];
 
-  // Hoist retSnap and insCount here so nudges block can reference them
+  // Hoist retSnap and insurance values here so nudges block can reference them
   const retSnap  = _toolMap['retirement']?.snapshot ?? snap.retirement ?? null;  // Supabase source of truth, localStorage fallback
-  const insCount = snap.assessment?.insCount ?? state.assessments[0]?.cat_scores?._insCount ?? null;
+  // Insurance — Supabase first. Newer assessments store an explicit count (_insCount, of 6 covers);
+  // older ones store only the insurance dimension score (0–100). Use whichever exists.
+  const _insAssess = state.assessments[0]?.cat_scores || state.user?.last_cat_scores || null;
+  const insCount = _insAssess?._insCount ?? snap.assessment?.insCount ?? null;
+  const insScore = (_insAssess && typeof _insAssess.insurance === 'number') ? _insAssess.insurance : null;
 
   // ── Nudge generation ──
   const nudges = [];
@@ -1370,7 +1396,7 @@ VIEWS['dashboard'] = async function () {
   if (!retSnap && hasAssessment) {
     nudges.push({ pri:'low', icon:'🏖️', title:'Run the retirement calculator', desc:'See if you are on track for retirement. Enter your age, salary, and current savings — takes 2 minutes.', cta:'Calculate', click:`openTool('retirement_calculator.html')` });
   }
-  if (insCount === null && hasAssessment) {
+  if (insCount === null && insScore === null && hasAssessment) {
     nudges.push({ pri:'medium', icon:'🛡️', title:'Check your insurance coverage', desc:'Re-take the assessment to see how many of the 6 key insurance types you currently hold.', cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
   } else if (insCount !== null && insCount < 3) {
     nudges.push({ pri:'medium', icon:'🛡️', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps to address.', cta:'Learn More', click:`go('learn')` });
@@ -1468,13 +1494,15 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
-  // Insurance Coverage — insCount hoisted above nudges block
+  // Insurance Coverage — explicit count (newer assessments) → dimension score (older) → prompt only if no assessment
   if (insCount !== null) {
     const insCls = insCount >= 5 ? 'green' : insCount >= 3 ? 'gold' : insCount >= 1 ? 'orange' : 'red';
     const insSub = insCount >= 5 ? 'Well covered' : insCount >= 3 ? 'Partial coverage' : insCount >= 1 ? 'Significant gaps' : 'No coverage recorded';
     hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insCount}/6`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
-  } else if (hasAssessment) {
-    hubCards.push({ cls:'gold', lbl:'Insurance Cover', val:'—', sub:'Re-open assessment to see details', click:`openTool('wellness_assessment.html')` });
+  } else if (insScore !== null) {
+    const insCls = insScore >= 75 ? 'green' : insScore >= 50 ? 'gold' : insScore >= 25 ? 'orange' : 'red';
+    const insSub = insScore >= 75 ? 'Well covered' : insScore >= 50 ? 'Some gaps' : 'Significant gaps';
+    hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insScore}/100`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -2835,6 +2863,7 @@ window.submitBooking = async function () {
         'Surname':         last,
         'Phone Number':    phone,
         'Email Address':   email,
+        'email':           email,   // FormSubmit sends the _autoresponse to the address in the `email` field — this makes the CLIENT receive the confirmation
         'Session Type':    sessionType,
         'Service':         service,
         'Preferred Date':  dateStr,
