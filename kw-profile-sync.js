@@ -26,7 +26,9 @@ const KWProfile = (function () {
     if (el.type === 'number' || el.inputMode === 'numeric') {
       el.value = val;
     } else {
-      el.value = Number(val).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // MUST use comma-thousands / dot-decimal (en-BW) — the tools' fmtInput strips non [0-9.]; en-ZA's
+      // space-thousands + comma-decimal would be mis-parsed into a ×100 value.
+      el.value = Number(val).toLocaleString('en-BW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
     el.dataset.kwProfileCol = el.dataset.kwProfileCol || '';
     el.dataset.kwProfileVal = String(val);
