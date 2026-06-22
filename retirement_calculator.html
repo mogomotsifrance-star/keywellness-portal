@@ -200,10 +200,10 @@
       <div class="field">
         <label>Life Expectancy</label>
         <div class="input-wrap">
-          <input type="number" id="lifeExpectancy" value="85" min="60" max="110" step="1">
+          <input type="number" id="lifeExpectancy" value="75" min="60" max="110" step="1">
           <span class="input-suffix">yrs</span>
         </div>
-        <div class="hint">Determines how long your pension must last</div>
+        <div class="hint">Auto-set from a Botswana life-expectancy estimate — adjust if you wish. Determines how long your pension must last.</div>
       </div>
       <div class="field">
         <label>Target Replacement Rate</label>
@@ -662,8 +662,15 @@ function downloadCSV() {
   a.click();
 }
 
+// BEST-ESTIMATE Botswana life expectancy used to derive the retirement projection horizon.
+// VERIFY against current Botswana mortality data (Statistics Botswana / WHO life tables) before
+// relying on it. ~68 at birth; a higher planning figure is used since this is conditional on
+// reaching retirement and conservative planning avoids underestimating the corpus needed.
+const BW_LIFE_EXPECTANCY = 75;
+
 const _RET_MAPPINGS = [
-  { inputId: 'monthlySalary', col: 'net_income'      },
+  { inputId: 'monthlySalary',  col: 'gross_income'    },   // retirement projections use GROSS income
+  { inputId: 'currentSavings', col: 'total_savings'   },   // current savings from the assessment
   { inputId: 'monthlyContrib', col: 'monthly_savings' },
 ];
 
@@ -692,6 +699,9 @@ window._retSave = function(){
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
+    // Auto-fill life expectancy from the Botswana basis (editable; a saved value overrides it below)
+    const _leEl = document.getElementById('lifeExpectancy');
+    if (_leEl) _leEl.value = BW_LIFE_EXPECTANCY;
     _sb.from('profiles').select('first_name, last_name, age').eq('id', session.user.id).maybeSingle().then(({ data }) => {
       if (data) {
         const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
