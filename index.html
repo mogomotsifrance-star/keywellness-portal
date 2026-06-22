@@ -1352,6 +1352,11 @@ VIEWS['dashboard'] = async function () {
   const hasBudget     = budgetSurplus !== null;
   const hasStress     = stressScore !== null;
   const hasDTI        = !!_toolMap['dti_calculator'];
+  // Tool-completion flags — nudges encourage using the actual tool even when the assessment estimate fills the card
+  const _bdTool       = _toolMap['budget_planner'];
+  const hasBudgetTool = !!(_bdTool?.currentKey && _bdTool?.budgets?.[_bdTool.currentKey]);
+  const _nwTool       = _toolMap['net_worth_tracker'];
+  const hasNWTool     = !!(_nwTool && ((_nwTool.assets||[]).length || (_nwTool.liabilities||[]).length));
 
   // Hoist retSnap and insurance values here so nudges block can reference them
   const retSnap  = _toolMap['retirement']?.snapshot ?? snap.retirement ?? null;  // Supabase source of truth, localStorage fallback
@@ -1369,7 +1374,7 @@ VIEWS['dashboard'] = async function () {
   } else if (snapAge.assessment !== null && snapAge.assessment > 90) {
     nudges.push({ pri:'medium', icon:'🔄', title:'Quarterly review due', desc:`Last assessed ${snapAge.assessment} days ago. Re-assess to measure your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
   }
-  if (!hasBudget) {
+  if (!hasBudgetTool) {
     nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
   } else if (budgetLabel && budgetLabel < curMonth) {
     nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${budgetLabel}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
@@ -1384,7 +1389,7 @@ VIEWS['dashboard'] = async function () {
   if (!hasDTI && hasBudget) {
     nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
   }
-  if (netWorth === null) {
+  if (!hasNWTool) {
     nudges.push({ pri:'medium', icon:'💎', title:'Track your net worth', desc:'Enter your assets and liabilities to see your true financial position — updated every time you save.', cta:'Open Net Worth', click:`openTool('net_worth_tracker.html')` });
   }
   if (!hasEF) {
@@ -1529,7 +1534,7 @@ VIEWS['dashboard'] = async function () {
   if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
-  if (netWorth === null) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
+  if (!hasNWTool) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
   if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
   if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
