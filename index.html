@@ -1306,7 +1306,7 @@ VIEWS['dashboard'] = async function () {
     const _dc = _toolMap['dti_calculator'];
     if (_dc && Array.isArray(_dc.debts) && _dc.debts.length) {
       const _pf = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
-      const _dcDebt  = _dc.debts.reduce((s, d) => s + Number(d.monthly || 0), 0);
+      const _dcDebt  = _dc.debts.reduce((s, d) => s + Number(d.amount ?? d.monthly ?? 0), 0);  // calc stores monthly payment as `amount`
       const _dcGross = _pf(_dc.grossSalary) + _pf(_dc.otherIncome);
       if (_dcGross > 0) budgetDTI = +(_dcDebt / _dcGross * 100).toFixed(1);
     }
