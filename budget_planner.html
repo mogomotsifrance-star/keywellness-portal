@@ -816,7 +816,7 @@ function renderAdvice(b, {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,
   // Debt minimum payments
   const debtMin=pf(b.expenses['debt_min']||0);
   const debtExtra=pf(b.expenses['debt_extra']||0);
-  if(debtMin/totalIncome>0.40) advice.push({type:'alert',icon:'💳',msg:`Minimum debt payments are <strong>${(debtMin/totalIncome*100).toFixed(0)}%</strong> of income. This is dangerously high. Consider the Debt Repayment Plan tool.`});
+  if(debtMin/totalIncome>0.40) advice.push({type:'alert',icon:'💳',msg:`Minimum debt payments are <strong>${(debtMin/totalIncome*100).toFixed(0)}%</strong> of income. This is dangerously high. Consider the Debt Management Plan tool.`});
   else if(debtMin>0&&debtExtra===0) advice.push({type:'info',icon:'💳',msg:`You have debt payments but no extra repayment budgeted. Even a small extra amount saves significant interest.`});
 
   // Retirement

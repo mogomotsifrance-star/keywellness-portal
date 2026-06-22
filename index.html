@@ -357,6 +357,17 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 .bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:rgba(255,255,255,.45);font-size:10px;font-weight:600;cursor:pointer;padding:6px}
 .bn-item.active{color:var(--gold)}
 .bn-icon{font-size:19px}
+/* ── Mobile "More" sheet ── */
+.more-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:110}
+.more-overlay.show{display:block}
+.more-sheet{display:none;position:fixed;left:0;right:0;bottom:0;background:var(--white);border-radius:16px 16px 0 0;z-index:111;padding:8px 14px calc(var(--bottom-nav-h) + 14px);box-shadow:0 -4px 24px rgba(0,0,0,.22);max-height:72vh;overflow-y:auto}
+.more-sheet.show{display:block}
+.more-sheet-handle{width:42px;height:4px;border-radius:99px;background:var(--border);margin:8px auto 6px}
+.more-sheet-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:6px 8px 10px}
+.more-item{display:flex;align-items:center;gap:14px;padding:14px 8px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;color:var(--navy);cursor:pointer}
+.more-item:last-child{border-bottom:none}
+.more-item:active{background:var(--cream)}
+.more-item .m-ic{font-size:20px}
 </style>
 </head>
 <body>
@@ -546,6 +557,14 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 
 <!-- ══ BOTTOM NAV ══ -->
 <nav id="bottom-nav" style="display:none"></nav>
+
+<!-- ══ MOBILE "MORE" SHEET ══ -->
+<div class="more-overlay" id="moreOverlay" onclick="closeMoreMenu()"></div>
+<nav class="more-sheet" id="moreSheet" aria-label="More pages">
+  <div class="more-sheet-handle"></div>
+  <div class="more-sheet-title">More</div>
+  <div id="more-sheet-list"></div>
+</nav>
 
 <!-- ══ NOTIFICATION PANEL ══ -->
 <div class="notif-overlay" id="notifOverlay" onclick="closeNotifPanel()"></div>
@@ -781,7 +800,7 @@ async function doSignup() {
   const pass2 = document.getElementById('b-pass2').value;
   if (!email || !pass) { authErr('Please fill in all fields.'); return; }
   if (pass !== pass2) { authErr('Passwords do not match.'); return; }
-  if (pass.length < 6) { authErr('Password must be at least 6 characters.'); return; }
+  if (pass.length < 8) { authErr('Password must be at least 8 characters.'); return; }
   const btn = document.getElementById('signup-btn');
   btn.disabled = true; btn.textContent = 'Creating account…';
   const { error } = await sb.auth.signUp({ email, password: pass });
@@ -814,7 +833,7 @@ async function doForgotPassword() {
 async function doResetPassword() {
   const pass  = document.getElementById('r-pass').value;
   const pass2 = document.getElementById('r-pass2').value;
-  if (pass.length < 6) { authErr('Password must be at least 6 characters.'); return; }
+  if (pass.length < 8) { authErr('Password must be at least 8 characters.'); return; }
   if (pass !== pass2)  { authErr('Passwords do not match.'); return; }
   const btn = document.getElementById('reset-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
@@ -848,6 +867,7 @@ const MOBILE_NAV = [
   { id:'tools',       icon:'🛠️',  label:'Tools' },
   { id:'calculators', icon:'🧮', label:'Calc' },
   { id:'booking',     icon:'📅', label:'Book' },
+  { id:'more',        icon:'☰', label:'More' },
 ];
 
 function buildNav(current) {
@@ -858,12 +878,36 @@ function buildNav(current) {
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
-    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='more'?`openMoreMenu()`:n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="bn-icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('sb-pts').textContent = state.badges.points;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
 }
+
+// Mobile "More" sheet — makes every sidebar page reachable on mobile without crowding the bottom bar
+window.openMoreMenu = function () {
+  const inBottom = MOBILE_NAV.map(n => n.id);
+  const items = NAV.filter(n => !inBottom.includes(n.id));
+  if (window._isAdmin) items.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
+  document.getElementById('more-sheet-list').innerHTML = items.map(n => `
+    <div class="more-item" role="menuitem" tabindex="0" onclick="moreGo('${n.id}')"
+         onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();moreGo('${n.id}')}">
+      <span class="m-ic" aria-hidden="true">${n.icon}</span>${n.label}
+    </div>`).join('');
+  document.getElementById('moreOverlay').classList.add('show');
+  document.getElementById('moreSheet').classList.add('show');
+};
+window.closeMoreMenu = function () {
+  document.getElementById('moreOverlay').classList.remove('show');
+  document.getElementById('moreSheet').classList.remove('show');
+};
+window.moreGo = function (id) {
+  closeMoreMenu();
+  if (id === 'assessment') openTool('wellness_assessment.html');
+  else if (id === 'admin-link') window.open('admin.html', '_blank');
+  else go(id);
+};
 
 // ══════════════════════════════════════════════════
 //  ROUTER
@@ -1454,7 +1498,7 @@ VIEWS['dashboard'] = async function () {
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (netWorth === null) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
-  if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Repayment Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
+  if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
   if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
@@ -1472,7 +1516,7 @@ VIEWS['dashboard'] = async function () {
     { icon:'🎯', label:'Goal Planner',            file:'goal_planner.html' },
     { icon:'💰', label:'Net Worth',               file:'net_worth_tracker.html' },
     { icon:'🆘', label:'Emergency Fund',          view:'emergency' },
-    { icon:'💳', label:'Debt Repayment Planner',  file:'debt_management_planner.html' },
+    { icon:'💳', label:'Debt Management Planner',  file:'debt_management_planner.html' },
     { icon:'📈', label:'Expense Tracker',         file:'expense_tracker.html' },
     { icon:'🧮', label:'Debt-to-Income',          file:'dti_calculator.html' },
     { icon:'🏖️', label:'Retirement Planner',      file:'retirement_calculator.html' },
@@ -2062,7 +2106,7 @@ window.showArticle = function (idx) {
 
     'Pay Yourself First': '<p style="font-size:14px;line-height:1.85">Most people save whatever is left at the end of the month. The problem: there is rarely anything left. Paying yourself first flips the script — savings come out automatically on payday, before you can spend them.</p>' + keybox(['Set up a standing order to a savings account for payday.','Even P200/month is a start — consistency beats amount.','Treat savings like a bill you cannot skip.','Automate it so willpower is not required.']) + bwbox('Many Botswana banks allow standing orders that trigger on salary credit. Ask your bank to move a fixed amount to a savings account the moment your salary lands. FNBB, Stanbic, and Absa all offer this.'),
 
-    'Avalanche vs Snowball': '<p style="font-size:14px;line-height:1.85">Both methods work — the best one is whichever you will actually stick to.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0"><div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px"><div style="font-weight:700;color:var(--navy);margin-bottom:6px">Avalanche</div><div style="font-size:13px;line-height:1.7">Pay minimum on all debts, then throw everything extra at the <strong>highest interest</strong> debt. Mathematically optimal — saves the most money.</div></div><div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px"><div style="font-weight:700;color:var(--navy);margin-bottom:6px">Snowball</div><div style="font-size:13px;line-height:1.7">Pay minimum on all debts, then throw everything extra at the <strong>smallest balance</strong>. Quick wins keep you motivated.</div></div></div>' + keybox(['Never miss minimum payments — late fees and credit damage cost more than the interest.','Once one debt is paid, roll that payment into the next.','Either method works — starting is the only requirement.']) + bwbox('Credit card interest rates in Botswana can exceed 20% per year. If you have credit card debt, it should almost always be your avalanche priority. Use our Debt Snowball Planner to model both scenarios.') + '<button class="btn btn-primary btn-sm" onclick="openTool(\'debt_management_planner.html\')">Open Debt Planner</button>',
+    'Avalanche vs Snowball': '<p style="font-size:14px;line-height:1.85">Both methods work — the best one is whichever you will actually stick to.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:16px 0"><div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px"><div style="font-weight:700;color:var(--navy);margin-bottom:6px">Avalanche</div><div style="font-size:13px;line-height:1.7">Pay minimum on all debts, then throw everything extra at the <strong>highest interest</strong> debt. Mathematically optimal — saves the most money.</div></div><div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px"><div style="font-weight:700;color:var(--navy);margin-bottom:6px">Snowball</div><div style="font-size:13px;line-height:1.7">Pay minimum on all debts, then throw everything extra at the <strong>smallest balance</strong>. Quick wins keep you motivated.</div></div></div>' + keybox(['Never miss minimum payments — late fees and credit damage cost more than the interest.','Once one debt is paid, roll that payment into the next.','Either method works — starting is the only requirement.']) + bwbox('Credit card interest rates in Botswana can exceed 20% per year. If you have credit card debt, it should almost always be your avalanche priority. Use our Debt Management Planner to model both scenarios.') + '<button class="btn btn-primary btn-sm" onclick="openTool(\'debt_management_planner.html\')">Open Debt Planner</button>',
 
     'Building Your Safety Net': '<p style="font-size:14px;line-height:1.85">An emergency fund is money set aside specifically for unexpected events — job loss, medical bills, car repairs. Without one, you are one crisis away from going into debt.</p>' + keybox(['Target 3 months of expenses as a minimum, 6 months if your income is variable.','Keep it in a separate, accessible savings account — not investments.','Only use it for genuine emergencies. Replenish it immediately after.','P500/month for 12 months = P6,000 — a meaningful safety net.']) + bwbox('In Botswana, medical emergencies are a common reason people go into debt. Private hospital bills can reach P10,000–P50,000. An emergency fund and health insurance together are your best defence.') + '<button class="btn btn-primary btn-sm" onclick="go(\'emergency\')">Open Emergency Fund Planner</button>',
 
@@ -2113,7 +2157,7 @@ VIEWS['tools'] = function () {
     { icon:'🎯', name:'Goal Planner',             desc:'Set SMART financial goals and track progress toward each one.',         file:'goal_planner.html' },
     { icon:'💎', name:'Net Worth Tracker',        desc:'Track assets vs liabilities and watch your net worth grow.',            file:'net_worth_tracker.html' },
     { icon:'🆘', name:'Emergency Fund',           desc:'Calculate your target and track progress toward 3–6 months.',          view:'emergency' },
-    { icon:'💳', name:'Debt Repayment Planner',   desc:'List your debts and see your payoff order and timeline.',              file:'debt_management_planner.html' },
+    { icon:'💳', name:'Debt Management Planner',   desc:'List your debts and see your payoff order and timeline.',              file:'debt_management_planner.html' },
     { icon:'💰', name:'Expense Tracker',          desc:'Log and categorise daily spending. Track where money goes.',           file:'expense_tracker.html' },
     { icon:'🧮', name:'Debt-to-Income',           desc:'Check if your debt load is healthy relative to your income.',          file:'dti_calculator.html' },
     { icon:'🏖️', name:'Retirement Planner',       desc:'Project how much you need and whether you are on track.',              file:'retirement_calculator.html' },

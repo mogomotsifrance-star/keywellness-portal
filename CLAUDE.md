@@ -54,7 +54,7 @@ keywellness-portal/
 ├── expense_tracker.html          ← Daily expense logging
 ├── goal_planner.html             ← SMART financial goals tracker
 ├── net_worth_tracker.html        ← Assets vs liabilities tracker
-├── debt_snowball.html            ← Debt repayment planner
+├── debt_management_planner.html  ← Debt management planner
 ├── dti_calculator.html           ← Debt-to-income calculator
 ├── retirement_calculator.html    ← Retirement projection tool
 ├── financial_stress_tracker.html ← Fortnightly stress logging

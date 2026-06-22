@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Debt Repayment Plan – Botswana Pula</title>
+<title>Debt Management Plan – Botswana Pula</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -188,7 +188,7 @@ tfoot td:first-child{text-align:left;font-family:'Inter',sans-serif;}
       </svg>
     </div>
     <div>
-      <h1>Debt Repayment Plan</h1>
+      <h1>Debt Management Plan</h1>
       <p>Botswana Pula (BWP) · Snowball vs Avalanche · Payoff timeline · Interest savings</p>
     </div>
     <div style="margin-left:auto;display:flex;align-items:center;gap:10px"><a href="index.html#dashboard" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid var(--border);border-radius:8px;color:var(--navy);font-size:12px;font-weight:600;background:var(--cream);text-decoration:none;flex-shrink:0">← Back to Portal</a><div id="tool-user-initial" style="width:30px;height:30px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.78rem;font-weight:700;color:#0D2545;flex-shrink:0;display:none">?</div></div>
@@ -876,7 +876,7 @@ function exportPDF(){
   // Header
   doc.setFillColor(...NAVY); doc.rect(0,0,pageW,26,'F');
   doc.setTextColor(...GOLD); doc.setFontSize(15); doc.setFont('helvetica','bold');
-  doc.text('Debt Repayment Plan',14,11);
+  doc.text('Debt Management Plan',14,11);
   doc.setFontSize(8); doc.setFont('helvetica','normal'); doc.setTextColor(200,210,220);
   const methodLabel = r.method==='avalanche'?'Avalanche Method':r.method==='both'?'Snowball vs Avalanche':'Snowball Method';
   doc.text(`Botswana Pula (BWP)  ·  ${methodLabel}  ·  ${today}`,14,18);
@@ -977,7 +977,7 @@ function exportPDF(){
   for(let p=1;p<=n;p++){
     doc.setPage(p); doc.setFillColor(...NAVY); doc.rect(0,pageH-9,pageW,9,'F');
     doc.setTextColor(180,190,205); doc.setFontSize(6); doc.setFont('helvetica','normal');
-    doc.text('Debt Repayment Plan  ·  Botswana Pula  ·  For planning purposes only',14,pageH-3.5);
+    doc.text('Debt Management Plan  ·  Botswana Pula  ·  For planning purposes only',14,pageH-3.5);
     doc.text('Page '+p+' of '+n,pageW-14,pageH-3.5,{align:'right'});
   }
   doc.save('debt_repayment_plan_bwp.pdf');
