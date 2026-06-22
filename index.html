@@ -781,11 +781,13 @@ function clearAuthMsg() {
   document.getElementById('auth-err').style.display = 'none';
   document.getElementById('auth-ok').style.display = 'none';
 }
+function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
 
 async function doLogin() {
   const email = document.getElementById('a-email').value.trim();
   const pass  = document.getElementById('a-pass').value;
   if (!email || !pass) { authErr('Please enter your email and password.'); return; }
+  if (!isValidEmail(email)) { authErr('Please enter a valid email address.'); return; }
   const btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Signing in…';
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
@@ -810,13 +812,24 @@ async function doSignup() {
   const pass  = document.getElementById('b-pass').value;
   const pass2 = document.getElementById('b-pass2').value;
   if (!email || !pass) { authErr('Please fill in all fields.'); return; }
+  if (!isValidEmail(email)) { authErr('Please enter a valid email address.'); return; }
   if (pass !== pass2) { authErr('Passwords do not match.'); return; }
   if (pass.length < 8) { authErr('Password must be at least 8 characters.'); return; }
   const btn = document.getElementById('signup-btn');
   btn.disabled = true; btn.textContent = 'Creating account…';
   const { error } = await sb.auth.signUp({ email, password: pass });
   btn.disabled = false; btn.textContent = 'Create Account';
-  if (error) { authErr(error.message); return; }
+  if (error) {
+    const m = (error.message || '').toLowerCase();
+    if (m.includes('already registered') || m.includes('already exists') || error.code === 'user_already_exists') {
+      authErr('An account with this email already exists — try logging in.');
+    } else if (m.includes('valid email') || m.includes('invalid email')) {
+      authErr('Please enter a valid email address.');
+    } else {
+      authErr(error.message || 'Could not create your account. Please try again.');
+    }
+    return;
+  }
   authOk('Account created! Check your email to confirm, then sign in. (Or sign in now if email confirmation is disabled.)');
 }
 
