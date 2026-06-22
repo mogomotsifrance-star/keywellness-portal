@@ -666,6 +666,7 @@ async function saveUser() {
     id:                currentUser.id,
     first_name:        u.first_name        ?? null,
     last_name:         u.last_name         ?? null,
+    phone:             u.phone             ?? null,
     age:               u.age               ?? null,
     monthly_income:    u.monthly_income    ?? null,
     monthly_expenses:  u.monthly_expenses  ?? null,
@@ -2534,7 +2535,7 @@ VIEWS['booking'] = function () {
     ? `${_bkFirst} ${_bkLast}`.trim()
     : prof.displayName || currentUser?.user_metadata?.full_name || '';
   const _bkEmail    = currentUser?.email || '';
-  const _bkPhone    = prof.phone || '';
+  const _bkPhone    = state.user?.phone || prof.phone || '';
   // Store on window so submitBooking can read them
   window._bkPrefFirst = _bkFirst;
   window._bkPrefLast  = _bkLast;
@@ -2920,7 +2921,7 @@ VIEWS['profile'] = function () {
   const firstName   = prof.firstName   || state.user?.first_name || _parts[0] || '';
   const lastName    = prof.lastName    || state.user?.last_name  || _parts.slice(1).join(' ') || '';
   const displayName = _dn;
-  const phone = prof.phone || '';
+  const phone = state.user?.phone || prof.phone || '';
   const avatarB64 = prof.avatarB64 || '';
 
   el.innerHTML = `
@@ -3012,6 +3013,7 @@ window.saveProfile = function () {
   if (state.user) {
     state.user.first_name = fname;
     state.user.last_name  = lname;
+    state.user.phone      = phone;
     if (ageVal && ageVal >= 18 && ageVal <= 80) state.user.age = ageVal;
     saveUser().catch(()=>{});
   }
