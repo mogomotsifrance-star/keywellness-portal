@@ -999,7 +999,7 @@ function showEmailBanner(state,msg){
 }
 
 function sendReport(r){
-  if(EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){showEmailBanner('error','Email not configured — add EmailJS credentials to enable automatic report sending.');return;}
+  if(EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){return;}  // EmailJS not configured — silently skip; PDF export remains available (no user-facing warning)
   showEmailBanner('sending',`Sending report to ${REPORT_RECIPIENT}…`);
   emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
