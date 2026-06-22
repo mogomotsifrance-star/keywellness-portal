@@ -377,7 +377,8 @@ async function openUserProfile(userId) {
 
   let dimHtml = '';
   if (latest?.cat_scores) {
-    const dims = Object.entries(latest.cat_scores);
+    // Only the 8 wellness dimensions (0–100). Exclude internal fields like _insCount (a 0–6 count, not a dimension).
+    const dims = Object.entries(latest.cat_scores).filter(([k]) => !k.startsWith('_'));
     dimHtml = `<div style="margin-top:12px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:10px">Score by Dimension</div>
       ${dims.map(([cat,s])=>{
