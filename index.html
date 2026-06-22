@@ -1274,13 +1274,15 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Emergency fund from Supabase ──
-  let efMonths = null, efTarget = null, efCurrent = null;
+  let efMonths = null, efTarget = null, efCurrent = null, hasEF = false;
   try {
     const ef = await loadEF();
     if (ef) {
       efTarget  = (ef.monthly || 0) * (ef.target_months || 6);
       efCurrent = ef.current_savings || 0;
       efMonths  = ef.monthly > 0 ? efCurrent / ef.monthly : null;
+      // "Set up" = a saved fund with a target and any real figure — not dependent on monthly being entered
+      hasEF = !!(ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0));
     }
   } catch {}
 
@@ -1385,9 +1387,9 @@ VIEWS['dashboard'] = async function () {
   if (netWorth === null) {
     nudges.push({ pri:'medium', icon:'💎', title:'Track your net worth', desc:'Enter your assets and liabilities to see your true financial position — updated every time you save.', cta:'Open Net Worth', click:`openTool('net_worth_tracker.html')` });
   }
-  if (efMonths === null) {
+  if (!hasEF) {
     nudges.push({ pri:'high', icon:'🆘', title:'Set up your emergency fund', desc:'An emergency fund is your #1 financial safety net. Set a target and start tracking your progress.', cta:'Set Up Now', click:`go('emergency')` });
-  } else if (efMonths < 3) {
+  } else if (efMonths !== null && efMonths < 3) {
     nudges.push({ pri:'high', icon:'🆘', title:`Emergency fund below 3 months (${efMonths.toFixed(1)} mo)`, desc:'Aim for at least 3 months of expenses. Increase your monthly contribution to close the gap.', cta:'View Fund', click:`go('emergency')` });
   }
   if (totalGoals === 0) {
@@ -1453,6 +1455,8 @@ VIEWS['dashboard'] = async function () {
   if (efMonths !== null) {
     const cls = efMonths >= 6 ? 'green' : efMonths >= 3 ? 'gold' : 'orange';
     hubCards.push({ cls, lbl:'Emergency Fund', val:`${efMonths.toFixed(1)} mo`, sub:`P${Math.round(efCurrent).toLocaleString()} saved`, click:`go('emergency')` });
+  } else if (hasEF) {
+    hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved · add monthly expenses for months', click:`go('emergency')` });
   } else {
     hubCards.push({ cls:'orange', lbl:'Emergency Fund', val:'—', sub:'Set up your fund', click:`go('emergency')` });
   }
@@ -2259,11 +2263,13 @@ VIEWS['emergency'] = async function () {
     ? { monthly: efData.monthly, current: efData.current_savings, contribution: efData.contribution, target: efData.target_months }
     : { monthly: 0, current: 0, contribution: 0, target: 3 };
 
-  // Pull monthly_expenses from profile for pre-calculated targets
+  // Pull assessment figures from profile: monthly_expenses → target, total_savings → current balance
   const _efMonthlyExp = state.user?.monthly_expenses || 0;
   const _ef3mo = _efMonthlyExp * 3;
   const _ef6mo = _efMonthlyExp * 6;
+  const _efSetUp   = !!(saved.monthly || saved.current || saved.contribution);
   const _efPrefill = _efMonthlyExp > 0 && !saved.monthly;
+  const _efSavings = Math.round(state.user?.total_savings || 0);  // assessment balance → current EF balance prefill
 
   el.innerHTML = `
     <div style="max-width:660px">
@@ -2301,7 +2307,8 @@ VIEWS['emergency'] = async function () {
         </div>
         <div class="field">
           <label>Current Emergency Savings (BWP)</label>
-          <input type="number" id="ef-c" value="${saved.current||''}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
+          <input type="number" id="ef-c" value="${saved.current || (!_efSetUp && _efSavings>0 ? _efSavings : '')}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
+          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled from your assessment savings. Adjust to your emergency-only balance.</div>` : ''}
         </div>
         <div class="field">
           <label>Monthly Contribution (BWP)</label>
@@ -2385,7 +2392,8 @@ VIEWS['emergency'] = async function () {
     saveEF({ monthly, current_savings: current, contribution: contrib, target_months: tgt });
   };
 
-  setTimeout(() => { if (saved.monthly||saved.current) efCalc(); }, 50);
+  // Show (and persist) the plan on load when we have saved data OR assessment pre-fill
+  setTimeout(() => { if (saved.monthly || saved.current || (!_efSetUp && (_efMonthlyExp>0 || _efSavings>0))) efCalc(); }, 50);
 };
 
 // ══════════════════════════════════════════════════
