@@ -45,7 +45,12 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .auth-ok{background:#f0faf4;border-left:4px solid var(--green);color:#1a4a2e;padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:14px;display:none}
 
 /* ── Sidebar ── */
-#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:200;transition:transform .28s cubic-bezier(.4,0,.2,1)}
+/* ── Sidebar overlay (mobile drawer backdrop) ── */
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:199}
+/* ── Hamburger button (mobile only) ── */
+.hamburger-btn{display:none;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--navy);transition:.15s;flex-shrink:0}
+.hamburger-btn:hover{background:var(--cream-dark)}
 .sb-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
 .sb-logo h1{color:var(--white);font-size:15px;font-weight:700}
 .sb-logo span{color:var(--gold);font-size:11px;font-weight:500}
@@ -344,13 +349,22 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 
 /* ── Mobile ── */
 @media(max-width:768px){
-  #sidebar{display:none}
+  #sidebar{transform:translateX(-100%)}
+  #sidebar.open{transform:translateX(0)}
+  #sidebar-overlay.open{display:block}
+  .hamburger-btn{display:flex}
   #main{margin-left:0;padding-bottom:var(--bottom-nav-h)}
   .page-content{padding:14px 14px 20px}
   .page-header{padding:12px 16px}
-  .booking-grid,.choice-grid{grid-template-columns:1fr}
+  .page-header h2{font-size:16px}
+  .booking-grid,.choice-grid,.bk-services-grid{grid-template-columns:1fr}
   .ef-summary{grid-template-columns:1fr 1fr}
+  .hub-summary{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .stat-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+  .learn-grid{grid-template-columns:1fr}
   #bottom-nav{display:flex}
+  .welcome-modal-box{padding:22px 18px}
+  .auth-box{padding:28px 22px}
 }
 @media(min-width:769px){#bottom-nav{display:none}}
 #bottom-nav{position:fixed;bottom:0;left:0;right:0;height:var(--bottom-nav-h);background:var(--navy);border-top:1px solid rgba(255,255,255,.1);justify-content:space-around;align-items:center;z-index:100}
@@ -500,7 +514,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <!-- Password reset form (shown when redirected back with recovery token) -->
     <div id="auth-reset-form" style="display:none">
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Enter a new password for your account.</p>
-      <div class="field"><label for="r-pass">New Password</label><input type="password" id="r-pass" placeholder="At least 6 characters" aria-label="New password"></div>
+      <div class="field"><label for="r-pass">New Password</label><input type="password" id="r-pass" placeholder="At least 8 characters" aria-label="New password"></div>
       <div class="field"><label for="r-pass2">Confirm Password</label><input type="password" id="r-pass2" placeholder="Repeat new password" aria-label="Confirm new password" onkeydown="if(event.key==='Enter')doResetPassword()"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
     </div>
@@ -508,12 +522,26 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <!-- Signup -->
     <div id="auth-signup-form" style="display:none">
       <div class="field"><label for="b-email">Email</label><input type="email" id="b-email" placeholder="you@example.com" aria-label="Email address"></div>
-      <div class="field"><label for="b-pass">Password</label><input type="password" id="b-pass" placeholder="At least 6 characters" aria-label="Password"></div>
+      <div class="field">
+        <label for="b-pass">Password</label>
+        <input type="password" id="b-pass" placeholder="At least 8 characters" aria-label="Password"
+          oninput="
+            const v=this.value;
+            const hint=document.getElementById('pw-hint');
+            if(!v){hint.style.color='var(--muted)';hint.textContent='At least 8 characters';}
+            else if(v.length<8){hint.style.color='var(--red)';hint.textContent='Too short — need '+(8-v.length)+' more character'+(8-v.length===1?'':'s');}
+            else{hint.style.color='var(--green)';hint.textContent='✓ Looks good';}
+          ">
+        <div id="pw-hint" class="hint" style="color:var(--muted)">At least 8 characters</div>
+      </div>
       <div class="field"><label for="b-pass2">Confirm Password</label><input type="password" id="b-pass2" placeholder="Repeat password" aria-label="Confirm password" onkeydown="if(event.key==='Enter')doSignup()"></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="signup-btn" onclick="doSignup()">Create Account</button>
     </div>
   </div>
 </div>
+
+<!-- ══ SIDEBAR DRAWER BACKDROP (mobile) ══ -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 
 <!-- ══ SIDEBAR ══ -->
 <nav id="sidebar">
@@ -556,7 +584,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 </nav>
 
 <!-- ══ BOTTOM NAV ══ -->
-<nav id="bottom-nav" style="display:none"></nav>
+<nav id="bottom-nav"></nav>
 
 <!-- ══ MOBILE "MORE" SHEET ══ -->
 <div class="more-overlay" id="moreOverlay" onclick="closeMoreMenu()"></div>
@@ -584,6 +612,9 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 <!-- ══ MAIN ══ -->
 <div id="main">
   <div class="page-header">
+    <button class="hamburger-btn" onclick="openSidebar()" aria-label="Open menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
     <h2 id="page-title">Dashboard</h2>
     <div id="header-actions"></div>
     <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
@@ -896,11 +927,22 @@ const MOBILE_NAV = [
   { id:'more',        icon:'☰', label:'More' },
 ];
 
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
 function buildNav(current) {
   const navItems = [...NAV];
   if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
   document.getElementById('sb-nav').innerHTML = navItems.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="sb-item${current===n.id?' active':''}" onclick="closeSidebar();${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
