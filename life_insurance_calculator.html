@@ -59,9 +59,9 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .iw{position:relative}
 .iw .prefix{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;font-weight:600;color:var(--muted);pointer-events:none}
 .iw .suffix{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--muted);pointer-events:none}
-.iw input,.iw select{padding-left:34px}
-.iw.suf input{padding-right:36px}
-.iw.no-prefix input,.iw.no-prefix select{padding-left:11px}
+.iw input[type],.iw select[id]{padding-left:34px}
+.iw.suf input[type]{padding-right:36px}
+.iw.no-prefix input[type],.iw.no-prefix select[id]{padding-left:11px}
 input[type=text],input[type=number],select{
   width:100%;padding:9px 11px;border:2px solid var(--border);border-radius:var(--radius-sm);
   font-size:14px;background:var(--cream);color:var(--text);outline:none;transition:.15s;
@@ -781,6 +781,11 @@ calculate();
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
+    // ── Pull current age from the assessment profile (retirement age keeps its default; the
+    //    assessment doesn't capture it). A saved tool_data value below overrides this. ──
+    const { data: prof } = await _sb.from('profiles')
+      .select('age').eq('id', session.user.id).maybeSingle();
+    if (prof?.age) { const el = document.getElementById('myAge'); if (el) { el.value = prof.age; calculate(); } }
     const { data: toolRow } = await _sb.from('tool_data')
       .select('data').eq('user_id', session.user.id).eq('tool', 'life_insurance').maybeSingle();
     if (toolRow?.data) {
