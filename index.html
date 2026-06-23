@@ -741,12 +741,12 @@ function saveBadges() {
 }
 
 function saveEF(data) {
-  if (!currentUser) return;
-  sb.from('emergency_fund').upsert({
+  if (!currentUser) return Promise.resolve({ error: { message: 'Not signed in' } });
+  return sb.from('emergency_fund').upsert({
     user_id: currentUser.id, ...data, updated_at: new Date().toISOString()
   }, { onConflict: 'user_id' })
-    .then(({ error }) => { if (error) console.error('saveEF failed:', error); })
-    .catch(console.error);
+    .then(({ error }) => { if (error) console.error('saveEF failed:', error); return { error }; })
+    .catch(err => { console.error('saveEF failed:', err); return { error: err }; });
 }
 
 async function loadEF() {
@@ -2405,6 +2405,9 @@ VIEWS['emergency'] = async function () {
           <div class="hint">How much can you set aside each month for this fund?</div>
         </div>
       </div>
+      <div style="margin:16px 0">
+        <button class="btn btn-primary" id="ef-save-btn" onclick="efSave()">💾 Save my plan</button>
+      </div>
       <div class="card" id="ef-res" style="display:none">
         <div class="card-title">📊 Your Plan</div>
         <div class="ef-summary" id="ef-boxes"></div>
@@ -2477,8 +2480,20 @@ VIEWS['emergency'] = async function () {
 
     if (pct>=100)  awardBadge('ef_complete');
     else if (pct>=50) awardBadge('ef_halfway');
+  };
 
-    saveEF({ monthly, current_savings: current, contribution: contrib, target_months: tgt });
+  window.efSave = async function () {
+    const monthly = parseFloat(document.getElementById('ef-m').value)||0;
+    const current = parseFloat(document.getElementById('ef-c').value)||0;
+    const contrib = parseFloat(document.getElementById('ef-k').value)||0;
+    if (!monthly && !current && !contrib) {
+      showToast('⚠️ Enter your numbers before saving'); return;
+    }
+    const btn = document.getElementById('ef-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    const { error } = await saveEF({ monthly, current_savings: current, contribution: contrib, target_months: tgt });
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Save my plan'; }
+    showToast(error ? '⚠️ Save failed — please try again' : '✓ Saved');
   };
 
   // Show (and persist) the plan on load when we have saved data OR assessment pre-fill

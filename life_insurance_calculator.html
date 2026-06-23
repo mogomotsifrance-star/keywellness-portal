@@ -213,7 +213,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         </div>
         <div class="field">
           <label>Annual gross income <span class="hint">BWP</span></label>
-          <div class="iw"><span class="prefix">P</span><input type="number" id="annualIncome" value="180000" oninput="calculate()"></div>
+          <div class="iw"><span class="prefix">P</span><input type="number" id="annualIncome" value="" placeholder="e.g. 180000" oninput="calculate()"></div>
         </div>
         <div class="field">
           <label>Employment type</label>
@@ -232,7 +232,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         <div id="spouseSection" style="display:none">
           <div class="field" style="margin-bottom:8px">
             <label>Spouse annual income <span class="hint">BWP</span></label>
-            <div class="iw"><span class="prefix">P</span><input type="number" id="spouseIncome" value="120000" oninput="calculate()"></div>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="spouseIncome" value="" placeholder="e.g. 120000" oninput="calculate()"></div>
           </div>
           <div class="notice notice-blue" style="margin-bottom:0;font-size:11px">Spouse income reduces the replacement cover needed. We deduct its present value from the total.</div>
         </div>
@@ -244,11 +244,11 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         <div class="row2">
           <div class="field">
             <label>No. of children</label>
-            <div class="iw no-prefix"><input type="number" id="numChildren" value="2" min="0" max="10" oninput="calculate()"></div>
+            <div class="iw no-prefix"><input type="number" id="numChildren" value="0" min="0" max="10" oninput="calculate()"></div>
           </div>
           <div class="field">
             <label>Youngest child age</label>
-            <div class="iw no-prefix"><input type="number" id="youngestAge" value="5" min="0" max="17" oninput="calculate()"></div>
+            <div class="iw no-prefix"><input type="number" id="youngestAge" value="0" min="0" max="17" oninput="calculate()"></div>
           </div>
         </div>
         <div class="field">
@@ -328,7 +328,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         <div class="row2">
           <div class="field">
             <label>Savings &amp; investments</label>
-            <div class="iw"><span class="prefix">P</span><input type="number" id="savings" value="50000" oninput="calculate()"></div>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="savings" value="0" placeholder="e.g. 50000" oninput="calculate()"></div>
           </div>
           <div class="field">
             <label>Existing life cover</label>
@@ -338,7 +338,7 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         <div class="row2">
           <div class="field">
             <label>Pension / provident fund</label>
-            <div class="iw"><span class="prefix">P</span><input type="number" id="pension" value="80000" oninput="calculate()"></div>
+            <div class="iw"><span class="prefix">P</span><input type="number" id="pension" value="0" placeholder="e.g. 80000" oninput="calculate()"></div>
           </div>
           <div class="field">
             <label>Death-in-service benefit</label>
@@ -749,8 +749,10 @@ function saveSnapshot(d) {
   } catch(e){}
   // Save full state to Supabase
   if (window._toolSb && window._toolUser) {
-    const ids = ['income','age','yearsToRetire','spouseIncome','replaceRate','discountRate',
-                 'funeralCost','estateSettle','emergencyFund','empType'];
+    const ids = ['myAge','retireAge','annualIncome','empType','spouseIncome',
+                 'numChildren','youngestAge','otherDeps','depCost',
+                 'replaceRate','discountRate','funeralCost','estateCost','medicalCost',
+                 'eduPerChild','eduSaved','savings','existingCover','pension','disb','otherAssets'];
     const inputs = {};
     ids.forEach(id => { const el = document.getElementById(id); if (el) inputs[id] = el.value; });
     const fullState = { method, debts, inputs, hasSpouse: document.getElementById('hasSpouse')?.checked };
@@ -790,6 +792,11 @@ calculate();
           const el = document.getElementById(id);
           if (el) el.value = val;
         });
+        // sync slider value labels to restored positions
+        const _rr = document.getElementById('replaceRateVal');
+        if (_rr) _rr.textContent = (document.getElementById('replaceRate')?.value || 75) + '%';
+        const _dr = document.getElementById('discountRateVal');
+        if (_dr) _dr.textContent = (document.getElementById('discountRate')?.value || 7) + '%';
       }
       if (d.hasSpouse !== undefined) {
         const el = document.getElementById('hasSpouse');
