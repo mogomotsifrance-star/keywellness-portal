@@ -1409,9 +1409,9 @@ VIEWS['dashboard'] = async function () {
   }
   if (!hasEF) {
     nudges.push({ pri:'high', icon:'🆘', title:'Set up your emergency fund', desc:'An emergency fund is your #1 financial safety net. Set a target and start tracking your progress.', cta:'Set Up Now', click:`go('emergency')` });
-  } else if (efMonths !== null && efMonths < 3) {
-    nudges.push({ pri:'high', icon:'🆘', title:`Emergency fund below 3 months (${efMonths.toFixed(1)} mo)`, desc:'Aim for at least 3 months of expenses. Increase your monthly contribution to close the gap.', cta:'View Fund', click:`go('emergency')` });
   }
+  // Once the fund is set up, progress (incl. "below 3 months") is shown on the Hub card —
+  // no Action Required nudge, so the banner clears the moment the user saves their plan.
   if (totalGoals === 0) {
     nudges.push({ pri:'medium', icon:'🎯', title:'Add your first financial goal', desc:'Goals give your money direction. Set a target — a home, education, holiday — and track progress.', cta:'Add Goal', click:`openTool('goal_planner.html')` });
   }
