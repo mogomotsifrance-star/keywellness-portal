@@ -1000,6 +1000,36 @@ const MOBILE_NAV = [
   { id:'more',        icon:'☰', label:'More' },
 ];
 
+// Submit fields to FormSubmit via a hidden iframe form POST.
+// _autoresponse works reliably with standard form POST (not AJAX fetch) on all hosting domains.
+function fsSubmit(fields) {
+  let iframe = document.getElementById('_fs_frame');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.name = '_fs_frame';
+    iframe.id   = '_fs_frame';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+  }
+  const prev = document.getElementById('_fs_form');
+  if (prev) prev.remove();
+  const form = document.createElement('form');
+  form.id     = '_fs_form';
+  form.method = 'POST';
+  form.action = 'https://formsubmit.co/wellness@keywellness.co.bw';
+  form.target = '_fs_frame';
+  form.style.display = 'none';
+  Object.entries(fields).forEach(([name, value]) => {
+    const inp = document.createElement('input');
+    inp.type  = 'hidden';
+    inp.name  = name;
+    inp.value = value ?? '';
+    form.appendChild(inp);
+  });
+  document.body.appendChild(form);
+  form.submit();
+}
+
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sidebar-overlay').classList.add('open');
@@ -3082,41 +3112,26 @@ window.submitBooking = async function () {
   btn.disabled=false; btn.classList.remove('bk-loading');
   window.scrollTo({top:0,behavior:'smooth'});
 
-  // ── 3) Notification email is SECONDARY — it must NEVER hide a saved booking. ──
-  //     FormSubmit returns HTTP 200 with success:"false" ("This form needs Activation") until the
-  //     recipient activates the form, so a failure here is warned-only; the booking is already saved.
-  // FormSubmit's _autoresponse only fires reliably with multipart/form-data, not JSON.
-  // We use FormData here so the user receives the summary auto-reply email.
+  // ── 3) Send emails via hidden iframe form POST — the only FormSubmit mode where
+  //     _autoresponse (client auto-reply) works reliably across all hosting domains. ──
   const clientMsg = `Hi ${first},\n\nThank you for booking with Key Wellness! Here is a summary of your request:\n\n  Service: ${service}\n  Session Type: ${sessionType}\n  Date: ${dateStr}\n  Time: ${time}\n\nWe will review your request and confirm your appointment within 24 hours. If you have any questions, please contact us at wellness@keywellness.co.bw.\n\nWarm regards,\nKey Wellness Team`;
-  try {
-    const fd = new FormData();
-    fd.append('First Name',     first);
-    fd.append('Surname',        last);
-    fd.append('Phone Number',   phone);
-    fd.append('email',          email);   // FormSubmit reads THIS field to send the _autoresponse to the client
-    fd.append('Session Type',   sessionType);
-    fd.append('Service',        service);
-    fd.append('Preferred Date', dateStr);
-    fd.append('Preferred Time', time);
-    fd.append('Message',        msg || 'No additional message.');
-    fd.append('Wellness Score', state.user?.last_score || 'N/A');
-    fd.append('_subject',       '📅 New Booking – ' + service + ' – ' + first + ' ' + last);
-    fd.append('_replyto',       email);
-    fd.append('_autoresponse',  clientMsg);
-    fd.append('_template',      'table');
-    fd.append('_captcha',       'false');
-    const res = await fetch('https://formsubmit.co/ajax/wellness@keywellness.co.bw', {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      body: fd
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.success === 'false') {
-      console.warn('Booking saved; notification email NOT sent (FormSubmit):', data && data.message);
-    }
-  } catch(e) {
-    console.warn('Booking saved; notification email failed to send:', e);
-  }
+  fsSubmit({
+    'First Name':     first,
+    'Surname':        last,
+    'Phone Number':   phone,
+    'email':          email,
+    'Session Type':   sessionType,
+    'Service':        service,
+    'Preferred Date': dateStr,
+    'Preferred Time': time,
+    'Message':        msg || 'No additional message.',
+    'Wellness Score': String(state.user?.last_score || 'N/A'),
+    '_subject':       '📅 New Booking – ' + service + ' – ' + first + ' ' + last,
+    '_replyto':       email,
+    '_autoresponse':  clientMsg,
+    '_template':      'table',
+    '_captcha':       'false',
+  });
 };
 
 window.bkResetForm = function () {
