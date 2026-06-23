@@ -1836,15 +1836,63 @@ window.saveNameModal = function () {
 //  e.g. 'https://www.youtube.com/embed/dQw4w9WgXcQ'
 // ══════════════════════════════════════════════════
 const VIDEOS = [
-  { title:'Welcome to Key Wellness',         cat:'Getting Started', duration:'3 min',  url: 'https://www.youtube.com/embed/FkzJ6tR4_JM' },
-  { title:'How to Build a Budget',            cat:'Budgeting',       duration:'5 min',  url: null },
-  { title:'Understanding Your Credit Score',  cat:'Debt',            duration:'4 min',  url: null },
-  { title:'Starting Your Emergency Fund',     cat:'Savings',         duration:'4 min',  url: null },
-  { title:'Retirement Planning 101',          cat:'Retirement',      duration:'6 min',  url: null },
-  { title:'Investing for Beginners',          cat:'Investing',       duration:'7 min',  url: null },
-  { title:'Managing Financial Stress',        cat:'Mindset',         duration:'5 min',  url: null },
-  { title:'Insurance Explained Simply',       cat:'Insurance',       duration:'4 min',  url: null },
+  { id:'welcome',    title:'Welcome to Key Wellness',        cat:'Getting Started', duration:'3 min', points:25, yt:'FkzJ6tR4_JM' },
+  { id:'budget',     title:'How to Build a Budget',           cat:'Budgeting',       duration:'5 min', points:25, yt:null },
+  { id:'credit',     title:'Understanding Your Credit Score', cat:'Debt',            duration:'4 min', points:25, yt:null },
+  { id:'emfund',     title:'Starting Your Emergency Fund',    cat:'Savings',         duration:'4 min', points:25, yt:null },
+  { id:'retire',     title:'Retirement Planning 101',         cat:'Retirement',      duration:'6 min', points:25, yt:null },
+  { id:'investing',  title:'Investing for Beginners',         cat:'Investing',       duration:'7 min', points:25, yt:null },
+  { id:'stress',     title:'Managing Financial Stress',       cat:'Mindset',         duration:'5 min', points:25, yt:null },
+  { id:'insurance',  title:'Insurance Explained Simply',      cat:'Insurance',       duration:'4 min', points:25, yt:null },
 ];
+
+// ── Video modules: sequential unlock + points, Supabase-backed (tool_data 'video_progress') ──
+async function loadVideoProgress() {
+  if (state.videoProgress) return state.videoProgress;
+  state.videoProgress = [];
+  try {
+    if (currentUser) {
+      const { data } = await sb.from('tool_data').select('data').eq('user_id', currentUser.id).eq('tool', 'video_progress').maybeSingle();
+      state.videoProgress = (data && data.data && data.data.completed) || [];
+    }
+  } catch (e) { console.warn('video_progress load failed:', e); }
+  return state.videoProgress;
+}
+async function saveVideoProgress() {
+  if (!currentUser) return;
+  try {
+    await sb.from('tool_data').upsert({ user_id: currentUser.id, tool: 'video_progress', data: { completed: state.videoProgress || [] }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
+  } catch (e) { console.error('video_progress save failed:', e); }
+}
+window.markVideoComplete = async function (vidId, pts) {
+  if (!state.videoProgress) state.videoProgress = [];
+  if (state.videoProgress.includes(vidId)) return;   // already complete — never double-award points
+  state.videoProgress.push(vidId);
+  state.badges.points = (state.badges.points || 0) + (pts || 0);
+  const ptsEl = document.getElementById('sb-pts'); if (ptsEl) ptsEl.textContent = state.badges.points;
+  await saveVideoProgress();
+  saveBadges();
+  showToast(`🎬 Video completed — +${pts} points!`);
+  if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
+};
+function _ensureYTApi() {
+  if (window.YT && window.YT.Player) return;
+  if (document.querySelector('script[src*="iframe_api"]')) return;
+  const tag = document.createElement('script'); tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+}
+function _attachVideoPlayers() {
+  if (!(window.YT && window.YT.Player)) { _ensureYTApi(); setTimeout(_attachVideoPlayers, 500); return; }
+  document.querySelectorAll('iframe[data-vid]').forEach(iframe => {
+    if (iframe._ytAttached) return;
+    iframe._ytAttached = true;
+    const vid = iframe.getAttribute('data-vid');
+    const pts = parseInt(iframe.getAttribute('data-pts'), 10) || 0;
+    try {
+      new YT.Player(iframe.id, { events: { onStateChange: e => { if (e.data === YT.PlayerState.ENDED) markVideoComplete(vid, pts); } } });
+    } catch (err) { console.warn('YT player attach failed:', err); }
+  });
+}
 
 // ══════════════════════════════════════════════════
 //  VIEW: LEARN
@@ -1870,6 +1918,13 @@ VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
   const activeTab = tab || 'articles';
 
+  // Videos tab needs the user's saved progress before it can render unlock states — lazy-load once
+  if (activeTab === 'videos' && state.videoProgress === undefined) {
+    el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
+    loadVideoProgress().then(() => VIEWS['learn']('videos'));
+    return;
+  }
+
   el.innerHTML = `
     <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:320px">
       <button class="auth-tab${activeTab==='articles'?' active':''}" onclick="VIEWS['learn']('articles')" style="flex:1">📚 Articles</button>
@@ -1890,33 +1945,40 @@ VIEWS['learn'] = function (tab) {
             </div>
           </div>`).join('')}
       </div>` : `
-      <div class="notice notice-gold" style="margin-bottom:18px">🎬 <strong>Video lessons</strong> from the Key Wellness coaching team. New videos added regularly.</div>
+      <div class="notice notice-gold" style="margin-bottom:18px">🎬 <strong>Video modules</strong> — finish each video to unlock the next and earn points. Progress saves to your account and syncs across devices.</div>
       <div class="learn-grid">
-        ${VIDEOS.map((v,i)=>{
-          const _watched = JSON.parse(localStorage.getItem('kw_watched')||'[]');
-          const _isWatched = _watched.includes(v.title);
-          return `<div class="learn-card" style="cursor:default">
-            <div class="learn-body" style="padding-top:18px">
-              <div class="video-tag">${v.cat}</div>
-              <div class="learn-title" style="margin-bottom:10px">${v.title}</div>
-              ${v.url
-                ? `<iframe class="video-embed" src="${v.url}" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>`
-                : `<div class="video-placeholder" style="cursor:default">
-                    <span class="add-url-tag">Coming Soon</span>
-                    <div class="play-btn" style="opacity:.4"><div class="play-icon"></div></div>
-                    <p>Video will be available soon</p>
-                   </div>`
-              }
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
-                <button class="video-watch-btn${_isWatched?' watched':''}" onclick="markVideoWatched(this,'${v.title.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')" ${_isWatched?'disabled':''}>
-                  ${_isWatched ? '✓ Watched' : '▶ Mark Watched'}
-                </button>
+        ${(() => {
+          const _done = state.videoProgress || [];
+          return VIDEOS.map((v,i)=>{
+            const isDone   = _done.includes(v.id);
+            const unlocked = i === 0 || _done.includes(VIDEOS[i-1].id);
+            const playable = unlocked && !!v.yt;
+            let media;
+            if (playable) {
+              media = `<iframe id="ytm-${i}" class="video-embed" data-vid="${v.id}" data-pts="${v.points}" src="https://www.youtube.com/embed/${v.yt}?enablejsapi=1" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>`;
+            } else if (unlocked) {
+              media = `<div class="video-placeholder" style="cursor:default"><span class="add-url-tag">Coming Soon</span><div class="play-btn" style="opacity:.4"><div class="play-icon"></div></div><p>This module will be available soon</p></div>`;
+            } else {
+              media = `<div class="video-placeholder" style="cursor:default;opacity:.7"><span class="add-url-tag" style="background:var(--navy);color:#fff">🔒 Locked</span><div class="play-btn" style="opacity:.3"><div class="play-icon"></div></div><p>Finish "${VIDEOS[i-1] ? VIDEOS[i-1].title : 'the previous video'}" to unlock</p></div>`;
+            }
+            return `<div class="learn-card" style="cursor:default${unlocked?'':';opacity:.9'}">
+              <div class="learn-body" style="padding-top:18px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <div class="video-tag">Module ${i+1} · ${v.cat}</div>
+                  ${isDone?'<span title="Completed" style="font-size:16px">✅</span>':(unlocked?'':'<span title="Locked" style="font-size:14px">🔒</span>')}
+                </div>
+                <div class="learn-title" style="margin-bottom:10px">${v.title}</div>
+                ${media}
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+                  <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
+                  <span style="font-size:11px;font-weight:700;color:${isDone?'var(--green)':'var(--muted)'}">${isDone?`✓ Completed · +${v.points} pts`:`▶ Watch fully to earn ${v.points} pts`}</span>
+                </div>
               </div>
-            </div>
-          </div>`;
-        }).join('')}
+            </div>`;
+          }).join('');
+        })()}
       </div>`}`;
+  if (activeTab === 'videos') setTimeout(_attachVideoPlayers, 100);
 };
 
 // ── Article renderer helper ──────────────────────────────────────
