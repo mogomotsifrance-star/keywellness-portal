@@ -900,7 +900,7 @@ function buildNav(current) {
   const navItems = [...NAV];
   if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
   document.getElementById('sb-nav').innerHTML = navItems.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`window.open('admin.html','_blank')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="sb-item${current===n.id?' active':''}" onclick="${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
@@ -931,7 +931,7 @@ window.closeMoreMenu = function () {
 window.moreGo = function (id) {
   closeMoreMenu();
   if (id === 'assessment') openTool('wellness_assessment.html');
-  else if (id === 'admin-link') window.open('admin.html', '_blank');
+  else if (id === 'admin-link') openTool('admin.html');
   else go(id);
 };
 
@@ -2301,7 +2301,7 @@ VIEWS['tools'] = function () {
       <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
       ${t.view
         ? `<button class="btn btn-primary btn-sm" onclick="go('${t.view}')">Open →</button>`
-        : `<button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>`}
+        : `<button class="btn btn-primary btn-sm" onclick="openTool('${t.file}')">Open →</button>`}
     </div>`;
   }
 
@@ -2334,7 +2334,7 @@ VIEWS['calculators'] = function () {
         <div style="font-size:34px;margin-bottom:10px">${t.icon}</div>
         <div class="card-title" style="margin-bottom:5px">${t.name}</div>
         <p style="font-size:13px;color:var(--muted);margin-bottom:14px">${t.desc}</p>
-        <button class="btn btn-primary btn-sm" onclick="window.open('${t.file}','_blank')">Open →</button>
+        <button class="btn btn-primary btn-sm" onclick="openTool('${t.file}')">Open →</button>
       </div>`).join('')}
     </div>`;
 };
