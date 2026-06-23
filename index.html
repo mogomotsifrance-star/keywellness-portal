@@ -1255,7 +1255,12 @@ VIEWS['dashboard'] = async function () {
   // Goals — prefer Supabase, fall back to localStorage
   try {
     const gd = _toolMap['goal_planner'] || JSON.parse(localStorage.getItem('kw_goals') || '{}');
-    const goals = gd.goals || [];
+    let goals = gd.goals || [];
+    // Fall back to onboarding goal selections (profiles.goals) if the planner isn't set up yet,
+    // so the hub reflects what the user chose during onboarding.
+    if (goals.length === 0 && Array.isArray(state.user?.goals) && state.user.goals.length) {
+      goals = state.user.goals.map(label => ({ name: label, target: 0, saved: 0, months: 12 }));
+    }
     totalGoals = goals.length;
     if (totalGoals > 0) {
       goalsOnTrack = goals.filter(g => {
