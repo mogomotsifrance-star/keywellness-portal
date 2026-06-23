@@ -502,6 +502,28 @@ async function updateBookingStatus(id, status) {
     document.getElementById('bk-search')?.value || '',
     document.getElementById('bk-status-filter')?.value || 'all'
   );
+
+  // On confirmation, email the client. We POST to the activated wellness@ form and put the CLIENT's
+  // address in the `email` field so FormSubmit delivers the _autoresponse to the client.
+  // The dashboard message + bell notification are derived from the booking's status on the member side.
+  if (status === 'confirmed') {
+    const b = allBookings.find(x => x.id === id);
+    if (b && b.user_email) {
+      const dateStr = b.requested_date || '';
+      fetch('https://formsubmit.co/ajax/wellness@keywellness.co.bw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({
+          'Confirmed Booking': `${b.user_name || ''} — ${b.service || 'session'}${dateStr ? ' on ' + dateStr : ''}`,
+          email: b.user_email,
+          _subject: '✅ Your Key Wellness booking is confirmed',
+          _autoresponse: `Hi ${b.user_name || 'there'},\n\nGood news — your ${b.service || 'coaching'} session${dateStr ? ' on ' + dateStr : ''} has been confirmed by Key Wellness. We look forward to seeing you.\n\nIf you need to reschedule, reply to this email or contact wellness@keywellness.co.bw.\n\nWarm regards,\nKey Wellness Team`,
+          _template: 'box',
+          _captcha: 'false'
+        })
+      }).then(r => r.json()).then(d => { if (d && d.success === 'false') console.warn('Confirmation email not sent (FormSubmit):', d.message); }).catch(e => console.warn('Confirmation email failed:', e));
+    }
+  }
 }
 
 // ── Start ──

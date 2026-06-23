@@ -653,17 +653,19 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
     safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
+    safe(sb.from('bookings').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
   ]);
 
   state.user        = pR.data  || null;
   state.assessments = aR.data  || [];
   state.checkins    = cR.data  || [];
+  state.bookings    = bkR.data || [];
   state.stressLogs  = (sR.data || []).map(r => ({ date: r.created_at, level: r.level, tags: r.tags || [], notes: r.notes || '' }));
   state.badges = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
@@ -1588,6 +1590,13 @@ VIEWS['dashboard'] = async function () {
       <div style="font-size:22px;font-weight:700;color:var(--navy)">${_greet}${_dFirst ? `, ${_dFirst}` : ''} 👋</div>
       <div style="font-size:13px;color:var(--muted);margin-top:3px">Here's your financial wellness overview.</div>
     </div>
+
+    ${(state.bookings||[]).filter(b=>b.status==='confirmed').length ? `
+    <div class="notice notice-green" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:18px">✅</span>
+      <div style="flex:1;min-width:180px;font-size:13px">${(() => { const b=(state.bookings||[]).filter(x=>x.status==='confirmed')[0]; return `<strong>Booking confirmed!</strong> Your ${b.service||'coaching'} session${b.requested_date?' on '+fmtDate(b.requested_date):''} is confirmed.`; })()}</div>
+      <button class="btn btn-outline btn-sm" onclick="go('my-bookings')">View →</button>
+    </div>` : ''}
 
     ${nudges.length ? `
     <!-- Nudge strip -->
@@ -3237,9 +3246,18 @@ function generateSmartNotifs() {
 
 function loadNotifications() {
   const smart = generateSmartNotifs();
+  // Booking-confirmed notifications — derived from the member's own Supabase bookings (cross-user/device)
+  const bookingNotifs = (state.bookings || [])
+    .filter(b => b.status === 'confirmed')
+    .map(b => ({
+      id: 'bk_confirmed_' + b.id,
+      title: '✅ Booking confirmed',
+      desc: `Your ${b.service || 'coaching'} session${b.requested_date ? ' on ' + fmtDate(b.requested_date) : ''} is confirmed. We look forward to seeing you.`,
+      link: 'my-bookings'
+    }));
   const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]');
   const dismissed = JSON.parse(localStorage.getItem('kw_notifs_dismissed')||'[]');
-  const all = [...custom, ...smart].filter(n => !dismissed.includes(n.id));
+  const all = [...bookingNotifs, ...custom, ...smart].filter(n => !dismissed.includes(n.id));
   const list = document.getElementById('notifList');
   const badge = document.getElementById('notifBadge');
   if (!list) return;
