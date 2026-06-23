@@ -204,11 +204,11 @@ input[type=number]::-webkit-inner-spin-button{opacity:.4}
         <div class="row2">
           <div class="field">
             <label>Current age</label>
-            <div class="iw no-prefix"><input type="number" id="myAge" value="35" min="18" max="70" oninput="calculate()"></div>
+            <div class="iw no-prefix"><input type="number" id="myAge" value="0" min="0" max="70" oninput="calculate()"></div>
           </div>
           <div class="field">
             <label>Retirement age</label>
-            <div class="iw no-prefix"><input type="number" id="retireAge" value="65" min="40" max="75" oninput="calculate()"></div>
+            <div class="iw no-prefix"><input type="number" id="retireAge" value="0" min="0" max="75" oninput="calculate()"></div>
           </div>
         </div>
         <div class="field">
@@ -781,11 +781,6 @@ calculate();
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    // ── Pull current age from the assessment profile (retirement age keeps its default; the
-    //    assessment doesn't capture it). A saved tool_data value below overrides this. ──
-    const { data: prof } = await _sb.from('profiles')
-      .select('age').eq('id', session.user.id).maybeSingle();
-    if (prof?.age) { const el = document.getElementById('myAge'); if (el) { el.value = prof.age; calculate(); } }
     const { data: toolRow } = await _sb.from('tool_data')
       .select('data').eq('user_id', session.user.id).eq('tool', 'life_insurance').maybeSingle();
     if (toolRow?.data) {
