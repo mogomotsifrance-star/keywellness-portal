@@ -3231,22 +3231,27 @@ function updateAvatarUI(b64, name) {
 }
 
 function initProfileUI() {
-  // Supabase profile is the source of truth for name
+  // Supabase profile is the source of truth for name — never fall back to
+  // a stale kw_profile entry from a previously logged-in user.
   let first = state.user?.first_name || '';
   let last  = state.user?.last_name  || '';
   let displayName = last ? `${first} ${last}` : first;
 
-  // Only fall back to localStorage avatar (image stays local-only for now)
+  // Only read localStorage for the avatar (image is local-only); never for the name.
   const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-  if (!displayName) {
-    displayName = prof.displayName || '';
-  }
 
-  // Keep localStorage in sync so standalone tool pages can read the name
+  // Keep localStorage in sync so standalone tool pages can read the name,
+  // but only write when we actually have a Supabase name — never copy stale data.
   if (first) {
     prof.firstName   = first;
     prof.lastName    = last;
     prof.displayName = displayName;
+    localStorage.setItem('kw_profile', JSON.stringify(prof));
+  } else {
+    // New user: clear any lingering name from the previous user in this browser
+    delete prof.firstName;
+    delete prof.lastName;
+    delete prof.displayName;
     localStorage.setItem('kw_profile', JSON.stringify(prof));
   }
 
