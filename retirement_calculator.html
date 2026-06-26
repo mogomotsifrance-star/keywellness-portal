@@ -520,8 +520,13 @@ function calculate() {
     barEl.className   = 'readiness-bar ' + (readiness >= 0.9 ? 'good' : readiness >= 0.6 ? 'warn' : 'poor');
   }, 100);
 
-  // Award badge if readiness >= 80% (matches 80+ convention used elsewhere)
-  if (readiness >= 0.8) KWBadges.award('retirement_planner');
+  // Award the incremental Retirement Planner tiers from readiness:
+  // tier 1 at 40%+, tier 2 at 60%+, tier 3 (full) at 80%+. Engine dedupes.
+  const _retTiers = [];
+  if (readiness >= 0.4) _retTiers.push('retirement_planner_t1');
+  if (readiness >= 0.6) _retTiers.push('retirement_planner_t2');
+  if (readiness >= 0.8) _retTiers.push('retirement_planner_t3');
+  if (_retTiers.length) KWBadges.award(_retTiers);
 
   // Action box
   let actionHtml = '';

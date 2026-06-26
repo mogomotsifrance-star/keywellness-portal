@@ -141,6 +141,16 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .badge-name{font-size:12px;font-weight:700;color:var(--navy)}
 .badge-desc{font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4}
 .badge-pts{font-size:11px;font-weight:600;color:var(--gold);margin-top:5px}
+/* ── Filling (tiered) score badges — "liquid in a glass" ── */
+.badge-glass{position:relative;width:54px;height:62px;margin:0 auto 7px;border:2.5px solid var(--border);border-radius:8px 8px 14px 14px;overflow:hidden;background:#fff}
+.badge-card.earned .badge-glass{border-color:var(--gold)}
+.badge-glass-fill{position:absolute;left:0;right:0;bottom:0;background:linear-gradient(180deg,var(--gold-light),var(--gold));transition:height .6s cubic-bezier(.4,0,.2,1)}
+.badge-glass-fill::before{content:"";position:absolute;top:-5px;left:0;right:0;height:8px;border-radius:50%;background:var(--gold-light);opacity:.8}
+.badge-glass-icon{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:26px;filter:grayscale(1) opacity(.4)}
+.badge-card.earned .badge-glass-icon{filter:none}
+.badge-tier{display:inline-block;font-size:10px;font-weight:700;color:var(--navy);background:var(--cream-dark);border-radius:99px;padding:2px 9px;margin-top:5px}
+.badge-card.earned .badge-tier{background:#fbeccf;color:#8a6516}
+.badge-tier.full{background:var(--gold);color:#fff}
 
 /* ── Assessment ── */
 .q-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px}
@@ -455,7 +465,10 @@ input[type=range]{width:100%;accent-color:var(--gold)}
     <div id="welcome-start-wrap" style="display:none;margin-top:8px">
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
     </div>
-    <div id="welcome-wait-msg" style="margin-top:8px;text-align:center;font-size:12px;color:var(--muted)">Please watch the video first — the button will appear shortly.</div>
+    <div id="welcome-wait-msg" style="margin-top:10px;text-align:center;font-size:12px;color:var(--muted)">
+      Watch the video to continue — your assessment unlocks when it finishes.<br>
+      <a href="#" onclick="event.preventDefault();closeWelcome()" style="display:inline-block;margin-top:6px;color:var(--muted);text-decoration:underline;font-size:12px">Skip intro →</a>
+    </div>
   </div>
 </div>
 
@@ -723,6 +736,16 @@ async function loadAllData() {
   state.badges = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
+  // Migrate legacy one-off score badges → filling tier ids (idempotent). A user
+  // who already earned an 80+ badge keeps it as a full (tier 3) filling badge.
+  try {
+    const _mig = KWBadges.migrateEarned(state.badges.earned);
+    if (_mig.changed) {
+      state.badges.earned = _mig.earned;
+      state.badges.points = KWBadges.pointsFor(_mig.earned);
+      await KWBadges.setEarned(_mig.earned);
+    }
+  } catch (e) { console.warn('[KW] badge migration skipped:', e); }
   if (state.stressLogs.length) localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
   // Admin check
@@ -806,6 +829,20 @@ async function loadEF() {
   if (!currentUser) return null;
   const { data } = await sb.from('emergency_fund').select('*').eq('user_id', currentUser.id).maybeSingle();
   return data;
+}
+
+// Award emergency-fund milestone badges from REAL saved figures only.
+// Target = monthly essential expenses × chosen months. If the target is
+// missing or zero, neither funded badge is awarded (prevents 0 ≥ 0 → "complete").
+function awardEFBadges(monthly, current, targetMonths) {
+  const m = parseFloat(monthly) || 0;
+  const c = parseFloat(current) || 0;
+  const mo = parseFloat(targetMonths) || 0;
+  const target = m * mo;
+  if (target <= 0) return;                 // no real target → no funded badge
+  const pct = (c / target) * 100;
+  if (pct >= 100)      awardBadge('ef_complete');
+  else if (pct >= 50)  awardBadge('ef_halfway');
 }
 
 // ══════════════════════════════════════════════════
@@ -1048,11 +1085,11 @@ function buildNav(current) {
   const navItems = [...NAV];
   if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
   document.getElementById('sb-nav').innerHTML = navItems.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="closeSidebar();${n.id==='assessment'?`openTool('wellness_assessment.html')`:n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="sb-item${current===n.id?' active':''}" onclick="closeSidebar();${n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
-    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='more'?`openMoreMenu()`:n.id==='assessment'?`openTool('wellness_assessment.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='more'?`openMoreMenu()`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="bn-icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('sb-pts').textContent = state.badges.points;
@@ -1078,8 +1115,7 @@ window.closeMoreMenu = function () {
 };
 window.moreGo = function (id) {
   closeMoreMenu();
-  if (id === 'assessment') openTool('wellness_assessment.html');
-  else if (id === 'admin-link') openTool('admin.html');
+  if (id === 'admin-link') openTool('admin.html');
   else go(id);
 };
 
@@ -1110,23 +1146,17 @@ function route() {
 // ══════════════════════════════════════════════════
 //  BADGE ENGINE
 // ══════════════════════════════════════════════════
-const BADGE_DEFS = [
-  { id:'first_login',       icon:'🌟', name:'First Step',          desc:'Completed onboarding',               pts:50  },
-  { id:'first_assessment',  icon:'📋', name:'Self-Aware',          desc:'Completed first assessment',         pts:100 },
-  { id:'budget_master',     icon:'📊', name:'Budget Master',       desc:'Score 80+ in Budgeting',             pts:150 },
-  { id:'savings_champ',     icon:'🏦', name:'Savings Champion',    desc:'Score 80+ in Savings',               pts:150 },
-  { id:'debt_destroyer',    icon:'⚔️',  name:'Debt Destroyer',     desc:'Score 80+ in Debt',                  pts:150 },
-  { id:'retirement_planner',icon:'🎯', name:'Retirement Planner',  desc:'Score 80+ in Retirement',            pts:150 },
-  { id:'insurance_hero',    icon:'🛡️',  name:'Insurance Hero',     desc:'Score 80+ in Insurance',             pts:150 },
-  { id:'high_scorer',       icon:'💯', name:'Financial Star',      desc:'Overall score of 75+',               pts:200 },
-  { id:'ef_started',        icon:'🆘', name:'Safety Net Started',  desc:'Opened Emergency Fund Planner',      pts:75  },
-  { id:'ef_halfway',        icon:'🛟', name:'Halfway Safe',        desc:'Emergency fund 50% funded',          pts:150 },
-  { id:'ef_complete',       icon:'🏰', name:'Fortress Built',      desc:'Emergency fund fully funded',        pts:300 },
-  { id:'check_in_1',        icon:'✅', name:'On Track',            desc:'Completed first fortnightly check-in',   pts:75  },
-  { id:'check_in_3',        icon:'🔥', name:'Consistent',          desc:'3 fortnightly check-ins',                pts:150 },
-  { id:'booked_session',    icon:'📅', name:'Getting Help',        desc:'Booked a coaching session',          pts:100 },
-  { id:'watched_video',     icon:'🎬', name:'Knowledge Seeker',    desc:'Watched a learning video',           pts:25  },
-];
+// Badge metadata lives in kw-badges.js (single source of truth via window.KWBadges).
+// The display model = simple one-off badges + one filling card per score area.
+function badgeStats() {
+  const earned = state.badges.earned || [];
+  const simple = KWBadges.SIMPLE_DEFS;
+  const groups = KWBadges.TIER_GROUPS;
+  let count = 0;
+  simple.forEach(d => { if (earned.includes(d.id)) count++; });
+  groups.forEach(g => { if (KWBadges.tierFor(earned, g.group) >= 1) count++; });
+  return { earnedCount: count, total: simple.length + groups.length, points: state.badges.points };
+}
 
 async function awardBadge(id) {
   const fresh = await KWBadges.award(id);
@@ -1344,9 +1374,116 @@ const QUESTIONS = [
 ];
 const Q_OPTS = ['Never / Not at all','Rarely','Sometimes','Often','Always / Completely'];
 
+// Assessment nav = latest SNAPSHOT/REPORT (read from Supabase), NOT the form.
+// Re-taking is launched from the Dashboard (see the "Re-assess" button there).
+const _DIM_META = [
+  { id:'income',     label:'Income & Cash Flow',  icon:'💼' },
+  { id:'savings',    label:'Savings Rate',         icon:'🏦' },
+  { id:'emergency',  label:'Emergency Fund',       icon:'🛡️' },
+  { id:'debt',       label:'Debt Management',      icon:'💳' },
+  { id:'retirement', label:'Retirement Readiness', icon:'🏖️' },
+  { id:'insurance',  label:'Risk Protection',      icon:'🩺' },
+  { id:'goals',      label:'Financial Goals',      icon:'🎯' },
+  { id:'spending',   label:'Spending & Net Worth', icon:'📊' },
+];
+const _DIM_ADVICE = {
+  income:     { tip:'Stabilise and grow your income — track every source and build a buffer for irregular months.', click:"go('emergency')", cta:'Emergency Fund' },
+  savings:    { tip:'Automate a "pay yourself first" transfer on payday — even P200/month builds the habit.',         click:"openTool('budget_planner.html')", cta:'Budget Planner' },
+  emergency:  { tip:'Build toward 3–6 months of essential expenses kept in a separate account.',                     click:"go('emergency')", cta:'Emergency Fund' },
+  debt:       { tip:'List your debts and clear the highest-interest one first (the avalanche method).',              click:"openTool('debt_management_planner.html')", cta:'Debt Planner' },
+  retirement: { tip:'Check whether your pension is on track and raise contributions where you can.',                 click:"openTool('retirement_calculator.html')", cta:'Retirement Calculator' },
+  insurance:  { tip:'Close your cover gaps — medical aid and income protection are the highest priority.',           click:"go('learn')", cta:'Learn More' },
+  goals:      { tip:'Set one clear, time-bound financial goal and track progress every month.',                      click:"openTool('goal_planner.html')", cta:'Goal Planner' },
+  spending:   { tip:'Review spending against the 50/30/20 rule and keep an eye on your net worth.',                  click:"openTool('net_worth_tracker.html')", cta:'Net Worth' },
+};
+
 VIEWS['assessment'] = function () {
-  // Redirect to the standalone 8-dimension assessment
-  openTool('wellness_assessment.html');
+  const el = document.getElementById('page-content');
+  const latest = state.assessments[0];
+
+  // No assessment on record → prompt to take the first one.
+  if (!latest) {
+    el.innerHTML = `
+      <div class="card" style="max-width:560px;margin:0 auto;text-align:center;padding:40px 28px">
+        <div style="font-size:48px;margin-bottom:14px">📋</div>
+        <h3 style="margin-bottom:8px">Take your wellness assessment</h3>
+        <p style="color:var(--muted);margin-bottom:22px;line-height:1.6">You haven't completed an assessment yet. It takes about 5 minutes and gives you a personalised financial wellness score, an 8-dimension breakdown, and an action plan.</p>
+        <button class="btn btn-primary" onclick="openTool('wellness_assessment.html')">Take your assessment →</button>
+      </div>`;
+    return;
+  }
+
+  const score = Math.round(latest.score || 0);
+  const cats  = latest.cat_scores || {};
+  const band  = scoreBand(score);
+  const daysSince = Math.floor((Date.now() - new Date(latest.created_at).getTime()) / 86400000);
+  const nextDate  = new Date(latest.created_at); nextDate.setDate(nextDate.getDate() + 30);
+  const due = daysSince >= 30;
+  const nextStr = nextDate.toLocaleDateString('en-GB', { day:'numeric', month:'long', year:'numeric' });
+
+  // Dimension rows (only dims we have a score for)
+  const dims = _DIM_META
+    .map(d => ({ ...d, score: typeof cats[d.id] === 'number' ? Math.round(cats[d.id]) : null }))
+    .filter(d => d.score !== null);
+
+  // Action plan = the 3 lowest-scoring dimensions
+  const plan = [...dims].sort((a,b) => a.score - b.score).slice(0, 3);
+
+  const dueNotice = due
+    ? `<div class="notice notice-gold" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+         <span style="font-size:18px">⏰</span>
+         <div style="flex:1"><strong>Time to reassess.</strong> Your last assessment was ${daysSince} days ago — a fresh one shows how far you've come.</div>
+         <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Take Assessment Now →</button>
+       </div>`
+    : `<div class="notice notice-green" style="margin-bottom:18px">✅ <strong>You're up to date.</strong> Your next assessment is recommended on <strong>${nextStr}</strong> (in ${30 - daysSince} day${30 - daysSince !== 1 ? 's' : ''}).</div>`;
+
+  el.innerHTML = `
+    ${dueNotice}
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:start;margin-bottom:18px">
+      <div class="card" style="text-align:center;min-width:200px">
+        <div class="card-title" style="margin-bottom:10px">Your Wellness Score</div>
+        ${svgGauge(score, band.color)}
+        <div style="font-size:15px;font-weight:700;color:${band.color};margin-top:4px">${band.label}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Assessed ${fmtDate(latest.created_at)}</div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="margin-bottom:14px">Dimension Breakdown</div>
+        <div style="display:flex;flex-direction:column;gap:11px">
+          ${dims.map(d => {
+            const c = scoreBand(d.score).color;
+            return `<div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px">
+                <span>${d.icon} ${d.label}</span><span class="mono" style="color:${c}">${d.score}/100</span>
+              </div>
+              <div class="progress-bar" style="height:9px"><div class="progress-fill" style="width:${d.score}%;background:${c}"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="margin-bottom:6px">🎯 Your Action Plan</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Your biggest opportunities to raise your score, lowest dimensions first.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${plan.map((d,i) => {
+          const adv = _DIM_ADVICE[d.id] || {};
+          return `<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--cream);border-radius:var(--radius-sm);border-left:4px solid ${scoreBand(d.score).color}">
+            <span style="font-size:18px;flex-shrink:0">${d.icon}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;color:var(--navy)">${i+1}. ${d.label} <span class="mono" style="color:var(--muted);font-weight:600">· ${d.score}/100</span></div>
+              <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:2px">${adv.tip || ''}</div>
+              ${adv.cta ? `<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="${adv.click}">${adv.cta} →</button>` : ''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-top:18px">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Want to measure your progress? Re-take your assessment from the Dashboard.</p>
+      <button class="btn btn-outline btn-sm" onclick="go('dashboard')">Go to Dashboard →</button>
+    </div>`;
 };
 
 // ══════════════════════════════════════════════════
@@ -1539,8 +1676,8 @@ VIEWS['dashboard'] = async function () {
   const curMonth = new Date().toISOString().slice(0,7);
   if (!hasAssessment) {
     nudges.push({ pri:'high', icon:'📋', title:'Start your wellness assessment', desc:"Your financial health score hasn't been set — takes 5 minutes.", cta:'Start Now', click:`openTool('wellness_assessment.html')` });
-  } else if (snapAge.assessment !== null && snapAge.assessment > 90) {
-    nudges.push({ pri:'medium', icon:'🔄', title:'Quarterly review due', desc:`Last assessed ${snapAge.assessment} days ago. Re-assess to measure your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
+  } else if (snapAge.assessment !== null && snapAge.assessment >= 30) {
+    nudges.push({ pri:'medium', icon:'🔄', title:'Time to reassess', desc:`Last assessed ${snapAge.assessment} days ago. A fresh assessment (recommended every 30 days) measures your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
   }
   if (!hasBudgetTool) {
     nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
@@ -1840,7 +1977,7 @@ VIEWS['dashboard'] = async function () {
     <!-- Stats row -->
     <div class="stat-grid">
       <div class="stat-box gold"><div class="stat-val">${state.badges.points}</div><div class="stat-lbl">Points</div></div>
-      <div class="stat-box"><div class="stat-val">${state.badges.earned.length}</div><div class="stat-lbl">Badges</div></div>
+      <div class="stat-box"><div class="stat-val">${badgeStats().earnedCount}</div><div class="stat-lbl">Badges</div></div>
       <div class="stat-box"><div class="stat-val">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
       <div class="stat-box"><div class="stat-val">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
     </div>
@@ -1914,21 +2051,43 @@ function showWelcomeVideo(){
   if (_wm) _wm.style.display = '';
   document.getElementById('welcome-modal').classList.add('visible');
 
-  // YouTube IFrame API — reveal button when video ends
-  const tag = document.createElement('script');
-  tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
-  window.onYouTubeIframeAPIReady = function() {
-    new YT.Player('welcome-iframe', {
-      events: {
-        onStateChange: function(e) {
-          if (e.data === YT.PlayerState.ENDED) _showStartButton();
+  // Reveal the "Start My Assessment" button ONLY when the welcome video ends.
+  // The button stays hidden during playback so it never appears at the start.
+  // (The "Skip intro" link is always available for users who opt out.)
+  function _attachWelcomePlayer() {
+    if (!(window.YT && window.YT.Player)) return false;
+    try {
+      new YT.Player('welcome-iframe', {
+        events: {
+          onStateChange: function (e) {
+            if (e.data === YT.PlayerState.ENDED) _showStartButton();
+          }
         }
-      }
-    });
-  };
-  // 90-second fallback in case YouTube API doesn't fire
-  setTimeout(_showStartButton, 90000);
+      });
+      return true;
+    } catch (err) { console.warn('Welcome YT attach failed:', err); return false; }
+  }
+  // Attach now if the API is already loaded; otherwise load it and hook the ready callback.
+  if (!_attachWelcomePlayer()) {
+    if (!document.querySelector('script[src*="iframe_api"]')) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+    const _prevReady = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = function () {
+      if (typeof _prevReady === 'function') { try { _prevReady(); } catch (_) {} }
+      _attachWelcomePlayer();
+    };
+    // Poll briefly in case the API was already initialised by another player.
+    let _tries = 0;
+    const _poll = setInterval(function () {
+      if (_attachWelcomePlayer() || ++_tries > 20) clearInterval(_poll);
+    }, 500);
+  }
+  // Safety net: if the API never reports completion (e.g. blocked), reveal the
+  // button after ~6 minutes — well past the 3-minute video, so it can't show mid-play.
+  setTimeout(_showStartButton, 360000);
 }
 
 window.closeWelcome = async function(){
@@ -1989,14 +2148,14 @@ window.saveNameModal = function () {
 //  e.g. 'https://www.youtube.com/embed/dQw4w9WgXcQ'
 // ══════════════════════════════════════════════════
 const VIDEOS = [
-  { id:'welcome',    title:'Welcome to Key Wellness',        cat:'Getting Started', duration:'3 min', points:25, yt:'FkzJ6tR4_JM' },
-  { id:'budget',     title:'How to Build a Budget',           cat:'Budgeting',       duration:'5 min', points:25, yt:null },
-  { id:'credit',     title:'Understanding Your Credit Score', cat:'Debt',            duration:'4 min', points:25, yt:null },
-  { id:'emfund',     title:'Starting Your Emergency Fund',    cat:'Savings',         duration:'4 min', points:25, yt:null },
-  { id:'retire',     title:'Retirement Planning 101',         cat:'Retirement',      duration:'6 min', points:25, yt:null },
-  { id:'investing',  title:'Investing for Beginners',         cat:'Investing',       duration:'7 min', points:25, yt:null },
-  { id:'stress',     title:'Managing Financial Stress',       cat:'Mindset',         duration:'5 min', points:25, yt:null },
-  { id:'insurance',  title:'Insurance Explained Simply',      cat:'Insurance',       duration:'4 min', points:25, yt:null },
+  { id:'welcome',    title:'Welcome to Key Wellness',        cat:'Getting Started', duration:'3 min', points:50, yt:'FkzJ6tR4_JM' },
+  { id:'budget',     title:'How to Build a Budget',           cat:'Budgeting',       duration:'5 min', points:50, yt:null },
+  { id:'credit',     title:'Understanding Your Credit Score', cat:'Debt',            duration:'4 min', points:50, yt:null },
+  { id:'emfund',     title:'Starting Your Emergency Fund',    cat:'Savings',         duration:'4 min', points:50, yt:null },
+  { id:'retire',     title:'Retirement Planning 101',         cat:'Retirement',      duration:'6 min', points:50, yt:null },
+  { id:'investing',  title:'Investing for Beginners',         cat:'Investing',       duration:'7 min', points:50, yt:null },
+  { id:'stress',     title:'Managing Financial Stress',       cat:'Mindset',         duration:'5 min', points:50, yt:null },
+  { id:'insurance',  title:'Insurance Explained Simply',      cat:'Insurance',       duration:'4 min', points:50, yt:null },
 ];
 
 // ── Video modules: sequential unlock + points, Supabase-backed (tool_data 'video_progress') ──
@@ -2025,6 +2184,7 @@ window.markVideoComplete = async function (vidId, pts) {
   const ptsEl = document.getElementById('sb-pts'); if (ptsEl) ptsEl.textContent = state.badges.points;
   await saveVideoProgress();
   saveBadges();
+  awardBadge('watched_video');   // "Knowledge Seeker" — first completed video (deduped by engine)
   showToast(`🎬 Video completed — +${pts} points!`);
   if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
 };
@@ -2630,9 +2790,10 @@ VIEWS['emergency'] = async function () {
     } else if (pct<100) {
       msg.innerHTML = `<div class="notice notice-red">⚠️ Enter a monthly contribution to see your goal date.</div>`;
     } else { msg.innerHTML=''; }
-
-    if (pct>=100)  awardBadge('ef_complete');
-    else if (pct>=50) awardBadge('ef_halfway');
+    // NOTE: EF badges are intentionally NOT awarded here. efCalc runs on
+    // *unsaved* prefilled values (e.g. total_savings pulled from the assessment),
+    // which previously triggered "Fortress Built" before the fund was real. Badges
+    // are awarded only from genuinely SAVED emergency-fund figures (see awardEFBadges).
   };
 
   window.efSave = async function () {
@@ -2646,12 +2807,31 @@ VIEWS['emergency'] = async function () {
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     const { error } = await saveEF({ monthly, current_savings: current, contribution: contrib, target_months: tgt });
     if (btn) { btn.disabled = false; btn.textContent = '💾 Save my plan'; }
+    if (!error) awardEFBadges(monthly, current, tgt);   // award from genuinely saved figures
     showToast(error ? '⚠️ Save failed — please try again' : '✓ Saved');
   };
 
   // Show (and persist) the plan on load when we have saved data OR assessment pre-fill
   setTimeout(() => { if (saved.monthly || saved.current || (!_efSetUp && (_efMonthlyExp>0 || _efSavings>0))) efCalc(); }, 50);
+  // Re-check milestone badges from REAL saved figures only (never from prefill).
+  if (efData) awardEFBadges(efData.monthly, efData.current_savings, efData.target_months);
 };
+
+// Count check-ins that represent genuine fortnightly cadence: walk the timestamps
+// oldest→newest and count one per ≥13-day gap from the last counted check-in.
+// (13 days allows checking in a day early while still blocking same-day farming.)
+function fortnightlyCheckinCount(checkins) {
+  const FORTNIGHT_MS = 13 * 86400000;
+  const times = (checkins || [])
+    .map(c => new Date(c.created_at || c.date || c.created).getTime())
+    .filter(t => !isNaN(t))
+    .sort((a, b) => a - b);
+  let count = 0, last = -Infinity;
+  for (const t of times) {
+    if (t - last >= FORTNIGHT_MS) { count++; last = t; }
+  }
+  return count;
+}
 
 // ══════════════════════════════════════════════════
 //  VIEW: CHECK-IN
@@ -2755,8 +2935,11 @@ VIEWS['checkin'] = function () {
     state.stressLogs.push({ date: now, level: stressLevel, tags: selectedTags, notes: stressNotes });
     localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
-    if (state.checkins.length === 1) awardBadge('check_in_1');
-    if (state.checkins.length >= 3)  awardBadge('check_in_3');
+    // Fortnightly cadence: only count check-ins that are ~14 days apart, so the
+    // "3 fortnightly check-ins" badge can't be farmed by logging 3 times in one day.
+    const _fc = fortnightlyCheckinCount(state.checkins);
+    if (_fc >= 1) awardBadge('check_in_1');
+    if (_fc >= 3) awardBadge('check_in_3');
 
     showToast('Check-in saved! Keep it up.');
     go('progress');
@@ -3158,23 +3341,59 @@ window.bkResetForm = function () {
 // ══════════════════════════════════════════════════
 VIEWS['badges'] = function () {
   const el = document.getElementById('page-content');
+  const stats = badgeStats();
   el.innerHTML = `
     <div class="stat-grid" style="margin-bottom:20px">
-      <div class="stat-box"><div class="stat-val mono">${state.badges.points}</div><div class="stat-lbl">Total Points</div></div>
-      <div class="stat-box"><div class="stat-val">${state.badges.earned.length}/${BADGE_DEFS.length}</div><div class="stat-lbl">Badges Earned</div></div>
+      <div class="stat-box"><div class="stat-val mono">${stats.points}</div><div class="stat-lbl">Total Points</div></div>
+      <div class="stat-box"><div class="stat-val">${stats.earnedCount}/${stats.total}</div><div class="stat-lbl">Badges Earned</div></div>
     </div>
     <div class="badge-grid">
-      ${BADGE_DEFS.map(b=>{
-        const earned = state.badges.earned.includes(b.id);
-        return `<div class="badge-card${earned?' earned':''}">
-          <span class="badge-icon">${b.icon}</span>
-          <div class="badge-name">${b.name}</div>
-          <div class="badge-desc">${b.desc}</div>
-          <div class="badge-pts">+${b.pts} pts${earned?' ✓':''}</div>
-        </div>`;
-      }).join('')}
+      ${renderBadgeCards()}
     </div>`;
 };
+
+// Builds the badge grid: simple one-off badges + one filling card per score area.
+function renderBadgeCards() {
+  const earned = state.badges.earned || [];
+  // Live dimension scores so each glass fills toward the next tier
+  const cats = state.assessments[0]?.cat_scores || state.user?.last_cat_scores || {};
+
+  const simple = KWBadges.SIMPLE_DEFS.map(b => {
+    const got = earned.includes(b.id);
+    return `<div class="badge-card${got?' earned':''}">
+      <span class="badge-icon">${b.icon}</span>
+      <div class="badge-name">${b.name}</div>
+      <div class="badge-desc">${b.desc}</div>
+      <div class="badge-pts">+${b.pts} pts${got?' ✓':''}</div>
+    </div>`;
+  }).join('');
+
+  const areas = KWBadges.TIER_GROUPS.map(g => {
+    const tier = KWBadges.tierFor(earned, g.group);
+    const score = typeof cats[g.dim] === 'number' ? Math.round(cats[g.dim]) : null;
+    // Fill height: prefer the live dimension score; fall back to tier milestone.
+    const fill = score !== null ? Math.min(100, score) : tier * (100/3);
+    const earnedPts = KWBadges.TIER_PTS.slice(0, tier).reduce((s,p)=>s+p, 0);
+    const tierLine = tier >= 3
+      ? `<span class="badge-tier full">★ Mastered · Tier 3 of 3</span>`
+      : `<span class="badge-tier">Tier ${tier} of 3</span>`;
+    const ptsLine = tier > 0
+      ? `+${earnedPts} pts${tier>=3?' ✓':''}`
+      : `Score 40+ to start filling`;
+    return `<div class="badge-card${tier>=1?' earned':''}">
+      <div class="badge-glass" title="${score!==null?score+'/100':''}">
+        <div class="badge-glass-fill" style="height:${fill}%"></div>
+        <span class="badge-glass-icon">${g.icon}</span>
+      </div>
+      <div class="badge-name">${g.name}</div>
+      <div class="badge-desc">${g.area}${score!==null?` · ${score}/100`:''}</div>
+      ${tierLine}
+      <div class="badge-pts">${ptsLine}</div>
+    </div>`;
+  }).join('');
+
+  return simple + areas;
+}
 
 // ══════════════════════════════════════════════════
 //  VIEW: MY BOOKINGS
@@ -3298,7 +3517,7 @@ VIEWS['profile'] = function () {
         <h4 style="margin-bottom:14px;font-size:14px">🏅 Points & Badges</h4>
         <div class="stat-grid">
           <div class="stat-box gold"><div class="stat-val mono">${state.badges.points}</div><div class="stat-lbl">Total Points</div></div>
-          <div class="stat-box"><div class="stat-val">${state.badges.earned.length}/${BADGE_DEFS.length}</div><div class="stat-lbl">Badges Earned</div></div>
+          <div class="stat-box"><div class="stat-val">${badgeStats().earnedCount}/${badgeStats().total}</div><div class="stat-lbl">Badges Earned</div></div>
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="go('badges')">View All Badges →</button>
       </div>

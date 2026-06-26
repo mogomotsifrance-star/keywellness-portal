@@ -816,11 +816,18 @@ function calculateWellness(){
   const _earnedBadges = ['first_assessment'];
   if (totalScore >= 75) _earnedBadges.push('high_scorer');
   const dimScore = id => (dims.find(d => d.id === id)?.score || 0);
-  if (dimScore('savings')    >= 80) _earnedBadges.push('savings_champ');
-  if (dimScore('debt')       >= 80) _earnedBadges.push('debt_destroyer');
-  if (dimScore('retirement') >= 80) _earnedBadges.push('retirement_planner');
-  if (dimScore('insurance')  >= 80) _earnedBadges.push('insurance_hero');
-  if (dimScore('spending')   >= 80) _earnedBadges.push('budget_master');
+  // Incremental "filling" score badges: tier 1 at 40+, tier 2 at 60+, tier 3 at 80+.
+  // The shared engine dedupes, so a tier already earned is never re-awarded.
+  const pushTiers = (group, sc) => {
+    if (sc >= 40) _earnedBadges.push(group + '_t1');
+    if (sc >= 60) _earnedBadges.push(group + '_t2');
+    if (sc >= 80) _earnedBadges.push(group + '_t3');
+  };
+  pushTiers('savings_champ',      dimScore('savings'));
+  pushTiers('debt_destroyer',     dimScore('debt'));
+  pushTiers('retirement_planner', dimScore('retirement'));
+  pushTiers('insurance_hero',     dimScore('insurance'));
+  pushTiers('budget_master',      dimScore('spending'));
   KWBadges.award(_earnedBadges);
 
   // Save result to localStorage for dashboard sync
