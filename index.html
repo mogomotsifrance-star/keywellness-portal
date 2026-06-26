@@ -151,6 +151,9 @@ input,select,textarea{font-family:'Inter',sans-serif}
 .badge-tier{display:inline-block;font-size:10px;font-weight:700;color:var(--navy);background:var(--cream-dark);border-radius:99px;padding:2px 9px;margin-top:5px}
 .badge-card.earned .badge-tier{background:#fbeccf;color:#8a6516}
 .badge-tier.full{background:var(--gold);color:#fff}
+/* Full-width section heading inside the badge grid */
+.badge-section-hdr{grid-column:1/-1;font-size:13px;font-weight:800;color:var(--navy);margin:6px 0 -2px;padding-bottom:6px;border-bottom:2px solid var(--border)}
+.badge-section-hdr:first-child{margin-top:0}
 
 /* ── Assessment ── */
 .q-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px}
@@ -685,6 +688,9 @@ let state = {
   checkins: [],
   stressLogs: [],
   badges: { earned: [], points: 0 },
+  toolData: {},          // Supabase tool_data rows keyed by tool name (budget_planner, net_worth_tracker, retirement, …)
+  articlesRead: [],      // ids (titles) of Learn articles opened — drives the learning/confidence badge
+  badgeMetrics: {},      // last computed filling-badge metrics: groupId → { value, detail }
 };
 
 // ══════════════════════════════════════════════════
@@ -746,6 +752,15 @@ async function loadAllData() {
       await KWBadges.setEarned(_mig.earned);
     }
   } catch (e) { console.warn('[KW] badge migration skipped:', e); }
+
+  // Behaviour reward engine: load the tool data the filling badges depend on,
+  // then award any tiers reached and cache the fill snapshot. Non-blocking so a
+  // slow query never holds up the dashboard.
+  loadBadgeData()
+    .then(() => syncProgressBadges())
+    .then(() => { if ((location.hash.replace('#','') || '') === 'badges') VIEWS['badges'](); })
+    .catch(e => console.warn('[KW] progress badge sync skipped:', e));
+
   if (state.stressLogs.length) localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
   // Admin check
@@ -831,19 +846,169 @@ async function loadEF() {
   return data;
 }
 
-// Award emergency-fund milestone badges from REAL saved figures only.
-// Target = monthly essential expenses × chosen months. If the target is
-// missing or zero, neither funded badge is awarded (prevents 0 ≥ 0 → "complete").
-function awardEFBadges(monthly, current, targetMonths) {
-  const m = parseFloat(monthly) || 0;
-  const c = parseFloat(current) || 0;
-  const mo = parseFloat(targetMonths) || 0;
-  const target = m * mo;
-  if (target <= 0) return;                 // no real target → no funded badge
-  const pct = (c / target) * 100;
-  if (pct >= 100)      awardBadge('ef_complete');
-  else if (pct >= 50)  awardBadge('ef_halfway');
+// ══════════════════════════════════════════════════════════════════
+//  BEHAVIOUR REWARD ENGINE — host wiring (Part 0)
+//  Computes every "filling" badge metric from live Supabase data, awards
+//  the tiers each metric has reached (sticky, deduped by KWBadges.award),
+//  and caches a per-badge fill snapshot to tool_data='badge_progress' so the
+//  glasses are consistent across devices. EF & retirement are current-STATE
+//  (fill rises and falls); the rest are achievement (fill never drops).
+// ══════════════════════════════════════════════════════════════════
+const _num   = v => { const n = parseFloat(String(v).replace(/,/g,'')); return isNaN(n) ? 0 : n; };
+const _clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// Pull the Supabase tool data the filling badges depend on (one round-trip).
+async function loadBadgeData() {
+  if (!currentUser) return;
+  try {
+    const { data: rows } = await sb.from('tool_data')
+      .select('tool, data').eq('user_id', currentUser.id)
+      .in('tool', ['budget_planner','net_worth_tracker','retirement','investment_calc','video_progress','articles_read']);
+    state.toolData = {};
+    (rows || []).forEach(r => { state.toolData[r.tool] = r.data; });
+  } catch (e) { console.warn('[KW] loadBadgeData failed:', e); }
+  state.videoProgress = (state.toolData.video_progress && state.toolData.video_progress.completed) || state.videoProgress || [];
+  state.articlesRead  = (state.toolData.articles_read  && state.toolData.articles_read.read)       || [];
+  try { state.badgeProgress = await KWBadges.loadProgress(); } catch { state.badgeProgress = {}; }
+  try { state._efRow = await loadEF(); } catch { state._efRow = null; }
 }
+
+// Per-budget-month savings rate, chronological. rate = savings allocations / income.
+const _SAVINGS_CATS = ['emfund','retirement','invest','goals','debt_extra'];
+function budgetMonthRates() {
+  const bp = state.toolData?.budget_planner;
+  const budgets = bp?.budgets || {};
+  return Object.keys(budgets).sort().map(key => {
+    const b = budgets[key] || {};
+    const income = (b.income || []).reduce((s, r) => s + _num(r.amount), 0);
+    const savings = _SAVINGS_CATS.reduce((s, c) => s + _num((b.expenses || {})[c]), 0);
+    const hasData = income > 0 || Object.values(b.expenses || {}).some(v => _num(v) > 0);
+    return { key, rate: income > 0 ? (savings / income) * 100 : 0, hasData };
+  });
+}
+// Distinct budgeting months that contain real figures.
+function budgetMonths() { return budgetMonthRates().filter(r => r.hasData).map(r => r.key); }
+
+function _quarterKey(d) { return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`; }
+
+// Compute all filling-badge metrics → { groupId: { value, detail } }.
+function computeBadgeMetrics() {
+  const u  = state.user || {};
+  const td = state.toolData || {};
+  const m  = {};
+
+  // PART 1 — Emergency Fund (current state; target = 6 months of essentials)
+  {
+    const ef = state._efRow || {};
+    const essential = _num(ef.monthly) || _num(u.essential_expenses) || _num(u.monthly_expenses);
+    const balance = _num(ef.current_savings);
+    const target = essential * 6;
+    let pct = target > 0 ? (balance / target) * 100 : 0;
+    const setUp = !!(_num(ef.monthly) || _num(ef.current_savings) || _num(ef.contribution));
+    if (setUp) pct = Math.max(pct, 1);     // "Set up" tier fills once the fund exists
+    m.ef = { value: _clamp(pct, 0, 100), detail: { balance, target, essential, setUp } };
+  }
+
+  // PART 2 — Retirement readiness (snapshot.readinessPct is already % toward 70%-of-gross)
+  {
+    const snap = (td.retirement && td.retirement.snapshot) || null;
+    m.retire_ready = { value: _clamp(snap ? _num(snap.readinessPct) : 0, 0, 100),
+      detail: { has: !!snap, proj: snap?.projPension, target: snap?.targetPension } };
+  }
+
+  // PART 3a — Savings-rate milestones (% of NET pay; best of profile vs budget months)
+  {
+    let rate = 0, src = null;
+    const net = _num(u.net_income), sav = _num(u.monthly_savings);
+    if (net > 0 && sav > 0) { rate = (sav / net) * 100; src = 'profile'; }
+    budgetMonthRates().forEach(r => { if (r.hasData && r.rate > rate) { rate = r.rate; src = 'budget'; } });
+    m.savings_rate = { value: _clamp(rate, 0, 100), detail: { rate: Math.round(rate), src } };
+  }
+
+  // PART 3b — Sustained 20%: longest run of consecutive budget months ≥ 20%
+  {
+    const rates = budgetMonthRates().filter(r => r.hasData);
+    let run = 0, best = 0;
+    rates.forEach(r => { if (r.rate >= 20) { run++; best = Math.max(best, run); } else run = 0; });
+    m.savings_streak = { value: best, detail: { streak: best, months: rates.length } };
+  }
+
+  // PART 4 — Quarterly investor: distinct quarters (this year) with the investing
+  // tool used AND positive net worth. Qualified quarters persist in the snapshot.
+  {
+    const nw = td.net_worth_tracker || {};
+    const assets = (nw.assets || []).reduce((s, a) => s + _num(a.amt ?? a.value), 0)
+                || _num(u.total_assets);
+    const liabs  = (nw.liabilities || []).reduce((s, a) => s + _num(a.amt ?? a.value), 0)
+                || _num(u.total_liabilities);
+    const netWorthPositive = (assets - liabs) > 0 && (assets > 0);
+    const investedUsed = !!td.investment_calc;
+    const year = new Date().getFullYear();
+    const qSet = new Set((state.badgeProgress?.investor?.quarters || [])
+      .filter(q => String(q).startsWith(String(year))));
+    if (investedUsed && netWorthPositive) qSet.add(_quarterKey(new Date()));
+    const quarters = [...qSet];
+    m.investor = { value: Math.min(4, quarters.length),
+      detail: { quarters, netWorthPositive, investedUsed, netWorth: assets - liabs } };
+  }
+
+  // PART 5 — Fortnightly check-ins (time-based; ~14 days apart)
+  m.checkin_streak = { value: fortnightlyCheckinCount(state.checkins),
+    detail: { total: (state.checkins || []).length } };
+
+  // PART 6 — Learning engagement (articles read + videos completed → confidence)
+  {
+    const vids = (state.videoProgress || []).length;
+    const arts = (state.articlesRead || []).length;
+    const total = (typeof VIDEOS !== 'undefined' ? VIDEOS.length : 0)
+                + (typeof CONTENT !== 'undefined' ? CONTENT.length : 0);
+    m.learning = { value: total > 0 ? _clamp((vids + arts) / total * 100, 0, 100) : 0,
+      detail: { vids, arts, total } };
+  }
+
+  // PART 7 — Budget consistency: distinct budgeting months, up to 12
+  {
+    const months = budgetMonths();
+    m.budget_year = { value: Math.min(12, months.length), detail: { months: months.length } };
+  }
+
+  state.badgeMetrics = m;
+  return m;
+}
+
+// Award reached tiers for every filling badge, then persist the fill snapshot.
+async function syncProgressBadges() {
+  if (!currentUser) return;
+  const metrics = computeBadgeMetrics();
+  for (const def of KWBadges.PROGRESS_DEFS) {
+    const mm = metrics[def.id];
+    if (!mm) continue;
+    try {
+      const fresh = await KWBadges.awardProgress(def.id, mm.value);
+      if (fresh && fresh.length) {
+        fresh.forEach(id => { if (!state.badges.earned.includes(id)) state.badges.earned.push(id); });
+        state.badges.points = KWBadges.pointsFor(state.badges.earned);
+        const el = document.getElementById('sb-pts'); if (el) el.textContent = state.badges.points;
+      }
+    } catch (e) { console.warn('[KW] awardProgress', def.id, e); }
+  }
+  // Build + persist the cross-device fill snapshot.
+  const snapshot = {};
+  for (const def of KWBadges.PROGRESS_DEFS) {
+    const mm = metrics[def.id]; if (!mm) continue;
+    snapshot[def.id] = {
+      tier: KWBadges.tiersReached(def, mm.value),
+      pct: KWBadges.progressFill(def, mm.value, state.badges.earned),
+      lastUpdated: new Date().toISOString(),
+    };
+    if (def.id === 'investor' && mm.detail?.quarters) snapshot[def.id].quarters = mm.detail.quarters;
+  }
+  state.badgeProgress = snapshot;
+  KWBadges.saveProgress(snapshot);
+}
+
+// Thin compatibility shim: EF save still calls this — now routes through the engine.
+function awardEFBadges() { syncProgressBadges(); }
 
 // ══════════════════════════════════════════════════
 //  AUTH UI
@@ -1152,10 +1317,13 @@ function badgeStats() {
   const earned = state.badges.earned || [];
   const simple = KWBadges.SIMPLE_DEFS;
   const groups = KWBadges.TIER_GROUPS;
+  const progress = KWBadges.PROGRESS_DEFS;
   let count = 0;
   simple.forEach(d => { if (earned.includes(d.id)) count++; });
   groups.forEach(g => { if (KWBadges.tierFor(earned, g.group) >= 1) count++; });
-  return { earnedCount: count, total: simple.length + groups.length, points: state.badges.points };
+  // A filling badge counts as "earned" once it has reached at least its first tier.
+  progress.forEach(def => { if (KWBadges.tiersEarned(def, earned) >= 1) count++; });
+  return { earnedCount: count, total: simple.length + groups.length + progress.length, points: state.badges.points };
 }
 
 async function awardBadge(id) {
@@ -2176,6 +2344,16 @@ async function saveVideoProgress() {
     await sb.from('tool_data').upsert({ user_id: currentUser.id, tool: 'video_progress', data: { completed: state.videoProgress || [] }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
   } catch (e) { console.error('video_progress save failed:', e); }
 }
+// Record a read article (by title), persist to Supabase, and refresh learning badge.
+async function markArticleRead(title) {
+  if (!state.articlesRead) state.articlesRead = [];
+  if (state.articlesRead.includes(title)) return;   // count each article once
+  state.articlesRead.push(title);
+  try {
+    if (currentUser) await sb.from('tool_data').upsert({ user_id: currentUser.id, tool: 'articles_read', data: { read: state.articlesRead }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
+  } catch (e) { console.warn('articles_read save failed:', e); }
+  syncProgressBadges();   // recompute Confident Learner (articles + videos)
+}
 window.markVideoComplete = async function (vidId, pts) {
   if (!state.videoProgress) state.videoProgress = [];
   if (state.videoProgress.includes(vidId)) return;   // already complete — never double-award points
@@ -2184,7 +2362,7 @@ window.markVideoComplete = async function (vidId, pts) {
   const ptsEl = document.getElementById('sb-pts'); if (ptsEl) ptsEl.textContent = state.badges.points;
   await saveVideoProgress();
   saveBadges();
-  awardBadge('watched_video');   // "Knowledge Seeker" — first completed video (deduped by engine)
+  syncProgressBadges();   // recompute the Confident Learner badge (videos + articles)
   showToast(`🎬 Video completed — +${pts} points!`);
   if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
 };
@@ -2238,10 +2416,25 @@ VIEWS['learn'] = function (tab) {
     return;
   }
 
+  // Learning engagement = the "confidence in financial decisions" indicator.
+  const _learnVids = (state.videoProgress || []).length;
+  const _learnArts = (state.articlesRead || []).length;
+  const _learnTotal = VIDEOS.length + CONTENT.length;
+  const _learnPct = _learnTotal ? Math.round((_learnVids + _learnArts) / _learnTotal * 100) : 0;
+
   el.innerHTML = `
     <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:320px">
       <button class="auth-tab${activeTab==='articles'?' active':''}" onclick="VIEWS['learn']('articles')" style="flex:1">📚 Articles</button>
       <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Videos</button>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--navy)">💪 Confidence in financial decisions</div>
+        <div class="mono" style="font-size:13px;font-weight:700;color:var(--gold)">${_learnPct}%</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${_learnPct}%"></div></div>
+      <div style="font-size:11px;color:var(--muted);margin-top:7px">${_learnArts + _learnVids} of ${_learnTotal} Learn items engaged — the more you learn, the more confident your money decisions become.</div>
     </div>
 
     ${activeTab==='articles' ? `
@@ -2529,6 +2722,8 @@ const ARTICLE_BODIES = {
 window.showArticle = function (idx) {
   const c = CONTENT[idx];
   const el = document.getElementById('page-content');
+  // Reading an article is learning engagement → drives the Confident Learner badge.
+  markArticleRead(c.title);
 
   // Legacy helpers used by the bodies fallback object below
   const keybox = items => `<div style="background:#fffbf0;border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:14px 16px;margin:18px 0"><div style="font-size:11px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">💡 Key Takeaways</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:2;color:#374151">${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
@@ -2656,7 +2851,8 @@ VIEWS['calculators'] = function () {
 //  VIEW: EMERGENCY FUND
 // ══════════════════════════════════════════════════
 VIEWS['emergency'] = async function () {
-  awardBadge('ef_started');
+  // "Set up" tier now fills from genuinely saved EF figures (see computeBadgeMetrics),
+  // not from merely opening the planner — so no award call here.
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
 
@@ -2807,14 +3003,18 @@ VIEWS['emergency'] = async function () {
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     const { error } = await saveEF({ monthly, current_savings: current, contribution: contrib, target_months: tgt });
     if (btn) { btn.disabled = false; btn.textContent = '💾 Save my plan'; }
-    if (!error) awardEFBadges(monthly, current, tgt);   // award from genuinely saved figures
+    if (!error) {
+      // Reflect the just-saved figures, then let the engine fill/award the Safety Net badge.
+      state._efRow = { monthly, current_savings: current, contribution: contrib, target_months: tgt };
+      syncProgressBadges();
+    }
     showToast(error ? '⚠️ Save failed — please try again' : '✓ Saved');
   };
 
   // Show (and persist) the plan on load when we have saved data OR assessment pre-fill
   setTimeout(() => { if (saved.monthly || saved.current || (!_efSetUp && (_efMonthlyExp>0 || _efSavings>0))) efCalc(); }, 50);
-  // Re-check milestone badges from REAL saved figures only (never from prefill).
-  if (efData) awardEFBadges(efData.monthly, efData.current_savings, efData.target_months);
+  // Re-check the Safety Net fill from REAL saved figures only (never from prefill).
+  if (efData) { state._efRow = efData; syncProgressBadges(); }
 };
 
 // Count check-ins that represent genuine fortnightly cadence: walk the timestamps
@@ -2935,11 +3135,9 @@ VIEWS['checkin'] = function () {
     state.stressLogs.push({ date: now, level: stressLevel, tags: selectedTags, notes: stressNotes });
     localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
-    // Fortnightly cadence: only count check-ins that are ~14 days apart, so the
-    // "3 fortnightly check-ins" badge can't be farmed by logging 3 times in one day.
-    const _fc = fortnightlyCheckinCount(state.checkins);
-    if (_fc >= 1) awardBadge('check_in_1');
-    if (_fc >= 3) awardBadge('check_in_3');
+    // Fortnightly cadence: the Check-in Streak badge fills from time-based counting
+    // (≥13-day gaps), so it can't be farmed by logging several times in one day.
+    syncProgressBadges();
 
     showToast('Check-in saved! Keep it up.');
     go('progress');
@@ -3352,10 +3550,15 @@ VIEWS['badges'] = function () {
     </div>`;
 };
 
-// Builds the badge grid: simple one-off badges + one filling card per score area.
+// Builds the badge grid: simple one-off badges + behaviour filling badges
+// (the reward engine) + one filling card per assessment score area.
 function renderBadgeCards() {
   const earned = state.badges.earned || [];
-  // Live dimension scores so each glass fills toward the next tier
+  // Refresh fill metrics from already-loaded data (display only — no awarding here).
+  const metrics = (state.toolData && Object.keys(state.toolData).length) || state._efRow
+    ? computeBadgeMetrics() : (state.badgeMetrics || {});
+  const snap = state.badgeProgress || {};
+  // Live dimension scores so each assessment glass fills toward the next tier
   const cats = state.assessments[0]?.cat_scores || state.user?.last_cat_scores || {};
 
   const simple = KWBadges.SIMPLE_DEFS.map(b => {
@@ -3365,6 +3568,52 @@ function renderBadgeCards() {
       <div class="badge-name">${b.name}</div>
       <div class="badge-desc">${b.desc}</div>
       <div class="badge-pts">+${b.pts} pts${got?' ✓':''}</div>
+    </div>`;
+  }).join('');
+
+  // ── Behaviour reward engine: one filling glass per behaviour badge ──
+  const behaviour = KWBadges.PROGRESS_DEFS.map(def => {
+    // Prefer the freshly computed metric; fall back to the cached fill snapshot.
+    const metric = metrics[def.id]?.value ?? snap[def.id]?.pct ?? 0;
+    const reachedNow  = KWBadges.tiersReached(def, metric);
+    const earnedCount = KWBadges.tiersEarned(def, earned);
+    const N = def.tiers.length;
+    // State badges show the live tier (can drop); achievements hold their best.
+    const curTier = def.kind === 'state' ? reachedNow : Math.max(reachedNow, earnedCount);
+    const fill = KWBadges.progressFill(def, metric, earned);
+    const earnedPts = def.tiers.slice(0, earnedCount).reduce((s, t) => s + t.pts, 0);
+
+    // Friendly value readout per unit.
+    const d = metrics[def.id]?.detail || {};
+    let valTxt;
+    if (def.unit === 'pct') valTxt = `${Math.round(metric)}%`;
+    else if (def.id === 'budget_year')   valTxt = `${metric}/12 months`;
+    else if (def.id === 'investor')      valTxt = `${metric}/4 quarters`;
+    else if (def.id === 'savings_streak')valTxt = `${metric}/3 months`;
+    else if (def.id === 'checkin_streak')valTxt = `${metric} check-in${metric===1?'':'s'}`;
+    else valTxt = `${metric}`;
+
+    const full = curTier >= N;
+    const tierLine = full
+      ? `<span class="badge-tier full">★ Complete · ${def.tiers[N-1].label}</span>`
+      : `<span class="badge-tier">Tier ${curTier} of ${N}${curTier>0?` · ${def.tiers[curTier-1].label}`:''}</span>`;
+    const nextLine = full
+      ? `<div class="badge-desc" style="color:var(--green)">✓ All tiers reached</div>`
+      : `<div class="badge-desc">Next: ${def.tiers[curTier].label}</div>`;
+    const ptsLine = earnedCount > 0
+      ? `+${earnedPts} pts${full?' ✓':''}`
+      : `Earn ${def.tiers[0].pts} pts at ${def.unit==='pct'?def.tiers[0].threshold+'%':'tier 1'}`;
+
+    return `<div class="badge-card${earnedCount>=1?' earned':''}" title="${def.blurb}">
+      <div class="badge-glass" title="${valTxt}">
+        <div class="badge-glass-fill" style="height:${fill}%"></div>
+        <span class="badge-glass-icon">${def.icon}</span>
+      </div>
+      <div class="badge-name">${def.name}</div>
+      <div class="badge-desc">${valTxt}</div>
+      ${tierLine}
+      ${nextLine}
+      <div class="badge-pts">${ptsLine}</div>
     </div>`;
   }).join('');
 
@@ -3392,7 +3641,11 @@ function renderBadgeCards() {
     </div>`;
   }).join('');
 
-  return simple + areas;
+  // Section headers help users read the three families of badges.
+  const hdr = t => `<div class="badge-section-hdr">${t}</div>`;
+  return hdr('🎖️ Milestones') + simple
+       + hdr('🌱 Behaviour Rewards — these fill as you build habits') + behaviour
+       + hdr('📊 Assessment Mastery') + areas;
 }
 
 // ══════════════════════════════════════════════════
@@ -3625,7 +3878,7 @@ window.markVideoWatched = function (btn, title) {
   if (watched.includes(title)) return;
   watched.push(title);
   localStorage.setItem('kw_watched', JSON.stringify(watched));
-  awardBadge('watched_video'); // badge for first video
+  syncProgressBadges(); // refresh Confident Learner (the watched_video badge is now part of the learning fill badge)
   // Award 25 pts manually
   state.badges.points = (state.badges.points||0) + 25;
   const bk = JSON.parse(localStorage.getItem('kw_badges')||'{"earned":[],"points":0}');
