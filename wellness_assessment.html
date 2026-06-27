@@ -763,14 +763,28 @@ function loadDraft(){
 
 function calculateWellness(){
   if(!validateStep(7))return;
-  const gross=pf('grossSalary'),net=pf('netSalary'),other=pf('otherIncome'),expenses=pf('expenses');
+  let gross,net,other,expenses,monthlySavings,emergencyFund,essentialExp,
+      totalDebtPayments,totalDebtBalance,retirementBal,monthlyPension,
+      age,retireAge,totalAssets,totalLiabilities;
+  if(window._isReassessment){
+    const f=window._resolvedFigures||resolveAssessmentFigures();
+    gross=f.gross||0; net=f.net||f.gross||0; other=0; expenses=f.expenses||0;
+    monthlySavings=f.monthlySavings||0; emergencyFund=f.emergencyFund||0;
+    essentialExp=f.essentialExpenses||expenses*0.6;
+    totalDebtPayments=f.totalDebtPayments||0; totalDebtBalance=f.totalDebtBalance||0;
+    retirementBal=f.retirementBalance||0; monthlyPension=f.monthlyPension||0;
+    age=f.age||30; retireAge=f.retireAge||60;
+    totalAssets=f.totalAssets||0; totalLiabilities=f.totalLiabilities||0;
+  } else {
+    gross=pf('grossSalary'); net=pf('netSalary'); other=pf('otherIncome'); expenses=pf('expenses');
+    monthlySavings=pf('monthlySavings'); emergencyFund=pf('emergencyFund');
+    essentialExp=pf('essentialExpenses')||expenses*0.6;
+    totalDebtPayments=pf('totalDebtPayments'); totalDebtBalance=pf('totalDebtBalance');
+    retirementBal=pf('retirementBalance'); monthlyPension=pf('monthlyPension');
+    age=pfi('age')||30; retireAge=pfi('retireAge')||60;
+    totalAssets=pf('totalAssets'); totalLiabilities=pf('totalLiabilities');
+  }
   const totalIncome=gross+other;
-  const monthlySavings=pf('monthlySavings'),emergencyFund=pf('emergencyFund');
-  const essentialExp=pf('essentialExpenses')||expenses*0.6;
-  const totalDebtPayments=pf('totalDebtPayments'),totalDebtBalance=pf('totalDebtBalance');
-  const retirementBal=pf('retirementBalance'),monthlyPension=pf('monthlyPension');
-  const age=pfi('age')||30,retireAge=pfi('retireAge')||60;
-  const totalAssets=pf('totalAssets'),totalLiabilities=pf('totalLiabilities');
   const netWorth=totalAssets-totalLiabilities;
 
   const surplusRatio=totalIncome>0?Math.max(0,totalIncome-expenses)/totalIncome:0;
@@ -1080,45 +1094,168 @@ function restartAssessment(){
   currentStep=0;showStep(0);document.getElementById('progressWrap').style.display='block';
 }
 
+// ── Figure resolver: tool data → profile → 0 ──────────────────────────────────
+// Sources: Budget Planner, Net Worth Tracker, Retirement Calculator,
+//          Emergency Fund table, Profile (seeded by last assessment).
+function resolveAssessmentFigures() {
+  const bp  = window._toolFigures?.budget_planner    || {};
+  const nw  = window._toolFigures?.net_worth_tracker || {};
+  const ret = window._toolFigures?.retirement        || {};
+  const ef  = window._efData  || {};
+  const prof = window._toolProfile || {};
+  const _n  = v => parseFloat(String(v||0).replace(/,/g,''))||0;
+  const f = {}, src = {};
+
+  // Budget Planner (current month) → gross income, expenses, savings allocation, debt payments
+  const bpKey = bp.currentKey;
+  const bpB   = bpKey && bp.budgets?.[bpKey] ? bp.budgets[bpKey] : null;
+  if (bpB) {
+    const bpInc  = (bpB.income||[]).reduce((s,i)=>s+_n(i.amount),0);
+    const bpExpAll= Object.values(bpB.expenses||{}).reduce((s,v)=>s+_n(v),0);
+    const SAV_CATS=['emfund','retirement','invest','goals','debt_extra'];
+    const bpSav  = SAV_CATS.reduce((s,c)=>s+_n((bpB.expenses||{})[c]),0);
+    const bpDebt = _n((bpB.expenses||{}).debt)||_n((bpB.expenses||{}).loans)||_n((bpB.expenses||{}).credit_cards);
+    if(bpInc>0)  {f.gross=bpInc;              src.gross='Budget Planner';}
+    if(bpExpAll>0){f.expenses=bpExpAll;         src.expenses='Budget Planner';}
+    if(bpSav>0)  {f.monthlySavings=bpSav;      src.monthlySavings='Budget Planner';}
+    if(bpDebt>0) {f.totalDebtPayments=bpDebt;  src.totalDebtPayments='Budget Planner';}
+  }
+
+  // Net Worth Tracker → total assets, total liabilities
+  const nwA=( nw.assets      ||[]).reduce((s,a)=>s+_n(a.amt??a.value),0);
+  const nwL=( nw.liabilities ||[]).reduce((s,a)=>s+_n(a.amt??a.value),0);
+  if(nwA||nwL){f.totalAssets=nwA;f.totalLiabilities=nwL;src.totalAssets=src.totalLiabilities='Net Worth Tracker';}
+
+  // Retirement Calculator → pension balance, monthly contribution, ages
+  const retI=ret.inputs||{}, retS=ret.snapshot||{};
+  if(_n(retI.currentSavings)){f.retirementBalance=_n(retI.currentSavings);src.retirementBalance='Retirement Calculator';}
+  if(_n(retI.monthlyContrib)){f.monthlyPension   =_n(retI.monthlyContrib); src.monthlyPension   ='Retirement Calculator';}
+  if(_n(retS.retireAge))     {f.retireAge        =retS.retireAge;           src.retireAge        ='Retirement Calculator';}
+  if(_n(retS.currentAge))    {f.age              =retS.currentAge;          src.age              ='Retirement Calculator';}
+
+  // Emergency Fund Tool → current balance, monthly essential expenses
+  if(_n(ef.current_savings)){f.emergencyFund    =ef.current_savings;src.emergencyFund    ='Emergency Fund Tool';}
+  if(_n(ef.monthly))        {f.essentialExpenses=ef.monthly;        src.essentialExpenses='Emergency Fund Tool';}
+
+  // Profile fallback (columns seeded when previous assessment saved)
+  const pfb=(key,col)=>{if(!f[key]&&_n(prof[col])){f[key]=_n(prof[col]);src[key]='Previous assessment';}};
+  pfb('gross',            'gross_income');
+  pfb('net',              'net_income');
+  pfb('expenses',         'monthly_expenses');
+  pfb('monthlySavings',   'monthly_savings');
+  pfb('totalAssets',      'total_assets');
+  pfb('totalLiabilities', 'total_liabilities');
+  pfb('totalDebtPayments','monthly_debt');
+  pfb('totalSavings',     'total_savings');
+  pfb('age',              'age');
+  if(!f.gross&&_n(prof.monthly_income)){f.gross=_n(prof.monthly_income);src.gross='Previous assessment';}
+  if(!f.net) f.net=f.gross||0;
+
+  window._resolvedFigures=f;
+  window._resolvedSources=src;
+  console.log('[KW] Reassessment figures resolved:',f,'sources:',src);
+  return f;
+}
+
+// ── Apply reassessment UI (MCQ-only mode) ─────────────────────────────────────
+function applyReassessmentMode() {
+  if(!window._isReassessment) return;
+  // Resolve figures immediately so banner can show sources
+  resolveAssessmentFigures();
+
+  // Hide numeric input grids in all steps that have them
+  [0,1,2,3,4,7].forEach(n=>{
+    const fg=document.querySelector(`#step${n} .form-grid`);
+    if(fg) fg.style.display='none';
+  });
+
+  // Remove required field validation for step 0 (only step with required fields)
+  STEP_REQUIRED[0].fields=[];
+
+  // Update page header
+  const h1=document.querySelector('.header h1');
+  if(h1) h1.textContent='Wellness Reassessment';
+  const hp=document.querySelector('.header p');
+  if(hp) hp.textContent='Behavioural questions only · Figures sourced from your tools';
+
+  // Inject an info banner into step 0
+  const step0Card=document.querySelector('#step0 .card');
+  if(step0Card){
+    const srcVals=[...new Set(Object.values(window._resolvedSources||{}))];
+    const srcNote=srcVals.length?`<br><span style="color:var(--muted)">Figures from: <strong>${srcVals.join(', ')}</strong></span>`:'';
+    const banner=document.createElement('div');
+    banner.style.cssText='background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.8rem;color:#065f46;line-height:1.6;';
+    banner.innerHTML=`✅ <strong>Quick reassessment.</strong> Just answer the questions below — we'll use your latest tool data for the financial figures so you don't have to re-enter numbers.${srcNote}`;
+    step0Card.insertBefore(banner,step0Card.firstChild);
+  }
+}
+
 updateProgress(0);
 loadDraft();
 
-// ── Auth init ──
+// ── Auth init (extended: loads previous assessment + tool data for reassessment mode) ──
 (function() {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
   const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
   const _sb = window.supabase.createClient(_SB_URL, _SB_KEY);
   window._toolSb = _sb;
-  _sb.auth.getSession().then(({ data: { session } }) => {
+  _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    _sb.from('profiles').select('first_name, last_name, monthly_income, gross_income, net_income, age, employment').eq('id', session.user.id).maybeSingle().then(({ data, error }) => {
-      if (error) console.warn('Could not load profile for header:', error);
-      window._toolProfile = data;
-      const name = data ? [data.first_name, data.last_name].filter(Boolean).join(' ') : '';
-      window._toolFullName = name || session.user.email || '';
-      const nameEl = document.getElementById('tool-user-name');
-      const initEl = document.getElementById('tool-user-initial');
-      if (nameEl) {
-        if (window._toolFullName) nameEl.textContent = window._toolFullName;
-        else nameEl.style.display = 'none';
+    const uid = session.user.id;
+
+    // Load profile (extended columns for figure fallback)
+    const { data: prof } = await _sb.from('profiles')
+      .select('first_name, last_name, monthly_income, gross_income, net_income, net_is_manual, age, employment, monthly_expenses, essential_expenses, total_assets, total_liabilities, monthly_debt, total_debt_balance, total_savings, monthly_savings')
+      .eq('id', uid).maybeSingle();
+    window._toolProfile = prof || {};
+
+    const name = prof ? [prof.first_name, prof.last_name].filter(Boolean).join(' ') : '';
+    window._toolFullName = name || session.user.email || '';
+    const nameEl = document.getElementById('tool-user-name');
+    const initEl = document.getElementById('tool-user-initial');
+    if (nameEl) { if (window._toolFullName) nameEl.textContent = window._toolFullName; else nameEl.style.display='none'; }
+    if (initEl) initEl.textContent = (window._toolFullName||'?').charAt(0).toUpperCase();
+
+    // Check if a previous assessment exists → determines first vs. re-assessment
+    const { data: prevRows } = await _sb.from('assessments')
+      .select('id, score, cat_scores, answers, created_at')
+      .eq('user_id', uid).order('created_at',{ascending:false}).limit(1);
+    window._prevAssessment = prevRows?.[0] || null;
+    window._isReassessment = !!(window._prevAssessment);
+
+    // Load tool_data rows needed for figure resolution
+    const { data: toolRows } = await _sb.from('tool_data')
+      .select('tool, data').eq('user_id', uid)
+      .in('tool', ['budget_planner','net_worth_tracker','retirement']);
+    window._toolFigures = {};
+    (toolRows||[]).forEach(r => { window._toolFigures[r.tool] = r.data; });
+
+    // Load emergency fund row
+    const { data: efRow } = await _sb.from('emergency_fund')
+      .select('*').eq('user_id', uid).maybeSingle();
+    window._efData = efRow || {};
+
+    if (window._isReassessment) {
+      // Reassessment: MCQ-only mode; pre-fill MCQ from previous answers
+      const prevAns = window._prevAssessment?.answers || {};
+      Object.entries(prevAns).forEach(([q, v]) => {
+        const el = document.querySelector(`.mcq-opt[data-q="${q}"][data-val="${v}"]`);
+        if (el) { el.classList.add('selected'); answers[q] = parseFloat(v); }
+      });
+      applyReassessmentMode();
+    } else {
+      // First assessment: pre-fill figures from profile
+      if (prof?.age) { const el=document.getElementById('age'); if(el&&!el.value) el.value=prof.age; }
+      if (prof?.gross_income) {
+        const el=document.getElementById('grossSalary');
+        if(el&&!el.value) el.value=Number(prof.gross_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
       }
-      if (initEl) initEl.textContent = (window._toolFullName || '?').charAt(0).toUpperCase();
-      // Pre-fill age from profile so it's not asked twice
-      if (data?.age) {
-        const ageEl = document.getElementById('age');
-        if (ageEl && !ageEl.value) ageEl.value = data.age;
+      if (prof?.net_income) {
+        const el=document.getElementById('netSalary');
+        if(el&&!el.value) el.value=Number(prof.net_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
       }
-      // Pre-fill gross/net if assessment page already visible and fields empty
-      if (data?.gross_income) {
-        const gEl = document.getElementById('grossSalary');
-        if (gEl && !gEl.value) { gEl.value = Number(data.gross_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-      }
-      if (data?.net_income) {
-        const nEl = document.getElementById('netSalary');
-        if (nEl && !nEl.value) { nEl.value = Number(data.net_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-      }
-    });
+    }
   });
 })();
 </script>
