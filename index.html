@@ -471,8 +471,7 @@ input[type=range]{width:100%;accent-color:var(--gold)}
       <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
     </div>
     <div id="welcome-wait-msg" style="margin-top:10px;text-align:center;font-size:12px;color:var(--muted)">
-      Watch the video to continue — your assessment unlocks when it finishes.<br>
-      <a href="#" onclick="event.preventDefault();closeWelcome()" style="display:inline-block;margin-top:6px;color:var(--muted);text-decoration:underline;font-size:12px">Skip intro →</a>
+      Watch the video to continue — your assessment unlocks when it finishes.
     </div>
   </div>
 </div>
@@ -2172,12 +2171,42 @@ VIEWS['dashboard'] = async function () {
       <div style="font-size:13px;color:var(--muted);margin-top:3px">Here's your financial wellness overview.</div>
     </div>
 
-    ${(state.bookings||[]).filter(b=>b.status==='confirmed').length ? `
-    <div class="notice notice-green" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <span style="font-size:18px">✅</span>
-      <div style="flex:1;min-width:180px;font-size:13px">${(() => { const b=(state.bookings||[]).filter(x=>x.status==='confirmed')[0]; return `<strong>Booking confirmed!</strong> Your ${b.service||'coaching'} session${b.requested_date?' on '+fmtDate(b.requested_date):''} is confirmed.`; })()}</div>
-      <button class="btn btn-outline btn-sm" onclick="go('my-bookings')">View →</button>
-    </div>` : ''}
+    ${(()=>{
+      const now = new Date();
+      const confirmed = (state.bookings||[]).filter(b=>b.status==='confirmed' && !b.client_seen_confirmation);
+      const firstConfirmed = confirmed[0];
+      const banners = [];
+      // Confirmation banner (dismissible)
+      if (firstConfirmed) {
+        banners.push(`<div class="notice notice-green" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:18px">✅</span>
+          <div style="flex:1;min-width:180px;font-size:13px"><strong>Booking confirmed!</strong> Your ${firstConfirmed.service||'coaching'} session${firstConfirmed.requested_date?' on '+fmtDate(firstConfirmed.requested_date):''} is confirmed.</div>
+          <button class="btn btn-outline btn-sm" onclick="dismissBookingBanner('${firstConfirmed.id}')">View →</button>
+        </div>`);
+      }
+      // Time-based reminders (1h before / 1h after) — only for confirmed bookings with a date+time
+      (state.bookings||[]).filter(b=>b.status==='confirmed' && b.requested_date).forEach(b=>{
+        const timeStr = b.requested_time || '09:00';
+        const appt = new Date(b.requested_date + 'T' + timeStr + ':00');
+        const diffMs = appt - now;
+        const diffH = diffMs / 3600000;
+        if (diffH > 0 && diffH <= 1) {
+          const minsLeft = Math.max(1, Math.round(diffMs / 60000));
+          banners.push(`<div class="notice notice-gold" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:18px">⏰</span>
+            <div style="flex:1;min-width:180px;font-size:13px"><strong>Your session is in ${minsLeft} minute${minsLeft!==1?'s':''}!</strong> ${b.service||'Coaching'} session at ${timeStr.replace(':','h')}.</div>
+            <button class="btn btn-outline btn-sm" onclick="go('my-bookings')">Details →</button>
+          </div>`);
+        } else if (diffH < 0 && diffH >= -1) {
+          banners.push(`<div class="notice notice-green" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-size:18px">💬</span>
+            <div style="flex:1;min-width:180px;font-size:13px"><strong>How was your session?</strong> Your ${b.service||'coaching'} session time has passed. We hope it was valuable!</div>
+            <button class="btn btn-outline btn-sm" onclick="go('booking')">Book Next →</button>
+          </div>`);
+        }
+      });
+      return banners.join('');
+    })()}
 
     ${nudges.length ? `
     <!-- Nudge strip -->
@@ -3004,8 +3033,8 @@ VIEWS['emergency'] = async function () {
     ? { monthly: efData.monthly, current: efData.current_savings, contribution: efData.contribution, target: efData.target_months }
     : { monthly: 0, current: 0, contribution: 0, target: 3 };
 
-  // Pull assessment figures from profile: monthly_expenses → target, total_savings → current balance
-  const _efMonthlyExp = state.user?.monthly_expenses || 0;
+  // Pull assessment figures from profile: monthly_expenses or essential_expenses → target, total_savings → current balance
+  const _efMonthlyExp = state.user?.monthly_expenses || state.user?.essential_expenses || 0;
   const _ef3mo = _efMonthlyExp * 3;
   const _ef6mo = _efMonthlyExp * 6;
   const _efSetUp   = !!(saved.monthly || saved.current || saved.contribution);
@@ -3610,6 +3639,7 @@ window.submitBooking = async function () {
       service,
       session_type: sessionType,
       requested_date: date,
+      requested_time: time,
       status: 'pending',
       created_at: new Date().toISOString()
     });
@@ -4137,6 +4167,21 @@ window.toggleNotifPanel = function () {
 window.closeNotifPanel = function () {
   document.getElementById('notifPanel').classList.remove('open');
   document.getElementById('notifOverlay').classList.remove('open');
+};
+
+window.dismissBookingBanner = async function (bookingId) {
+  // Mark confirmed banner as seen — persisted to Supabase so it stays gone cross-device
+  if (currentUser && bookingId) {
+    sb.from('bookings').update({ client_seen_confirmation: true }).eq('id', bookingId).eq('user_id', currentUser.id).then(({error})=>{
+      if (error) console.warn('dismissBookingBanner update failed:', error);
+    });
+  }
+  // Update local state immediately so re-render doesn't show it again
+  if (state.bookings) {
+    const bk = state.bookings.find(b => String(b.id) === String(bookingId));
+    if (bk) bk.client_seen_confirmation = true;
+  }
+  go('my-bookings');
 };
 
 window.dismissNotif = function (id) {

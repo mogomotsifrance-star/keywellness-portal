@@ -228,7 +228,7 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
         <label>Gross Monthly Salary</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="grossSalary" value="15,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="grossSalary" value="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
         <div class="hint">Before tax (PAYE) deductions</div>
@@ -246,7 +246,7 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
         <label>Net Monthly Salary (Take-home)</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="netSalary" value="12,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="netSalary" value="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
         <div class="hint">Used for affordability view</div>
@@ -926,9 +926,26 @@ loadData();
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'dti_calculator').maybeSingle();
     if (toolRow?.data) { localStorage.setItem(LS_DATA, JSON.stringify(toolRow.data)); loadData(); }
     else {
-      // No saved tool data — prefill from shared profile
+      // No saved tool data — prefill income + monthly_debt from shared profile
       await KWProfile.load();
       KWProfile.prefill(_DTI_INCOME_MAPPINGS);
+      const profDebt = KWProfile.get('monthly_debt');
+      if (profDebt > 0 && !debts.length) {
+        debts.push({
+          id: nextId++,
+          type: 'other',
+          name: 'Monthly Debt Obligations (from assessment)',
+          amount: profDebt,
+          balance: 0,
+          isHousing: false,
+        });
+        renderDebtList();
+        const noticeEl = document.getElementById('income-prefill-notice');
+        if (noticeEl) {
+          noticeEl.textContent = '💡 Income and debt pre-filled from your profile. Adjust or replace with itemised debts below.';
+          noticeEl.style.display = '';
+        }
+      }
     }
   });
 })();
