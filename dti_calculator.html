@@ -926,7 +926,14 @@ loadData();
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'dti_calculator').maybeSingle();
     if (toolRow?.data) { localStorage.setItem(LS_DATA, JSON.stringify(toolRow.data)); loadData(); }
     else {
-      // No saved tool data — prefill income + monthly_debt from shared profile
+      // No saved tool data for this user — clear any stale localStorage (could be from a different account)
+      localStorage.removeItem(LS_DATA);
+      debts = []; nextId = 1;
+      document.getElementById('grossSalary').value = '0.00';
+      document.getElementById('otherIncome').value  = '0.00';
+      document.getElementById('netSalary').value    = '0.00';
+      renderDebtList();
+      // Prefill income + monthly_debt from shared profile
       await KWProfile.load();
       KWProfile.prefill(_DTI_INCOME_MAPPINGS);
       const profDebt = KWProfile.get('monthly_debt');
