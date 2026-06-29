@@ -929,9 +929,6 @@ loadData();
       // No saved tool data for this user — clear any stale localStorage (could be from a different account)
       localStorage.removeItem(LS_DATA);
       debts = []; nextId = 1;
-      document.getElementById('grossSalary').value = '0.00';
-      document.getElementById('otherIncome').value  = '0.00';
-      document.getElementById('netSalary').value    = '0.00';
       renderDebtList();
       // Prefill income + monthly_debt from shared profile
       await KWProfile.load();
