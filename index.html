@@ -789,9 +789,11 @@ async function loadAllData() {
     window._isAdmin = !!adminRow;
   } catch (_) { window._isAdmin = false; }
 
-  // Employer check (HR manager role)
+  // Employer check (HR manager role) — look up by email, same pattern as admins.
+  // This allows employers to be added by email before they ever register,
+  // so their first login routes straight to employer.html with no member visit.
   try {
-    const { data: empRow } = await sb.from('employers').select('org_id').eq('user_id', currentUser.id).maybeSingle();
+    const { data: empRow } = await sb.from('employers').select('org_id').eq('email', currentUser.email.toLowerCase()).maybeSingle();
     window._employerOrgId = empRow?.org_id || null;
   } catch (_) { window._employerOrgId = null; }
 }
