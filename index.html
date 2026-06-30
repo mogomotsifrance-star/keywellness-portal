@@ -476,6 +476,19 @@ input[type=range]{width:100%;accent-color:var(--gold)}
   </div>
 </div>
 
+<!-- ══ SESSION CONFIRM OVERLAY ══ -->
+<!-- Shown when an existing session is detected — user must confirm it is them before proceeding. -->
+<div id="session-confirm" style="display:none;position:fixed;inset:0;background:var(--navy);align-items:center;justify-content:center;z-index:1000">
+  <div style="background:var(--white);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.3);text-align:center">
+    <div style="font-size:40px;margin-bottom:16px">🔑</div>
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;color:var(--navy)">Welcome back</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:8px">You are signed in as</p>
+    <p id="sc-email" style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:28px;word-break:break-all"></p>
+    <button onclick="confirmSession()" style="width:100%;padding:12px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:12px">Continue as this account</button>
+    <button onclick="switchAccount()" style="width:100%;padding:12px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer">Sign in as someone else</button>
+  </div>
+</div>
+
 <!-- ══ AUTH SCREEN ══ -->
 <div id="auth-screen">
   <div class="auth-box">
@@ -775,6 +788,12 @@ async function loadAllData() {
     const { data: adminRow } = await sb.from('admins').select('email').eq('email', currentUser.email).maybeSingle();
     window._isAdmin = !!adminRow;
   } catch (_) { window._isAdmin = false; }
+
+  // Employer check (HR manager role)
+  try {
+    const { data: empRow } = await sb.from('employers').select('org_id').eq('user_id', currentUser.id).maybeSingle();
+    window._employerOrgId = empRow?.org_id || null;
+  } catch (_) { window._employerOrgId = null; }
 }
 
 async function saveUser() {
@@ -1023,6 +1042,24 @@ function awardEFBadges() { syncProgressBadges(); }
 function showAuthScreen(visible) {
   const el = document.getElementById('auth-screen');
   if (visible) el.classList.add('visible'); else el.classList.remove('visible');
+}
+
+// Session confirm overlay handlers
+async function confirmSession() {
+  document.getElementById('session-confirm').style.display = 'none';
+  await loadAllData();
+  if (window._isAdmin) { window.location.replace('admin.html'); return; }
+  if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+  initProfileUI();
+  loadNotifications();
+  route();
+}
+
+async function switchAccount() {
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('session-confirm').style.display = 'none';
+  showAuthScreen(true);
 }
 
 function showAuthTab(tab) {
@@ -4237,10 +4274,16 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
-  if (currentUser) await loadAllData();
-  // Admins get a streamlined practitioner experience — never the member journey.
-  // Route them to the admin home before any member onboarding/consent/dashboard renders.
-  if (currentUser && window._isAdmin) { window.location.replace('admin.html'); return; }
+  // If a session is already stored, ask the user to confirm it is them before
+  // proceeding. This prevents a shared link from silently logging in as someone else.
+  if (currentUser) {
+    document.getElementById('sc-email').textContent = currentUser.email || '';
+    const sc = document.getElementById('session-confirm');
+    sc.style.display = 'flex';
+    return; // wait for confirmSession() or switchAccount()
+  }
+
+  showAuthScreen(true);
   initProfileUI();
   loadNotifications();
 
@@ -4253,6 +4296,8 @@ async function init() {
       // Admins skip onboarding, consent, the welcome video, assessment nags and all
       // member surfaces — send them straight to the admin home.
       if (window._isAdmin) { window.location.replace('admin.html'); return; }
+      // HR managers (employers) likewise skip the member journey — straight to org dashboard.
+      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
       initProfileUI();
       loadNotifications();
       route();
