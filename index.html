@@ -571,6 +571,12 @@ input[type=range]{width:100%;accent-color:var(--gold)}
           onkeydown="if(event.key==='Enter')doSignup()">
         <div class="field-err" id="b-pass2-err"></div>
       </div>
+      <div class="field">
+        <label for="b-code" style="color:var(--muted)">Company code <span style="font-weight:400;font-size:12px">(optional — leave blank if signing up personally)</span></label>
+        <input type="text" id="b-code" placeholder="e.g. ACME-7F3K2" aria-label="Company invite code"
+          style="text-transform:uppercase" autocomplete="off"
+          onkeydown="if(event.key==='Enter')doSignup()">
+      </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="signup-btn" onclick="doSignup()">Create Account</button>
     </div>
   </div>
@@ -1129,7 +1135,11 @@ async function doSignup() {
   if (pass !== pass2) { setFieldErr('b-pass2','b-pass2-err','Passwords do not match.'); return; }
   const btn = document.getElementById('signup-btn');
   btn.disabled = true; btn.textContent = 'Creating account…';
-  const { error } = await sb.auth.signUp({ email, password: pass });
+  const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
+  const { error } = await sb.auth.signUp({
+    email, password: pass,
+    options: { data: { invite_code: inviteCode || null } }
+  });
   btn.disabled = false; btn.textContent = 'Create Account';
   if (error) {
     const m = (error.message || '').toLowerCase();
