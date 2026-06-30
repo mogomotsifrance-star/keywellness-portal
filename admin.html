@@ -224,21 +224,24 @@ async function init() {
 }
 
 let allOrgs = [];
+let allCheckins = [];
 let selectedOrgId = '';  // '' = all orgs
 
 async function loadAllData() {
-  const [uR, aR, bR, bkR, orgR] = await Promise.all([
+  const [uR, aR, bR, bkR, orgR, ciR] = await Promise.all([
     sb.from('profiles').select('*').order('joined_at', { ascending: false }),
-    sb.from('assessments').select('*').order('created_at', { ascending: false }),
+    sb.from('assessments').select('user_id,score,cat_scores,answers,created_at').order('created_at', { ascending: false }),
     sb.from('badges').select('*'),
     sb.from('bookings').select('*').order('created_at', { ascending: false }),
     sb.from('organizations').select('id,name').order('name'),
+    sb.from('checkins').select('user_id,created_at').order('created_at', { ascending: false }),
   ]);
   allUsers       = uR.data   || [];
   allAssessments = aR.data   || [];
   allBadges      = bR.data   || [];
   allBookings    = bkR.data  || [];
   allOrgs        = orgR.data || [];
+  allCheckins    = ciR.data  || [];
 }
 
 async function loadOrgOverview(orgId) {
@@ -307,6 +310,14 @@ function renderUsers(filter = '', statusFilter = 'all') {
   }
 
   // Build latest assessment lookup
+  // Latest check-in per user
+  const latestCheckin = {};
+  allCheckins.forEach(c => {
+    if (!latestCheckin[c.user_id] || new Date(c.created_at) > new Date(latestCheckin[c.user_id])) {
+      latestCheckin[c.user_id] = c.created_at;
+    }
+  });
+
   const latestAssess = {};
   allAssessments.forEach(a => {
     if (!latestAssess[a.user_id] || new Date(a.created_at) > new Date(latestAssess[a.user_id].created_at)) {
@@ -358,6 +369,7 @@ function renderUsers(filter = '', statusFilter = 'all') {
               <th>Wellness Score</th>
               <th>Band</th>
               <th>Last Assessment</th>
+              <th>Last Active</th>
               <th>Badges</th>
               <th>Points</th>
               <th></th>
@@ -372,12 +384,16 @@ function renderUsers(filter = '', statusFilter = 'all') {
               const band = score !== null ? scoreBand(score) : null;
               const badgeCount = b ? (b.earned_badge_ids || []).length : 0;
               const points = b ? (b.points || 0) : 0;
+              // Last Active = most recent of: latest assessment, latest check-in
+              const dates = [a?.created_at, latestCheckin[u.id]].filter(Boolean);
+              const lastActive = dates.length ? dates.reduce((mx, d) => d > mx ? d : mx) : null;
               return `<tr>
                 <td style="font-weight:600">${name}</td>
                 <td style="color:var(--muted);font-size:12px">${u.id ? (u.email || '—') : '—'}</td>
                 <td>${score !== null ? `<span class="score-badge ${band.cls}">${score}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
                 <td>${band ? `<span class="band-pill" style="background:${band.cls==='score-green'?'#f0faf4':band.cls==='score-gold'?'#fffbf2':band.cls==='score-orange'?'#fff8f0':'#fdf2f2'};color:${band.color}">${band.label}</span>` : '—'}</td>
                 <td style="font-size:12px;color:var(--muted)">${a ? fmtDate(a.created_at) : '—'}</td>
+                <td style="font-size:12px;color:var(--muted)">${lastActive ? fmtDate(lastActive) : '—'}</td>
                 <td style="text-align:center">${badgeCount}</td>
                 <td class="mono" style="font-size:12px">${points}</td>
                 <td><button class="btn btn-outline btn-sm" onclick="openUserProfile('${u.id}')">View →</button></td>
