@@ -223,17 +223,28 @@ async function init() {
   showTab('users');
 }
 
+let allOrgs = [];
+let selectedOrgId = '';  // '' = all orgs
+
 async function loadAllData() {
-  const [uR, aR, bR, bkR] = await Promise.all([
+  const [uR, aR, bR, bkR, orgR] = await Promise.all([
     sb.from('profiles').select('*').order('joined_at', { ascending: false }),
     sb.from('assessments').select('*').order('created_at', { ascending: false }),
     sb.from('badges').select('*'),
     sb.from('bookings').select('*').order('created_at', { ascending: false }),
+    sb.from('organizations').select('id,name').order('name'),
   ]);
-  allUsers       = uR.data  || [];
-  allAssessments = aR.data  || [];
-  allBadges      = bR.data  || [];
-  allBookings    = bkR.data || [];
+  allUsers       = uR.data   || [];
+  allAssessments = aR.data   || [];
+  allBadges      = bR.data   || [];
+  allBookings    = bkR.data  || [];
+  allOrgs        = orgR.data || [];
+}
+
+async function loadOrgOverview(orgId) {
+  const { data, error } = await sb.rpc('org_overview', { target_org: orgId });
+  if (error) { console.error('org_overview error:', error); return null; }
+  return data;
 }
 
 async function doLogout() {
@@ -276,6 +287,24 @@ function showTab(tab) {
 // ── Users View ──
 function renderUsers(filter = '', statusFilter = 'all') {
   const el = document.getElementById('page-content');
+  // Async banner load after synchronous render completes
+  if (selectedOrgId && selectedOrgId !== '__none__') {
+    setTimeout(async () => {
+      const banner = document.getElementById('org-overview-banner');
+      if (!banner) return;
+      const ov = await loadOrgOverview(selectedOrgId);
+      if (!ov) { banner.textContent = 'Could not load organisation summary.'; return; }
+      if (ov.suppressed) {
+        banner.innerHTML = `<strong>Privacy notice:</strong> ${ov.message} (${ov.n_employees} enrolled so far)`;
+        return;
+      }
+      const orgName = allOrgs.find(o => o.id === selectedOrgId)?.name || 'Organisation';
+      banner.innerHTML = `<strong>${orgName}:</strong> &nbsp;
+        ${ov.n_employees} enrolled &nbsp;·&nbsp;
+        ${ov.participation_pct ?? '—'}% participated &nbsp;·&nbsp;
+        Avg score <strong>${ov.avg_score ?? '—'}</strong>`;
+    }, 0);
+  }
 
   // Build latest assessment lookup
   const latestAssess = {};
@@ -289,6 +318,7 @@ function renderUsers(filter = '', statusFilter = 'all') {
   allBadges.forEach(b => { badgeLookup[b.user_id] = b; });
 
   let users = allUsers;
+  if (selectedOrgId) users = users.filter(u => u.org_id === selectedOrgId);
   if (filter) {
     const q = filter.toLowerCase();
     users = users.filter(u => {
@@ -311,7 +341,13 @@ function renderUsers(filter = '', statusFilter = 'all') {
           <option value="assessed"${statusFilter==='assessed'?' selected':''}>Completed Assessment</option>
           <option value="no-assess"${statusFilter==='no-assess'?' selected':''}>No Assessment Yet</option>
         </select>
+        <select id="org-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="selectedOrgId=this.value;renderUsers(document.getElementById('user-search').value,document.getElementById('status-filter').value)">
+          <option value="">All Organisations</option>
+          <option value="__none__"${selectedOrgId==='__none__'?' selected':''}>No Organisation</option>
+          ${allOrgs.map(o=>`<option value="${o.id}"${selectedOrgId===o.id?' selected':''}>${o.name}</option>`).join('')}
+        </select>
       </div>
+      ${selectedOrgId && selectedOrgId !== '__none__' ? `<div id="org-overview-banner" style="margin-bottom:16px;padding:14px 18px;background:var(--cream-dark);border-radius:var(--radius-sm);font-size:13px;color:var(--muted)">Loading organisation summary…</div>` : ''}
       ${users.length === 0 ? '<div class="empty">No users found.</div>' : `
       <div class="table-wrap">
         <table>
