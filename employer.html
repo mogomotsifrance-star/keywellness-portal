@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Key Wellness — Employer Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  --navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--gold-light:#e8b85a;
+  --cream:#f5f0e8;--cream-dark:#ede7d9;--white:#ffffff;
+  --green:#2d8a4e;--red:#c0392b;--orange:#e67e22;--muted:#6b7280;
+  --teal:#0d7377;--text:#1a2744;--border:#ddd6c8;
+  --radius:12px;--radius-sm:8px;--shadow:0 2px 12px rgba(26,39,68,.10);--sidebar-w:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
+button{cursor:pointer;font-family:'Inter',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* Sidebar */
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+.sb-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo h1{color:#fff;font-size:14px;font-weight:700}
+.sb-logo span{color:var(--gold);font-size:11px;font-weight:500;display:block;margin-top:2px}
+.sb-org{padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.5);line-height:1.6}
+.sb-org strong{color:rgba(255,255,255,.85);display:block;font-size:13px;margin-bottom:1px}
+.sb-nav{flex:1;padding:12px 0}
+.sb-item{display:flex;align-items:center;gap:12px;padding:10px 20px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;border-left:3px solid transparent}
+.sb-item.active{color:#fff;background:rgba(200,151,58,.15);border-left-color:var(--gold)}
+.sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1)}
+.sb-user{color:rgba(255,255,255,.5);font-size:11px;margin-bottom:10px;word-break:break-all}
+.sb-logout{background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.6);font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;width:100%}
+.sb-logout:hover{background:rgba(255,255,255,.15);color:#fff}
+
+/* Main */
+#main{margin-left:var(--sidebar-w);flex:1;min-height:100vh}
+.page-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.page-header h2{font-size:19px;font-weight:700;flex:1}
+.page-content{padding:28px 32px}
+.privacy-badge{display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark);border:1px solid var(--border);border-radius:99px;padding:4px 12px;font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap}
+
+/* Cards */
+.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:14px;font-weight:700;margin-bottom:4px;color:var(--navy)}
+.card-subtitle{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+
+/* Stat boxes */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px}
+.stat-box{background:var(--white);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
+.stat-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--navy)}
+.stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+.stat-delta{font-size:11px;margin-top:6px;font-weight:600}
+.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .stat-val{color:var(--gold)}
+.stat-box.green{border-left-color:var(--green)}.stat-box.green .stat-val{color:var(--green)}
+.stat-box.navy{border-left-color:var(--navy)}
+.stat-box.orange{border-left-color:var(--orange)}.stat-box.orange .stat-val{color:var(--orange)}
+
+/* Funnel */
+.funnel-list{display:flex;flex-direction:column;gap:12px}
+.funnel-step{display:flex;flex-direction:column;gap:5px}
+.funnel-label-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+.funnel-count{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)}
+.funnel-bar-bg{background:var(--cream-dark);border-radius:99px;height:10px;overflow:hidden}
+.funnel-bar-fill{height:100%;border-radius:99px;transition:.5s}
+.funnel-note{font-size:11px;color:var(--muted);margin-top:10px;font-style:italic}
+
+/* Distribution */
+.dist-bands{display:flex;border-radius:var(--radius-sm);overflow:hidden;height:32px;margin-bottom:12px}
+.dist-band{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;min-width:0;overflow:hidden}
+.dist-band.struggling{background:var(--red)}
+.dist-band.coping{background:var(--orange)}
+.dist-band.thriving{background:var(--green)}
+.dist-legend{display:flex;gap:16px;flex-wrap:wrap}
+.dist-leg-item{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500}
+.dist-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* Dimensions */
+.dim-list{display:flex;flex-direction:column;gap:12px}
+.dim-row{display:flex;align-items:center;gap:12px}
+.dim-label-wrap{width:170px;flex-shrink:0;display:flex;align-items:center}
+.dim-label{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dim-focus-tag{display:inline-block;background:var(--gold);color:var(--navy);font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.dim-bar-bg{flex:1;background:var(--cream-dark);border-radius:99px;height:8px;overflow:hidden}
+.dim-bar-fill{height:100%;border-radius:99px;background:var(--teal);transition:.5s}
+.dim-bar-fill.focus{background:var(--gold)}
+.dim-score{width:36px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--muted)}
+
+/* Distress */
+.distress-band{background:var(--cream-dark);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 18px;display:flex;align-items:flex-start;gap:14px;margin-bottom:12px}
+.distress-pct{font-family:'DM Mono',monospace;font-size:32px;font-weight:500;color:var(--orange);flex-shrink:0;line-height:1.1}
+.distress-desc{font-size:13px;color:var(--text);line-height:1.6}
+
+/* Actions */
+.action-strip{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);border-radius:var(--radius);padding:24px;color:#fff;margin-bottom:20px}
+.action-strip h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.action-strip p{font-size:13px;color:rgba(255,255,255,.75);margin-bottom:18px;line-height:1.6}
+.action-btns{display:flex;gap:12px;flex-wrap:wrap}
+.btn-action{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border-radius:var(--radius-sm);cursor:pointer;transition:.15s}
+.btn-action:hover{background:rgba(200,151,58,.3);border-color:var(--gold)}
+.btn-action.primary{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.btn-action.primary:hover{background:var(--gold-light)}
+
+/* Chart */
+.chart-wrap{position:relative;height:220px}
+.trend-caption{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5;font-style:italic}
+
+/* Spinner */
+.spinner{display:flex;align-items:center;justify-content:center;padding:80px;color:var(--muted);font-size:14px;gap:10px}
+.spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Empty state */
+.empty-state{text-align:center;padding:64px 32px;max-width:480px;margin:0 auto}
+.empty-state h3{font-size:18px;font-weight:700;margin-bottom:10px}
+.empty-state p{font-size:14px;color:var(--muted);line-height:1.6}
+.empty-icon{font-size:48px;margin-bottom:16px}
+.notice-gold{background:#fffbf2;border:1px solid #f0d88e;color:#7a5c10;padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;margin-top:16px;text-align:left;line-height:1.5}
+
+@media(max-width:768px){
+  #sidebar{display:none}
+  #main{margin-left:0}
+  .page-content{padding:16px}
+  .page-header{padding:14px 16px}
+  .dim-label-wrap{width:120px}
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <h1>KEY WELLNESS</h1>
+    <span>Employer Dashboard</span>
+  </div>
+  <div class="sb-org" id="sb-org-name">Loading&hellip;</div>
+  <div class="sb-nav">
+    <div class="sb-item active">&#128202; Wellbeing Overview</div>
+  </div>
+  <div class="sb-footer">
+    <div class="sb-user" id="sb-user-email"></div>
+    <button class="sb-logout" onclick="doLogout()">Sign Out</button>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <div class="page-header">
+    <h2 id="page-org-title">Workforce Wellbeing Overview</h2>
+    <span class="privacy-badge">&#128274; Aggregate only &middot; min 5 per group</span>
+  </div>
+  <div class="page-content" id="page-content">
+    <div class="spinner"><div class="spin"></div> Loading your dashboard&hellip;</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+const { createClient } = window.supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// UI convenience flag only — never a security boundary.
+// All access control is enforced by RLS and the org_overview() RPC.
+window._isEmployer = false;
+
+let trendChart = null;
+
+const DIM_LABELS = {
+  income:     'Income & Cash Flow',
+  savings:    'Savings Rate',
+  emergency:  'Emergency Fund',
+  debt:       'Debt Management',
+  retirement: 'Retirement Readiness',
+  insurance:  'Risk Protection',
+  goals:      'Financial Goals',
+  spending:   'Spending & Net Worth',
+};
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function scoreBandColor(score) {
+  if (score >= 65) return 'var(--green)';
+  if (score >= 40) return 'var(--orange)';
+  return 'var(--red)';
+}
+function scoreBandLabel(score) {
+  if (score >= 65) return 'Thriving';
+  if (score >= 40) return 'Coping';
+  return 'Struggling';
+}
+
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.replace('index.html'); return; }
+
+  const user = session.user;
+  document.getElementById('sb-user-email').textContent = user.email || '';
+
+  // Verify caller is employer or admin — otherwise send them back to the member portal.
+  const [empRes, adminRes] = await Promise.all([
+    sb.from('employers').select('org_id').eq('user_id', user.id).maybeSingle(),
+    sb.from('admins').select('email').eq('email', user.email).maybeSingle(),
+  ]);
+
+  const isEmployer = !!empRes.data;
+  const isAdmin    = !!adminRes.data;
+
+  if (!isEmployer && !isAdmin) {
+    window.location.replace('index.html');
+    return;
+  }
+
+  window._isEmployer = isEmployer;
+
+  // Load org name (allowed by orgs_own RLS for the employer's own org).
+  if (isEmployer && empRes.data && empRes.data.org_id) {
+    const { data: orgRow } = await sb
+      .from('organizations')
+      .select('name')
+      .eq('id', empRes.data.org_id)
+      .maybeSingle();
+    if (orgRow && orgRow.name) {
+      document.getElementById('sb-org-name').innerHTML =
+        '<strong>' + escHtml(orgRow.name) + '</strong>HR / Employer view';
+      document.getElementById('page-org-title').textContent =
+        orgRow.name + ' — Wellbeing Overview';
+    }
+  } else if (isAdmin) {
+    document.getElementById('sb-org-name').innerHTML =
+      '<strong>Admin</strong>Viewing as administrator';
+  }
+
+  // Call RPC with no argument — employer_org() resolves their org server-side.
+  const { data: overview, error } = await sb.rpc('org_overview');
+
+  if (error) {
+    renderError(error.message);
+    return;
+  }
+
+  render(overview);
+}
+
+function render(data) {
+  if (!data || data.suppressed) {
+    renderSuppressed(data || {});
+    return;
+  }
+
+  const s       = data.summary      || {};
+  const f       = data.funnel       || {};
+  const d       = data.distribution || {};
+  const dims    = data.dimensions   || {};
+  const distress = data.distress;
+  const trend   = data.trend;
+
+  const nEmp    = s.n_employees       || 0;
+  const partPct = s.participation_pct || 0;
+  const avg     = s.avg_score         || 0;
+
+  // 1. Headline stats
+  let html = '<div class="stat-grid">';
+  html += '<div class="stat-box navy"><div class="stat-val mono">' + nEmp + '</div><div class="stat-lbl">Enrolled Employees</div></div>';
+  html += '<div class="stat-box gold"><div class="stat-val mono">' + partPct + '%</div><div class="stat-lbl">Completed Assessment</div></div>';
+  html += '<div class="stat-box" style="border-left-color:' + scoreBandColor(avg) + '">'
+        + '<div class="stat-val mono" style="color:' + scoreBandColor(avg) + '">' + (avg || '&mdash;') + '</div>'
+        + '<div class="stat-lbl">Avg Wellbeing Score</div>'
+        + (avg ? '<div class="stat-delta" style="color:' + scoreBandColor(avg) + '">' + scoreBandLabel(avg) + '</div>' : '')
+        + '</div>';
+  if (distress && distress.pct_low_emergency_fund != null) {
+    html += '<div class="stat-box orange"><div class="stat-val mono">' + distress.pct_low_emergency_fund + '%</div>'
+          + '<div class="stat-lbl">Low Emergency Cover</div>'
+          + '<div class="stat-delta" style="color:var(--orange)">Under 1&ndash;2 months saved</div></div>';
+  }
+  html += '</div>';
+
+  // 2. Engagement funnel
+  const signedUp  = f.signed_up            || nEmp;
+  const assessed  = f.completed_assessment || 0;
+  const checkedIn = f.did_checkin          || 0;
+  html += '<div class="card">'
+        + '<div class="card-title">Engagement Funnel</div>'
+        + '<div class="card-subtitle">Where employees are in the programme &mdash; the drop-off point shows HR&apos;s highest-leverage action.</div>'
+        + '<div class="funnel-list">'
+        + funnelStep('Enrolled', signedUp, signedUp, 'var(--navy)')
+        + funnelStep('Completed assessment', assessed, signedUp, 'var(--teal)')
+        + funnelStep('Completed a check-in', checkedIn, signedUp, 'var(--gold)')
+        + '</div>'
+        + '<p class="funnel-note">Calculator usage is not yet tracked &mdash; that funnel step will appear in a future update.</p>'
+        + '</div>';
+
+  // 3. Workforce distribution
+  const struggling = d.struggling || { pct: 0, count: 0 };
+  const coping     = d.coping     || { pct: 0, count: 0 };
+  const thriving   = d.thriving   || { pct: 0, count: 0 };
+  const assessed2  = d.assessed_count || 0;
+
+  if (assessed2 > 0) {
+    html += '<div class="card">'
+          + '<div class="card-title">Workforce Distribution</div>'
+          + '<div class="card-subtitle">Across ' + assessed2 + ' employees who completed the assessment. The average score alone can mask a split workforce.</div>'
+          + '<div class="dist-bands">';
+    if (struggling.pct > 0) html += '<div class="dist-band struggling" style="flex:' + struggling.pct + '" title="' + struggling.pct + '% Struggling">' + (struggling.pct >= 12 ? struggling.pct + '%' : '') + '</div>';
+    if (coping.pct     > 0) html += '<div class="dist-band coping"     style="flex:' + coping.pct     + '" title="' + coping.pct     + '% Coping"    >' + (coping.pct     >= 12 ? coping.pct     + '%' : '') + '</div>';
+    if (thriving.pct   > 0) html += '<div class="dist-band thriving"   style="flex:' + thriving.pct   + '" title="' + thriving.pct   + '% Thriving"  >' + (thriving.pct   >= 12 ? thriving.pct   + '%' : '') + '</div>';
+    html += '</div>';
+    html += '<div class="dist-legend">'
+          + '<div class="dist-leg-item"><div class="dist-dot" style="background:var(--red)"></div><span><strong>' + struggling.pct + '%</strong> Struggling (0&ndash;39) &middot; ' + struggling.count + ' employees</span></div>'
+          + '<div class="dist-leg-item"><div class="dist-dot" style="background:var(--orange)"></div><span><strong>' + coping.pct     + '%</strong> Coping (40&ndash;64) &middot; '     + coping.count     + ' employees</span></div>'
+          + '<div class="dist-leg-item"><div class="dist-dot" style="background:var(--green)"></div><span><strong>' + thriving.pct   + '%</strong> Thriving (65&ndash;100) &middot; '   + thriving.count   + ' employees</span></div>'
+          + '</div></div>';
+  }
+
+  // 4. By dimension
+  const dimItems    = dims.items           || [];
+  const focusDimKey = dims.focus_dimension || '';
+
+  if (dimItems.length > 0) {
+    html += '<div class="card">'
+          + '<div class="card-title">By Financial Dimension</div>'
+          + '<div class="card-subtitle">Average across all assessed employees. The <strong style="color:var(--gold)">focus</strong> dimension has the lowest score &mdash; a targeted push here will have the greatest impact.</div>'
+          + '<div class="dim-list">';
+    dimItems.forEach(function(item) {
+      var label   = DIM_LABELS[item.dimension] || item.dimension;
+      var isFocus = item.dimension === focusDimKey;
+      var pct     = Math.max(0, Math.min(100, item.avg || 0));
+      html += '<div class="dim-row">'
+            + '<div class="dim-label-wrap">'
+            + '<span class="dim-label">' + escHtml(label) + '</span>'
+            + (isFocus ? '<span class="dim-focus-tag">focus</span>' : '')
+            + '</div>'
+            + '<div class="dim-bar-bg"><div class="dim-bar-fill' + (isFocus ? ' focus' : '') + '" style="width:' + pct + '%"></div></div>'
+            + '<div class="dim-score">' + item.avg + '</div>'
+            + '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  // 5. Distress signal (only rendered when markers are present)
+  if (distress && distress.pct_low_emergency_fund != null) {
+    html += '<div class="card">'
+          + '<div class="card-title">Financial Resilience Signal</div>'
+          + '<div class="card-subtitle">Based on self-reported emergency fund coverage from the wellness assessment.</div>'
+          + '<div class="distress-band">'
+          + '<div class="distress-pct">' + distress.pct_low_emergency_fund + '%</div>'
+          + '<div class="distress-desc"><strong>' + distress.pct_low_emergency_fund + '% of assessed employees</strong> have emergency savings covering less than 1&ndash;2 months of essential expenses, making them financially vulnerable to unexpected shocks such as medical costs or job loss.<br><br>A savings-focused campaign or workshop would directly support this group.</div>'
+          + '</div>'
+          + '<p style="font-size:11px;color:var(--muted)">Based on ' + distress.n_assessed + ' employees who completed the assessment. This is a readiness band &mdash; no individual can be identified from this data.</p>'
+          + '</div>';
+  }
+
+  // 6. Trend chart
+  html += '<div class="card">'
+        + '<div class="card-title">Wellbeing Score Over Time</div>'
+        + '<div class="card-subtitle">Quarterly average across all assessed workforce members.</div>'
+        + '<div class="chart-wrap"><canvas id="trendChart"></canvas></div>'
+        + '<p class="trend-caption">Wellbeing improvement is gradual &mdash; engagement metrics above are the leading indicator early in the programme. Score movement typically becomes visible after 2&ndash;4 quarters.</p>'
+        + '</div>';
+
+  // 7. Recommended actions
+  var focusDimLabel = DIM_LABELS[focusDimKey] || focusDimKey;
+  if (focusDimKey) {
+    html += '<div class="action-strip">'
+          + '<h3>Recommended Next Step</h3>'
+          + '<p><strong>' + escHtml(focusDimLabel) + '</strong> is your workforce&apos;s lowest-scoring dimension. A targeted initiative here &mdash; a workshop, a guided coaching campaign, or a financial literacy push &mdash; will have the most impact for your team right now.</p>'
+          + '<div class="action-btns">'
+          + '<button class="btn-action primary" onclick="requestWorkshop(\'' + escHtml(focusDimLabel).replace(/'/g, "\\'") + '\')">Request a workshop on this topic</button>'
+          + '<button class="btn-action" onclick="triggerCampaign(\'' + escHtml(focusDimLabel).replace(/'/g, "\\'") + '\')">Trigger employee campaign</button>'
+          + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
+          + '</div></div>';
+  }
+
+  document.getElementById('page-content').innerHTML = html;
+
+  if (trend && trend.length > 0) {
+    renderTrendChart(trend);
+  } else {
+    var wrap = document.getElementById('trendChart');
+    if (wrap && wrap.parentElement) {
+      wrap.parentElement.innerHTML = '<p style="text-align:center;color:var(--muted);font-size:13px;padding:48px 0">Trend will appear as assessments accumulate over time.</p>';
+    }
+  }
+}
+
+function funnelStep(label, count, total, color) {
+  var pct = total > 0 ? Math.round(100 * count / total) : 0;
+  return '<div class="funnel-step">'
+       + '<div class="funnel-label-row"><span>' + escHtml(label) + '</span><span class="funnel-count">' + count + ' employees &middot; ' + pct + '%</span></div>'
+       + '<div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div>'
+       + '</div>';
+}
+
+function renderTrendChart(trendData) {
+  var ctx = document.getElementById('trendChart');
+  if (!ctx) return;
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: trendData.map(function(t){ return t.period; }),
+      datasets: [{
+        label: 'Avg Wellbeing Score',
+        data: trendData.map(function(t){ return t.avg_score; }),
+        borderColor: '#c8973a',
+        backgroundColor: 'rgba(200,151,58,.08)',
+        pointBackgroundColor: '#c8973a',
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.3,
+        fill: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { min: 0, max: 100,
+             grid: { color: '#ede7d9' },
+             ticks: { font: { family: 'DM Mono', size: 11 } } },
+        x: { grid: { display: false },
+             ticks: { font: { family: 'Inter', size: 11 } } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(ctx){ return 'Score: ' + ctx.parsed.y; } } }
+      }
+    }
+  });
+}
+
+function renderSuppressed(data) {
+  var n = data.n_employees || 0;
+  document.getElementById('page-content').innerHTML =
+    '<div class="empty-state">'
+    + '<div class="empty-icon">&#128274;</div>'
+    + '<h3>Building your dashboard</h3>'
+    + '<p>Aggregate data appears once at least <strong>5 employees</strong> have enrolled, to protect individual privacy.<br><br>'
+    + '<strong>' + n + ' employee' + (n === 1 ? '' : 's') + '</strong> ' + (n === 1 ? 'has' : 'have') + ' joined so far. Share your company enrolment code with your team to unlock the dashboard.</p>'
+    + '<div class="notice-gold"><strong>Privacy commitment:</strong> '
+    + escHtml(data.message || 'All figures are workforce aggregates. No individual scores or identifiable data is shared with employers.')
+    + '</div></div>';
+}
+
+function renderError(msg) {
+  document.getElementById('page-content').innerHTML =
+    '<div class="empty-state">'
+    + '<div class="empty-icon">&#9888;&#65039;</div>'
+    + '<h3>Could not load dashboard</h3>'
+    + '<p>' + escHtml(msg || 'An unexpected error occurred. Please refresh or contact support at wellness@keywellness.co.bw') + '</p>'
+    + '</div>';
+}
+
+// Action handlers — intent only in v1, open mailto
+function requestWorkshop(dimension) {
+  var subject = encodeURIComponent('Workshop Request: ' + dimension);
+  var body    = encodeURIComponent('Hi Key Wellness team,\n\nOur dashboard shows "' + dimension + '" is our workforce\'s lowest-scoring area.\n\nWe would like to request a targeted workshop or group session on this topic for our employees.\n\nPlease get in touch to discuss options.\n\nThank you.');
+  window.open('mailto:wellness@keywellness.co.bw?subject=' + subject + '&body=' + body);
+}
+
+function triggerCampaign(dimension) {
+  var subject = encodeURIComponent('Employee Campaign Request: ' + dimension);
+  var body    = encodeURIComponent('Hi Key Wellness team,\n\nWe\'d like to run a targeted financial wellness campaign for our employees focused on "' + dimension + '".\n\nCould you help us set this up?\n\nThank you.');
+  window.open('mailto:wellness@keywellness.co.bw?subject=' + subject + '&body=' + body);
+}
+
+function contactSupport() {
+  window.open('mailto:wellness@keywellness.co.bw?subject=Employer%20Dashboard%20Enquiry');
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  window.location.replace('index.html');
+}
+
+init();
+</script>
+</body>
+</html>
