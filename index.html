@@ -477,14 +477,23 @@ input[type=range]{width:100%;accent-color:var(--gold)}
 </div>
 
 <!-- ══ SESSION CONFIRM OVERLAY ══ -->
-<!-- Shown when an existing session is detected — user must confirm it is them before proceeding. -->
+<!-- Shown only when opening the portal from an external link with a stored session.
+     Requires password re-entry — "Continue" alone is not enough to prove identity. -->
 <div id="session-confirm" style="display:none;position:fixed;inset:0;background:var(--navy);align-items:center;justify-content:center;z-index:1000">
   <div style="background:var(--white);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.3);text-align:center">
     <div style="font-size:40px;margin-bottom:16px">🔑</div>
-    <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;color:var(--navy)">Welcome back</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:8px">You are signed in as</p>
-    <p id="sc-email" style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:28px;word-break:break-all"></p>
-    <button onclick="confirmSession()" style="width:100%;padding:12px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:12px">Continue as this account</button>
+    <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;color:var(--navy)">Confirm your identity</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:4px">This session is signed in as</p>
+    <p id="sc-email" style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:20px;word-break:break-all"></p>
+    <div style="text-align:left;margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Enter your password to continue</label>
+      <input id="sc-pass" type="password" placeholder="Your password"
+        style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Inter',sans-serif;outline:none"
+        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
+        onkeydown="if(event.key==='Enter')confirmSession()">
+      <div id="sc-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none"></div>
+    </div>
+    <button id="sc-btn" onclick="confirmSession()" style="width:100%;padding:12px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:12px">Confirm &amp; Continue</button>
     <button onclick="switchAccount()" style="width:100%;padding:12px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer">Sign in as someone else</button>
   </div>
 </div>
@@ -1048,7 +1057,44 @@ function showAuthScreen(visible) {
 
 // Session confirm overlay handlers
 async function confirmSession() {
+  const passEl = document.getElementById('sc-pass');
+  const errEl  = document.getElementById('sc-err');
+  const btn    = document.getElementById('sc-btn');
+  const pass   = passEl.value;
+
+  errEl.style.display = 'none';
+  if (!pass) {
+    errEl.textContent = 'Please enter your password.';
+    errEl.style.display = 'block';
+    passEl.focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifying…';
+
+  // Re-authenticate with the stored email + entered password.
+  // This is the only way to prove the person knows the credentials.
+  const { error } = await sb.auth.signInWithPassword({
+    email: currentUser.email,
+    password: pass,
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Confirm & Continue';
+
+  if (error) {
+    passEl.value = '';
+    errEl.textContent = 'Incorrect password. Please try again.';
+    errEl.style.display = 'block';
+    passEl.focus();
+    return;
+  }
+
+  // Password correct — stamp this tab so refresh/back don't re-prompt.
+  sessionStorage.setItem('kw_session_confirmed', currentUser.id);
   document.getElementById('session-confirm').style.display = 'none';
+
   await loadAllData();
   if (window._isAdmin) { window.location.replace('admin.html'); return; }
   if (window._employerOrgId) { window.location.replace('employer.html'); return; }
@@ -1059,6 +1105,7 @@ async function confirmSession() {
 
 async function switchAccount() {
   await sb.auth.signOut();
+  sessionStorage.removeItem('kw_session_confirmed');
   currentUser = null;
   document.getElementById('session-confirm').style.display = 'none';
   showAuthScreen(true);
@@ -4276,13 +4323,26 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
-  // If a session is already stored, ask the user to confirm it is them before
-  // proceeding. This prevents a shared link from silently logging in as someone else.
+  // If a session is stored, require password confirmation — but only when the page
+  // is opened fresh from outside (e.g. a shared link). Skip if the user already
+  // confirmed this session in the current browser tab (sessionStorage flag).
   if (currentUser) {
-    document.getElementById('sc-email').textContent = currentUser.email || '';
-    const sc = document.getElementById('session-confirm');
-    sc.style.display = 'flex';
-    return; // wait for confirmSession() or switchAccount()
+    const alreadyConfirmed = sessionStorage.getItem('kw_session_confirmed') === currentUser.id;
+    if (alreadyConfirmed) {
+      // Same tab, same user — proceed without interrupting.
+      await loadAllData();
+      if (window._isAdmin) { window.location.replace('admin.html'); return; }
+      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+      initProfileUI();
+      loadNotifications();
+      route();
+    } else {
+      // External visit or new tab — require password to prove identity.
+      document.getElementById('sc-email').textContent = currentUser.email || '';
+      document.getElementById('session-confirm').style.display = 'flex';
+      setTimeout(() => document.getElementById('sc-pass')?.focus(), 100);
+    }
+    return;
   }
 
   showAuthScreen(true);
