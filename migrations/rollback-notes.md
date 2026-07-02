@@ -43,3 +43,12 @@ drop function if exists public.org_leaderboard(text);
 Note: nothing pre-existing referenced these; safe to drop in any order once
 the leaderboard page (Batch 5) and HR Rewards tab (Batch 7) are no longer
 calling them.
+
+## supabase_financial_indicators.sql (Batch 6 — org_financial_indicators())
+
+```sql
+drop function if exists public.org_financial_indicators(uuid);
+```
+
+Note: nothing pre-existing referenced this; safe to drop once the HR
+dashboard's Debt Health / Retirement Readiness panels (Batch 7) are removed.
