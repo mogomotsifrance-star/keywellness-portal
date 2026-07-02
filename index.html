@@ -1120,11 +1120,11 @@ function showAuthTab(tab) {
 }
 
 function authErr(msg) {
-  const e = document.getElementById('auth-err'); e.textContent = msg; e.style.display = '';
+  const e = document.getElementById('auth-err'); e.textContent = msg; e.style.display = 'block';
   document.getElementById('auth-ok').style.display = 'none';
 }
 function authOk(msg) {
-  const e = document.getElementById('auth-ok'); e.textContent = msg; e.style.display = '';
+  const e = document.getElementById('auth-ok'); e.textContent = msg; e.style.display = 'block';
   document.getElementById('auth-err').style.display = 'none';
 }
 function clearAuthMsg() {
