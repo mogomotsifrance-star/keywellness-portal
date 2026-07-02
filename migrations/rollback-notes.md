@@ -20,3 +20,14 @@ Note: `points_catalog` includes the `legacy_migration` row (0 pts) and
 'v1-carryover'`). Dropping the tables removes those too — the source data
 (`badges.points`) is untouched, so the backfill can be re-run if the ledger is
 ever recreated.
+
+## supabase_leaderboard_optin.sql (Batch 3 — opt-in & alias)
+
+```sql
+alter table public.profiles
+  drop column if exists leaderboard_opt_in,
+  drop column if exists display_alias;
+```
+
+Note: this permanently discards any member's leaderboard opt-in choice and
+chosen display name. No other table references these columns.

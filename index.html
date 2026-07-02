@@ -846,6 +846,8 @@ async function saveUser() {
     monthly_savings:      u.monthly_savings      ?? null,
     net_is_manual:        u.net_is_manual        ?? false,
     fin_updated_at:       u.fin_updated_at       ?? null,
+    leaderboard_opt_in:   u.leaderboard_opt_in   ?? false,
+    display_alias:        u.display_alias        ?? null,
     updated_at:        new Date().toISOString(),
   };
   const { data, error } = await sb
@@ -1481,6 +1483,16 @@ function svgGauge(score, color) {
 function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+// HTML-escape untrusted text (e.g. a member-chosen leaderboard alias) before
+// interpolating it into an innerHTML template.
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ══════════════════════════════════════════════════
@@ -3825,16 +3837,45 @@ window.bkResetForm = function () {
 };
 
 
+// Persist the leaderboard opt-in toggle + display alias from the Badges page.
+// Blank alias on opt-in defaults to first name (resolved once and stored, so
+// later profile-name edits don't silently change what's shown on the board).
+async function saveLeaderboardSettings() {
+  const optIn = document.getElementById('lb-optin').checked;
+  const inputVal = document.getElementById('lb-alias').value.trim().slice(0, 30);
+  let alias = inputVal || state.user?.display_alias || '';
+  if (optIn && !alias) alias = (state.user?.first_name || 'Member').trim().slice(0, 30);
+  state.user = { ...state.user, leaderboard_opt_in: optIn, display_alias: alias || null };
+  await saveUser();
+  showToast(optIn ? "You're on the leaderboard!" : 'Leaderboard settings saved');
+  VIEWS['badges']();
+}
+
 // ══════════════════════════════════════════════════
 //  VIEW: BADGES
 // ══════════════════════════════════════════════════
 VIEWS['badges'] = function () {
   const el = document.getElementById('page-content');
   const stats = badgeStats();
+  const u = state.user || {};
   el.innerHTML = `
     <div class="stat-grid" style="margin-bottom:20px">
       <div class="stat-box"><div class="stat-val mono">${stats.points}</div><div class="stat-lbl">Total Points</div></div>
       <div class="stat-box"><div class="stat-val">${stats.earnedCount}/${stats.total}</div><div class="stat-lbl">Badges Earned</div></div>
+    </div>
+    <div class="card" style="margin-bottom:20px">
+      <h4 style="margin-bottom:6px">🏅 Leaderboard</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Join your organisation's leaderboard. Only your chosen display name, points, and badge count are visible — never your scores or financial information. You can leave at any time.</p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="lb-optin" ${u.leaderboard_opt_in ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0">
+        <span style="font-size:13px;font-weight:500;color:var(--navy)">Show me on the leaderboard</span>
+      </label>
+      <div class="field">
+        <label>Display name</label>
+        <input type="text" id="lb-alias" class="input" maxlength="30" placeholder="${escHtml(u.first_name || 'Your name')}" value="${escHtml(u.display_alias || '')}" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveLeaderboardSettings()">Save</button>
+    </div>
     </div>
     <div class="badge-grid">
       ${renderBadgeCards()}
