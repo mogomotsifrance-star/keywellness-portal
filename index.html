@@ -754,13 +754,14 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR, bkR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR, ptR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('badges').select('*').eq('user_id', uid).maybeSingle()),
     safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
     safe(sb.from('bookings').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
+    safe(sb.from('my_points').select('*').maybeSingle()),
   ]);
 
   state.user        = pR.data  || null;
@@ -771,13 +772,17 @@ async function loadAllData() {
   state.badges = bR.data
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
+  // Authoritative points total/season now come from the server-side ledger
+  // (points_events → my_points), not from badges.points.
+  state.points = ptR.data
+    ? { total: ptR.data.total_points || 0, season: ptR.data.season_points || 0 }
+    : { total: 0, season: 0 };
   // Migrate legacy one-off score badges → filling tier ids (idempotent). A user
   // who already earned an 80+ badge keeps it as a full (tier 3) filling badge.
   try {
     const _mig = KWBadges.migrateEarned(state.badges.earned);
     if (_mig.changed) {
       state.badges.earned = _mig.earned;
-      state.badges.points = KWBadges.pointsFor(_mig.earned);
       await KWBadges.setEarned(_mig.earned);
     }
   } catch (e) { console.warn('[KW] badge migration skipped:', e); }
@@ -858,10 +863,11 @@ async function saveUser() {
 
 function saveBadges() {
   if (!currentUser) return;
+  // Points are no longer written here — the server-side ledger (my_points) is
+  // the source of truth. earned_badge_ids is the only thing this persists.
   sb.from('badges').upsert({
     user_id: currentUser.id,
     earned_badge_ids: state.badges.earned,
-    points: state.badges.points,
     updated_at: new Date().toISOString()
   }, { onConflict: 'user_id' })
     .then(({ error }) => { if (error) console.error('saveBadges failed:', error); })
@@ -1024,8 +1030,6 @@ async function syncProgressBadges() {
       const fresh = await KWBadges.awardProgress(def.id, mm.value);
       if (fresh && fresh.length) {
         fresh.forEach(id => { if (!state.badges.earned.includes(id)) state.badges.earned.push(id); });
-        state.badges.points = KWBadges.pointsFor(state.badges.earned);
-        const el = document.getElementById('sb-pts'); if (el) el.textContent = state.badges.points;
       }
     } catch (e) { console.warn('[KW] awardProgress', def.id, e); }
   }
@@ -1357,7 +1361,7 @@ function buildNav(current) {
     <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='more'?`openMoreMenu()`:`go('${n.id}')`}" aria-label="${n.label}">
       <span class="bn-icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
-  document.getElementById('sb-pts').textContent = state.badges.points;
+  document.getElementById('sb-pts').textContent = (state.points && state.points.total) || 0;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
 }
 
@@ -1423,16 +1427,13 @@ function badgeStats() {
   groups.forEach(g => { if (KWBadges.tierFor(earned, g.group) >= 1) count++; });
   // A filling badge counts as "earned" once it has reached at least its first tier.
   progress.forEach(def => { if (KWBadges.tiersEarned(def, earned) >= 1) count++; });
-  return { earnedCount: count, total: simple.length + groups.length + progress.length, points: state.badges.points };
+  return { earnedCount: count, total: simple.length + groups.length + progress.length, points: (state.points && state.points.total) || 0 };
 }
 
 async function awardBadge(id) {
   const fresh = await KWBadges.award(id);
   if (fresh.length) {
     state.badges.earned.push(...fresh);
-    state.badges.points = KWBadges.pointsFor(state.badges.earned);
-    const el = document.getElementById('sb-pts');
-    if (el) el.textContent = state.badges.points;
   }
 }
 
@@ -1447,7 +1448,10 @@ function showToast(msg) {
 // ══════════════════════════════════════════════════
 //  OPEN TOOL (standalone HTML files)
 // ══════════════════════════════════════════════════
-function openTool(filename) {
+async function openTool(filename) {
+  // Awaited (not fire-and-forget) because the immediate navigation below would
+  // otherwise cancel the in-flight RPC before it reaches the server.
+  try { await KWBadges.recordPoints('tool_first_use', filename); } catch (e) {}
   window.location.href = filename;
 }
 
@@ -1600,6 +1604,9 @@ VIEWS['onboarding'] = function () {
       initProfileUI();
     }
     awardBadge('first_login');
+    KWBadges.recordPoints('onboarding_complete').then(res => {
+      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+    });
     // Show consent → welcome video for new users, checking localStorage first
     const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
     const _lsWelcome = localStorage.getItem('kw_welcome_seen') === 'true';
@@ -2395,7 +2402,7 @@ VIEWS['dashboard'] = async function () {
 
     <!-- Stats row -->
     <div class="stat-grid">
-      <div class="stat-box gold"><div class="stat-val">${state.badges.points}</div><div class="stat-lbl">Points</div></div>
+      <div class="stat-box gold"><div class="stat-val">${(state.points && state.points.total) || 0}</div><div class="stat-lbl">Points</div></div>
       <div class="stat-box"><div class="stat-val">${badgeStats().earnedCount}</div><div class="stat-lbl">Badges</div></div>
       <div class="stat-box"><div class="stat-val">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
       <div class="stat-box"><div class="stat-val">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
@@ -2594,17 +2601,18 @@ async function markArticleRead(title) {
     if (currentUser) await sb.from('tool_data').upsert({ user_id: currentUser.id, tool: 'articles_read', data: { read: state.articlesRead }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
   } catch (e) { console.warn('articles_read save failed:', e); }
   syncProgressBadges();   // recompute Confident Learner (articles + videos)
+  const _res = await KWBadges.recordPoints('article_read', title);
+  if (_res && typeof _res.total === 'number') state.points = { total: _res.total, season: state.points?.season || 0 };
 }
 window.markVideoComplete = async function (vidId, pts) {
   if (!state.videoProgress) state.videoProgress = [];
   if (state.videoProgress.includes(vidId)) return;   // already complete — never double-award points
   state.videoProgress.push(vidId);
-  state.badges.points = (state.badges.points || 0) + (pts || 0);
-  const ptsEl = document.getElementById('sb-pts'); if (ptsEl) ptsEl.textContent = state.badges.points;
   await saveVideoProgress();
-  saveBadges();
   syncProgressBadges();   // recompute the Confident Learner badge (videos + articles)
-  showToast(`🎬 Video completed — +${pts} points!`);
+  const res = await KWBadges.recordPoints('video_watched', vidId);
+  if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+  showToast(res && res.awarded ? `🎬 Video completed — +${res.points} points!` : '🎬 Video completed!');
   if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
 };
 function _ensureYTApi() {
@@ -3410,6 +3418,14 @@ VIEWS['checkin'] = function () {
     // (≥13-day gaps), so it can't be farmed by logging several times in one day.
     syncProgressBadges();
 
+    // Points: once per calendar month, plus the quarterly streak bonus if earned.
+    KWBadges.recordPoints('monthly_checkin').then(res => {
+      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+      return KWBadges.recordPoints('checkin_streak_3');
+    }).then(res => {
+      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+    });
+
     showToast('Check-in saved! Keep it up.');
     go('progress');
   };
@@ -3731,8 +3747,9 @@ window.submitBooking = async function () {
 
   // ── 1) Supabase bookings insert is the SOURCE OF TRUTH — run it FIRST and await it. ──
   //     The admin panel and My Bookings read from this row, so a DB failure is the only real failure.
+  let _bookingId = null;
   if (currentUser) {
-    const { error: bkErr } = await sb.from('bookings').insert({
+    const { data: bkRow, error: bkErr } = await sb.from('bookings').insert({
       user_id: currentUser.id,
       user_name: `${first} ${last}`.trim(),
       user_email: email,
@@ -3742,7 +3759,8 @@ window.submitBooking = async function () {
       requested_time: time,
       status: 'pending',
       created_at: new Date().toISOString()
-    });
+    }).select('id').single();
+    _bookingId = bkRow?.id ?? null;
     if (bkErr) {
       console.error('Booking insert failed:', bkErr);
       document.getElementById('bkErrMsg').textContent = '⚠️ Your booking could not be saved. Please try again, or email wellness@keywellness.co.bw';
@@ -3758,6 +3776,11 @@ window.submitBooking = async function () {
   bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
   localStorage.setItem('kw_bookings', JSON.stringify(bookings));
   awardBadge('booked_session');
+  if (_bookingId != null) {
+    KWBadges.recordPoints('session_booked', String(_bookingId)).then(res => {
+      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+    });
+  }
 
   document.getElementById('bkForm').style.display='none';
   const s = document.getElementById('bkSuccess'); s.classList.add('show');
@@ -4037,7 +4060,7 @@ VIEWS['profile'] = function () {
       <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
         <h4 style="margin-bottom:14px;font-size:14px">🏅 Points & Badges</h4>
         <div class="stat-grid">
-          <div class="stat-box gold"><div class="stat-val mono">${state.badges.points}</div><div class="stat-lbl">Total Points</div></div>
+          <div class="stat-box gold"><div class="stat-val mono">${(state.points && state.points.total) || 0}</div><div class="stat-lbl">Total Points</div></div>
           <div class="stat-box"><div class="stat-val">${badgeStats().earnedCount}/${badgeStats().total}</div><div class="stat-lbl">Badges Earned</div></div>
         </div>
         <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="go('badges')">View All Badges →</button>
@@ -4147,12 +4170,9 @@ window.markVideoWatched = function (btn, title) {
   watched.push(title);
   localStorage.setItem('kw_watched', JSON.stringify(watched));
   syncProgressBadges(); // refresh Confident Learner (the watched_video badge is now part of the learning fill badge)
-  // Award 25 pts manually
-  state.badges.points = (state.badges.points||0) + 25;
-  const bk = JSON.parse(localStorage.getItem('kw_badges')||'{"earned":[],"points":0}');
-  bk.points = state.badges.points;
-  localStorage.setItem('kw_badges', JSON.stringify(bk));
-  document.getElementById('sb-pts').textContent = state.badges.points;
+  KWBadges.recordPoints('video_watched', title).then(res => {
+    if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+  });
   // Update button
   btn.textContent = '✓ Watched';
   btn.classList.add('watched');

@@ -11,11 +11,14 @@
   // PROGRESS_DEFS below as single "filling" badges. The ids removed from this
   // list (ef_started/halfway/complete, check_in_1/3, watched_video) are kept in
   // LEGACY_PROGRESS_MAP so historical earners migrate into the right fill tier.
+  // `public` marks whether a badge may appear on the opt-in leaderboard /
+  // HR Rewards tab. Rule: reveals a specific financial-state threshold →
+  // private; pure engagement/consistency → public. See BUILD-NOTES.md.
   const SIMPLE_DEFS = [
-    { id: 'first_login',        icon: '🌟', name: 'First Step',         desc: 'Completed onboarding',                  pts: 50  },
-    { id: 'first_assessment',   icon: '📋', name: 'Self-Aware',         desc: 'Completed first assessment',            pts: 100 },
-    { id: 'high_scorer',        icon: '💯', name: 'Financial Star',     desc: 'Overall score of 75+',                  pts: 200 },
-    { id: 'booked_session',     icon: '📅', name: 'Getting Help',       desc: 'Booked a coaching session',             pts: 100 },
+    { id: 'first_login',        icon: '🌟', name: 'First Step',         desc: 'Completed onboarding',                  pts: 50,  public: true  },
+    { id: 'first_assessment',   icon: '📋', name: 'Self-Aware',         desc: 'Completed first assessment',            pts: 100, public: true  },
+    { id: 'high_scorer',        icon: '💯', name: 'Financial Star',     desc: 'Overall score of 75+',                  pts: 200, public: false },
+    { id: 'booked_session',     icon: '📅', name: 'Getting Help',       desc: 'Booked a coaching session',             pts: 100, public: true  },
   ];
 
   // ── Incremental score badges: ONE filling badge per area, three tiers ──
@@ -40,6 +43,7 @@
       TIER_DEFS.push({
         id: `${g.group}_t${i + 1}`, group: g.group, tier: i + 1, icon: g.icon,
         name: `${g.name} · Tier ${i + 1}`, desc: `Score ${thr}+ in ${g.area}`, pts: TIER_PTS[i],
+        public: false, // assessment-dimension mastery reveals a financial-state threshold
       });
     });
   });
@@ -73,65 +77,65 @@
     { id:'ef', icon:'🛟', name:'Safety Net', kind:'state', unit:'pct',
       blurb:'Emergency fund vs 6 months of essential expenses',
       tiers:[
-        { threshold:1,   label:'Set up',       pts:75  },
-        { threshold:50,  label:'Halfway',      pts:150 },
-        { threshold:100, label:'Fully funded', pts:300 },
+        { threshold:1,   label:'Set up',       pts:75,  public:true  },
+        { threshold:50,  label:'Halfway',      pts:150, public:false },
+        { threshold:100, label:'Fully funded', pts:300, public:false },
       ] },
     // PART 2 — Retirement Readiness (current-state; toward 70%-of-gross goal)
     { id:'retire_ready', icon:'🎯', name:'Retirement Ready', kind:'state', unit:'pct',
       blurb:'Projected pension vs 70% of your gross salary',
       tiers:[
-        { threshold:25,  label:'On the board', pts:75  },
-        { threshold:50,  label:'Halfway',      pts:125 },
-        { threshold:75,  label:'Nearly there', pts:175 },
-        { threshold:100, label:'Retirement ready', pts:250 },
+        { threshold:25,  label:'On the board', pts:75,  public:false },
+        { threshold:50,  label:'Halfway',      pts:125, public:false },
+        { threshold:75,  label:'Nearly there', pts:175, public:false },
+        { threshold:100, label:'Retirement ready', pts:250, public:false },
       ] },
     // PART 3a — Savings-rate milestones (achievement; % of NET pay saved)
     { id:'savings_rate', icon:'🏦', name:'Savings Rate', kind:'achievement', unit:'pct',
       blurb:'Share of your net pay that you save',
       tiers:[
-        { threshold:5,   label:'5% saved',  pts:75  },
-        { threshold:10,  label:'10% saved', pts:125 },
-        { threshold:20,  label:'20% saved', pts:250 },
+        { threshold:5,   label:'5% saved',  pts:75,  public:false },
+        { threshold:10,  label:'10% saved', pts:125, public:false },
+        { threshold:20,  label:'20% saved', pts:250, public:false },
       ] },
     // PART 3b — Sustained saving (achievement; 3 consecutive months >= 20%)
     { id:'savings_streak', icon:'🔁', name:'Steady Saver', kind:'achievement', unit:'count', max:3,
       blurb:'Consecutive budgeting months saving 20% or more',
       tiers:[
-        { threshold:1, label:'1 month at 20%',  pts:75  },
-        { threshold:2, label:'2 months at 20%', pts:100 },
-        { threshold:3, label:'3 months at 20%', pts:225 },
+        { threshold:1, label:'1 month at 20%',  pts:75,  public:false },
+        { threshold:2, label:'2 months at 20%', pts:100, public:false },
+        { threshold:3, label:'3 months at 20%', pts:225, public:false },
       ] },
     // PART 4 — Investing + positive net worth, per quarter (achievement)
     { id:'investor', icon:'📈', name:'Quarterly Investor', kind:'achievement', unit:'count', max:4,
       blurb:'Quarters with the investing tool used and positive net worth',
       tiers:[
-        { threshold:1, label:'1 quarter', pts:100 },
-        { threshold:2, label:'2 quarters', pts:100 },
-        { threshold:3, label:'3 quarters', pts:100 },
-        { threshold:4, label:'Full year', pts:150 },
+        { threshold:1, label:'1 quarter', pts:100, public:false },
+        { threshold:2, label:'2 quarters', pts:100, public:false },
+        { threshold:3, label:'3 quarters', pts:100, public:false },
+        { threshold:4, label:'Full year', pts:150, public:false },
       ] },
     // PART 5 — Fortnightly check-ins, time-based (achievement)
     { id:'checkin_streak', icon:'✅', name:'Check-in Streak', kind:'achievement', unit:'count', max:3,
       blurb:'Fortnightly check-ins about two weeks apart',
       tiers:[
-        { threshold:1, label:'First check-in', pts:75  },
-        { threshold:2, label:'Two check-ins',  pts:75  },
-        { threshold:3, label:'Three check-ins', pts:150 },
+        { threshold:1, label:'First check-in', pts:75,  public:true },
+        { threshold:2, label:'Two check-ins',  pts:75,  public:true },
+        { threshold:3, label:'Three check-ins', pts:150, public:true },
       ] },
     // PART 6 — Learning engagement (drives the "confidence" indicator)
     { id:'learning', icon:'📚', name:'Confident Learner', kind:'achievement', unit:'pct',
       blurb:'Learn content engaged — articles read + videos completed',
       tiers:[
-        { threshold:25,  label:'Curious',   pts:50  },
-        { threshold:50,  label:'Engaged',   pts:100 },
-        { threshold:100, label:'Confident', pts:200 },
+        { threshold:25,  label:'Curious',   pts:50,  public:true },
+        { threshold:50,  label:'Engaged',   pts:100, public:true },
+        { threshold:100, label:'Confident', pts:200, public:true },
       ] },
     // PART 7 — Budget consistency, one tier per budgeting month (achievement)
     { id:'budget_year', icon:'🗓️', name:'Budget Discipline', kind:'achievement', unit:'count', max:12,
       blurb:'Months with a maintained budget (up to a full year)',
       tiers: Array.from({ length:12 }, (_, i) => ({
-        threshold:i + 1, label:`${i + 1} month${i ? 's' : ''}`, pts:50,
+        threshold:i + 1, label:`${i + 1} month${i ? 's' : ''}`, pts:50, public:true,
       })) },
   ];
 
@@ -155,6 +159,7 @@
       PROGRESS_TIER_DEFS.push({
         id:`${d.id}_t${i + 1}`, group:d.id, tier:i + 1,
         icon:d.icon, name:`${d.name} · ${t.label}`, desc:t.label, pts:t.pts,
+        public: t.public,
       });
     });
   });
@@ -319,33 +324,52 @@
     if (!fresh.length) return [];
 
     const merged = [...existing, ...fresh];
-    const points = pointsFor(merged);
 
+    // Points are no longer computed/written here — they come exclusively from
+    // the server-side points ledger (see recordPoints() below). `points` is
+    // carried through unchanged so the upsert stays schema-safe on a brand-new
+    // row; it is never recomputed from badge tiers again.
     const { error: writeErr } = await sb.from('badges').upsert({
-      user_id: user.id, earned_badge_ids: merged, points, updated_at: new Date().toISOString(),
+      user_id: user.id, earned_badge_ids: merged, points: (row && row.points) || 0,
+      updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     if (writeErr) { console.error('[KWBadges] write error', writeErr); return []; }
 
-    fresh.forEach(id => { const d = DEF_MAP[id]; toast(`🏆 Badge earned: ${d.name} (+${d.pts} pts)`); });
-    const el = document.getElementById('sb-pts');
-    if (el) el.textContent = points;
+    fresh.forEach(id => { const d = DEF_MAP[id]; toast(`🏆 Badge earned: ${d.name}`); });
     return fresh;
   }
 
-  // Persist a full earned array + recomputed points (used by the legacy→tier migration).
+  // Persist a full earned array (used by the legacy→tier migration). Points are
+  // not touched — see the note in award() above.
   async function setEarned(earned) {
     const sb = await getClient();
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
-    const points = pointsFor(earned);
     const { error } = await sb.from('badges').upsert({
-      user_id: user.id, earned_badge_ids: earned, points, updated_at: new Date().toISOString(),
+      user_id: user.id, earned_badge_ids: earned, updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
     if (error) console.error('[KWBadges] setEarned error', error);
   }
 
+  // Call the server-side points ledger for an evidence-checked event. Never
+  // throws — points must not block the user flow. Updates the sidebar total
+  // directly (if present on the page) and toasts only on a genuine award.
+  // Admins are excluded so staff testing doesn't pollute the leaderboard.
+  async function recordPoints(eventType, refId) {
+    if (global._isAdmin) return null;
+    try {
+      const sb = await getClient();
+      const { data, error } = await sb.rpc('award_points', { p_event_type: eventType, p_ref_id: refId || '' });
+      if (error) { console.warn('[KWBadges] recordPoints failed:', eventType, error); return null; }
+      const el = document.getElementById('sb-pts');
+      if (el && typeof data?.total === 'number') el.textContent = data.total;
+      if (data?.awarded) toast(`+${data.points} pts`);
+      return data;
+    } catch (e) { console.warn('[KWBadges] recordPoints error:', eventType, e); return null; }
+  }
+
   global.KWBadges = {
-    BADGE_DEFS, DEF_MAP, pointsFor, award,
+    BADGE_DEFS, DEF_MAP, pointsFor, award, recordPoints,
     SIMPLE_DEFS, TIER_GROUPS, TIER_DEFS, TIER_THRESHOLDS, TIER_PTS, TIER_LABELS,
     tierFor, migrateEarned, setEarned,
     // Progress-capable (filling) badge model — Part 0

@@ -888,6 +888,14 @@ function calculateWellness(){
     } else {
       console.log('Assessment saved to Supabase:', inserted);
       showToast('Assessment saved');
+      // Server evidence-checks both: assessment_complete needs a fresh row (just
+      // inserted above); improvement needs a genuine dimension rise vs. the prior
+      // assessment. Either may no-op silently — that's expected and fine.
+      if (window.KWBadges && typeof KWBadges.recordPoints === 'function') {
+        KWBadges.recordPoints('assessment_complete', _now)
+          .then(() => KWBadges.recordPoints('improvement', _now))
+          .catch(() => {});
+      }
     }
     // Seed ALL shared financial figures into the profile (single source of truth)
     const _totSavings = pf('totalSavings');
