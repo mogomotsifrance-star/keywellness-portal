@@ -1300,6 +1300,7 @@ const NAV = [
   { id:'booking',     icon:'📅', label:'Book Session' },
   { id:'my-bookings', icon:'🗓️', label:'My Bookings' },
   { id:'badges',      icon:'🏆', label:'Badges' },
+  { id:'leaderboard', icon:'🏅', label:'Leaderboard' },
   { id:'profile',     icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
@@ -3848,7 +3849,19 @@ async function saveLeaderboardSettings() {
   state.user = { ...state.user, leaderboard_opt_in: optIn, display_alias: alias || null };
   await saveUser();
   showToast(optIn ? "You're on the leaderboard!" : 'Leaderboard settings saved');
-  VIEWS['badges']();
+  const _cur = location.hash.replace('#','') || 'badges';
+  if (VIEWS[_cur]) VIEWS[_cur]();
+}
+
+// Quarter key matching the server's to_char(now(),'YYYY"-Q"Q'), e.g. "2026-Q3".
+// offset=1 means "one quarter ago".
+function quarterKey(offset) {
+  const d = new Date();
+  let q = Math.floor(d.getMonth() / 3) + 1;
+  let y = d.getFullYear();
+  q -= (offset || 0);
+  while (q < 1) { q += 4; y -= 1; }
+  return `${y}-Q${q}`;
 }
 
 // ══════════════════════════════════════════════════
@@ -3979,6 +3992,110 @@ function renderBadgeCards() {
        + hdr('🌱 Behaviour Rewards — these fill as you build habits') + behaviour
        + hdr('📊 Assessment Mastery') + areas;
 }
+
+// ══════════════════════════════════════════════════
+//  VIEW: LEADERBOARD
+// ══════════════════════════════════════════════════
+VIEWS['leaderboard'] = async function (seasonArg) {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading leaderboard…</div>';
+
+  const season = seasonArg || quarterKey(0);
+  const seasonOptions = [0,1,2,3].map(o => quarterKey(o));
+
+  const [selfRes, optedRes] = await Promise.all([
+    sb.rpc('org_leaderboard_self_rank', { p_season: season }),
+    sb.rpc('org_leaderboard', { p_season: season }),
+  ]);
+
+  if (selfRes.error) console.error('org_leaderboard_self_rank failed:', selfRes.error);
+  if (optedRes.error) console.error('org_leaderboard failed:', optedRes.error);
+
+  const self = (selfRes.data && selfRes.data[0]) || null;
+  const rows = optedRes.data || [];
+  const optedIn = !!state.user?.leaderboard_opt_in;
+
+  const footer = `<p style="font-size:12px;color:var(--muted);text-align:center;margin-top:18px">
+    Leaderboards reflect engagement and learning — never financial scores or personal financial information.
+  </p>`;
+
+  const seasonSelect = `
+    <select id="lb-season" class="input" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px" onchange="VIEWS['leaderboard'](this.value)">
+      ${seasonOptions.map(s => `<option value="${s}" ${s===season?'selected':''}>${s===quarterKey(0) ? s+' (current)' : s}</option>`).join('')}
+    </select>`;
+
+  // No org at all — leaderboards don't apply.
+  if (!self) {
+    el.innerHTML = `
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:14px">🏅</div>
+        <h3 style="margin-bottom:8px">No leaderboard yet</h3>
+        <p style="color:var(--muted)">Leaderboards are available for members who joined through an organisation.</p>
+      </div>${footer}`;
+    return;
+  }
+
+  const optInCard = `
+    <div class="card" style="margin-bottom:20px">
+      <h4 style="margin-bottom:6px">Join the leaderboard</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Only your chosen display name, points, and badge count are visible — never your scores or financial information. You can leave at any time.</p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="lb-optin" style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0">
+        <span style="font-size:13px;font-weight:500;color:var(--navy)">Show me on the leaderboard</span>
+      </label>
+      <div class="field">
+        <label>Display name</label>
+        <input type="text" id="lb-alias" class="input" maxlength="30" placeholder="${escHtml(state.user?.first_name || 'Your name')}" value="${escHtml(state.user?.display_alias || '')}" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveLeaderboardSettings()">Save</button>
+    </div>`;
+
+  const rankCard = `
+    <div class="card" style="text-align:center;margin-bottom:20px">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Your rank this season</div>
+      <div class="stat-val mono" style="font-size:32px;color:var(--gold)">#${self.my_rank} <span style="font-size:16px;color:var(--muted);font-weight:400">of ${self.total_members}</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">${self.season_points} points this season</div>
+      ${optedIn ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:8px">Points are private until you join the leaderboard below.</div>`}
+    </div>`;
+
+  if (!optedIn) {
+    el.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
+      ${rankCard}${optInCard}${footer}`;
+    return;
+  }
+
+  if (rows.length < 3) {
+    el.innerHTML = `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
+      ${rankCard}
+      <div class="card" style="text-align:center;padding:32px">
+        <div style="font-size:36px;margin-bottom:10px">🌱</div>
+        <p style="color:var(--muted)">The leaderboard unlocks as more colleagues join.</p>
+      </div>${footer}`;
+    return;
+  }
+
+  const medal = r => r===1 ? '🥇' : r===2 ? '🥈' : r===3 ? '🥉' : null;
+  const rowsHtml = rows.map(r => {
+    const isPodium = r.rank <= 3;
+    const m = medal(r.rank);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:${isPodium?'14px':'10px'} 14px;border-radius:var(--radius-sm);margin-bottom:6px;background:${r.is_self?'#fff8e8':(isPodium?'var(--cream-dark)':'transparent')};border:${r.is_self?'2px solid var(--gold)':'1px solid var(--border)'}">
+      <div style="width:32px;text-align:center;font-size:${isPodium?'20px':'14px'};font-weight:700;color:${isPodium?'inherit':'var(--muted)'}">${m || '#'+r.rank}</div>
+      <div style="flex:1;font-weight:${r.is_self?'700':'500'};color:var(--navy)">${escHtml(r.alias)}${r.is_self?' (you)':''}</div>
+      <div style="font-size:12px;color:var(--muted)">🏆 ${r.badge_count}</div>
+      <div class="mono" style="font-weight:700;color:var(--gold);min-width:60px;text-align:right">${r.season_points} pts</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
+    ${rankCard}
+    <div class="card">
+      <h4 style="margin-bottom:14px">Season Leaderboard — Top ${rows.length}</h4>
+      ${rowsHtml}
+    </div>${footer}`;
+};
 
 // ══════════════════════════════════════════════════
 //  VIEW: MY BOOKINGS
