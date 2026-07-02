@@ -208,8 +208,11 @@ async function init() {
   document.getElementById('sb-user-email').textContent = user.email || '';
 
   // Verify caller is employer or admin — otherwise send them back to the member portal.
+  // Employer lookup mirrors employer_org(): match by user_id OR email, since
+  // employers added by email before their first login won't have user_id set
+  // until the signup backfill trigger fires (existing accounts never get it).
   const [empRes, adminRes] = await Promise.all([
-    sb.from('employers').select('org_id').eq('user_id', user.id).maybeSingle(),
+    sb.from('employers').select('org_id').or(`user_id.eq.${user.id},email.eq.${user.email.toLowerCase()}`).maybeSingle(),
     sb.from('admins').select('email').eq('email', user.email).maybeSingle(),
   ]);
 
