@@ -1224,7 +1224,10 @@ async function doSignup() {
   const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
   const { error } = await sb.auth.signUp({
     email, password: pass,
-    options: { data: { invite_code: inviteCode || null } }
+    options: {
+      data: { invite_code: inviteCode || null },
+      emailRedirectTo: window.location.origin + window.location.pathname
+    }
   });
   btn.disabled = false; btn.textContent = 'Create Account';
   if (error) {
@@ -1255,7 +1258,7 @@ async function doForgotPassword() {
   const email = document.getElementById('fp-email').value.trim();
   if (!email) { authErr('Please enter your email address.'); return; }
   const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: 'https://keywellness-portal.mogomotsifrance.workers.dev'
+    redirectTo: window.location.origin + window.location.pathname
   });
   if (error) { authErr(error.message); return; }
   authOk('Check your email for a password reset link.');
