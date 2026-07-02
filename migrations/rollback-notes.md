@@ -31,3 +31,15 @@ alter table public.profiles
 
 Note: this permanently discards any member's leaderboard opt-in choice and
 chosen display name. No other table references these columns.
+
+## supabase_leaderboard.sql (Batch 4 — leaderboard & rewards RPCs)
+
+```sql
+drop function if exists public.org_rewards(uuid, text);
+drop function if exists public.org_leaderboard_self_rank(text);
+drop function if exists public.org_leaderboard(text);
+```
+
+Note: nothing pre-existing referenced these; safe to drop in any order once
+the leaderboard page (Batch 5) and HR Rewards tab (Batch 7) are no longer
+calling them.

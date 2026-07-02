@@ -11,9 +11,31 @@ durable record.
   spec assumed (`budget_master`, `ef_halfway`). Public/private classification
   (Batch 2) is applied per-tier using the rule: badges revealing a specific
   financial-state threshold are private; badges reflecting pure engagement or
-  consistency are public. Full mapping lives in `kw-badges.js` itself once
-  Batch 2 lands (`public: true/false` on each `BADGE_DEFS` entry) — this file
-  will be updated with the final table when that batch is committed.
+  consistency are public. Final mapping (each entry now carries
+  `public: true/false` in `kw-badges.js`):
+  - **Public**: `first_login`, `first_assessment`, `booked_session`, `ef_t1`,
+    `checkin_streak_t1..t3`, `learning_t1..t3`, `budget_year_t1..t12`
+  - **Private**: `high_scorer`, `ef_t2`, `ef_t3`, `budget_master_t1..t3`,
+    `savings_champ_t1..t3`, `debt_destroyer_t1..t3`, `retirement_planner_t1..t3`,
+    `insurance_hero_t1..t3`, `retire_ready_t1..t4`, `savings_rate_t1..t3`,
+    `savings_streak_t1..t3`, `investor_t1..t4`
+
+  **Duplication note**: `org_leaderboard()`'s `badge_count` (Batch 4,
+  `supabase_leaderboard.sql`) hardcodes the same public-id array in SQL,
+  since a Postgres function can't import a JS array. If a badge's public/private
+  status ever changes in `kw-badges.js`, `v_public_badges` in
+  `supabase_leaderboard.sql` must be updated to match, or the leaderboard's
+  badge count will silently drift from what the Badges page shows.
+
+- **Badge card "+N pts" labels are now cosmetic, not literal.** Since points
+  are awarded exclusively through the catalog-driven ledger (Batch 1) at a
+  small set of evidence-checked events, and badge tiers are no longer paid
+  out via `award()`/`awardProgress()`, the `pts` figures shown on badge cards
+  in `renderBadgeCards()` (`index.html`) no longer add up to the member's
+  actual point total. This is an intentional consequence of closing the
+  self-reported-assessment gaming hole, not a bug — but the UI copy wasn't
+  updated to reflect it (out of scope for this build). Worth a follow-up pass
+  if members notice the mismatch.
 
 - **`article_read`, `video_watched`, `tool_first_use` have no server-side
   evidence check.** There is no backing table row proving an article was read
