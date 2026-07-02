@@ -108,6 +108,20 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 .chart-wrap{position:relative;height:220px}
 .trend-caption{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5;font-style:italic}
 
+/* Financial indicator bands (Debt Health / Retirement Readiness) */
+.fin-bands{display:flex;border-radius:var(--radius-sm);overflow:hidden;height:32px;margin-bottom:12px}
+.fin-band{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;min-width:0;overflow:hidden}
+.fin-band.suppressed{background:repeating-linear-gradient(45deg,var(--border),var(--border) 6px,var(--cream-dark) 6px,var(--cream-dark) 12px);color:var(--muted)}
+.fin-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px}
+.fin-leg-item{display:flex;align-items:center;gap:6px}
+.fin-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* Rewards table */
+.rewards-table{width:100%;border-collapse:collapse;font-size:13px}
+.rewards-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--border)}
+.rewards-table td{padding:10px;border-bottom:1px solid var(--border)}
+.rewards-table tr:last-child td{border-bottom:none}
+
 /* Spinner */
 .spinner{display:flex;align-items:center;justify-content:center;padding:80px;color:var(--muted);font-size:14px;gap:10px}
 .spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
@@ -139,7 +153,8 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
   </div>
   <div class="sb-org" id="sb-org-name">Loading&hellip;</div>
   <div class="sb-nav">
-    <div class="sb-item active">&#128202; Wellbeing Overview</div>
+    <div class="sb-item active" id="nav-overview" onclick="switchTab('overview')">&#128202; Wellbeing Overview</div>
+    <div class="sb-item" id="nav-rewards" onclick="switchTab('rewards')">&#127942; Rewards</div>
   </div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-user-email"></div>
@@ -244,15 +259,212 @@ async function init() {
       '<strong>Admin</strong>Viewing as administrator';
   }
 
-  // Call RPC with no argument — employer_org() resolves their org server-side.
-  const { data: overview, error } = await sb.rpc('org_overview');
+  // Call both RPCs with no argument — employer_org() resolves their org
+  // server-side for each. Financial indicators failing shouldn't block the
+  // rest of the dashboard, so it's handled separately from org_overview.
+  const [overviewRes, finRes] = await Promise.all([
+    sb.rpc('org_overview'),
+    sb.rpc('org_financial_indicators'),
+  ]);
 
+  if (overviewRes.error) {
+    renderError(overviewRes.error.message);
+    return;
+  }
+  if (finRes.error) console.error('org_financial_indicators failed:', finRes.error);
+
+  window._overviewData = overviewRes.data;
+  window._finData = finRes.error ? null : finRes.data;
+
+  render(window._overviewData);
+}
+
+// Quarter key matching the server's to_char(now(),'YYYY"-Q"Q'), e.g. "2026-Q3".
+// offset=1 means "one quarter ago".
+function quarterKey(offset) {
+  var d = new Date();
+  var q = Math.floor(d.getMonth() / 3) + 1;
+  var y = d.getFullYear();
+  q -= (offset || 0);
+  while (q < 1) { q += 4; y -= 1; }
+  return y + '-Q' + q;
+}
+
+let rewardsSeason = null;
+let rewardsRows = [];
+
+async function switchTab(tab) {
+  document.getElementById('nav-overview').classList.toggle('active', tab === 'overview');
+  document.getElementById('nav-rewards').classList.toggle('active', tab === 'rewards');
+  if (tab === 'overview') {
+    render(window._overviewData);
+  } else {
+    await loadRewards(rewardsSeason || quarterKey(0));
+  }
+}
+
+async function loadRewards(season) {
+  rewardsSeason = season;
+  document.getElementById('page-content').innerHTML = '<div class="spinner"><div class="spin"></div> Loading rewards&hellip;</div>';
+  const { data, error } = await sb.rpc('org_rewards', { p_season: season });
   if (error) {
     renderError(error.message);
     return;
   }
+  rewardsRows = data || [];
+  renderRewards();
+}
 
-  render(overview);
+function renderRewards() {
+  var seasonOptions = [0, 1, 2, 3].map(quarterKey);
+  var seasonSelect = '<select id="rewards-season" onchange="loadRewards(this.value)" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px">'
+    + seasonOptions.map(function (s) { return '<option value="' + s + '"' + (s === rewardsSeason ? ' selected' : '') + '>' + (s === quarterKey(0) ? s + ' (current)' : s) + '</option>'; }).join('')
+    + '</select>';
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">'
+    + seasonSelect
+    + '<button class="btn-action" style="background:var(--navy);color:#fff" onclick="exportRewardsCsv()">Export CSV</button>'
+    + '</div>';
+
+  html += '<div class="card">'
+    + '<div class="card-title">Rewards</div>'
+    + '<div class="card-subtitle">Shows employees who opted in to the leaderboard. Points reflect engagement and learning activity only.</div>';
+
+  if (!rewardsRows.length) {
+    html += '<p style="color:var(--muted);font-size:13px">No employees have opted in yet.</p>';
+  } else {
+    html += '<table class="rewards-table"><thead><tr><th>Rank</th><th>Name</th><th>Season Points</th></tr></thead><tbody>'
+      + rewardsRows.map(function (r) {
+          return '<tr><td class="mono">#' + r.rank + '</td><td>' + escHtml(((r.first_name || '') + ' ' + (r.last_name || '')).trim() || 'Member') + '</td><td class="mono">' + r.season_points + '</td></tr>';
+        }).join('')
+      + '</tbody></table>';
+  }
+  html += '</div>';
+
+  document.getElementById('page-content').innerHTML = html;
+}
+
+function exportRewardsCsv() {
+  var rows = [['Rank', 'Name', 'Season Points']].concat(
+    rewardsRows.map(function (r) { return [r.rank, ((r.first_name || '') + ' ' + (r.last_name || '')).trim(), r.season_points]; })
+  );
+  var csv = rows.map(function (r) {
+    return r.map(function (v) {
+      var s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'key-wellness-rewards-' + rewardsSeason + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Debt Health / Retirement Readiness (org_financial_indicators) ─────
+function emptyFinCard(title, fin) {
+  var n = fin && fin.assessed_count != null ? fin.assessed_count : 0;
+  return '<div class="card"><div class="card-title">' + title + '</div>'
+    + '<p style="color:var(--muted);font-size:13px">Data appears once 5+ employees have completed assessments (' + n + ' of 5).</p></div>';
+}
+
+function finBandsHtml(bands, total, colors) {
+  return bands.map(function (b) {
+    if (b.suppressed) return '<div class="fin-band suppressed" style="flex:1" title="Fewer than 3 employees &mdash; hidden for privacy">&lt;3</div>';
+    var pct = total ? Math.round(100 * (b.count || 0) / total) : 0;
+    if (!pct) return '';
+    return '<div class="fin-band" style="flex:' + pct + ';background:' + colors[b.key] + '" title="' + escHtml(b.label) + ': ' + b.count + '">' + (pct >= 12 ? pct + '%' : '') + '</div>';
+  }).join('');
+}
+
+function finLegendHtml(bands, colors) {
+  return bands.map(function (b) {
+    return '<div class="fin-leg-item"><div class="fin-dot" style="background:' + colors[b.key] + '"></div><span>' + escHtml(b.label) + (b.suppressed ? ' &middot; &lt;3' : ' &middot; ' + b.count) + '</span></div>';
+  }).join('');
+}
+
+function renderDebtHealth(fin) {
+  if (!fin || fin.eligible === false) return emptyFinCard('Debt Health', fin);
+  var dti = fin.dti;
+  var total = dti.reported_count || 0;
+  var colors = { healthy: 'var(--green)', manageable: 'var(--gold)', strained: 'var(--orange)', over_indebted: 'var(--red)' };
+
+  var html = '<div class="card">'
+    + '<div class="card-title">Debt Health</div>'
+    + '<div class="card-subtitle">Debt-to-income ratio across ' + total + ' employee' + (total === 1 ? '' : 's') + ' who reported income and debt figures. Median DTI: <strong>' + (dti.median != null ? dti.median + '%' : '&mdash;') + '</strong>.</div>';
+
+  if (total > 0) {
+    html += '<div class="fin-bands">' + finBandsHtml(dti.bands, total, colors) + '</div>'
+      + '<div class="fin-legend">' + finLegendHtml(dti.bands, colors) + '</div>';
+  } else {
+    html += '<p style="color:var(--muted);font-size:13px">No employees have reported income and debt figures yet.</p>';
+  }
+  html += '</div>';
+
+  if (total > 0) {
+    // Suppressed bands (1-2 members) are treated as 0 here — the true count
+    // never reaches the client, so the threshold check can only work off
+    // what was actually disclosed.
+    var strainedN = (dti.bands.filter(function (b) { return b.key === 'strained'; })[0] || {}).count || 0;
+    var overN     = (dti.bands.filter(function (b) { return b.key === 'over_indebted'; })[0] || {}).count || 0;
+    var riskyPct  = Math.round(100 * (strainedN + overN) / total);
+
+    if (riskyPct >= 25) {
+      html += '<div class="action-strip">'
+        + '<h3>Recommended Next Step</h3>'
+        + '<p><strong>' + riskyPct + '% of reporting employees</strong> are in the strained or over-indebted DTI bands. A group debt-counselling initiative would directly support this group.</p>'
+        + '<div class="action-btns">'
+        + '<button class="btn-action primary" onclick="requestWorkshop(\'Debt Counselling\')">Arrange group debt-counselling sessions</button>'
+        + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
+        + '</div></div>';
+    } else {
+      html += '<div class="notice-gold" style="margin-bottom:20px">Debt levels look manageable across your reporting workforce &mdash; no urgent action flagged.</div>';
+    }
+  }
+  return html;
+}
+
+function renderRetirementReadiness(fin) {
+  if (!fin || fin.eligible === false) return emptyFinCard('Retirement Readiness', fin);
+  var ret = fin.retirement;
+  var total = ret.bands.reduce(function (s, b) { return s + (b.count || 0); }, 0);
+  var colors = { excellent: 'var(--green)', good: 'var(--teal)', fair: 'var(--gold)', needs_work: 'var(--orange)', critical: 'var(--red)' };
+
+  var html = '<div class="card">'
+    + '<div class="card-title">Retirement Readiness</div>'
+    + '<div class="card-subtitle">Based on the retirement dimension of each employee\'s latest assessment. Median score: <strong>' + (ret.median != null ? ret.median + '/100' : '&mdash;') + '</strong>.</div>';
+
+  if (total > 0) {
+    html += '<div class="fin-bands">' + finBandsHtml(ret.bands, total, colors) + '</div>'
+      + '<div class="fin-legend">' + finLegendHtml(ret.bands, colors) + '</div>';
+  } else {
+    html += '<p style="color:var(--muted);font-size:13px">No retirement dimension data available yet.</p>';
+  }
+  html += '</div>';
+
+  if (total > 0) {
+    var needsN = (ret.bands.filter(function (b) { return b.key === 'needs_work'; })[0] || {}).count || 0;
+    var critN  = (ret.bands.filter(function (b) { return b.key === 'critical'; })[0] || {}).count || 0;
+    var atRiskPct = Math.round(100 * (needsN + critN) / total);
+
+    if (atRiskPct >= 30) {
+      html += '<div class="action-strip">'
+        + '<h3>Recommended Next Step</h3>'
+        + '<p><strong>' + atRiskPct + '% of assessed employees</strong> fall in the needs-work or critical retirement readiness bands. A retirement-planning workshop or pension communication campaign would directly support this group.</p>'
+        + '<div class="action-btns">'
+        + '<button class="btn-action primary" onclick="requestWorkshop(\'Retirement Planning\')">Request a retirement-planning workshop</button>'
+        + '<button class="btn-action" onclick="triggerCampaign(\'Retirement Planning\')">Trigger pension communication campaign</button>'
+        + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
+        + '</div></div>';
+    } else {
+      html += '<div class="notice-gold" style="margin-bottom:20px">Retirement readiness looks solid across your assessed workforce &mdash; no urgent action flagged.</div>';
+    }
+  }
+  return html;
 }
 
 function render(data) {
@@ -362,6 +574,10 @@ function render(data) {
           + '<p style="font-size:11px;color:var(--muted)">Based on ' + distress.n_assessed + ' employees who completed the assessment. This is a readiness band &mdash; no individual can be identified from this data.</p>'
           + '</div>';
   }
+
+  // 5.5 Debt Health & Retirement Readiness (org_financial_indicators)
+  html += renderDebtHealth(window._finData);
+  html += renderRetirementReadiness(window._finData);
 
   // 6. Trend chart
   html += '<div class="card">'
