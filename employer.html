@@ -719,6 +719,14 @@ function finLegendHtml(bands, colors) {
   }).join('');
 }
 
+// Explains the 🔒 icon wherever it appears — only shown when at least one
+// band in that panel is actually suppressed, so it doesn't clutter panels
+// where every band already has 3+ employees.
+function finSuppressedNote(bands) {
+  if (!bands.some(function (b) { return b.suppressed; })) return '';
+  return '<p style="font-size:11px;color:var(--muted);margin-top:10px">&#128274; = fewer than 3 employees fall in that band. To protect individual privacy, the exact count is never shown &mdash; only that it&apos;s a very small group.</p>';
+}
+
 function renderDebtHealth(fin) {
   if (!fin || fin.eligible === false) return emptyFinCard('Debt Health', fin);
   var dti = fin.dti;
@@ -731,7 +739,8 @@ function renderDebtHealth(fin) {
 
   if (total > 0) {
     html += '<div class="fin-bands">' + finBandsHtml(dti.bands, total, colors) + '</div>'
-      + '<div class="fin-legend">' + finLegendHtml(dti.bands, colors) + '</div>';
+      + '<div class="fin-legend">' + finLegendHtml(dti.bands, colors) + '</div>'
+      + finSuppressedNote(dti.bands);
   } else {
     html += '<p style="color:var(--muted);font-size:13px">No employees have reported income and debt figures yet.</p>';
   }
@@ -773,7 +782,8 @@ function renderFinancialStress(fin) {
 
   if (total > 0) {
     html += '<div class="fin-bands">' + finBandsHtml(st.bands, total, colors) + '</div>'
-      + '<div class="fin-legend">' + finLegendHtml(st.bands, colors) + '</div>';
+      + '<div class="fin-legend">' + finLegendHtml(st.bands, colors) + '</div>'
+      + finSuppressedNote(st.bands);
   } else {
     html += '<p style="color:var(--muted);font-size:13px">No employees have logged a stress check-in yet.</p>';
   }
@@ -810,7 +820,8 @@ function renderRetirementReadiness(fin) {
 
   if (total > 0) {
     html += '<div class="fin-bands">' + finBandsHtml(ret.bands, total, colors) + '</div>'
-      + '<div class="fin-legend">' + finLegendHtml(ret.bands, colors) + '</div>';
+      + '<div class="fin-legend">' + finLegendHtml(ret.bands, colors) + '</div>'
+      + finSuppressedNote(ret.bands);
   } else {
     html += '<p style="color:var(--muted);font-size:13px">No retirement dimension data available yet.</p>';
   }
