@@ -133,10 +133,15 @@ begin
     group by mb.user_id
   ),
   fulfilled as (
-    select user_id, array_agg(category order by category) as rewarded_categories
-    from reward_fulfilments
-    where org_id = target_org and season = v_season
-    group by user_id
+    -- Every column here must be qualified with the rf. alias: org_rewards()'s
+    -- RETURNS TABLE declares an OUT parameter also named user_id, so an
+    -- unqualified `user_id` (or the other OUT-param-shaped names) inside the
+    -- function body is ambiguous between the table column and the plpgsql
+    -- variable — Postgres raises "column reference ... is ambiguous".
+    select rf.user_id, array_agg(rf.category order by rf.category) as rewarded_categories
+    from reward_fulfilments rf
+    where rf.org_id = target_org and rf.season = v_season
+    group by rf.user_id
   )
   select
     mb.user_id, mb.first_name, mb.last_name, mb.email,
