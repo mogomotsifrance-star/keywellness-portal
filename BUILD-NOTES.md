@@ -190,6 +190,33 @@ table column it queries, qualify every reference to that name with a table
 alias, even in single-table subqueries — don't rely on "only one table in
 this FROM clause" as proof of non-ambiguity.
 
+**Follow-up — the qualification fix above was incomplete for
+`record_reward_fulfilment()`.** After re-deploying, clicking Reward still
+raised `42702 column reference "org_id" is ambiguous`, confirmed via
+`pg_get_functiondef` to be hitting the exact function text described above
+(ruled out: a stale SQL Editor tab, a duplicate function overload — `select
+proname, pg_get_function_identity_arguments(oid) from pg_proc where
+proname = 'record_reward_fulfilment'` returned exactly one row — and
+`employer_org()` itself, which is `language sql` with no OUT parameters and
+therefore structurally can't have this bug). Root-caused to the `insert
+into reward_fulfilments (org_id, user_id, season, category, ...) ... on
+conflict (org_id, user_id, season, category) ...` statement still sharing
+those bare column names with the function's own OUT parameters, even
+though every *other* reference in the body was already alias-qualified.
+
+Fixed by removing the collision at the source instead of chasing individual
+clauses: `record_reward_fulfilment()` now returns `(recorded boolean,
+fulfilment reward_fulfilments)` — the whole row as one composite column —
+instead of naming `org_id`/`user_id`/`season`/`category` as separate OUT
+parameters. This is safe because `employer.html`'s `confirmReward()` only
+checks `error`, never destructures the returned row by field name. Revised
+lesson: for a table-returning function whose OUT columns are still
+partially or wholly a copy of the target table's own columns (as opposed to
+a differently-named projection like `org_rewards()`'s `utilisation_points`
+etc.), prefer returning the row as a single composite column over naming
+each field — it removes the entire bug class rather than requiring every
+reference, in every clause, to be perfectly qualified forever.
+
 ## Privacy-notice follow-ups for Tshenolo (from the FINAL CHECKLIST)
 
 - **Revised consent copy is live** in `index.html`'s Badges page (Rewards
