@@ -72,6 +72,13 @@ durable record.
   own fallback instruction, this indicator is **omitted** from
   `org_financial_indicators()` rather than invented.
 
+- **Financial Stress added as a third indicator** (post-hoc scope clarification
+  — the original batch spec only named DTI and retirement). Sourced from
+  `stress_logs.level` (1-10 scale, latest log per member), reusing the same
+  `>=7 = high stress` threshold already used member-side in index.html's
+  dashboard. Bands: Low (1-3), Moderate (4-6), High (7-10). Same
+  reported_count/median/cell-suppression shape as `dti`.
+
 ## Manual follow-up — NOT attempted by Claude
 
 - **Privacy notice / consent copy update required.** Once opt-in leaderboards
