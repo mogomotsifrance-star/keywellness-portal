@@ -88,27 +88,29 @@ grant execute on function public.set_org_headcount(int, uuid) to authenticated;
 
 
 -- ── VERIFICATION QUERIES ─────────────────────────────────────────
--- Run these as real users via the browser console (window._toolSb.rpc(...)).
+-- Run these as real users via the browser console — while on employer.html
+-- (HR/employer login), typing `sb.rpc(...)` directly (sb is a page-level
+-- const, not window._toolSb — that only exists on the standalone tool pages).
 
 -- 1. Direct client insert fails (no policies on org_headcount_reports):
---    await window._toolSb.from('org_headcount_reports').insert({org_id:'...',headcount:100,reported_by:'...'});
+--    await sb.from('org_headcount_reports').insert({org_id:'...',headcount:100,reported_by:'...'});
 --    Expect: an error, no row inserted.
 
 -- 2. Employer sets and updates headcount — each update creates a NEW row:
---    await window._toolSb.rpc('set_org_headcount', { p_headcount: 1240 });
---    await window._toolSb.rpc('set_org_headcount', { p_headcount: 1255 });
+--    await sb.rpc('set_org_headcount', { p_headcount: 1240 });
+--    await sb.rpc('set_org_headcount', { p_headcount: 1255 });
 --    select count(*) from org_headcount_reports where org_id = '<that org>';  -- expect >= 2
 --    Confirm org_rewards_summary().reported_headcount reflects the LATEST
 --    value (1255) and reported_headcount_updated_at is the second call's time.
 
 -- 3. Non-employer, non-admin caller rejected:
---    await window._toolSb.rpc('set_org_headcount', { p_headcount: 100 });
+--    await sb.rpc('set_org_headcount', { p_headcount: 100 });
 --    Expect: "not authorised".
 --    Admin without p_org_id: expect "p_org_id is required for admin callers".
 --    Admin with p_org_id: succeeds for the specified org.
 
 -- 4. Cross-org isolation — as employer of org A:
---    await window._toolSb.rpc('set_org_headcount', { p_headcount: 999, p_org_id: '<org-B-uuid>' });
+--    await sb.rpc('set_org_headcount', { p_headcount: 999, p_org_id: '<org-B-uuid>' });
 --    Expect: the row is still written against org A (p_org_id is ignored for
 --    employer callers), NOT org B. Verify via
 --    select org_id from org_headcount_reports order by created_at desc limit 1;

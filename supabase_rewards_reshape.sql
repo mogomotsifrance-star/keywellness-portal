@@ -252,13 +252,17 @@ grant execute on function public.org_rewards_summary(uuid, text) to authenticate
 
 
 -- ── VERIFICATION QUERIES ─────────────────────────────────────────
--- Run these as real users via the browser console (window._toolSb.rpc(...)),
+-- Run these as real users via the browser console — while on employer.html
+-- (HR/employer login), where the page's own top-level `const sb` is in scope
+-- (type `sb.rpc(...)` directly; sb is NOT on window, and window._toolSb does
+-- NOT exist on this page — that global only exists on the standalone tool
+-- pages via kw-profile-sync.js),
 -- NOT the SQL Editor — the SQL Editor runs as postgres and bypasses both
 -- RLS and org_rewards()'s own auth.uid()/employer_org() checks.
 
 -- 1. Improvement isolation — seed a test member with an 'improvement' event
 --    (award_points('improvement', ...)), opt them in, then as their employer:
---      const { data } = await window._toolSb.rpc('org_rewards');
+--      const { data } = await sb.rpc('org_rewards');
 --      JSON.stringify(data).includes('improvement')  // expect false
 --    Confirm their overall_points rose but utilisation/learning/progress_points
 --    did not change from the improvement event.
@@ -272,7 +276,7 @@ grant execute on function public.org_rewards_summary(uuid, text) to authenticate
 --    reached_total_at; confirm the earlier reached_total_at ranks higher.
 
 -- 4. Auth gate — as a non-employer member:
---      await window._toolSb.rpc('org_rewards');   // expect "not authorised"
+--      await sb.rpc('org_rewards');   // expect "not authorised"
 --    As the org's employer: expect the opted-in members list.
 
 -- 5. Legacy exclusion — a member with only 'legacy' season points shows
@@ -280,7 +284,7 @@ grant execute on function public.org_rewards_summary(uuid, text) to authenticate
 --    have real current-season events).
 
 -- 6. org_rewards_summary() sanity — as the org's employer:
---      await window._toolSb.rpc('org_rewards_summary');
+--      await sb.rpc('org_rewards_summary');
 --    Expect org_member_count/opted_in_count/active_this_season_count to
 --    match manual counts, season_end_date = last day of the current
 --    quarter, days_remaining >= 0, reported_headcount null until Batch 7's

@@ -177,10 +177,12 @@ grant execute on function public.org_reward_history(text) to authenticated;
 
 
 -- ── VERIFICATION QUERIES ─────────────────────────────────────────
--- Run these as real users via the browser console (window._toolSb.rpc(...)).
+-- Run these as real users via the browser console — while on employer.html
+-- (HR/employer login), typing `sb.rpc(...)` directly (sb is a page-level
+-- const, not window._toolSb — that only exists on the standalone tool pages).
 
 -- 1. Direct client insert fails (no policies on reward_fulfilments):
---    await window._toolSb.from('reward_fulfilments').insert({org_id:'...',user_id:'...',season:'2026-Q3',category:'utilisation',fulfilled_by:'...'});
+--    await sb.from('reward_fulfilments').insert({org_id:'...',user_id:'...',season:'2026-Q3',category:'utilisation',fulfilled_by:'...'});
 --    Expect: an error, no row inserted.
 
 -- 2. Non-qualified / non-opted-in member rejected:
@@ -189,7 +191,7 @@ grant execute on function public.org_reward_history(text) to authenticated;
 --    no row inserted.
 
 -- 3. Idempotent double-click:
---    await window._toolSb.rpc('record_reward_fulfilment', {p_user_id:'...', p_season:'2026-Q3', p_category:'utilisation', p_note:'P500 voucher'});
+--    await sb.rpc('record_reward_fulfilment', {p_user_id:'...', p_season:'2026-Q3', p_category:'utilisation', p_note:'P500 voucher'});
 --    // repeat the same call
 --    Expect: first call {recorded:true,...}; second call {recorded:false,...}
 --    with the SAME id/note as the first — confirm via
@@ -197,5 +199,5 @@ grant execute on function public.org_reward_history(text) to authenticated;
 
 -- 4. Cross-org isolation — as employer of org A, call org_reward_history();
 --    confirm no org B fulfilments appear. As a member (non-employer):
---    await window._toolSb.rpc('org_reward_history'); expect "not authorised".
+--    await sb.rpc('org_reward_history'); expect "not authorised".
 -- ─────────────────────────────────────────────────────────────

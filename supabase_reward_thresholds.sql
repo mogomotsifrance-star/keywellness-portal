@@ -51,9 +51,12 @@ create policy thresholds_readable on public.reward_thresholds
 -- 1. Table seeded, readable by any authenticated user, not writable:
 --    select * from reward_thresholds order by category;
 --    Expect: exactly 3 rows (utilisation, learning, progress) with the
---    values above. As a logged-in member via the browser console:
---      await window._toolSb.from('reward_thresholds').select('*');       -- succeeds
---      await window._toolSb.from('reward_thresholds').update({first_season_points:1}).eq('category','progress'); -- fails (no policy)
+--    values above. As a logged-in member, on index.html, via the browser
+--    console (type `sb.rpc(...)`/`sb.from(...)` directly — sb is a
+--    page-level const, not window._toolSb, which only exists on the
+--    standalone tool pages via kw-profile-sync.js):
+--      await sb.from('reward_thresholds').select('*');       -- succeeds
+--      await sb.from('reward_thresholds').update({first_season_points:1}).eq('category','progress'); -- fails (no policy)
 
 -- 2. Tenure rule sanity check — seed/pick two real profiles, one created
 --    this quarter and one created last quarter, and confirm the formula:
