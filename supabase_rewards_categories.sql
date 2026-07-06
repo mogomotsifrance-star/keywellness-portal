@@ -89,7 +89,7 @@ grant select on public.my_points to authenticated;
 
 -- 3. Existing consumer unaffected — in the browser console as any logged-in
 --    member:
---      await window._toolSb.from('my_points').select('*').maybeSingle();
+--      await sb.from('my_points').select('*').maybeSingle();
 --    Expect: total_points/season_points still present and correct, plus the
 --    three new columns.
 -- ─────────────────────────────────────────────────────────────
