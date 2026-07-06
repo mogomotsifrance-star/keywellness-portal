@@ -1,0 +1,238 @@
+/* Key Wellness — shared theme module.
+   Tokens, base styles, and component classes live here.
+   Pages import this file and must not redefine tokens locally. */
+
+:root{
+  /* Brand */
+  --kw-green:#397e2b;        /* primary actions, links, progress, active */
+  --kw-green-deep:#2a5f20;   /* hover, emphasis text on tint */
+  --kw-green-tint:#eef4ea;   /* fills, active nav pill, icon chips */
+  --kw-green-wash:#f4f8f1;   /* sidebar, banners */
+  --kw-yellow:#f0c90a;       /* accents ONLY: flags, points, badges */
+  --kw-yellow-ink:#93790a;   /* yellow-family TEXT colour */
+  --kw-yellow-tint:#fdf5cf;  /* yellow badge background */
+  /* Neutrals */
+  --kw-ink:#23261f;          /* headings */
+  --kw-body:#4b4e48;         /* body text */
+  --kw-grey:#808185;         /* brand grey: labels, captions only */
+  --kw-line:#e7e9e3;         /* hairline borders */
+  --kw-surface:#f5f6f2;      /* tinted card / track background */
+  --kw-canvas:#fbfcfa;       /* page background */
+  --kw-white:#ffffff;
+  /* Status (keep for existing semantics) */
+  --kw-red:#c0392b; --kw-orange:#d97706;
+  /* Shape & motion */
+  --kw-r:14px; --kw-r-lg:18px;
+  --kw-shadow-hover:0 10px 30px rgba(35,38,31,.09),0 2px 8px rgba(35,38,31,.05);
+  --kw-ease:cubic-bezier(.22,.9,.32,1);
+  --kw-dur:0.45s; --kw-stagger:60ms; --kw-countup:1100ms;
+}
+
+/* ── Base ─────────────────────────────────────────── */
+body{
+  font-family:'Nunito',sans-serif;
+  background:var(--kw-canvas);
+  color:var(--kw-body);
+}
+h1,h2,h3,h4,h5,h6{
+  font-family:'Nunito',sans-serif;
+  font-weight:800;
+  letter-spacing:-0.015em;
+  color:var(--kw-ink);
+}
+.kw-mono{font-family:'DM Mono',monospace}
+
+/* ── Cards ────────────────────────────────────────── */
+.kw-card{
+  background:var(--kw-white);
+  border:1px solid var(--kw-line);
+  border-radius:var(--kw-r-lg);
+  padding:24px;
+}
+.kw-card--tint{
+  background:var(--kw-surface);
+  border:none;
+}
+.kw-card--lift{
+  transition:transform var(--kw-dur) var(--kw-ease), box-shadow var(--kw-dur) var(--kw-ease);
+}
+.kw-card--lift:hover{
+  transform:translateY(-3px);
+  box-shadow:var(--kw-shadow-hover);
+}
+
+/* ── Labels ───────────────────────────────────────── */
+.kw-label{
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  color:var(--kw-grey);
+}
+
+/* ── Buttons ──────────────────────────────────────── */
+.kw-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  border:none;
+  border-radius:999px;
+  padding:11px 22px;
+  font-family:'Nunito',sans-serif;
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+  transition:transform .15s var(--kw-ease), background-color var(--kw-dur) var(--kw-ease), box-shadow var(--kw-dur) var(--kw-ease), border-color var(--kw-dur) var(--kw-ease);
+}
+.kw-btn:active{transform:scale(.96)}
+.kw-btn--primary{
+  background:var(--kw-green);
+  color:var(--kw-white);
+}
+.kw-btn--primary:hover{
+  background:var(--kw-green-deep);
+  box-shadow:var(--kw-shadow-hover);
+}
+.kw-btn--secondary{
+  background:var(--kw-white);
+  border:1px solid var(--kw-line);
+  color:var(--kw-ink);
+}
+.kw-btn--secondary:hover{
+  border-color:var(--kw-grey);
+}
+
+/* ── Pills (nav items, month/tab switchers) ──────────── */
+.kw-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  border-radius:999px;
+  padding:9px 16px;
+  font-size:14px;
+  font-weight:700;
+  color:var(--kw-body);
+  background:transparent;
+  border:none;
+  cursor:pointer;
+  transition:background-color var(--kw-dur) var(--kw-ease), color var(--kw-dur) var(--kw-ease), box-shadow var(--kw-dur) var(--kw-ease);
+}
+.kw-pill:hover{
+  background:var(--kw-green-tint);
+}
+.kw-pill.is-active{
+  background:var(--kw-white);
+  color:var(--kw-green);
+  box-shadow:0 1px 4px rgba(35,38,31,.12);
+}
+
+/* ── Points / reward badge ────────────────────────────── */
+.kw-badge--points{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  background:var(--kw-yellow-tint);
+  color:var(--kw-yellow-ink);
+  border-radius:999px;
+  padding:6px 14px;
+  font-size:13px;
+  font-weight:800;
+}
+
+/* ── Progress bars ────────────────────────────────────── */
+.kw-bar{
+  position:relative;
+  width:100%;
+  height:6px;
+  border-radius:999px;
+  background:var(--kw-surface);
+  overflow:hidden;
+}
+.kw-bar__fill{
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:0%;
+  border-radius:999px;
+  background:var(--kw-green);
+  transition:width var(--kw-dur) var(--kw-ease);
+}
+.kw-bar__fill.is-flag{
+  background:var(--kw-yellow);
+}
+
+/* ── Inputs ───────────────────────────────────────────── */
+.kw-input{
+  width:100%;
+  background:var(--kw-white);
+  border:1px solid var(--kw-line);
+  border-radius:var(--kw-r);
+  padding:10px 14px;
+  font-family:'Nunito',sans-serif;
+  font-size:14px;
+  color:var(--kw-ink);
+  transition:border-color var(--kw-dur) var(--kw-ease), box-shadow var(--kw-dur) var(--kw-ease);
+}
+.kw-input:focus{
+  outline:none;
+  border-color:var(--kw-green);
+  box-shadow:0 0 0 3px var(--kw-green-tint);
+}
+
+/* ── Skeleton loading ─────────────────────────────────── */
+.kw-skeleton{
+  position:relative;
+  background:var(--kw-surface);
+  border-radius:var(--kw-r);
+  overflow:hidden;
+  color:transparent;
+}
+.kw-skeleton::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent);
+  transform:translateX(-100%);
+  animation:kw-shimmer 1.4s infinite;
+}
+@keyframes kw-shimmer{
+  100%{transform:translateX(100%)}
+}
+
+/* ── Entrance motion ──────────────────────────────────── */
+.reveal{
+  opacity:0;
+  transform:translateY(12px);
+  transition:opacity var(--kw-dur) var(--kw-ease), transform var(--kw-dur) var(--kw-ease);
+}
+.reveal.in{
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* ── Reduced motion: kill all of the above motion ────────── */
+@media (prefers-reduced-motion: reduce){
+  .kw-card--lift,
+  .kw-btn,
+  .kw-pill,
+  .kw-bar__fill,
+  .kw-input,
+  .reveal{
+    transition:none !important;
+  }
+  .kw-card--lift:hover{
+    transform:none;
+    box-shadow:none;
+  }
+  .kw-btn:active{
+    transform:none;
+  }
+  .reveal{
+    opacity:1 !important;
+    transform:none !important;
+  }
+  .kw-skeleton::after{
+    animation:none !important;
+    display:none;
+  }
+}
