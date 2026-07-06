@@ -103,7 +103,7 @@ begin
 
     select first_season_points, returning_points
     into v_first_season_points, v_returning_points
-    from reward_thresholds where category = p_category;
+    from reward_thresholds where reward_thresholds.category = p_category;
 
     v_is_first_season := (to_char(v_joined_at, 'YYYY"-Q"Q') = to_char(now(), 'YYYY"-Q"Q'));
     v_qualified := v_points >= (case when v_is_first_season
@@ -122,8 +122,12 @@ begin
 
   if v_row.id is null then
     -- Already recorded — idempotent no-op, return the existing row.
-    select * into v_row from reward_fulfilments
-    where org_id = v_org and user_id = p_user_id and season = p_season and category = p_category;
+    -- Every column here must be qualified with the rf. alias: this function's
+    -- RETURNS TABLE declares OUT parameters named org_id/user_id/season/
+    -- category too, so unqualified references are ambiguous between the
+    -- table column and the plpgsql variable of the same name.
+    select * into v_row from reward_fulfilments rf
+    where rf.org_id = v_org and rf.user_id = p_user_id and rf.season = p_season and rf.category = p_category;
     return query select false, v_row.id, v_row.org_id, v_row.user_id, v_row.season,
                         v_row.category, v_row.note, v_row.fulfilled_by, v_row.created_at;
   else

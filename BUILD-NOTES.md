@@ -165,6 +165,31 @@ follow-up" at the end of this section.
   way to disambiguate which org an admin means — kept deliberately narrow
   rather than inventing a parameter the spec didn't ask for.
 
+## Post-ship fix — ambiguous column references in PL/pgSQL
+
+After both branches went live, the Rewards tab failed with `column
+reference "user_id" is ambiguous`. Root cause: `org_rewards()` and
+`record_reward_fulfilment()` both declare `RETURNS TABLE (user_id uuid,
+..., org_id uuid, season text, category text, ...)`, and PL/pgSQL exposes
+each OUT column as an implicit variable throughout the function body. Any
+*unqualified* reference to a column with the same name inside the query
+(e.g. `where user_id = p_user_id`) is then ambiguous between the table
+column and that implicit variable — Postgres won't guess.
+
+Fixed in three places (all now qualify every column with its table alias):
+`org_rewards()`'s `fulfilled` CTE (`user_id`), `record_reward_fulfilment()`'s
+idempotent re-fetch (`org_id`/`user_id`/`season`/`category`), and its
+`reward_thresholds` lookup (`category`). Re-run the corrected
+`supabase_rewards_reshape.sql` and `supabase_reward_fulfilment.sql` — both
+are `CREATE OR REPLACE FUNCTION` with unchanged return signatures, so no
+`DROP FUNCTION` is needed this time.
+
+**General lesson for future RPCs in this codebase**: whenever a plpgsql
+function's `RETURNS TABLE (...)` column list shares a name with a real
+table column it queries, qualify every reference to that name with a table
+alias, even in single-table subqueries — don't rely on "only one table in
+this FROM clause" as proof of non-ambiguity.
+
 ## Privacy-notice follow-ups for Tshenolo (from the FINAL CHECKLIST)
 
 - **Revised consent copy is live** in `index.html`'s Badges page (Rewards
