@@ -35,6 +35,20 @@ alter table public.reward_fulfilments enable row level security;
 -- Idempotent via the unique constraint — a double-click returns
 -- recorded:false with the already-existing row, not an error.
 
+-- Root-cause fix for the "column reference ... is ambiguous" (42702) error
+-- that kept resurfacing here: the previous RETURNS TABLE named its OUT
+-- columns org_id/user_id/season/category — the SAME names as real columns
+-- on reward_fulfilments — so PL/pgSQL's implicit OUT-parameter variables
+-- were ambiguous against those table columns wherever referenced, in ways
+-- that kept slipping past manual re-qualification (Postgres's own "cannot
+-- change return type" error path meant a clean drop was never forced, so
+-- earlier fixes kept fighting the same class of collision instead of
+-- removing it). Since employer.html's confirmReward() never reads the
+-- returned row by field name (it only checks `error`), the row is returned
+-- as a single composite column instead — this makes the collision
+-- structurally impossible rather than merely avoided.
+drop function if exists public.record_reward_fulfilment(uuid, text, text, text);
+
 create or replace function public.record_reward_fulfilment(
   p_user_id uuid,
   p_season text,
@@ -42,15 +56,8 @@ create or replace function public.record_reward_fulfilment(
   p_note text default null
 )
 returns table (
-  recorded     boolean,
-  id           bigint,
-  org_id       uuid,
-  user_id      uuid,
-  season       text,
-  category     text,
-  note         text,
-  fulfilled_by uuid,
-  created_at   timestamptz
+  recorded   boolean,
+  fulfilment reward_fulfilments
 )
 language plpgsql security definer set search_path = public as $$
 declare
@@ -64,6 +71,7 @@ declare
   v_is_first_season     boolean;
   v_qualified           boolean;
   v_row                 reward_fulfilments%rowtype;
+  v_recorded            boolean;
 begin
   v_org := employer_org();
   if v_org is null then
@@ -101,9 +109,9 @@ begin
       and pe.season = p_season and pe.season <> 'legacy'
       and pc.category = p_category;
 
-    select first_season_points, returning_points
+    select rt.first_season_points, rt.returning_points
     into v_first_season_points, v_returning_points
-    from reward_thresholds where reward_thresholds.category = p_category;
+    from reward_thresholds rt where rt.category = p_category;
 
     v_is_first_season := (to_char(v_joined_at, 'YYYY"-Q"Q') = to_char(now(), 'YYYY"-Q"Q'));
     v_qualified := v_points >= (case when v_is_first_season
@@ -115,25 +123,21 @@ begin
     end if;
   end if;
 
-  insert into reward_fulfilments (org_id, user_id, season, category, note, fulfilled_by)
+  insert into reward_fulfilments as rf (org_id, user_id, season, category, note, fulfilled_by)
   values (v_org, p_user_id, p_season, p_category, p_note, auth.uid())
   on conflict (org_id, user_id, season, category) do nothing
-  returning * into v_row;
+  returning rf.* into v_row;
 
   if v_row.id is null then
     -- Already recorded — idempotent no-op, return the existing row.
-    -- Every column here must be qualified with the rf. alias: this function's
-    -- RETURNS TABLE declares OUT parameters named org_id/user_id/season/
-    -- category too, so unqualified references are ambiguous between the
-    -- table column and the plpgsql variable of the same name.
-    select * into v_row from reward_fulfilments rf
-    where rf.org_id = v_org and rf.user_id = p_user_id and rf.season = p_season and rf.category = p_category;
-    return query select false, v_row.id, v_row.org_id, v_row.user_id, v_row.season,
-                        v_row.category, v_row.note, v_row.fulfilled_by, v_row.created_at;
+    v_recorded := false;
+    select rf2.* into v_row from reward_fulfilments rf2
+    where rf2.org_id = v_org and rf2.user_id = p_user_id and rf2.season = p_season and rf2.category = p_category;
   else
-    return query select true, v_row.id, v_row.org_id, v_row.user_id, v_row.season,
-                        v_row.category, v_row.note, v_row.fulfilled_by, v_row.created_at;
+    v_recorded := true;
   end if;
+
+  return query select v_recorded, v_row;
 end;
 $$;
 
@@ -193,11 +197,13 @@ grant execute on function public.org_reward_history(text) to authenticated;
 --    below the category threshold, or not opted in — expect an exception,
 --    no row inserted.
 
--- 3. Idempotent double-click:
---    await sb.rpc('record_reward_fulfilment', {p_user_id:'...', p_season:'2026-Q3', p_category:'utilisation', p_note:'P500 voucher'});
---    // repeat the same call
---    Expect: first call {recorded:true,...}; second call {recorded:false,...}
---    with the SAME id/note as the first — confirm via
+-- 3. Idempotent double-click (data[0].fulfilment holds the row; recorded
+--    flags which call actually inserted it):
+--    const a = await sb.rpc('record_reward_fulfilment', {p_user_id:'...', p_season:'2026-Q3', p_category:'utilisation', p_note:'P500 voucher'});
+--    const b = await sb.rpc('record_reward_fulfilment', {p_user_id:'...', p_season:'2026-Q3', p_category:'utilisation', p_note:'P500 voucher'});
+--    Expect: a.data[0].recorded === true; b.data[0].recorded === false; both
+--    a.data[0].fulfilment.id and b.data[0].fulfilment.id are the SAME id —
+--    confirm via
 --    `select count(*) from reward_fulfilments where user_id='...' and category='utilisation' and season='2026-Q3';` → 1.
 
 -- 4. Cross-org isolation — as employer of org A, call org_reward_history();
