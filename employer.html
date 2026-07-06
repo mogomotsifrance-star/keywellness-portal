@@ -737,6 +737,44 @@ function renderDebtHealth(fin) {
   return html;
 }
 
+function renderFinancialStress(fin) {
+  if (!fin || fin.eligible === false) return emptyFinCard('Financial Stress', fin);
+  var st = fin.stress;
+  if (!st) return ''; // older cached response shape before this indicator existed
+  var total = st.reported_count || 0;
+  var colors = { low: 'var(--green)', moderate: 'var(--gold)', high: 'var(--red)' };
+
+  var html = '<div class="card">'
+    + '<div class="card-title">Financial Stress</div>'
+    + '<div class="card-subtitle">Self-reported stress level from ' + total + ' employee' + (total === 1 ? '' : 's') + "' most recent fortnightly check-in. Median: <strong>" + (st.median != null ? st.median + '/10' : '&mdash;') + '</strong>.</div>';
+
+  if (total > 0) {
+    html += '<div class="fin-bands">' + finBandsHtml(st.bands, total, colors) + '</div>'
+      + '<div class="fin-legend">' + finLegendHtml(st.bands, colors) + '</div>';
+  } else {
+    html += '<p style="color:var(--muted);font-size:13px">No employees have logged a stress check-in yet.</p>';
+  }
+  html += '</div>';
+
+  if (total > 0) {
+    var highN = (st.bands.filter(function (b) { return b.key === 'high'; })[0] || {}).count || 0;
+    var highPct = Math.round(100 * highN / total);
+
+    if (highPct >= 25) {
+      html += '<div class="action-strip">'
+        + '<h3>Recommended Next Step</h3>'
+        + '<p><strong>' + highPct + '% of reporting employees</strong> are logging high financial stress. Proactive wellbeing outreach or an EAP referral would directly support this group.</p>'
+        + '<div class="action-btns">'
+        + '<button class="btn-action primary" onclick="requestWorkshop(\'Financial Stress Support\')">Request wellbeing outreach</button>'
+        + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
+        + '</div></div>';
+    } else {
+      html += '<div class="notice-gold" style="margin-bottom:20px">Reported stress levels look manageable across your workforce &mdash; no urgent action flagged.</div>';
+    }
+  }
+  return html;
+}
+
 function renderRetirementReadiness(fin) {
   if (!fin || fin.eligible === false) return emptyFinCard('Retirement Readiness', fin);
   var ret = fin.retirement;
@@ -884,9 +922,10 @@ function render(data) {
           + '</div>';
   }
 
-  // 5.5 Debt Health & Retirement Readiness (org_financial_indicators)
+  // 5.5 Debt Health, Retirement Readiness & Financial Stress (org_financial_indicators)
   html += renderDebtHealth(window._finData);
   html += renderRetirementReadiness(window._finData);
+  html += renderFinancialStress(window._finData);
 
   // 6. Trend chart
   html += '<div class="card">'

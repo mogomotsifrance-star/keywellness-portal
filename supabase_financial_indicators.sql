@@ -16,6 +16,9 @@
 --     already used by org_overview().
 --   • Pension contribution % is never persisted anywhere and is OMITTED from
 --     this function's output rather than invented.
+--   • Financial Stress uses stress_logs.level (1-10 scale, higher = more
+--     stressed — the same field and >=7 "high stress" threshold already used
+--     member-side in index.html's dashboard), latest log per member.
 --
 -- Structurally incapable of returning a per-member row: every value returned
 -- is an aggregate (count/median) computed inside the function body.
@@ -31,6 +34,9 @@ declare
   v_dti_bands      json;
   v_ret_median     numeric;
   v_ret_bands      json;
+  v_stress_reported int;
+  v_stress_median   numeric;
+  v_stress_bands    json;
 begin
   -- ── Auth: same gate as org_overview() ──────────────────────────
   if target_org is null then
@@ -148,6 +154,49 @@ begin
     group by band
   ) rc on rc.band = b.key;
 
+  -- ── Financial Stress: reported count + median (latest stress_logs.level) ──
+  select count(*), percentile_cont(0.5) within group (order by lvl)
+  into v_stress_reported, v_stress_median
+  from (
+    select sl.level as lvl
+    from profiles p
+    cross join lateral (
+      select level from stress_logs where user_id = p.id order by created_at desc limit 1
+    ) sl
+    where p.org_id = target_org
+  ) x;
+
+  select json_agg(
+    json_build_object(
+      'key', b.key, 'label', b.label,
+      'count', case when coalesce(sc.n, 0) between 1 and 2 then null else coalesce(sc.n, 0) end,
+      'suppressed', coalesce(sc.n, 0) between 1 and 2
+    ) order by b.ord
+  ) into v_stress_bands
+  from (values
+    ('low',      'Low (1–3)',      1),
+    ('moderate', 'Moderate (4–6)', 2),
+    ('high',     'High (7–10)',    3)
+  ) as b(key, label, ord)
+  left join (
+    select
+      case
+        when lvl <= 3 then 'low'
+        when lvl <= 6 then 'moderate'
+        else 'high'
+      end as band,
+      count(*) as n
+    from (
+      select sl.level as lvl
+      from profiles p
+      cross join lateral (
+        select level from stress_logs where user_id = p.id order by created_at desc limit 1
+      ) sl
+      where p.org_id = target_org
+    ) v
+    group by band
+  ) sc on sc.band = b.key;
+
   -- ── Assemble. No pension_contrib_pct key — not derivable (see notes above).
   return json_build_object(
     'eligible', true,
@@ -160,6 +209,11 @@ begin
     'retirement', json_build_object(
       'median', round(v_ret_median, 1),
       'bands', v_ret_bands
+    ),
+    'stress', json_build_object(
+      'reported_count', v_stress_reported,
+      'median', round(v_stress_median, 1),
+      'bands', v_stress_bands
     )
   );
 end;
@@ -178,9 +232,10 @@ grant execute on function public.org_financial_indicators(uuid) to authenticated
 --    payload — inspect the raw network response, not just the rendered UI.
 
 -- 2. Eligible org with a 1-2 member band:
---    Expect that band's bucket in `dti.bands` / `retirement.bands` to have
---    count:null, suppressed:true. Confirm the true count never appears
---    anywhere in the response (check Network tab, not just what the UI shows).
+--    Expect that band's bucket in `dti.bands` / `retirement.bands` /
+--    `stress.bands` to have count:null, suppressed:true. Confirm the true
+--    count never appears anywhere in the response (check Network tab, not
+--    just what the UI shows).
 
 -- 3. Response contains no user ids, no per-user values, no min/max — inspect
 --    the full JSON payload directly.
