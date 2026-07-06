@@ -109,7 +109,11 @@ begin
 
   return query
   with member_base as (
-    select p.id as user_id, p.first_name, p.last_name, u.email, u.created_at as joined_at
+    -- auth.users.email is character varying(255); the RETURNS TABLE declares
+    -- email as text, and Postgres requires an exact type match for table-
+    -- returning functions ("structure of query does not match function
+    -- result type") — cast explicitly rather than relying on an implicit cast.
+    select p.id as user_id, p.first_name, p.last_name, u.email::text as email, u.created_at as joined_at
     from profiles p
     join auth.users u on u.id = p.id
     where p.org_id = target_org and p.leaderboard_opt_in = true

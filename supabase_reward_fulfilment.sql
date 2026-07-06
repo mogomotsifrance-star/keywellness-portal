@@ -163,7 +163,10 @@ begin
   end if;
 
   return query
-  select p.first_name, p.last_name, u.email, rf.category, rf.note, rf.season, rf.created_at
+  -- auth.users.email is character varying(255); the RETURNS TABLE declares
+  -- email as text — cast explicitly (see org_rewards() for the same fix and
+  -- full explanation).
+  select p.first_name, p.last_name, u.email::text as email, rf.category, rf.note, rf.season, rf.created_at
   from reward_fulfilments rf
   join profiles p on p.id = rf.user_id
   join auth.users u on u.id = p.id
