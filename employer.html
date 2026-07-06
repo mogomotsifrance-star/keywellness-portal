@@ -103,6 +103,14 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 .btn-action:hover{background:rgba(200,151,58,.3);border-color:var(--gold)}
 .btn-action.primary{background:var(--gold);border-color:var(--gold);color:var(--navy)}
 .btn-action.primary:hover{background:var(--gold-light)}
+/* .btn-action is designed for the dark .action-strip background — on a white
+   .card, its default rgba(255,255,255,.12) fill is nearly invisible. .on-light
+   gives it navy-on-white contrast instead, used for the Rewards tab's Reward
+   buttons and Categories/History sub-tab toggles. */
+.btn-action.on-light{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn-action.on-light:hover{background:var(--navy-light)}
+.btn-action.on-light.primary{background:var(--gold);border-color:var(--gold);color:var(--navy)}
+.btn-action.on-light.primary:hover{background:var(--gold-light)}
 
 /* Chart */
 .chart-wrap{position:relative;height:220px}
@@ -292,6 +300,15 @@ function quarterKey(offset) {
 
 let rewardsSeason = null;
 let rewardsRows = [];
+let rewardsSummary = null;
+let rewardsSubTab = 'categories'; // 'categories' | 'history'
+let guidanceOpen = false;
+let openRewardForm = null;        // { category, userId } | null
+let belowSectionsOpen = { utilisation: false, learning: false, progress: false };
+let historyRows = [];
+let historySeason = '';           // '' = all seasons
+let historyLoaded = false;
+let headcountEditing = false;
 
 async function switchTab(tab) {
   document.getElementById('nav-overview').classList.toggle('active', tab === 'overview');
@@ -305,58 +322,350 @@ async function switchTab(tab) {
 
 async function loadRewards(season) {
   rewardsSeason = season;
+  rewardsSubTab = 'categories';
+  openRewardForm = null;
+  historyLoaded = false;
   document.getElementById('page-content').innerHTML = '<div class="spinner"><div class="spin"></div> Loading rewards&hellip;</div>';
-  const { data, error } = await sb.rpc('org_rewards', { p_season: season });
-  if (error) {
-    renderError(error.message);
+  const [rewardsRes, summaryRes] = await Promise.all([
+    sb.rpc('org_rewards', { p_season: season }),
+    sb.rpc('org_rewards_summary', { p_season: season }),
+  ]);
+  if (rewardsRes.error) {
+    renderError(rewardsRes.error.message);
     return;
   }
-  rewardsRows = data || [];
+  if (summaryRes.error) console.error('org_rewards_summary failed:', summaryRes.error);
+  rewardsRows = rewardsRes.data || [];
+  rewardsSummary = summaryRes.error ? null : summaryRes.data;
   renderRewards();
 }
 
-function renderRewards() {
-  var seasonOptions = [0, 1, 2, 3].map(quarterKey);
-  var seasonSelect = '<select id="rewards-season" onchange="loadRewards(this.value)" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px">'
-    + seasonOptions.map(function (s) { return '<option value="' + s + '"' + (s === rewardsSeason ? ' selected' : '') + '>' + (s === quarterKey(0) ? s + ' (current)' : s) + '</option>'; }).join('')
+async function switchRewardsSubTab(tab) {
+  rewardsSubTab = tab;
+  if (tab === 'history' && !historyLoaded) {
+    await loadHistory(historySeason);
+  } else {
+    renderRewards();
+  }
+}
+
+async function loadHistory(season) {
+  historySeason = season || '';
+  const { data, error } = await sb.rpc('org_reward_history', { p_season: historySeason || null });
+  if (error) { console.error('org_reward_history failed:', error); historyRows = []; }
+  else { historyRows = data || []; historyLoaded = true; }
+  renderRewards();
+}
+
+function toggleBelowBar(category) {
+  belowSectionsOpen[category] = !belowSectionsOpen[category];
+  renderRewards();
+}
+
+function toggleRewardForm(category, userId) {
+  openRewardForm = (openRewardForm && openRewardForm.category === category && openRewardForm.userId === userId)
+    ? null
+    : { category: category, userId: userId };
+  renderRewards();
+}
+
+async function confirmReward(category, userId) {
+  const noteEl = document.getElementById('reward-note-' + category + '-' + userId);
+  const errEl  = document.getElementById('reward-error-' + category + '-' + userId);
+  const note = (noteEl && noteEl.value || '').trim();
+  if (errEl) errEl.textContent = '';
+
+  const { error } = await sb.rpc('record_reward_fulfilment', {
+    p_user_id: userId, p_season: rewardsSeason, p_category: category, p_note: note || null,
+  });
+  if (error) {
+    if (errEl) errEl.textContent = error.message;
+    return;
+  }
+  openRewardForm = null;
+  // Patch local state so the row flips to "Rewarded" without a full reload.
+  const row = rewardsRows.find(function (m) { return m.user_id === userId; });
+  if (row) {
+    row.rewarded_categories = row.rewarded_categories || [];
+    if (row.rewarded_categories.indexOf(category) === -1) row.rewarded_categories.push(category);
+    row.rewarded_notes = row.rewarded_notes || {};
+    row.rewarded_notes[category] = note;
+  }
+  renderRewards();
+}
+
+function rewardButtonHtml(category, userId, rewardedCategories, noteText) {
+  if ((rewardedCategories || []).indexOf(category) !== -1) {
+    return '<span style="font-size:12px;color:var(--green);font-weight:600;white-space:nowrap">&#10003; Rewarded' + (noteText ? ' &mdash; ' + escHtml(noteText) : '') + '</span>';
+  }
+  return '<button class="btn-action on-light" style="padding:6px 14px;font-size:12px" onclick="toggleRewardForm(\'' + category + '\',\'' + userId + '\')">Reward</button>';
+}
+
+function rewardFormHtml(category, userId, placeholder) {
+  return '<div class="card" style="margin:-2px 0 10px;padding:14px 18px;background:#fffbf2;border:1px solid #f0d88e">'
+    + '<label style="font-size:12px;font-weight:600;color:var(--navy);display:block;margin-bottom:6px">What was awarded?</label>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<input type="text" id="reward-note-' + category + '-' + userId + '" maxlength="200" placeholder="' + placeholder + '" style="flex:1;min-width:180px;padding:8px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px">'
+    + '<button class="btn-action on-light primary" onclick="confirmReward(\'' + category + '\',\'' + userId + '\')">Confirm</button>'
+    + '<button class="btn-action on-light" onclick="openRewardForm=null;renderRewards();">Cancel</button>'
+    + '</div><div id="reward-error-' + category + '-' + userId + '" style="font-size:11px;color:var(--red);margin-top:6px"></div>'
+    + '</div>';
+}
+
+function memberRow(m, category) {
+  const pointsKey = category + '_points';
+  const formOpen = openRewardForm && openRewardForm.category === category && openRewardForm.userId === m.user_id;
+  const name = escHtml(((m.first_name || '') + ' ' + (m.last_name || '')).trim() || 'Member');
+  let html = '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:6px;background:var(--cream-dark)">'
+    + '<div style="flex:1;min-width:140px"><div style="font-weight:600;font-size:13px;color:var(--navy)">' + name + '</div><div style="font-size:11px;color:var(--muted)">' + escHtml(m.email || '') + '</div></div>'
+    + '<div class="mono" style="font-weight:700;color:var(--gold);min-width:60px;text-align:right">' + (m[pointsKey] || 0) + ' pts</div>'
+    + rewardButtonHtml(category, m.user_id, m.rewarded_categories, m.rewarded_notes && m.rewarded_notes[category])
+    + '</div>';
+  if (formOpen) html += rewardFormHtml(category, m.user_id, 'e.g. P500 Choppies voucher');
+  return html;
+}
+
+function renderCategorySection(category, label) {
+  const qualifiedKey = 'qualified_' + category;
+  const qualified = rewardsRows.filter(function (m) { return m[qualifiedKey]; })
+    .sort(function (a, b) { return (b[category + '_points'] || 0) - (a[category + '_points'] || 0); });
+  const below = rewardsRows.filter(function (m) { return !m[qualifiedKey]; });
+
+  let html = '<div class="card" style="margin-bottom:20px">'
+    + '<div class="card-title">' + label + '</div>'
+    + '<div class="card-subtitle">' + qualified.length + ' qualified member' + (qualified.length === 1 ? '' : 's') + ' this season.</div>';
+
+  if (!qualified.length) {
+    html += '<p style="color:var(--muted);font-size:13px">No opted-in members have reached the ' + label.toLowerCase() + ' threshold yet.</p>';
+  } else {
+    html += qualified.map(function (m) { return memberRow(m, category); }).join('');
+  }
+
+  if (below.length) {
+    html += '<div style="margin-top:10px">'
+      + '<a href="#" onclick="event.preventDefault();toggleBelowBar(\'' + category + '\')" style="font-size:12px;color:var(--muted);font-weight:600">'
+      + (belowSectionsOpen[category] ? 'Hide' : 'Show') + ' below qualification bar (' + below.length + ')</a>'
+      + '</div>';
+    if (belowSectionsOpen[category]) {
+      html += '<div style="margin-top:8px;opacity:.55">' + below.map(function (m) {
+        const name = escHtml(((m.first_name || '') + ' ' + (m.last_name || '')).trim() || 'Member');
+        return '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:8px 14px;border-radius:var(--radius-sm);margin-bottom:4px;background:var(--cream-dark)">'
+          + '<div style="flex:1;min-width:140px"><div style="font-size:13px;color:var(--navy)">' + name + '</div><div style="font-size:11px;color:var(--muted)">' + escHtml(m.email || '') + '</div></div>'
+          + '<div class="mono" style="font-size:12px;color:var(--muted)">' + (m[category + '_points'] || 0) + ' pts</div>'
+          + '</div>';
+      }).join('') + '</div>';
+    }
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function renderOverallRanking() {
+  const top = rewardsRows.slice().sort(function (a, b) { return a.overall_rank - b.overall_rank; }).slice(0, 10);
+  const medal = function (r) { return r === 1 ? '&#129351;' : r === 2 ? '&#129352;' : r === 3 ? '&#129353;' : null; };
+
+  const rowsHtml = top.map(function (m) {
+    const isPodium = m.overall_rank <= 3;
+    const m2 = medal(m.overall_rank);
+    const name = escHtml(((m.first_name || '') + ' ' + (m.last_name || '')).trim() || 'Member');
+    const formOpen = openRewardForm && openRewardForm.category === 'overall' && openRewardForm.userId === m.user_id;
+    let row = '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:' + (isPodium ? '14px' : '10px') + ' 14px;border-radius:var(--radius-sm);margin-bottom:6px;background:' + (isPodium ? 'var(--cream-dark)' : 'transparent') + ';border:1px solid var(--border)">'
+      + '<div style="width:32px;text-align:center;font-size:' + (isPodium ? '20px' : '14px') + ';font-weight:700;color:' + (isPodium ? 'inherit' : 'var(--muted)') + '">' + (m2 || ('#' + m.overall_rank)) + '</div>'
+      + '<div style="flex:1;min-width:140px"><div style="font-weight:600;font-size:13px;color:var(--navy)">' + name + '</div><div style="font-size:11px;color:var(--muted)">' + escHtml(m.email || '') + '</div></div>'
+      + '<div class="mono" style="font-weight:700;color:var(--gold);min-width:70px;text-align:right">' + (m.overall_points || 0) + ' pts</div>'
+      + rewardButtonHtml('overall', m.user_id, m.rewarded_categories, m.rewarded_notes && m.rewarded_notes['overall'])
+      + '</div>';
+    if (formOpen) row += rewardFormHtml('overall', m.user_id, 'e.g. P1000 headline prize');
+    return row;
+  }).join('');
+
+  return '<div class="card" style="margin-bottom:20px">'
+    + '<div class="card-title">Overall Ranking &mdash; Top ' + top.length + '</div>'
+    + '<div class="card-subtitle">Guidance: reserve headline prizes for the top 3.</div>'
+    + (rowsHtml || '<p style="color:var(--muted);font-size:13px">No opted-in members yet.</p>')
+    + '</div>';
+}
+
+function renderGuidancePanel() {
+  return '<div class="card" style="margin-bottom:20px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="guidanceOpen=!guidanceOpen;renderRewards();">'
+    + '<div class="card-title" style="margin-bottom:0">&#128161; Key Wellness guidance</div>'
+    + '<span style="font-size:12px;color:var(--muted)">' + (guidanceOpen ? 'Hide &#9650;' : 'Show &#9660;') + '</span>'
+    + '</div>'
+    + (guidanceOpen
+        ? '<div style="margin-top:14px;font-size:13px;color:var(--text);line-height:1.7">'
+          + '<p style="margin-bottom:10px">Points reflect engagement, learning, and consistency &mdash; never financial state. Nothing on this tab indicates a member&apos;s income, debt, or savings position.</p>'
+          + '<p style="margin-bottom:10px"><strong>Recommended practice:</strong> recognise everyone who qualifies in a category (the threshold tier below), and reserve headline prizes for the overall top 3 (the top-N tier).</p>'
+          + '<p style="margin-bottom:6px"><strong>Budget-neutral recognition ideas:</strong></p>'
+          + '<ul style="margin:0 0 0 20px;color:var(--muted)"><li>A personal recognition letter from a manager or director</li><li>A half-day of leave</li><li>Small vouchers (e.g. grocery or airtime)</li></ul>'
+          + '</div>'
+        : '')
+    + '</div>';
+}
+
+function fmtHistoryDate(iso) {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderRewardHistory() {
+  const seasonOptions = [''].concat([0, 1, 2, 3].map(quarterKey));
+  const select = '<select onchange="loadHistory(this.value)" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;margin-bottom:14px">'
+    + seasonOptions.map(function (s) { return '<option value="' + s + '"' + (s === historySeason ? ' selected' : '') + '>' + (s === '' ? 'All seasons' : s) + '</option>'; }).join('')
     + '</select>';
 
-  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">'
-    + seasonSelect
-    + '<button class="btn-action" style="background:var(--navy);color:#fff" onclick="exportRewardsCsv()">Export CSV</button>'
-    + '</div>';
+  let html = '<div class="card">'
+    + '<div class="card-title">Reward History</div>'
+    + '<div class="card-subtitle">A record of everything already given &mdash; a member opting out afterwards does not remove these entries.</div>'
+    + select;
 
-  html += '<div class="card">'
-    + '<div class="card-title">Rewards</div>'
-    + '<div class="card-subtitle">Shows employees who opted in to the leaderboard. Points reflect engagement and learning activity only.</div>';
-
-  if (!rewardsRows.length) {
-    html += '<p style="color:var(--muted);font-size:13px">No employees have opted in yet.</p>';
+  if (!historyRows.length) {
+    html += '<p style="color:var(--muted);font-size:13px">No rewards recorded yet.</p>';
   } else {
-    html += '<table class="rewards-table"><thead><tr><th>Rank</th><th>Name</th><th>Season Points</th></tr></thead><tbody>'
-      + rewardsRows.map(function (r) {
-          return '<tr><td class="mono">#' + r.rank + '</td><td>' + escHtml(((r.first_name || '') + ' ' + (r.last_name || '')).trim() || 'Member') + '</td><td class="mono">' + r.season_points + '</td></tr>';
+    html += '<table class="rewards-table"><thead><tr><th>Date</th><th>Name</th><th>Category</th><th>Note</th><th>Season</th></tr></thead><tbody>'
+      + historyRows.map(function (r) {
+          const name = escHtml(((r.first_name || '') + ' ' + (r.last_name || '')).trim() || 'Member');
+          return '<tr><td class="mono">' + fmtHistoryDate(r.fulfilled_at) + '</td>'
+            + '<td>' + name + '<div style="font-size:11px;color:var(--muted)">' + escHtml(r.email || '') + '</div></td>'
+            + '<td style="text-transform:capitalize">' + escHtml(r.category) + '</td>'
+            + '<td>' + (r.note ? escHtml(r.note) : '&mdash;') + '</td>'
+            + '<td class="mono">' + escHtml(r.season) + '</td></tr>';
         }).join('')
       + '</tbody></table>';
   }
   html += '</div>';
+  return html;
+}
+
+function renderHeadcountAffordance(s) {
+  if (headcountEditing) {
+    return '<div>'
+      + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+      + '<input type="number" id="headcount-input" min="1" max="999999" value="' + (s.reported_headcount || '') + '" placeholder="e.g. 1240" style="width:110px;padding:6px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px">'
+      + '<button class="btn-action on-light primary" onclick="saveHeadcount()">Save</button>'
+      + '<button class="btn-action on-light" onclick="headcountEditing=false;renderRewards();">Cancel</button>'
+      + '</div>'
+      + '<div id="headcount-error" style="font-size:11px;color:var(--red);margin-top:6px"></div>'
+      + '</div>';
+  }
+  const lastUpdated = s.reported_headcount_updated_at
+    ? ' <span style="color:var(--muted)">(updated ' + fmtHistoryDate(s.reported_headcount_updated_at) + ')</span>' : '';
+  return '<div style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    + (s.reported_headcount
+        ? 'Company headcount: <strong style="color:var(--navy)">' + Number(s.reported_headcount).toLocaleString() + '</strong>' + lastUpdated
+        : 'Company headcount: <span>not set</span>')
+    + ' <a href="#" onclick="event.preventDefault();headcountEditing=true;renderRewards();" style="color:var(--gold);font-weight:600;text-decoration:none">&#9998;</a>'
+    + '</div>';
+}
+
+async function saveHeadcount() {
+  const input = document.getElementById('headcount-input');
+  const errEl = document.getElementById('headcount-error');
+  const val = parseInt(input && input.value, 10);
+  if (!val || val <= 0 || val >= 1000000) {
+    if (errEl) errEl.textContent = 'Enter a whole number greater than 0.';
+    return;
+  }
+  const { error } = await sb.rpc('set_org_headcount', { p_headcount: val });
+  if (error) {
+    if (errEl) errEl.textContent = error.message;
+    return;
+  }
+  headcountEditing = false;
+  await loadRewards(rewardsSeason);
+}
+
+function renderSeasonSummary() {
+  const s = rewardsSummary;
+  if (!s) return '';
+  const countdown = (s.days_remaining != null)
+    ? ('Season closes in <strong>' + s.days_remaining + ' day' + (s.days_remaining === 1 ? '' : 's') + '</strong>') : '';
+
+  let strip;
+  if (s.reported_headcount) {
+    const pct = Math.round(100 * s.org_member_count / s.reported_headcount);
+    strip = '<strong>' + s.org_member_count + '</strong> of <strong>' + Number(s.reported_headcount).toLocaleString() + '</strong> employees registered ('
+      + pct + '% activation, as reported by your HR team) &middot; ' + s.opted_in_count + ' opted in &middot; ' + s.active_this_season_count + ' active this season';
+  } else {
+    strip = '<strong>' + s.opted_in_count + '</strong> of ' + s.org_member_count + ' registered members opted in &middot; '
+      + s.active_this_season_count + ' active this season';
+  }
+
+  return '<div class="card" style="margin-bottom:20px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px">'
+    + '<div style="font-size:13px;color:var(--muted)">' + countdown + '</div>'
+    + renderHeadcountAffordance(s)
+    + '</div>'
+    + '<div style="font-size:13px;color:var(--navy)">' + strip + '</div>'
+    + (!s.reported_headcount
+        ? '<p style="font-size:12px;color:var(--muted);margin-top:6px">Add your employee headcount to see programme activation rates.</p>'
+        : '')
+    + '</div>';
+}
+
+function renderRewards() {
+  const seasonOptions = [0, 1, 2, 3].map(quarterKey);
+  const seasonSelect = '<select id="rewards-season" onchange="loadRewards(this.value)" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px">'
+    + seasonOptions.map(function (s) { return '<option value="' + s + '"' + (s === rewardsSeason ? ' selected' : '') + '>' + (s === quarterKey(0) ? s + ' (current)' : s) + '</option>'; }).join('')
+    + '</select>';
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">'
+    + seasonSelect
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button class="btn-action on-light' + (rewardsSubTab === 'categories' ? ' primary' : '') + '" onclick="switchRewardsSubTab(\'categories\')">Categories</button>'
+    + '<button class="btn-action on-light' + (rewardsSubTab === 'history' ? ' primary' : '') + '" onclick="switchRewardsSubTab(\'history\')">History</button>'
+    + (rewardsSubTab === 'categories' ? '<button class="btn-action on-light" onclick="exportRewardsCsv()">Export CSV</button>' : '')
+    + '</div></div>';
+
+  html += renderSeasonSummary();
+
+  if (rewardsSubTab === 'history') {
+    html += renderRewardHistory();
+  } else if (!rewardsRows.length) {
+    html += '<div class="empty-state">'
+      + '<div class="empty-icon">&#127942;</div>'
+      + '<h3>No one has opted in yet</h3>'
+      + '<p>Encourage your team to opt in to Rewards from their Badges page in the member portal &mdash; once they do, they will appear here as they qualify in each category.</p>'
+      + '</div>';
+  } else {
+    html += renderGuidancePanel();
+    html += renderCategorySection('utilisation', 'Utilisation');
+    html += renderCategorySection('learning', 'Learning');
+    html += renderCategorySection('progress', 'Progress');
+    html += renderOverallRanking();
+  }
 
   document.getElementById('page-content').innerHTML = html;
 }
 
 function exportRewardsCsv() {
-  var rows = [['Rank', 'Name', 'Season Points']].concat(
-    rewardsRows.map(function (r) { return [r.rank, ((r.first_name || '') + ' ' + (r.last_name || '')).trim(), r.season_points]; })
+  const header = ['Name', 'Email', 'Utilisation Points', 'Learning Points', 'Progress Points', 'Overall Points', 'Overall Rank', 'Qualified Utilisation', 'Qualified Learning', 'Qualified Progress', 'Rewarded Categories'];
+  const rows = [header].concat(
+    rewardsRows.map(function (r) {
+      return [
+        ((r.first_name || '') + ' ' + (r.last_name || '')).trim(),
+        r.email || '',
+        r.utilisation_points || 0,
+        r.learning_points || 0,
+        r.progress_points || 0,
+        r.overall_points || 0,
+        r.overall_rank || '',
+        r.qualified_utilisation ? 'Yes' : 'No',
+        r.qualified_learning ? 'Yes' : 'No',
+        r.qualified_progress ? 'Yes' : 'No',
+        (r.rewarded_categories || []).join('; '),
+      ];
+    })
   );
-  var csv = rows.map(function (r) {
+  const csv = rows.map(function (r) {
     return r.map(function (v) {
-      var s = String(v == null ? '' : v);
+      const s = String(v == null ? '' : v);
       return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     }).join(',');
   }).join('\n');
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
   a.href = url;
   a.download = 'key-wellness-rewards-' + rewardsSeason + '.csv';
   document.body.appendChild(a);

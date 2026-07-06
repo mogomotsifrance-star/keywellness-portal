@@ -52,3 +52,269 @@ drop function if exists public.org_financial_indicators(uuid);
 
 Note: nothing pre-existing referenced this; safe to drop once the HR
 dashboard's Debt Health / Retirement Readiness panels (Batch 7) are removed.
+
+## supabase_rewards_categories.sql (Rewards-reshape Batch 1 — category column + my_points extension)
+
+Prior `my_points` definition (restore this first if rolling back — it's the
+exact view from `supabase_points_ledger.sql` §5, before the three per-category
+columns were appended):
+
+```sql
+create or replace view public.my_points
+with (security_invoker = true) as
+  select user_id,
+         coalesce(sum(points), 0) as total_points,
+         coalesce(sum(points) filter (where season = to_char(now(), 'YYYY"-Q"Q')), 0) as season_points
+  from public.points_events
+  group by user_id;
+
+grant select on public.my_points to authenticated;
+```
+
+Then drop the category column:
+
+```sql
+alter table public.points_catalog drop column if exists category;
+```
+
+Note: dropping `category` before restoring the view would break the new
+view definition's join — restore the view FIRST, then drop the column, if
+rolling back this batch in isolation.
+
+## supabase_reward_thresholds.sql (Rewards-reshape Batch 2 — threshold config)
+
+```sql
+drop table if exists public.reward_thresholds;
+```
+
+Note: nothing pre-existing referenced this; safe to drop once org_rewards()/
+record_reward_fulfilment() (Batch 4/5) no longer read it.
+
+## Member leaderboard removal (Rewards-reshape Batch 3 — product decision)
+
+The member-facing leaderboard is removed (`VIEWS['leaderboard']` deleted from
+`index.html`, replaced by the private Rewards Progress card). `org_leaderboard()`
+and `org_leaderboard_self_rank()` are dropped from the database. Recreate
+scripts below are the verbatim current definitions from `supabase_leaderboard.sql`
+— run these FIRST if the leaderboard ever needs to come back, then re-add the
+frontend view.
+
+Recreate `org_leaderboard(p_season text default null)`:
+
+```sql
+create or replace function public.org_leaderboard(p_season text default null)
+returns table (
+  alias         text,
+  season_points bigint,
+  badge_count   int,
+  rank          bigint,
+  is_self       boolean
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_org    uuid;
+  v_season text;
+  v_public_badges text[] := array[
+    'first_login','first_assessment','booked_session','ef_t1',
+    'checkin_streak_t1','checkin_streak_t2','checkin_streak_t3',
+    'learning_t1','learning_t2','learning_t3',
+    'budget_year_t1','budget_year_t2','budget_year_t3','budget_year_t4',
+    'budget_year_t5','budget_year_t6','budget_year_t7','budget_year_t8',
+    'budget_year_t9','budget_year_t10','budget_year_t11','budget_year_t12'
+  ];
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select org_id into v_org from profiles where id = v_uid;
+  if v_org is null then
+    return;
+  end if;
+
+  v_season := coalesce(p_season, to_char(now(), 'YYYY"-Q"Q'));
+
+  return query
+  with org_points as (
+    select pe.user_id, coalesce(sum(pe.points), 0) as season_points
+    from points_events pe
+    join profiles p on p.id = pe.user_id
+    where p.org_id = v_org and pe.season = v_season
+    group by pe.user_id
+  ),
+  badge_counts as (
+    select b.user_id, count(*) as badge_count
+    from badges b
+    cross join lateral unnest(b.earned_badge_ids) as bid(id)
+    where bid.id = any(v_public_badges)
+    group by b.user_id
+  ),
+  ranked as (
+    select
+      p.id as user_id,
+      coalesce(op.season_points, 0) as season_points,
+      coalesce(nullif(trim(p.display_alias), ''), 'Member') as alias,
+      coalesce(bc.badge_count, 0) as badge_count,
+      rank() over (order by coalesce(op.season_points, 0) desc) as rnk
+    from profiles p
+    left join org_points   op on op.user_id = p.id
+    left join badge_counts bc on bc.user_id = p.id
+    where p.org_id = v_org and p.leaderboard_opt_in = true
+  )
+  select r.alias, r.season_points, r.badge_count, r.rnk as rank, (r.user_id = v_uid) as is_self
+  from ranked r
+  where r.rnk <= 50 or r.user_id = v_uid
+  order by r.rnk asc;
+end;
+$$;
+
+grant execute on function public.org_leaderboard(text) to authenticated;
+```
+
+Recreate `org_leaderboard_self_rank(p_season text default null)`:
+
+```sql
+create or replace function public.org_leaderboard_self_rank(p_season text default null)
+returns table (
+  my_rank       bigint,
+  total_members bigint,
+  season_points bigint,
+  opted_in      boolean
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_uid    uuid := auth.uid();
+  v_org    uuid;
+  v_season text;
+begin
+  if v_uid is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select org_id into v_org from profiles where id = v_uid;
+  if v_org is null then
+    return;
+  end if;
+
+  v_season := coalesce(p_season, to_char(now(), 'YYYY"-Q"Q'));
+
+  return query
+  with org_points as (
+    select p.id as user_id,
+           coalesce(sum(pe.points) filter (where pe.season = v_season), 0) as season_points
+    from profiles p
+    left join points_events pe on pe.user_id = p.id
+    where p.org_id = v_org
+    group by p.id
+  ),
+  ranked as (
+    select user_id, season_points,
+           rank() over (order by season_points desc) as rnk,
+           count(*) over () as total
+    from org_points
+  )
+  select r.rnk, r.total, r.season_points,
+         (select leaderboard_opt_in from profiles where id = v_uid)
+  from ranked r
+  where r.user_id = v_uid;
+end;
+$$;
+
+grant execute on function public.org_leaderboard_self_rank(text) to authenticated;
+```
+
+Drop statements (only run these once the recreate scripts above are safely saved —
+they already are, in this file):
+
+```sql
+drop function if exists public.org_leaderboard(text);
+drop function if exists public.org_leaderboard_self_rank(text);
+```
+
+Note: `org_rewards` is NOT dropped here — it is reshaped in place by
+`supabase_rewards_reshape.sql` (Batch 4). Its prior definition is saved in
+that batch's own rollback entry below.
+
+## supabase_rewards_reshape.sql (Rewards-reshape Batch 4 — org_rewards() reshape + org_rewards_summary())
+
+Prior `org_rewards()` definition (flat rank list, no categories) — restore
+this to undo the reshape and go back to the old return shape:
+
+```sql
+create or replace function public.org_rewards(target_org uuid default null, p_season text default null)
+returns table (
+  first_name    text,
+  last_name     text,
+  season_points bigint,
+  rank          bigint
+)
+language plpgsql security definer set search_path = public as $$
+declare
+  v_season text;
+begin
+  if target_org is null then
+    target_org := employer_org();
+  end if;
+
+  if target_org is null then
+    raise exception 'not authorised';
+  end if;
+
+  if not (is_admin() or coalesce(employer_org() = target_org, false)) then
+    raise exception 'not authorised';
+  end if;
+
+  v_season := coalesce(p_season, to_char(now(), 'YYYY"-Q"Q'));
+
+  return query
+  with org_points as (
+    select p.id as user_id, coalesce(sum(pe.points), 0) as season_points
+    from profiles p
+    left join points_events pe on pe.user_id = p.id and pe.season = v_season
+    where p.org_id = target_org and p.leaderboard_opt_in = true
+    group by p.id
+  )
+  select p.first_name, p.last_name, op.season_points,
+         rank() over (order by op.season_points desc) as rank
+  from org_points op
+  join profiles p on p.id = op.user_id
+  order by rank asc;
+end;
+$$;
+
+grant execute on function public.org_rewards(uuid, text) to authenticated;
+```
+
+Then drop the new objects added by this batch:
+
+```sql
+drop function if exists public.org_rewards_summary(uuid, text);
+drop table if exists public.org_headcount_reports;
+drop table if exists public.reward_fulfilments;
+```
+
+Note: only drop `reward_fulfilments`/`org_headcount_reports` if Batches 5/7
+have also been rolled back — `record_reward_fulfilment()`, `org_reward_history()`,
+and `set_org_headcount()` all depend on these tables existing.
+
+## supabase_reward_fulfilment.sql (Rewards-reshape Batch 5 — fulfilment RPCs)
+
+Nothing pre-existing referenced these functions, so dropping is safe and
+complete (the `reward_fulfilments` table itself is owned by Batch 4's
+rollback entry above — don't drop it here if Batch 4 is still in place):
+
+```sql
+drop function if exists public.record_reward_fulfilment(uuid, text, text, text);
+drop function if exists public.org_reward_history(text);
+```
+
+## supabase_org_headcount.sql (Rewards-reshape Batch 7 — employer headcount)
+
+```sql
+drop function if exists public.set_org_headcount(int, uuid);
+```
+
+Note: `org_headcount_reports` itself is owned by Batch 4's rollback entry
+above (it was pre-created there) — don't drop it here if Batch 4 is still
+in place; org_rewards_summary() still reads it for reported_headcount.

@@ -754,7 +754,7 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR, bkR, ptR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR, ptR, thR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
@@ -762,6 +762,7 @@ async function loadAllData() {
     safe(sb.from('stress_logs').select('*').eq('user_id', uid).order('created_at', { ascending: true })),
     safe(sb.from('bookings').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('my_points').select('*').maybeSingle()),
+    safe(sb.from('reward_thresholds').select('*')),
   ]);
 
   state.user        = pR.data  || null;
@@ -773,10 +774,22 @@ async function loadAllData() {
     ? { earned: bR.data.earned_badge_ids || [], points: bR.data.points || 0 }
     : { earned: [], points: 0 };
   // Authoritative points total/season now come from the server-side ledger
-  // (points_events → my_points), not from badges.points.
+  // (points_events → my_points), not from badges.points. season_utilisation/
+  // learning/progress exclude 'private' events (e.g. improvement) by
+  // construction — they power the member's own Rewards Progress card only.
   state.points = ptR.data
-    ? { total: ptR.data.total_points || 0, season: ptR.data.season_points || 0 }
-    : { total: 0, season: 0 };
+    ? {
+        total: ptR.data.total_points || 0,
+        season: ptR.data.season_points || 0,
+        season_utilisation: ptR.data.season_utilisation || 0,
+        season_learning: ptR.data.season_learning || 0,
+        season_progress: ptR.data.season_progress || 0,
+      }
+    : { total: 0, season: 0, season_utilisation: 0, season_learning: 0, season_progress: 0 };
+
+  // Reward category thresholds, keyed by category for the Progress card.
+  state.rewardThresholds = {};
+  (thR.data || []).forEach(row => { state.rewardThresholds[row.category] = row; });
   // Migrate legacy one-off score badges → filling tier ids (idempotent). A user
   // who already earned an 80+ badge keeps it as a full (tier 3) filling badge.
   try {
@@ -1300,7 +1313,6 @@ const NAV = [
   { id:'booking',     icon:'📅', label:'Book Session' },
   { id:'my-bookings', icon:'🗓️', label:'My Bookings' },
   { id:'badges',      icon:'🏆', label:'Badges' },
-  { id:'leaderboard', icon:'🏅', label:'Leaderboard' },
   { id:'profile',     icon:'👤', label:'My Profile' },
 ];
 const MOBILE_NAV = [
@@ -1618,7 +1630,7 @@ VIEWS['onboarding'] = function () {
     }
     awardBadge('first_login');
     KWBadges.recordPoints('onboarding_complete').then(res => {
-      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+      if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
     });
     // Show consent → welcome video for new users, checking localStorage first
     const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
@@ -2615,7 +2627,7 @@ async function markArticleRead(title) {
   } catch (e) { console.warn('articles_read save failed:', e); }
   syncProgressBadges();   // recompute Confident Learner (articles + videos)
   const _res = await KWBadges.recordPoints('article_read', title);
-  if (_res && typeof _res.total === 'number') state.points = { total: _res.total, season: state.points?.season || 0 };
+  if (_res && typeof _res.total === 'number') state.points = { ...state.points, total: _res.total, season: state.points?.season || 0 };
 }
 window.markVideoComplete = async function (vidId, pts) {
   if (!state.videoProgress) state.videoProgress = [];
@@ -2624,7 +2636,7 @@ window.markVideoComplete = async function (vidId, pts) {
   await saveVideoProgress();
   syncProgressBadges();   // recompute the Confident Learner badge (videos + articles)
   const res = await KWBadges.recordPoints('video_watched', vidId);
-  if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+  if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
   showToast(res && res.awarded ? `🎬 Video completed — +${res.points} points!` : '🎬 Video completed!');
   if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
 };
@@ -3433,10 +3445,10 @@ VIEWS['checkin'] = function () {
 
     // Points: once per calendar month, plus the quarterly streak bonus if earned.
     KWBadges.recordPoints('monthly_checkin').then(res => {
-      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+      if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
       return KWBadges.recordPoints('checkin_streak_3');
     }).then(res => {
-      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+      if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
     });
 
     showToast('Check-in saved! Keep it up.');
@@ -3791,7 +3803,7 @@ window.submitBooking = async function () {
   awardBadge('booked_session');
   if (_bookingId != null) {
     KWBadges.recordPoints('session_booked', String(_bookingId)).then(res => {
-      if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+      if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
     });
   }
 
@@ -3838,17 +3850,14 @@ window.bkResetForm = function () {
 };
 
 
-// Persist the leaderboard opt-in toggle + display alias from the Badges page.
-// Blank alias on opt-in defaults to first name (resolved once and stored, so
-// later profile-name edits don't silently change what's shown on the board).
-async function saveLeaderboardSettings() {
+// Persist the rewards HR-sharing opt-in toggle from the Badges page.
+// display_alias is left untouched — the leaderboard that rendered it is gone,
+// the column is dormant (see BUILD-NOTES.md), and no UI writes to it anymore.
+async function saveRewardsOptIn() {
   const optIn = document.getElementById('lb-optin').checked;
-  const inputVal = document.getElementById('lb-alias').value.trim().slice(0, 30);
-  let alias = inputVal || state.user?.display_alias || '';
-  if (optIn && !alias) alias = (state.user?.first_name || 'Member').trim().slice(0, 30);
-  state.user = { ...state.user, leaderboard_opt_in: optIn, display_alias: alias || null };
+  state.user = { ...state.user, leaderboard_opt_in: optIn };
   await saveUser();
-  showToast(optIn ? "You're on the leaderboard!" : 'Leaderboard settings saved');
+  showToast(optIn ? "You're sharing your points with HR" : 'Rewards opt-in updated');
   const _cur = location.hash.replace('#','') || 'badges';
   if (VIEWS[_cur]) VIEWS[_cur]();
 }
@@ -3864,6 +3873,71 @@ function quarterKey(offset) {
   return `${y}-Q${q}`;
 }
 
+// Same quarter-key formula as quarterKey(), applied to an arbitrary date —
+// used only to compare a member's account-creation quarter against the
+// current one (tenure rule below).
+function seasonKeyForDate(d) {
+  return `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`;
+}
+
+// Tenure rule — IDENTICAL formula to the server's (org_rewards() /
+// record_reward_fulfilment(), see supabase_rewards_reshape.sql and
+// BUILD-NOTES.md): a member is "first season" during the calendar quarter
+// containing their account creation; every later quarter they are
+// "returning". auth.users.created_at is exposed on the session's own user
+// object, so no extra round-trip is needed for a member's own tenure.
+function isFirstSeasonMember() {
+  const created = currentUser?.created_at ? new Date(currentUser.created_at) : null;
+  return !created || seasonKeyForDate(created) === quarterKey(0);
+}
+
+// One progress bar for the Rewards Progress card — reuses the existing
+// .progress-bar/.progress-fill pattern (see CLAUDE.md component patterns).
+function rewardsProgressBar(label, points, threshold) {
+  const t = threshold || 0;
+  const pct = t > 0 ? Math.min(100, Math.round(100 * points / t)) : 0;
+  const qualified = t > 0 && points >= t;
+  return `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:4px">
+        <span>${escHtml(label)}</span>
+        <span class="mono">${points} / ${t}${qualified ? ' <span style="color:var(--green)">✓ Qualified</span>' : ''}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%${qualified ? ';background:var(--green)' : ''}"></div></div>
+    </div>`;
+}
+
+// Private, member-facing Rewards Progress card — replaces the removed
+// member leaderboard. Shows only the current user's own category points
+// against their tenure-appropriate thresholds. Nobody else's data appears.
+function renderRewardsProgressCard() {
+  const u  = state.user || {};
+  const th = state.rewardThresholds || {};
+  const pts = state.points || {};
+  const key = isFirstSeasonMember() ? 'first_season_points' : 'returning_points';
+  const utilT  = th.utilisation ? th.utilisation[key] : 300;
+  const learnT = th.learning    ? th.learning[key]    : 300;
+  const progT  = th.progress    ? th.progress[key]    : 300;
+
+  const bars = rewardsProgressBar('Utilisation', pts.season_utilisation || 0, utilT)
+             + rewardsProgressBar('Learning',    pts.season_learning    || 0, learnT)
+             + rewardsProgressBar('Progress',    pts.season_progress    || 0, progT);
+
+  return `
+    <div class="card" style="margin-bottom:20px">
+      <h4 style="margin-bottom:6px">🎯 Rewards Progress — ${quarterKey(0)}</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Qualify in each category this season to be eligible for recognition from your employer.</p>
+      ${bars}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:12px;border-top:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:600;color:var(--navy)">Overall season points</span>
+        <span class="mono" style="font-weight:700;color:var(--gold)">${pts.season || 0}</span>
+      </div>
+      ${u.leaderboard_opt_in
+        ? ''
+        : `<p style="font-size:12px;color:var(--muted);margin-top:12px">Your points are private. Opt in below to share your name and points with your employer's HR for rewards eligibility.</p>`}
+    </div>`;
+}
+
 // ══════════════════════════════════════════════════
 //  VIEW: BADGES
 // ══════════════════════════════════════════════════
@@ -3876,19 +3950,15 @@ VIEWS['badges'] = function () {
       <div class="stat-box"><div class="stat-val mono">${stats.points}</div><div class="stat-lbl">Total Points</div></div>
       <div class="stat-box"><div class="stat-val">${stats.earnedCount}/${stats.total}</div><div class="stat-lbl">Badges Earned</div></div>
     </div>
+    ${renderRewardsProgressCard()}
     <div class="card" style="margin-bottom:20px">
-      <h4 style="margin-bottom:6px">🏅 Leaderboard</h4>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Join your organisation's leaderboard. Only your chosen display name, points, and badge count are visible — never your scores or financial information. You can leave at any time.</p>
+      <h4 style="margin-bottom:6px">🏆 Rewards Opt-In</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Share my name, email, and reward points with my employer's HR team for rewards and recognition. HR sees your points and qualification status only — never your scores, answers, or any financial information. You can withdraw at any time.</p>
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px">
         <input type="checkbox" id="lb-optin" ${u.leaderboard_opt_in ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0">
-        <span style="font-size:13px;font-weight:500;color:var(--navy)">Show me on the leaderboard</span>
+        <span style="font-size:13px;font-weight:500;color:var(--navy)">Share my points with HR</span>
       </label>
-      <div class="field">
-        <label>Display name</label>
-        <input type="text" id="lb-alias" class="input" maxlength="30" placeholder="${escHtml(u.first_name || 'Your name')}" value="${escHtml(u.display_alias || '')}" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveLeaderboardSettings()">Save</button>
-    </div>
+      <button class="btn btn-primary btn-sm" onclick="saveRewardsOptIn()">Save</button>
     </div>
     <div class="badge-grid">
       ${renderBadgeCards()}
@@ -3992,110 +4062,6 @@ function renderBadgeCards() {
        + hdr('🌱 Behaviour Rewards — these fill as you build habits') + behaviour
        + hdr('📊 Assessment Mastery') + areas;
 }
-
-// ══════════════════════════════════════════════════
-//  VIEW: LEADERBOARD
-// ══════════════════════════════════════════════════
-VIEWS['leaderboard'] = async function (seasonArg) {
-  const el = document.getElementById('page-content');
-  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading leaderboard…</div>';
-
-  const season = seasonArg || quarterKey(0);
-  const seasonOptions = [0,1,2,3].map(o => quarterKey(o));
-
-  const [selfRes, optedRes] = await Promise.all([
-    sb.rpc('org_leaderboard_self_rank', { p_season: season }),
-    sb.rpc('org_leaderboard', { p_season: season }),
-  ]);
-
-  if (selfRes.error) console.error('org_leaderboard_self_rank failed:', selfRes.error);
-  if (optedRes.error) console.error('org_leaderboard failed:', optedRes.error);
-
-  const self = (selfRes.data && selfRes.data[0]) || null;
-  const rows = optedRes.data || [];
-  const optedIn = !!state.user?.leaderboard_opt_in;
-
-  const footer = `<p style="font-size:12px;color:var(--muted);text-align:center;margin-top:18px">
-    Leaderboards reflect engagement and learning — never financial scores or personal financial information.
-  </p>`;
-
-  const seasonSelect = `
-    <select id="lb-season" class="input" style="padding:8px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px" onchange="VIEWS['leaderboard'](this.value)">
-      ${seasonOptions.map(s => `<option value="${s}" ${s===season?'selected':''}>${s===quarterKey(0) ? s+' (current)' : s}</option>`).join('')}
-    </select>`;
-
-  // No org at all — leaderboards don't apply.
-  if (!self) {
-    el.innerHTML = `
-      <div class="card" style="text-align:center;padding:40px">
-        <div style="font-size:48px;margin-bottom:14px">🏅</div>
-        <h3 style="margin-bottom:8px">No leaderboard yet</h3>
-        <p style="color:var(--muted)">Leaderboards are available for members who joined through an organisation.</p>
-      </div>${footer}`;
-    return;
-  }
-
-  const optInCard = `
-    <div class="card" style="margin-bottom:20px">
-      <h4 style="margin-bottom:6px">Join the leaderboard</h4>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Only your chosen display name, points, and badge count are visible — never your scores or financial information. You can leave at any time.</p>
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px">
-        <input type="checkbox" id="lb-optin" style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0">
-        <span style="font-size:13px;font-weight:500;color:var(--navy)">Show me on the leaderboard</span>
-      </label>
-      <div class="field">
-        <label>Display name</label>
-        <input type="text" id="lb-alias" class="input" maxlength="30" placeholder="${escHtml(state.user?.first_name || 'Your name')}" value="${escHtml(state.user?.display_alias || '')}" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="saveLeaderboardSettings()">Save</button>
-    </div>`;
-
-  const rankCard = `
-    <div class="card" style="text-align:center;margin-bottom:20px">
-      <div style="font-size:13px;color:var(--muted);margin-bottom:4px">Your rank this season</div>
-      <div class="stat-val mono" style="font-size:32px;color:var(--gold)">#${self.my_rank} <span style="font-size:16px;color:var(--muted);font-weight:400">of ${self.total_members}</span></div>
-      <div style="font-size:13px;color:var(--muted);margin-top:4px">${self.season_points} points this season</div>
-      ${optedIn ? '' : `<div style="font-size:12px;color:var(--muted);margin-top:8px">Points are private until you join the leaderboard below.</div>`}
-    </div>`;
-
-  if (!optedIn) {
-    el.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
-      ${rankCard}${optInCard}${footer}`;
-    return;
-  }
-
-  if (rows.length < 3) {
-    el.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
-      ${rankCard}
-      <div class="card" style="text-align:center;padding:32px">
-        <div style="font-size:36px;margin-bottom:10px">🌱</div>
-        <p style="color:var(--muted)">The leaderboard unlocks as more colleagues join.</p>
-      </div>${footer}`;
-    return;
-  }
-
-  const medal = r => r===1 ? '🥇' : r===2 ? '🥈' : r===3 ? '🥉' : null;
-  const rowsHtml = rows.map(r => {
-    const isPodium = r.rank <= 3;
-    const m = medal(r.rank);
-    return `<div style="display:flex;align-items:center;gap:12px;padding:${isPodium?'14px':'10px'} 14px;border-radius:var(--radius-sm);margin-bottom:6px;background:${r.is_self?'#fff8e8':(isPodium?'var(--cream-dark)':'transparent')};border:${r.is_self?'2px solid var(--gold)':'1px solid var(--border)'}">
-      <div style="width:32px;text-align:center;font-size:${isPodium?'20px':'14px'};font-weight:700;color:${isPodium?'inherit':'var(--muted)'}">${m || '#'+r.rank}</div>
-      <div style="flex:1;font-weight:${r.is_self?'700':'500'};color:var(--navy)">${escHtml(r.alias)}${r.is_self?' (you)':''}</div>
-      <div style="font-size:12px;color:var(--muted)">🏆 ${r.badge_count}</div>
-      <div class="mono" style="font-weight:700;color:var(--gold);min-width:60px;text-align:right">${r.season_points} pts</div>
-    </div>`;
-  }).join('');
-
-  el.innerHTML = `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">${seasonSelect}</div>
-    ${rankCard}
-    <div class="card">
-      <h4 style="margin-bottom:14px">Season Leaderboard — Top ${rows.length}</h4>
-      ${rowsHtml}
-    </div>${footer}`;
-};
 
 // ══════════════════════════════════════════════════
 //  VIEW: MY BOOKINGS
@@ -4329,7 +4295,7 @@ window.markVideoWatched = function (btn, title) {
   localStorage.setItem('kw_watched', JSON.stringify(watched));
   syncProgressBadges(); // refresh Confident Learner (the watched_video badge is now part of the learning fill badge)
   KWBadges.recordPoints('video_watched', title).then(res => {
-    if (res && typeof res.total === 'number') state.points = { total: res.total, season: state.points?.season || 0 };
+    if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
   });
   // Update button
   btn.textContent = '✓ Watched';

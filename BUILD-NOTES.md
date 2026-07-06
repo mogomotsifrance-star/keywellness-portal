@@ -82,3 +82,140 @@ durable record.
   under the Botswana Data Protection Act (Act 18 of 2024) and should be
   reviewed by Tshenolo before shipping to production, not drafted by an
   agent.
+
+---
+
+# Rewards reshape — Categories, Thresholds & HR Fulfilment
+
+Product reshape of the points/leaderboard/rewards system above: three
+HR-visible categories (Utilisation/Learning/Progress) replace the flat
+season total, the member leaderboard is removed in favour of a private
+Progress card, HR gets a fulfilment (Reward button) flow, thresholds respect
+member tenure, and employers can self-report headcount. SQL files:
+`supabase_rewards_categories.sql`, `supabase_reward_thresholds.sql`,
+`supabase_drop_leaderboard.sql`, `supabase_rewards_reshape.sql`,
+`supabase_reward_fulfilment.sql`, `supabase_org_headcount.sql`. None of
+these have been run against the live Supabase project yet — see "Manual
+follow-up" at the end of this section.
+
+## Schema deviations from the reshape spec
+
+- **`profiles` has no `created_at` column.** Confirmed absent (only
+  `organizations`/`employers` have it; `supabase_seed_test_org.sql` always
+  joins `auth.users` for account-creation dates). The tenure rule ("first
+  season" = calendar quarter containing account creation) is therefore
+  computed from `auth.users.created_at`, joined on `profiles.id =
+  auth.users.id`, everywhere it's needed: inline in `org_rewards()` and
+  `record_reward_fulfilment()` (`supabase_rewards_reshape.sql` /
+  `supabase_reward_fulfilment.sql`), and client-side in `index.html`'s
+  `isFirstSeasonMember()` using `currentUser.created_at` (Supabase Auth
+  already exposes this on a user's own session — no extra RPC needed for a
+  member's own tenure). All three use the identical formula
+  `to_char(created_at, 'YYYY"-Q"Q') = to_char(now(), 'YYYY"-Q"Q')` — if this
+  ever needs to change, update all three call sites together.
+
+- **`profiles` has no `email` column either** (confirmed the same way).
+  `org_rewards()` and `org_reward_history()` join `auth.users` for email —
+  the same pattern already established by `handle_new_user()` and
+  `supabase_employer_email.sql`'s backfill trigger.
+
+- **`org_rewards()`'s return shape needed a `user_id` column not listed in
+  the spec.** The spec's column list (first_name, last_name, email, ...) has
+  no stable identifier the frontend can pass to
+  `record_reward_fulfilment(p_user_id, ...)` — email alone isn't a usable
+  uuid argument. Added `user_id uuid` as the first return column; it
+  discloses nothing HR doesn't already see via name+email for the same
+  (opted-in-only) row.
+
+- **Dependency-ordering across batches.** `org_rewards()`/
+  `org_rewards_summary()` (Batch 4) need to read `reward_fulfilments` (for
+  `rewarded_categories`) and `org_headcount_reports` (for
+  `reported_headcount`), but those tables' write-RPCs ship in Batches 5 and
+  7. Both tables are created (`IF NOT EXISTS`, RLS on, no policies) inside
+  `supabase_rewards_reshape.sql` itself; the Batch 5/7 files re-declare them
+  `IF NOT EXISTS` (idempotent no-op) alongside the RPCs that are actually
+  allowed to touch them. Apply the SQL files in numeric/batch order and
+  this resolves itself — there is no window where a function references a
+  genuinely missing table.
+
+- **`leaderboard_opt_in` column keeps its original name.** It now means
+  "share my points with HR for rewards", not "show me on the leaderboard".
+  Renaming it would be a non-additive migration (drop+recreate or a
+  multi-step rename) for no functional gain, so the name is a permanent
+  naming quirk — grep for `leaderboard_opt_in` before assuming it's
+  leaderboard-related in any future change.
+
+- **`display_alias` column is now fully dormant.** The member leaderboard
+  (its only renderer) is removed; the alias input was removed from the
+  Badges page consent card per the spec's instruction. The column itself is
+  left in place (additive discipline) — nothing writes or reads it anymore.
+  Safe to drop in a future cleanup if it's confirmed nothing else depends on
+  it, but not attempted here.
+
+- **`org_rewards()`/`record_reward_fulfilment()` exclude `season='legacy'`
+  from every season sum**, per the spec's blanket instruction — even though
+  in practice `pe.season = v_season` already can't match `'legacy'` unless a
+  caller explicitly passes `p_season='legacy'`. The extra `and pe.season <>
+  'legacy'` guard exists specifically to close that edge case off.
+
+- **`record_reward_fulfilment()`/`org_reward_history()` are strictly
+  employer-only** (resolved via `employer_org()`), with no `is_admin()` +
+  explicit-org-param override, unlike `org_overview()`/`org_rewards()`. The
+  spec's signatures for these two RPCs have no org parameter, so there's no
+  way to disambiguate which org an admin means — kept deliberately narrow
+  rather than inventing a parameter the spec didn't ask for.
+
+## Privacy-notice follow-ups for Tshenolo (from the FINAL CHECKLIST)
+
+- **Revised consent copy is live** in `index.html`'s Badges page (Rewards
+  Opt-In card) — no longer mentions a leaderboard; states HR sees points and
+  qualification status only, never scores/answers/financial information.
+  Worth a legal read alongside the existing Botswana Data Protection Act
+  follow-up noted above, since the data actually shared with HR has grown
+  (name, email, per-category points, qualification, fulfilment history —
+  see below) even though the leaderboard exposure has shrunk to zero.
+
+- **Fulfilment records persist after opt-out.** If a member opts out after
+  HR has already recorded a reward for them, `reward_fulfilments` rows are
+  NOT deleted or anonymised — `org_reward_history()` will still show past
+  fulfilments for that person. This is intentional (a record of what was
+  already given, not a live roster), but it means "opt out" does not mean
+  "disappear from every HR-visible surface retroactively." Worth a line in
+  the consent copy or privacy notice if this behaviour needs to be
+  disclosed up front.
+
+- **Email disclosure to HR is new.** The prior `org_rewards()` never
+  returned email; the reshaped version does (needed for the Reward
+  button/CSV export to identify people unambiguously, and because
+  `org_reward_history()` needs it too). This is a small but real expansion
+  of what HR can see about an opted-in member and should be reflected in
+  the consent copy review above.
+
+- **Ops obligation — returning-Learning threshold (300 required-content
+  based).** `reward_thresholds.learning.returning_points = 150` assumes
+  annual quiz revalidation and/or quarterly new content. Key Wellness must
+  review this value each season; if no new point-bearing learning content
+  ships, returning members cannot realistically qualify for Learning. (This
+  note also lives inline as a SQL comment in `supabase_reward_thresholds.sql`.)
+
+## Manual follow-up — NOT attempted by Claude
+
+- **None of this build's SQL has been run against the live Supabase
+  project.** Per this repo's established convention (every `supabase_*.sql`
+  file says "run in the SQL Editor"), and because this is a shared prod/dev
+  database, Tshenolo needs to run the six new/changed SQL files in the
+  Supabase SQL Editor, in this order: `supabase_rewards_categories.sql` →
+  `supabase_reward_thresholds.sql` → `supabase_drop_leaderboard.sql` →
+  `supabase_rewards_reshape.sql` → `supabase_reward_fulfilment.sql` →
+  `supabase_org_headcount.sql`. Each file's own verification-queries block
+  should be run afterward, in the browser console against
+  `window._toolSb`/`window._toolSb.rpc(...)` (not the SQL Editor, which
+  bypasses RLS and the RPCs' own auth checks).
+
+- **Full end-to-end member/HR journey testing needs real data.** The
+  frontend changes (Progress card, Rewards tab rebuild, headcount UI) were
+  verified for correct rendering logic and mobile layout (390×844) using
+  mocked data in a Node/browser harness, since the live DB doesn't yet have
+  the new schema. A real walkthrough — a member earning points across all
+  three categories, opting in, HR rewarding them, opting out, checking the
+  CSV — should happen once the SQL is live.
