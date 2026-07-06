@@ -682,17 +682,33 @@ function emptyFinCard(title, fin) {
 }
 
 function finBandsHtml(bands, total, colors) {
-  // Suppressed bands get a fixed pixel width (flex-grow:0, flex-shrink:0) so
-  // they stay legible regardless of how big the real percentage bands are.
+  // Consecutive suppressed bands are merged into ONE hatched segment (fixed
+  // width, flex-grow/shrink:0) instead of one per band — two near-identical
+  // "<3" boxes side by side reads as a rendering glitch, not as data. The
+  // legend below still lists each suppressed band on its own line.
   // Percentage bands use flex-basis:0% so their flex-grow ratio (the
   // count-derived pct) decides their share of the REMAINING space, rather
   // than the raw pct competing directly against a fixed-width sibling.
-  return bands.map(function (b) {
-    if (b.suppressed) return '<div class="fin-band suppressed" style="flex:0 0 42px" title="Fewer than 3 employees &mdash; hidden for privacy">&lt;3</div>';
+  var html = '';
+  var i = 0;
+  while (i < bands.length) {
+    var b = bands[i];
+    if (b.suppressed) {
+      var run = [b];
+      while (i + run.length < bands.length && bands[i + run.length].suppressed) run.push(bands[i + run.length]);
+      var w = 36 + 16 * (run.length - 1);
+      var runTitle = 'Fewer than 3 employees in each of: ' + run.map(function (x) { return escHtml(x.label); }).join(', ') + ' &mdash; hidden for privacy';
+      html += '<div class="fin-band suppressed" style="flex:0 0 ' + w + 'px" title="' + runTitle + '">&lt;3</div>';
+      i += run.length;
+      continue;
+    }
     var pct = total ? Math.round(100 * (b.count || 0) / total) : 0;
-    if (!pct) return '';
-    return '<div class="fin-band" style="flex:' + pct + ' 1 0%;background:' + colors[b.key] + '" title="' + escHtml(b.label) + ': ' + b.count + '">' + (pct >= 12 ? pct + '%' : '') + '</div>';
-  }).join('');
+    if (pct) {
+      html += '<div class="fin-band" style="flex:' + pct + ' 1 0%;background:' + colors[b.key] + '" title="' + escHtml(b.label) + ': ' + b.count + '">' + (pct >= 12 ? pct + '%' : '') + '</div>';
+    }
+    i++;
+  }
+  return html;
 }
 
 function finLegendHtml(bands, colors) {
