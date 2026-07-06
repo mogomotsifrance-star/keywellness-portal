@@ -845,6 +845,28 @@ function render(data) {
           + '<div class="stat-lbl">Low Emergency Cover</div>'
           + '<div class="stat-delta" style="color:var(--orange)">Under 1&ndash;2 months saved</div></div>';
   }
+  // Quick-glance financial indicators (full band breakdowns + recommended
+  // actions still appear in their own cards further down the page).
+  var fin = window._finData;
+  if (fin && fin.eligible !== false) {
+    if (fin.dti && fin.dti.median != null) {
+      var dtiColor = fin.dti.median < 20 ? 'var(--green)' : fin.dti.median < 35 ? 'var(--gold)' : fin.dti.median < 45 ? 'var(--orange)' : 'var(--red)';
+      html += '<div class="stat-box" style="border-left-color:' + dtiColor + '">'
+            + '<div class="stat-val mono" style="color:' + dtiColor + '">' + fin.dti.median + '%</div>'
+            + '<div class="stat-lbl">Median Debt-to-Income</div></div>';
+    }
+    if (fin.retirement && fin.retirement.median != null) {
+      html += '<div class="stat-box" style="border-left-color:' + scoreBandColor(fin.retirement.median) + '">'
+            + '<div class="stat-val mono" style="color:' + scoreBandColor(fin.retirement.median) + '">' + fin.retirement.median + '</div>'
+            + '<div class="stat-lbl">Median Retirement Readiness</div></div>';
+    }
+    if (fin.stress && fin.stress.median != null) {
+      var stressColor = fin.stress.median <= 3 ? 'var(--green)' : fin.stress.median <= 6 ? 'var(--gold)' : 'var(--red)';
+      html += '<div class="stat-box" style="border-left-color:' + stressColor + '">'
+            + '<div class="stat-val mono" style="color:' + stressColor + '">' + fin.stress.median + '/10</div>'
+            + '<div class="stat-lbl">Median Financial Stress</div></div>';
+    }
+  }
   html += '</div>';
 
   // 2. Engagement funnel
