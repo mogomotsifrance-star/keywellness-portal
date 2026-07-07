@@ -560,40 +560,24 @@ async function updateBookingStatus(id, status) {
     document.getElementById('bk-status-filter')?.value || 'all'
   );
 
-  // On confirmation, email the client via hidden iframe form POST — the only FormSubmit
-  // mode where _autoresponse works reliably across all hosting domains (AJAX drops it silently).
+  // On confirmation, email the client via the shared booking Edge Function (Resend).
+  // Best-effort: the booking status is already saved, so a send failure is logged
+  // visibly rather than blocking or rolling back the status change.
   if (status === 'confirmed') {
     const b = allBookings.find(x => x.id === id);
     if (b && b.user_email) {
-      const dateStr = b.requested_date || '';
-      const confirmMsg = `Hi ${b.user_name || 'there'},\n\nGood news — your ${b.service || 'coaching'} session${dateStr ? ' on ' + dateStr : ''} has been confirmed by Key Wellness. We look forward to seeing you.\n\nIf you need to reschedule, please reply to this email or contact us at wellness@keywellness.co.bw.\n\nWarm regards,\nKey Wellness Team`;
-      let iframe = document.getElementById('_fs_frame');
-      if (!iframe) {
-        iframe = document.createElement('iframe');
-        iframe.name = '_fs_frame'; iframe.id = '_fs_frame'; iframe.style.display = 'none';
-        document.body.appendChild(iframe);
-      }
-      const prev = document.getElementById('_fs_form');
-      if (prev) prev.remove();
-      const form = document.createElement('form');
-      form.id = '_fs_form'; form.method = 'POST';
-      form.action = 'https://formsubmit.co/wellness@keywellness.co.bw';
-      form.target = '_fs_frame'; form.style.display = 'none';
-      const fields = {
-        'Confirmed Booking': `${b.user_name || ''} — ${b.service || 'session'}${dateStr ? ' on ' + dateStr : ''}`,
-        'email':        b.user_email,
-        '_subject':     '✅ Your Key Wellness booking is confirmed',
-        '_autoresponse': confirmMsg,
-        '_template':    'box',
-        '_captcha':     'false',
-      };
-      Object.entries(fields).forEach(([name, value]) => {
-        const inp = document.createElement('input');
-        inp.type = 'hidden'; inp.name = name; inp.value = value ?? '';
-        form.appendChild(inp);
+      const { error: emailErr } = await sb.functions.invoke('send-booking-email', {
+        body: {
+          type: 'confirmed',
+          firstName: b.user_name || '',
+          email: b.user_email,
+          service: b.service || '',
+          dateStr: b.requested_date || '',
+        }
       });
-      document.body.appendChild(form);
-      form.submit();
+      if (emailErr) {
+        console.error('Booking-confirmed email failed to send:', emailErr);
+      }
     }
   }
 }

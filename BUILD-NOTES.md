@@ -278,3 +278,183 @@ reference, in every clause, to be perfectly qualified forever.
   the new schema. A real walkthrough — a member earning points across all
   three categories, opting in, HR rewarding them, opting out, checking the
   CSV — should happen once the SQL is live.
+
+---
+
+# Email Template Standardisation
+
+Work against `kw-prompt-email-templates.md`'s batch plan. Two things diverged
+from the prompt's assumptions during Batch 0 discovery — recorded here along
+with the manual follow-ups every batch produced.
+
+## Batch 0 — discovery findings
+
+- **`kw-email-design-preview.html` does not exist** anywhere in this repo or
+  its git history. The prompt's Batch 1 instructs the shared module to match
+  it "faithfully." Absent the file, `supabase/functions/_shared/kw-email.ts`
+  was built directly from the HTML/CSS skeleton and values embedded in the
+  prompt text itself (colours, spacing, structure). If a real design-preview
+  file exists elsewhere, diff it against the module and adjust.
+
+- **FormSubmit had a second, live, unstyled send path** beyond the one the
+  prompt already knew about (the booking Edge Function had already replaced
+  FormSubmit for the initial "booking received" email — confirmed via git
+  history: *"Replace FormSubmit with Resend via Supabase Edge Function for
+  booking emails"*). `admin.html`'s `updateBookingStatus()` still posted
+  directly to `https://formsubmit.co/wellness@keywellness.co.bw` with an
+  `_autoresponse` field whenever HR confirmed a booking — a third,
+  completely unstyled template source. **Retired in Batch 2**: this send now
+  goes through `send-booking-email` (Edge Function) with `type: "confirmed"`,
+  using the shared template, same trigger condition (`status === 'confirmed'`),
+  same best-effort/non-blocking semantics, but now logs failures to console
+  instead of failing silently. The dead, never-called `fsSubmit()` helper in
+  `index.html` (a leftover from before the Resend migration — real bookings
+  already went through the Edge Function, not this helper) was deleted in the
+  same pass. FormSubmit is now fully retired from the codebase; only a
+  historical code comment and the stale `CLAUDE.md` "Bookings: FormSubmit.co"
+  line reference it.
+
+- **No PNG logo asset exists.** Only `assets/img/kw-icon.svg` and
+  `assets/img/kw-logo-horizontal.svg` are in the repo (confirmed on `dev`;
+  `assets/img/` doesn't exist on `main` at all yet). `KW_LOGO_URL` in
+  `kw-email.ts` points to `https://keywellness.co.bw/assets/img/kw-logo-horizontal.png`,
+  which **does not resolve** until (a) a PNG export is added at that path and
+  (b) `dev` is merged to `main`. Until then every email's logo will show as a
+  broken image. See "Manual follow-ups" below.
+
+- **No physical address or Help/Privacy pages exist yet.** The member footer
+  needs a mailing address and Help/Privacy links per the prompt's spec. No
+  address was found anywhere in the repo, and there is no in-app Help or
+  Privacy page (only a Privacy section within the signup flow). The footer
+  currently reads "Key Wellness · Botswana" and links Help to
+  `mailto:wellness@keywellness.co.bw` and Privacy to a placeholder
+  `https://keywellness.co.bw/privacy` URL that doesn't exist yet. Fix once a
+  real address and pages exist — single edit in `renderFooter()` in
+  `kw-email.ts`.
+
+- **OTP/link expiry could not be discovered from code** (no
+  `supabase/config.toml` in this repo — auth settings are dashboard-only).
+  The Batch 4 auth templates use generic wording ("This link expires soon
+  for your security") rather than a specific hour count, per the prompt's
+  instruction not to assume a number. Confirm the actual expiry in
+  Dashboard → Authentication → Email/OTP settings and tighten the copy if a
+  specific figure is wanted.
+
+## Batch 1 — shared module
+
+`supabase/functions/_shared/kw-email.ts` — new file, additive, delete to
+revert. Verified: zero `svg`/`base64` hits, `#E8C018` used only for
+`background`/`border-left` (never `color:`), both member and internal
+variants render correctly (manually paste-tested via a Node-transpiled copy
+of the render logic, screenshotted in-browser since Deno isn't installed in
+this environment).
+
+## Batch 2 — booking Edge Function
+
+`supabase/functions/send-booking-email/index.ts` rewired to use the shared
+module; `admin.html`'s FormSubmit call replaced with an Edge Function call
+(see Batch 0 above). Success/failure semantics unchanged for the original
+"new booking" flow (client send still gates, team notification still
+best-effort but still surfaces as a 502 if it fails, matching the original
+code's behaviour exactly).
+
+**⚠️ Not deployed. Not tested against real Resend/Gmail.** This function
+serves production (shared Supabase project) the moment it's deployed —
+deploying and sending real test emails from an agent session isn't something
+I'll do without you present. Manual steps before this ships:
+
+1. `supabase functions deploy send-booking-email` (and confirm `_shared/` is
+   included — Supabase bundles relative imports automatically, but verify in
+   the deploy output).
+2. Make one real test booking on the dev site. Confirm:
+   - Client confirmation email arrives, renders correctly in Gmail web and
+     one mobile mail client, Reply-To lands at `wellness@keywellness.co.bw`.
+   - Team notification arrives at `wellness@keywellness.co.bw`, Reply-To is
+     the client's address.
+3. In the admin dashboard, confirm a test booking and verify the
+   "booking confirmed" email arrives styled correctly with the shared
+   template (this is the newly migrated FormSubmit replacement — hasn't been
+   exercised against real Resend at all yet).
+4. Force a team-notification failure (e.g. temporarily break `TEAM`'s
+   address) and confirm: the error is logged to the function's console
+   output, and the client email still sends successfully.
+5. Rollback: Supabase retains function deploy history; redeploy the previous
+   version from the dashboard, or `git revert` this commit on `dev`.
+
+## Batch 3 — certificate renderer
+
+`certificateReadyEmail()` added to `kw-email.ts`. No send path created —
+confirmed via repo-wide grep for `resend.emails.send`/`api.resend.com`
+(only hit is the existing Batch 2 `sendEmail()` call). Rendered with sample
+data and grepped for `improvement`/score/topic-name leakage — zero hits.
+
+## Batch 4 — Supabase Auth templates (⚠️ manual dashboard paste required)
+
+Five files generated in `email-templates/auth/`: `confirm-signup.html`,
+`invite-user.html`, `magic-link.html`, `reset-password.html`,
+`change-email.html`, plus `SUBJECTS.md`. Each contains exactly 3 references
+to `{{ .ConfirmationURL }}` (button href, alt-link text, alt-link href).
+Yellow-as-text grep: zero hits.
+
+**Manual procedure (this is live in production the instant it's saved —
+do it in a low-traffic window):**
+
+1. Before touching anything: Dashboard → Authentication → Email Templates →
+   for each of the 5 template types, copy the **current** body HTML into
+   `email-templates/auth/_previous/<template-name>.html` in this repo. That
+   folder exists and is currently empty — it's the rollback copy.
+2. For each of the 5 types, paste the subject from `SUBJECTS.md` and the
+   body from the matching file in `email-templates/auth/`.
+3. Save.
+4. Trigger one of each from the dev site: a test signup (Confirm signup), a
+   password reset (Reset password), and an invite if there's an invite flow
+   wired up (Invite user). Verify rendering and that the links work
+   end-to-end. Magic link and Change email can be spot-checked the same way
+   if those flows are reachable.
+5. Rollback: paste the corresponding file back from `_previous/`.
+
+Also confirm before pasting: which of the 6 possible template types
+(Confirm signup, Invite user, Magic link, Reset password, Change email,
+Reauthentication) are actually **enabled** in this project — the prompt
+listed Reauthentication as a possible 6th type but gave no spec for it, so
+no file was generated for it. If it's enabled and in use, it needs its own
+template; flag back if so.
+
+## Batch 5 — logo, retirement, sweep
+
+- **Logo**: no PNG export exists (see Batch 0). Requesting a **no-slogan**
+  horizontal lockup from the brand manual is worth doing at the same time —
+  the current SVG (`assets/img/kw-logo-horizontal.svg`) includes the
+  "Wellness Is Key, Be About It." slogan lockup used on the login screen,
+  which will be illegible at 210px in an email. Once a PNG (ideally
+  slogan-less) exists at a stable path, update the one `KW_LOGO_URL`
+  constant in `kw-email.ts` — nothing else needs to change.
+- **FormSubmit**: retired, not just reported (see Batch 0/2 above).
+- **Sweep**: repo-wide grep for ad-hoc email HTML strings outside the shared
+  module and the auth template files found none remaining.
+- **Post-merge check (do after `dev` → `main`)**: confirm
+  `https://keywellness.co.bw/assets/img/kw-logo-horizontal.png` (or whatever
+  path the eventual PNG lands at) returns 200, then send one test of each
+  email family from production.
+
+## Manual follow-up — NOT attempted by Claude
+
+- **DPA lawyer sign-off** on the footer trust line wording ("Your individual
+  data is never shared with your employer.") before employer-cohort
+  scale-up, per the prompt's own requirement.
+- **Resend dashboard**: confirm domain verification covers
+  `noreply@keywellness.co.bw`, and that both scoped API keys are unchanged.
+  Not checkable from code.
+- **Which Supabase Auth template types are enabled**, and the actual
+  OTP/link expiry value — dashboard-only, see Batch 0/4 above.
+- **PNG logo export** (ideally slogan-less) — see Batch 5.
+- **Physical address and Help/Privacy page URLs** for the member email
+  footer — see Batch 0.
+- **`admin.html` env/deploy note**: this batch didn't touch any Supabase
+  schema or RPCs, but the booking Edge Function change (Batch 2) is
+  undeployed — see the deploy checklist there before it's live.
+- **`CLAUDE.md`'s tech-stack table still lists "Bookings: FormSubmit.co"** —
+  stale even before this batch (bookings have gone through the Edge Function
+  since the earlier "Replace FormSubmit..." commit); worth a one-line fix
+  next time that file is touched. Not changed here since it's the project's
+  instruction file, not build output.

@@ -1363,36 +1363,6 @@ const MOBILE_NAV = [
   { id:'more',        icon:'☰', label:'More' },
 ];
 
-// Submit fields to FormSubmit via a hidden iframe form POST.
-// _autoresponse works reliably with standard form POST (not AJAX fetch) on all hosting domains.
-function fsSubmit(fields) {
-  let iframe = document.getElementById('_fs_frame');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.name = '_fs_frame';
-    iframe.id   = '_fs_frame';
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-  }
-  const prev = document.getElementById('_fs_form');
-  if (prev) prev.remove();
-  const form = document.createElement('form');
-  form.id     = '_fs_form';
-  form.method = 'POST';
-  form.action = 'https://formsubmit.co/wellness@keywellness.co.bw';
-  form.target = '_fs_frame';
-  form.style.display = 'none';
-  Object.entries(fields).forEach(([name, value]) => {
-    const inp = document.createElement('input');
-    inp.type  = 'hidden';
-    inp.name  = name;
-    inp.value = value ?? '';
-    form.appendChild(inp);
-  });
-  document.body.appendChild(form);
-  form.submit();
-}
-
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('sidebar-overlay').classList.add('open');
