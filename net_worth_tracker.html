@@ -33,7 +33,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .sum-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;text-align:center}
 .sum-val{font-family:'DM Mono',monospace;font-size:26px;font-weight:500}
 .sum-lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .section-header h3{font-size:14px;font-weight:800}
 .item-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--cream);border-radius:var(--radius-sm);margin-bottom:8px}
@@ -43,7 +43,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .item-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px}.item-del:hover{color:var(--red)}
 .add-form{margin-top:12px;display:flex;flex-direction:column;gap:8px}
 .add-row{display:flex;gap:8px}
-.add-row input,.add-row select{flex:1;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:#fff;outline:none;font-family:'Nunito',sans-serif;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease)}
+.add-row input,.add-row select{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:#fff;outline:none;font-family:'Nunito',sans-serif;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease)}
 .add-row input:focus,.add-row select:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .progress-bar{background:var(--cream-dark);border-radius:999px;height:8px;overflow:hidden;margin-top:6px}
 .progress-fill{height:100%;border-radius:999px;transition:.4s}
