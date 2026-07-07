@@ -11,6 +11,10 @@
   --kw-yellow:#f0c90a;       /* accents ONLY: flags, points, badges */
   --kw-yellow-ink:#93790a;   /* yellow-family TEXT colour */
   --kw-yellow-tint:#fdf5cf;  /* yellow badge background */
+  /* Chrome (structural definition only: sidebar, topbar, page/tool headers, auth backdrop —
+     never for buttons/links/active-states, those stay green) */
+  --kw-navy:#1a2744;
+  --kw-navy-light:#243360;
   /* Neutrals */
   --kw-ink:#23261f;          /* headings */
   --kw-body:#4b4e48;         /* body text */

@@ -4,61 +4,62 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Affordability Calculator – Key Wellness</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="kw-profile-sync.js"></script>
+<script src="js/kw-reveal.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#f0c842;
-  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
-  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#fff;
-  --radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(13,37,69,.1);
+  --navy:var(--kw-ink);--navy2:var(--kw-grey);--gold:var(--kw-green);--gold-lt:var(--kw-green-deep);
+  --cream:var(--kw-canvas);--slate:var(--kw-body);--muted:var(--kw-grey);--border:var(--kw-line);
+  --green:var(--kw-green);--red:var(--kw-red);--orange:var(--kw-orange);--white:var(--kw-white);
+  --radius:var(--kw-r-lg);--radius-sm:var(--kw-r);--shadow:0 1px 3px rgba(35,38,31,.06);
 }
-body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
 .wrap{max-width:740px;margin:0 auto}
 .back-link{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--navy);text-decoration:none;margin-bottom:18px;opacity:.7;transition:opacity .15s}
 .back-link:hover{opacity:1}
-.tool-header{background:var(--navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px;position:relative;overflow:hidden}
-.tool-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(200,153,26,.18) 0%,transparent 70%)}
+.tool-header{background:var(--kw-navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px}
 .tool-header-inner{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
-.tool-icon{font-size:2.2rem}
-.tool-header h1{color:#fff;font-size:1.3rem;font-weight:700;margin-bottom:3px}
-.tool-header p{color:rgba(255,255,255,.6);font-size:.82rem}
-.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
-.card-title{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.tool-icon{font-size:2.2rem;width:52px;height:52px;background:var(--kw-green);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tool-header h1{color:#fff;font-size:1.3rem;font-weight:800;margin-bottom:3px}
+.tool-header p{color:rgba(255,255,255,.65);font-size:.82rem}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
+.card-title{font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--kw-green);margin-bottom:18px}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:520px){.field-grid{grid-template-columns:1fr}}
 .field{display:flex;flex-direction:column;gap:5px}
-.field label{font-size:.75rem;font-weight:600;color:var(--slate)}
-.field input,.field select{padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border .15s;width:100%}
-.field input:focus,.field select:focus{outline:none;border-color:var(--gold)}
+.field label{font-size:.75rem;font-weight:700;color:var(--slate)}
+.field input,.field select{padding:10px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease);width:100%}
+.field input:focus,.field select:focus{outline:none;border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .field-hint{font-size:.7rem;color:var(--muted);margin-top:2px}
-.btn{padding:12px 24px;border-radius:var(--radius-sm);font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:.15s}
-.btn-primary{background:var(--gold);color:var(--navy)}
-.btn-primary:hover{background:var(--gold-lt)}
+.btn{padding:12px 24px;border-radius:999px;font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:background-color .2s var(--kw-ease),transform .1s}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--kw-green);color:#fff}
+.btn-primary:hover{background:var(--kw-green-deep)}
 .results{display:none}
 .results.show{display:block}
 
 /* Hero result */
-.hero-result{background:var(--navy);border-radius:var(--radius);padding:24px 28px;margin-bottom:16px;text-align:center;position:relative;overflow:hidden}
-.hero-result::before{content:'';position:absolute;top:-50px;right:-50px;width:220px;height:220px;background:radial-gradient(circle,rgba(200,153,26,.14) 0%,transparent 70%)}
-.hero-label{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:8px;position:relative}
-.hero-val{font-family:'DM Mono',monospace;font-size:2.2rem;font-weight:700;color:var(--gold-lt);position:relative}
-.hero-sub{font-size:.82rem;color:rgba(255,255,255,.6);margin-top:6px;position:relative}
+.hero-result{background:var(--kw-navy);border-radius:var(--radius);padding:24px 28px;margin-bottom:16px;text-align:center}
+.hero-label{font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:8px;position:relative}
+.hero-val{font-family:'DM Mono',monospace;font-size:2.2rem;font-weight:700;color:var(--kw-yellow);position:relative}
+.hero-sub{font-size:.82rem;color:rgba(255,255,255,.55);margin-top:6px;position:relative}
 
 /* Stat grid */
 .stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;margin-bottom:16px}
-.stat-box{background:var(--white);border-radius:var(--radius-sm);padding:14px 16px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
-.stat-box.green{border-left-color:var(--green)}.stat-box.red{border-left-color:var(--red)}.stat-box.gold{border-left-color:var(--gold)}.stat-box.orange{border-left-color:var(--orange)}
+.stat-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;box-shadow:var(--shadow)}
 .stat-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:5px}
 .stat-value{font-family:'DM Mono',monospace;font-size:1.1rem;font-weight:600;color:var(--navy)}
 .stat-sub{font-size:.7rem;color:var(--muted);margin-top:3px}
 .stat-box.green .stat-value{color:var(--green)}
 .stat-box.red .stat-value{color:var(--red)}
-.stat-box.gold .stat-value{color:var(--gold)}
+.stat-box.gold .stat-value{color:var(--kw-yellow-ink)}
 .stat-box.orange .stat-value{color:var(--orange)}
 
 /* Gauge bar */
@@ -69,9 +70,9 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 
 /* Scenarios */
 .scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.scenario-card{border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;transition:.15s}
-.scenario-card:hover{border-color:var(--gold);background:var(--cream)}
-.scenario-card.active{border-color:var(--gold);background:#fffbf0}
+.scenario-card{border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px 16px;cursor:pointer;transition:.15s}
+.scenario-card:hover{border-color:var(--kw-green);background:var(--kw-green-tint)}
+.scenario-card.active{border-color:var(--kw-green);background:var(--kw-green-tint)}
 .sc-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px}
 .sc-val{font-family:'DM Mono',monospace;font-size:1.05rem;font-weight:700;color:var(--navy);margin-bottom:3px}
 .sc-sub{font-size:.72rem;color:var(--slate)}
@@ -79,13 +80,13 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 /* Advice */
 .advice-list{display:flex;flex-direction:column;gap:10px}
 .advice-item{display:flex;gap:12px;padding:12px 14px;border-radius:8px;font-size:.82rem;line-height:1.5}
-.advice-item.good{background:#f0fbf5;border-left:3px solid var(--green)}
-.advice-item.warn{background:#fffbf0;border-left:3px solid var(--gold)}
+.advice-item.good{background:var(--kw-green-tint);border-left:3px solid var(--green)}
+.advice-item.warn{background:var(--kw-yellow-tint);border-left:3px solid var(--kw-yellow)}
 .advice-item.alert{background:#fff5f5;border-left:3px solid var(--red)}
-.advice-item.info{background:#f0f4ff;border-left:3px solid var(--navy2)}
+.advice-item.info{background:var(--kw-surface);border-left:3px solid var(--navy2)}
 .advice-icon{font-size:1.1rem;flex-shrink:0;margin-top:1px}
 
-.info-note{background:#f0f4ff;border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
+.info-note{background:var(--kw-surface);border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
 
 /* Debt table */
 .debt-table{width:100%;border-collapse:collapse;font-size:.8rem;margin-top:6px}
@@ -103,10 +104,10 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 <div class="wrap">
 <!-- ── Back + User ── -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
   <div style="display:flex;align-items:center;gap:10px">
-    <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
-    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    <div id="tool-user-initial" style="width:32px;height:32px;background:#397e2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#fff;flex-shrink:0">?</div>
+    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#23261f">Loading…</div>
   </div>
 </div>
 
@@ -120,7 +121,7 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fffbf0;border-left:4px solid #C8991A;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#0D2545;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
 
   <!-- Income -->
   <div class="card">
@@ -335,7 +336,7 @@ function calculate() {
   const projDTI     = income > 0 ? ((existingDebt + pmt(maxBond)) / income * 100) : 0;
 
   // ── Hero ──
-  document.getElementById('maxBond').textContent = fmtK(maxBond);
+  KW.countUp(document.getElementById('maxBond'), maxBond, { format: fmtK });
   document.getElementById('maxBondSub').textContent =
     `Maximum home purchase: ${fmtK(maxPurchase)} (bond + ${fmtK(deposit)} deposit)  ·  Bond repayment: ${fmtK(pmt(maxBond))}/mo`;
 
@@ -528,6 +529,7 @@ async function _toolRestore(_sb, uid){
     // Cross-device: restore saved inputs (source of truth), then persist on change
     await _toolRestore(_sb, session.user.id);
     document.addEventListener('input', _toolSave);
+    KW.reveal('.card');
   });
 })();
 </script>

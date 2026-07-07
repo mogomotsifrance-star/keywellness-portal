@@ -4,85 +4,88 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Debt-to-Income Calculator – Botswana Pula</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="kw-profile-sync.js"></script>
+<script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --navy:    #0D2545;
-  --navy2:   #163561;
-  --gold:    #C8991A;
-  --gold-lt: #F0C842;
-  --cream:   #F7F4EE;
-  --slate:   #4A5568;
-  --muted:   #8896A8;
-  --border:  #D6DDE8;
-  --green:   #1A8C5B;
-  --red:     #C0392B;
-  --orange:  #D97706;
-  --white:   #FFFFFF;
-  --radius:  10px;
-  --shadow:  0 4px 24px rgba(13,37,69,.12);
+  --navy:    var(--kw-ink);
+  --navy2:   var(--kw-grey);
+  --gold:    var(--kw-green);
+  --gold-lt: var(--kw-green-deep);
+  --cream:   var(--kw-canvas);
+  --slate:   var(--kw-body);
+  --muted:   var(--kw-grey);
+  --border:  var(--kw-line);
+  --green:   var(--kw-green);
+  --red:     var(--kw-red);
+  --orange:  var(--kw-orange);
+  --white:   var(--kw-white);
+  --radius:  var(--kw-r-lg);
+  --shadow:  0 1px 3px rgba(35,38,31,.06);
 }
-body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--navy); min-height: 100vh; }
+body { font-family: 'Nunito', sans-serif; background: var(--cream); color: var(--navy); min-height: 100vh; }
 .app { max-width: 960px; margin: 0 auto; padding: 28px 18px 60px; }
 
 /* Header */
 .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; flex-wrap: wrap; }
-.header-icon { width: 48px; height: 48px; background: var(--navy); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.header h1 { font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+.header-icon { width: 48px; height: 48px; background: var(--kw-green); border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.header h1 { font-size: 1.45rem; font-weight: 800; letter-spacing: -.02em; }
 .header p  { font-size: .82rem; color: var(--muted); margin-top: 2px; }
 .user-badge { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-shrink: 0; }
-.user-avatar { width: 32px; height: 32px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: var(--navy); flex-shrink: 0; }
+.user-avatar { width: 32px; height: 32px; background: var(--kw-green); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700; color: #fff; flex-shrink: 0; }
 .user-name { font-size: .82rem; font-weight: 600; color: var(--navy); }
 .user-sub  { font-size: .67rem; color: var(--muted); }
-.btn-logout { padding: 6px 13px; background: var(--cream); border: 1.5px solid var(--border); border-radius: 7px; font-size: .75rem; font-weight: 600; color: var(--slate); cursor: pointer; transition: all .15s; white-space: nowrap; }
+.btn-logout { padding: 8px 14px; background: var(--white); border: 1px solid var(--border); border-radius: 999px; font-size: .75rem; font-weight: 600; color: var(--slate); cursor: pointer; transition: all .15s; white-space: nowrap; }
 .btn-logout:hover { border-color: var(--red); color: var(--red); background: #fef2f2; }
 
 /* Cards */
-.card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
-.card-title { font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+.card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 20px; }
+.card-title { font-size: .72rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--kw-green); margin-bottom: 18px; }
 
 /* Form */
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 .field label { display: block; font-size: .75rem; font-weight: 600; color: var(--slate); margin-bottom: 6px; letter-spacing: .03em; }
 .field .hint { font-size: .68rem; color: var(--muted); margin-top: 4px; line-height: 1.4; }
-.input-wrap { display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: 7px; background: var(--cream); overflow: hidden; transition: border-color .15s; }
-.input-wrap:focus-within { border-color: var(--gold); background: #fff; }
+.input-wrap { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--kw-r); background: var(--white); overflow: hidden; transition: border-color .2s var(--kw-ease), box-shadow .2s var(--kw-ease); }
+.input-wrap:focus-within { border-color: var(--kw-green); box-shadow: 0 0 0 3px var(--kw-green-tint); }
 .input-prefix, .input-suffix { padding: 0 10px; font-size: .82rem; font-weight: 600; color: var(--muted); background: transparent; white-space: nowrap; font-family: 'DM Mono', monospace; flex-shrink: 0; }
 .input-wrap input, .input-wrap select { flex: 1; border: none; outline: none; background: transparent; padding: 10px 8px; font-size: .9rem; font-family: 'DM Mono', monospace; color: var(--navy); min-width: 0; }
-.input-wrap select { cursor: pointer; font-family: 'Inter', sans-serif; font-size: .85rem; }
+.input-wrap select { cursor: pointer; font-family: 'Nunito', sans-serif; font-size: .85rem; }
 
 /* Buttons */
-.btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 22px; background: var(--navy); color: white; border: none; border-radius: 8px; font-size: .88rem; font-weight: 700; cursor: pointer; letter-spacing: .03em; transition: background .15s, transform .1s; }
-.btn-primary:hover { background: var(--navy2); }
-.btn-primary:active { transform: scale(.98); }
-.btn-gold { background: var(--gold); color: var(--navy); }
-.btn-gold:hover { background: #b8870f; }
-.btn-sm { padding: 7px 14px; font-size: .78rem; border-radius: 6px; }
-.btn-danger { background: #fef2f2; color: var(--red); border: 1.5px solid #fecaca; font-size: .74rem; font-weight: 600; border-radius: 6px; padding: 5px 10px; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 22px; background: var(--kw-green); color: white; border: none; border-radius: 999px; font-size: .88rem; font-weight: 700; cursor: pointer; letter-spacing: .03em; transition: background-color .2s var(--kw-ease), transform .1s; }
+.btn-primary:hover { background: var(--kw-green-deep); }
+.btn-primary:active { transform: scale(.96); }
+.btn-gold { background: var(--kw-yellow); color: var(--kw-yellow-ink); }
+.btn-gold:hover { background: #dab809; }
+.btn-sm { padding: 8px 16px; font-size: .78rem; }
+.btn-danger { background: #fef2f2; color: var(--red); border: 1px solid #fecaca; font-size: .74rem; font-weight: 600; border-radius: 999px; padding: 5px 10px; cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .btn-danger:hover { background: var(--red); color: white; border-color: var(--red); }
 
 /* Debt type chips */
 .type-chip-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 4px; }
-.type-chip { display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1.5px solid var(--border); border-radius: 8px; background: var(--cream); cursor: pointer; font-size: .76rem; font-weight: 600; color: var(--slate); transition: all .15s; white-space: nowrap; }
-.type-chip:hover  { border-color: var(--gold); color: var(--navy); }
-.type-chip.active { border-color: var(--navy); background: var(--navy); color: white; }
+.type-chip { display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px; border: 1px solid var(--border); border-radius: 999px; background: var(--cream); cursor: pointer; font-size: .76rem; font-weight: 600; color: var(--slate); transition: all .15s; white-space: nowrap; }
+.type-chip:hover  { border-color: var(--kw-green); color: var(--kw-green); }
+.type-chip.active { border-color: var(--kw-green); background: var(--kw-green); color: white; }
 
 /* Debt list */
 .debt-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
-.debt-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--cream); border-radius: 8px; border: 1.5px solid var(--border); flex-wrap: wrap; }
+.debt-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--cream); border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
 .debt-row-icon { font-size: 1.2rem; flex-shrink: 0; }
 .debt-row-name { flex: 1; font-size: .85rem; font-weight: 600; color: var(--navy); min-width: 120px; }
 .debt-row-type { font-size: .7rem; color: var(--muted); margin-top: 1px; }
 .debt-row-amount { font-family: 'DM Mono', monospace; font-weight: 700; font-size: .9rem; color: var(--navy); white-space: nowrap; }
-.debt-row-housing { font-size: .65rem; background: #f0f4ff; color: var(--navy2); border-radius: 99px; padding: 2px 7px; font-weight: 700; margin-left: 4px; white-space: nowrap; }
-.empty-debts { text-align: center; padding: 28px; color: var(--muted); font-size: .84rem; border: 2px dashed var(--border); border-radius: 8px; margin-top: 12px; }
+.debt-row-housing { font-size: .65rem; background: var(--kw-surface); color: var(--kw-grey); border-radius: 999px; padding: 2px 7px; font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.empty-debts { text-align: center; padding: 28px; color: var(--muted); font-size: .84rem; border: 1px dashed var(--border); border-radius: 8px; margin-top: 12px; }
 
 /* DTI Gauge */
 .gauge-wrap { position: relative; width: 220px; height: 120px; margin: 0 auto 10px; }
@@ -93,19 +96,14 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
 
 /* Summary strip */
 .summary-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 14px; margin-bottom: 20px; }
-.stat-box { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; border-left: 4px solid var(--border); }
-.stat-box.gold   { border-color: var(--gold); }
-.stat-box.navy   { border-color: var(--navy); }
-.stat-box.green  { border-color: var(--green); }
-.stat-box.red    { border-color: var(--red); }
-.stat-box.orange { border-color: var(--orange); }
+.stat-box { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; }
 .stat-label { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 5px; }
 .stat-value { font-size: 1.12rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy); }
 .stat-sub   { font-size: .7rem; color: var(--muted); margin-top: 3px; line-height: 1.4; }
 .stat-box.green  .stat-value { color: var(--green); }
 .stat-box.red    .stat-value { color: var(--red); }
 .stat-box.orange .stat-value { color: var(--orange); }
-.stat-box.gold   .stat-value { color: var(--gold); }
+.stat-box.gold   .stat-value { color: var(--kw-yellow-ink); }
 
 /* Two-col */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
@@ -117,7 +115,7 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
 .data-row-label { font-size: .8rem; color: var(--slate); flex: 1; }
 .data-row-value { font-family: 'DM Mono', monospace; font-weight: 700; font-size: .84rem; white-space: nowrap; }
 .v-navy   { color: var(--navy); }
-.v-gold   { color: var(--gold); }
+.v-gold   { color: var(--kw-yellow-ink); }
 .v-green  { color: var(--green); }
 .v-red    { color: var(--red); }
 .v-orange { color: var(--orange); }
@@ -137,15 +135,15 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
 .bench-range { font-size: .76rem; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--navy); min-width: 60px; }
 .bench-label { font-size: .76rem; color: var(--slate); flex: 1; }
 .bench-badge { font-size: .65rem; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
-.you-badge { font-size: .62rem; font-weight: 700; background: var(--navy); color: white; padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
+.you-badge { font-size: .62rem; font-weight: 700; background: var(--kw-green); color: white; padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
 
 /* Advice card */
 .advice-card { border-radius: 8px; padding: 16px 18px; }
-.advice-card.green  { background: #f0faf5; border: 1.5px solid #a7f3d0; }
-.advice-card.orange { background: #fffbeb; border: 1.5px solid #fde68a; }
-.advice-card.red    { background: #fef2f2; border: 1.5px solid #fecaca; }
+.advice-card.green  { background: var(--kw-green-tint); border: 1px solid var(--green); }
+.advice-card.orange { background: #fffbeb; border: 1px solid #fde68a; }
+.advice-card.red    { background: #fef2f2; border: 1px solid #fecaca; }
 .advice-title { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
-.advice-card.green  .advice-title { color: var(--green); }
+.advice-card.green  .advice-title { color: var(--kw-green-deep); }
 .advice-card.orange .advice-title { color: var(--orange); }
 .advice-card.red    .advice-title { color: var(--red); }
 .advice-card p { font-size: .8rem; line-height: 1.65; color: var(--slate); }
@@ -154,28 +152,28 @@ body { font-family: 'Inter', sans-serif; background: var(--cream); color: var(--
 /* Table */
 .table-container { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
 table { width: 100%; border-collapse: collapse; font-size: .8rem; }
-thead th { background: var(--navy); color: var(--gold-lt); font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 11px 14px; white-space: nowrap; }
+thead th { background: var(--kw-ink); color: #fff; font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; padding: 11px 14px; white-space: nowrap; }
 thead th:first-child { text-align: left; }
 tbody tr:nth-child(even) { background: #f5f7fa; }
-tbody tr:hover { background: #eef2f8; }
+tbody tr:hover { background: var(--kw-surface); }
 tbody td { padding: 10px 14px; text-align: right; font-family: 'DM Mono', monospace; color: var(--navy); border-bottom: 1px solid var(--border); white-space: nowrap; }
-tbody td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
-tfoot td { background: var(--navy); color: white; padding: 10px 14px; font-weight: 700; font-family: 'DM Mono', monospace; text-align: right; }
-tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
+tbody td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
+tfoot td { background: var(--kw-ink); color: white; padding: 10px 14px; font-weight: 700; font-family: 'DM Mono', monospace; text-align: right; }
+tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
 
 /* Info note */
-.info-note { display: flex; align-items: flex-start; gap: 10px; background: #f0f4ff; border-radius: 8px; padding: 12px 14px; font-size: .77rem; color: var(--slate); line-height: 1.55; border: 1px solid #dbeafe; }
-.info-note svg { flex-shrink: 0; margin-top: 2px; color: var(--navy2); }
+.info-note { display: flex; align-items: flex-start; gap: 10px; background: var(--kw-surface); border-radius: 8px; padding: 12px 14px; font-size: .77rem; color: var(--slate); line-height: 1.55; border: 1px solid var(--kw-line); }
+.info-note svg { flex-shrink: 0; margin-top: 2px; color: var(--kw-grey); }
 
 /* Section divider */
-.section-divider { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--navy); background: #f0f4ff; border-radius: 5px; padding: 5px 8px; margin: 12px 0 4px; }
+.section-divider { font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--navy); background: var(--kw-surface); border-radius: 5px; padding: 5px 8px; margin: 12px 0 4px; }
 
 /* Results */
 .results-section { display: none; }
 .results-section.visible { display: block; }
 
 /* Save toast */
-.save-toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy); color: white; padding: 10px 18px; border-radius: 8px; font-size: .78rem; font-weight: 600; box-shadow: var(--shadow); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; display: flex; align-items: center; gap: 7px; }
+.save-toast { position: fixed; bottom: 24px; right: 24px; background: var(--kw-ink); color: white; padding: 10px 18px; border-radius: 999px; font-size: .78rem; font-weight: 600; box-shadow: var(--shadow); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999; display: flex; align-items: center; gap: 7px; }
 .save-toast.show { opacity: 1; }
 
 @media (max-width: 520px) {
@@ -198,17 +196,17 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
 
 <!-- ── Back + User ── -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
   <div style="display:flex;align-items:center;gap:10px">
-    <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
-    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    <div id="tool-user-initial" style="width:32px;height:32px;background:#397e2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#fff;flex-shrink:0">?</div>
+    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#23261f">Loading…</div>
   </div>
 </div>
 
   <!-- Header -->
   <div class="header">
     <div class="header-icon">
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#C8991A" stroke-width="2">
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24" stroke="#ffffff" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"/>
       </svg>
     </div>
@@ -218,7 +216,7 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fffbf0;border-left:4px solid #C8991A;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#0D2545;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
 
   <!-- ── INCOME ── -->
   <div class="card">
@@ -344,10 +342,10 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
         <div class="gauge-wrap" id="gaugeWrap">
           <svg class="gauge-svg" viewBox="0 0 220 120" id="gaugeSvg">
             <!-- Background arc segments -->
-            <path d="M20,110 A90,90 0 0,1 65,27" stroke="#1A8C5B" stroke-width="14" fill="none" stroke-linecap="round"/>
-            <path d="M65,27 A90,90 0 0,1 110,20" stroke="#C8991A" stroke-width="14" fill="none" stroke-linecap="round"/>
-            <path d="M110,20 A90,90 0 0,1 165,40" stroke="#D97706" stroke-width="14" fill="none" stroke-linecap="round"/>
-            <path d="M165,40 A90,90 0 0,1 200,110" stroke="#C0392B" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M20,110 A90,90 0 0,1 65,27" stroke="#397e2b" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M65,27 A90,90 0 0,1 110,20" stroke="#f0c90a" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M110,20 A90,90 0 0,1 165,40" stroke="#d97706" stroke-width="14" fill="none" stroke-linecap="round"/>
+            <path d="M165,40 A90,90 0 0,1 200,110" stroke="#c0392b" stroke-width="14" fill="none" stroke-linecap="round"/>
             <!-- Needle -->
             <line id="gaugeNeedle" x1="110" y1="110" x2="110" y2="30" stroke="var(--navy)" stroke-width="3" stroke-linecap="round" transform="rotate(0,110,110)" style="transition:transform 1.2s cubic-bezier(.4,0,.2,1)"/>
             <circle cx="110" cy="110" r="6" fill="var(--navy)"/>
@@ -366,10 +364,10 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
         <div class="card-title">Botswana Lending Benchmarks</div>
         <div class="benchmark-track" id="benchmarkTrack">
           <div class="benchmark-bar">
-            <div class="bb-seg" style="width:35%;background:#1A8C5B;opacity:.85;"></div>
-            <div class="bb-seg" style="width:15%;background:#C8991A;opacity:.85;"></div>
-            <div class="bb-seg" style="width:15%;background:#D97706;opacity:.85;"></div>
-            <div class="bb-seg" style="width:35%;background:#C0392B;opacity:.85;"></div>
+            <div class="bb-seg" style="width:35%;background:#397e2b;opacity:.85;"></div>
+            <div class="bb-seg" style="width:15%;background:#f0c90a;opacity:.85;"></div>
+            <div class="bb-seg" style="width:15%;background:#d97706;opacity:.85;"></div>
+            <div class="bb-seg" style="width:35%;background:#c0392b;opacity:.85;"></div>
           </div>
           <div style="position:absolute;top:0;left:0;right:0;" id="benchmarkPointerWrap">
             <div class="benchmark-pointer" id="benchmarkPointer" style="left:0%;">
@@ -382,28 +380,28 @@ tfoot td:first-child { text-align: left; font-family: 'Inter', sans-serif; }
         </div>
         <div class="benchmark-rows">
           <div class="bench-row">
-            <div class="bench-dot" style="background:#1A8C5B;"></div>
+            <div class="bench-dot" style="background:#397e2b;"></div>
             <div class="bench-range">0 – 35%</div>
             <div class="bench-label">Excellent — most lenders approve freely</div>
-            <span class="bench-badge" style="background:#dcfce7;color:#1A8C5B;">Low Risk</span>
+            <span class="bench-badge" style="background:#eef4ea;color:#2a5f20;">Low Risk</span>
           </div>
           <div class="bench-row">
-            <div class="bench-dot" style="background:#C8991A;"></div>
+            <div class="bench-dot" style="background:#f0c90a;"></div>
             <div class="bench-range">36 – 50%</div>
             <div class="bench-label">Acceptable — NBFIRA DSR limit for unsecured</div>
-            <span class="bench-badge" style="background:#fef3c7;color:#92400e;">Moderate</span>
+            <span class="bench-badge" style="background:#fdf5cf;color:#93790a;">Moderate</span>
           </div>
           <div class="bench-row">
-            <div class="bench-dot" style="background:#D97706;"></div>
+            <div class="bench-dot" style="background:#d97706;"></div>
             <div class="bench-range">51 – 65%</div>
             <div class="bench-label">High — some lenders decline; review advised</div>
-            <span class="bench-badge" style="background:#ffedd5;color:#D97706;">High Risk</span>
+            <span class="bench-badge" style="background:#ffedd5;color:#d97706;">High Risk</span>
           </div>
           <div class="bench-row">
-            <div class="bench-dot" style="background:#C0392B;"></div>
+            <div class="bench-dot" style="background:#c0392b;"></div>
             <div class="bench-range">65%+</div>
             <div class="bench-label">Very high — credit applications likely rejected</div>
-            <span class="bench-badge" style="background:#fee2e2;color:#C0392B;">Critical</span>
+            <span class="bench-badge" style="background:#fee2e2;color:#c0392b;">Critical</span>
           </div>
         </div>
         <div class="info-note" style="margin-top:14px;">
@@ -666,7 +664,7 @@ function calculate() {
 
   // Status
   const status = backEndDTI <= 35 ? {label:'Excellent',  color:'var(--green)',  cls:'green',  msg:`Your DTI is well within Botswana lending norms. You have strong borrowing capacity and are in a healthy financial position.`}
-               : backEndDTI <= 50 ? {label:'Acceptable', color:'#b8870f',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
+               : backEndDTI <= 50 ? {label:'Acceptable', color:'#93790a',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
                : backEndDTI <= 65 ? {label:'High Risk',  color:'var(--orange)', cls:'orange', msg:`Your DTI is elevated. Some lenders may decline applications. Focus on reducing existing debt before applying for new credit.`}
                :                    {label:'Critical',   color:'var(--red)',    cls:'red',    msg:`Your DTI exceeds safe lending thresholds. Most Botswana lenders will decline applications. Debt reduction should be an immediate priority.`};
 
@@ -697,8 +695,8 @@ function calculate() {
   const clampedPct = Math.min(backEndDTI, 80);
   const angle      = -90 + (clampedPct / 80) * 180;
   document.getElementById('gaugeNeedle').setAttribute('transform', `rotate(${angle},110,110)`);
-  const gaugeColor = backEndDTI<=35?'var(--green)':backEndDTI<=50?'var(--gold)':backEndDTI<=65?'var(--orange)':'var(--red)';
-  document.getElementById('gaugePct').textContent  = backEndDTI.toFixed(1) + '%';
+  const gaugeColor = backEndDTI<=35?'var(--green)':backEndDTI<=50?'#93790a':backEndDTI<=65?'var(--orange)':'var(--red)';
+  KW.countUp(document.getElementById('gaugePct'), backEndDTI, { format: v => v.toFixed(1) + '%' });
   document.getElementById('gaugePct').style.color  = gaugeColor;
   document.getElementById('gaugeStatus').textContent = status.label;
   document.getElementById('gaugeStatus').style.color  = gaugeColor;
@@ -788,6 +786,7 @@ function calculate() {
 
   document.getElementById('resultsSection').classList.add('visible');
   setTimeout(()=>document.getElementById('resultsSection').scrollIntoView({behavior:'smooth',block:'start'}), 80);
+  KW.reveal('#resultsSection .card');
 
   // ── kw_snapshot ──
   try {
@@ -902,6 +901,7 @@ function exportPDF() {
 // ──────────────────────────────────────────────
 document.getElementById('debtName').value = DEBT_META['mortgage'].label;
 loadData();
+KW.reveal('.card');
 
 // ── Auth init ──
 (function() {
@@ -924,7 +924,7 @@ loadData();
       }
     });
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'dti_calculator').maybeSingle();
-    if (toolRow?.data) { localStorage.setItem(LS_DATA, JSON.stringify(toolRow.data)); loadData(); }
+    if (toolRow?.data) { localStorage.setItem(LS_DATA, JSON.stringify(toolRow.data)); loadData(); KW.reveal('.card'); }
     else {
       // No saved tool data for this user — clear any stale localStorage (could be from a different account)
       localStorage.removeItem(LS_DATA);

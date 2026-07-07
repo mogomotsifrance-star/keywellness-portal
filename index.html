@@ -30,13 +30,13 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 
 /* ── Auth Screen ── */
 #auth-screen{
-  display:none;position:fixed;inset:0;background:var(--kw-green-wash);
+  display:none;position:fixed;inset:0;background:var(--kw-navy);
   align-items:center;justify-content:center;z-index:999;
 }
 #auth-screen.visible{display:flex}
 .auth-box{
   background:var(--white);border-radius:var(--kw-r-lg);padding:40px;width:100%;max-width:420px;
-  border:1px solid var(--border);box-shadow:0 24px 64px rgba(35,38,31,.14);
+  box-shadow:0 24px 64px rgba(0,0,0,.3);
 }
 .auth-logo{margin-bottom:20px;text-align:center}
 .auth-box h2{font-size:22px;font-weight:800;margin-bottom:4px}
@@ -48,32 +48,31 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 .auth-ok{background:var(--kw-green-tint);border-left:4px solid var(--green);color:var(--kw-green-deep);padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:14px;display:none}
 
 /* ── Sidebar ── */
-#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--kw-green-wash);border-right:1px solid var(--kw-line);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:200;transition:transform .28s cubic-bezier(.4,0,.2,1)}
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--kw-navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:200;transition:transform .28s cubic-bezier(.4,0,.2,1)}
 /* ── Sidebar overlay (mobile drawer backdrop) ── */
-#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(35,38,31,.35);z-index:199}
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:199}
 /* ── Hamburger button (mobile only) ── */
 .hamburger-btn{display:none;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;padding:6px;border-radius:8px;color:var(--navy);transition:.15s;flex-shrink:0}
 .hamburger-btn:hover{background:var(--cream-dark)}
-.sb-logo{padding:20px 20px 16px;border-bottom:1px solid var(--kw-line);display:flex;align-items:center;gap:10px}
+.sb-logo{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:10px}
 .sb-logo-icon{width:34px;height:34px;flex-shrink:0}
 .sb-logo-word{font-family:'Nunito',sans-serif;font-weight:800;font-size:15px;letter-spacing:-0.01em;line-height:1.2}
-.sb-logo-word .k{color:#54555a}
-.sb-logo-word .w{color:var(--kw-green)}
-.sb-logo-tag{font-size:9px;color:var(--kw-grey);font-weight:600;margin-top:1px}
+.sb-logo-word .k{color:rgba(255,255,255,.85)}
+.sb-logo-word .w{color:var(--kw-yellow)}
+.sb-logo-tag{font-size:9px;color:rgba(255,255,255,.45);font-weight:600;margin-top:1px}
 .sb-nav{flex:1;padding:14px 12px;overflow-y:auto}
-.sb-item{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:2px;border-radius:999px;color:#5d6058;font-size:13px;font-weight:700;cursor:pointer;transition:background-color .2s var(--kw-ease),color .2s var(--kw-ease)}
-.sb-item:hover{color:var(--kw-green-deep);background:var(--kw-green-tint)}
-.sb-item.active{color:var(--kw-green);background:var(--white);box-shadow:0 1px 4px rgba(35,38,31,.12)}
+.sb-item{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:2px;border-radius:999px;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;transition:background-color .2s var(--kw-ease),color .2s var(--kw-ease)}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.08)}
+.sb-item.active{color:var(--kw-green);background:var(--white);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .sb-item .icon{font-size:16px;width:20px;text-align:center}
 .sb-footer{padding:12px 16px 16px}
 .sb-points-chip{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--white);border:1px solid var(--kw-line);border-radius:999px;padding:8px 12px;margin-bottom:10px;color:var(--kw-yellow-ink);font-size:12px;font-weight:800}
-.sb-logout{background:transparent;border:1px solid var(--kw-line);color:var(--kw-body);font-size:11px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;width:100%;transition:.15s}
-.sb-logout:hover{background:var(--white);border-color:var(--kw-grey)}
+.sb-logout{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;width:100%;transition:.15s}
+.sb-logout:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);color:#fff}
 
 /* ── Main ── */
 #main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;display:flex;flex-direction:column}
-.page-header{background:rgba(251,252,250,.8);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid transparent;padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50;transition:border-color .2s var(--kw-ease)}
-.page-header.is-scrolled{border-bottom-color:var(--border)}
+.page-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
 .page-header h2{font-size:19px;font-weight:800;flex:1}
 .page-content{padding:28px 32px;max-width:960px}
 
@@ -488,7 +487,7 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 <!-- ══ SESSION CONFIRM OVERLAY ══ -->
 <!-- Shown only when opening the portal from an external link with a stored session.
      Requires password re-entry — "Continue" alone is not enough to prove identity. -->
-<div id="session-confirm" style="display:none;position:fixed;inset:0;background:var(--kw-green-wash);align-items:center;justify-content:center;z-index:1000">
+<div id="session-confirm" style="display:none;position:fixed;inset:0;background:var(--kw-navy);align-items:center;justify-content:center;z-index:1000">
   <div style="background:var(--white);border-radius:16px;padding:40px;width:100%;max-width:400px;box-shadow:0 24px 64px rgba(0,0,0,.3);text-align:center">
     <div style="font-size:40px;margin-bottom:16px">🔑</div>
     <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;color:var(--navy)">Confirm your identity</h2>
@@ -619,12 +618,24 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 <!-- ══ SIDEBAR ══ -->
 <nav id="sidebar">
   <div class="sb-logo">
-    <svg class="sb-logo-icon" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <circle cx="12" cy="8" r="2.2" fill="#808185"/>
-      <circle cx="19" cy="5" r="1.8" fill="#808185"/>
-      <circle cx="25" cy="8" r="1.4" fill="#808185"/>
-      <circle cx="15.5" cy="13" r="1.4" fill="#808185"/>
-      <path d="M24 13c6.6 0 12 5.8 12 13.5S30.6 42 24 42c-2 0-3.9-.5-5.5-1.4-1 .5-2.2.8-3.5.8-4.4 0-8-3.8-8-8.5 0-3.5 2-6.5 5-8-.3-1-.5-2-.5-3.1C11.5 15.6 15.9 13 21 13z" fill="#397e2b"/>
+    <svg class="sb-logo-icon" viewBox="0 0 50 46" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Dots arc -->
+      <circle cx="16" cy="30" r="1.4" fill="rgba(255,255,255,.5)"/>
+      <circle cx="12" cy="25" r="1.5" fill="rgba(255,255,255,.55)"/>
+      <circle cx="11" cy="19" r="1.6" fill="rgba(255,255,255,.6)"/>
+      <circle cx="14" cy="13" r="1.5" fill="rgba(255,255,255,.6)"/>
+      <circle cx="19" cy="9"  r="1.4" fill="rgba(255,255,255,.6)"/>
+      <circle cx="25" cy="7"  r="1.4" fill="rgba(255,255,255,.6)"/>
+      <circle cx="31" cy="9"  r="1.4" fill="rgba(255,255,255,.6)"/>
+      <circle cx="36" cy="13" r="1.5" fill="rgba(255,255,255,.6)"/>
+      <circle cx="39" cy="19" r="1.6" fill="rgba(255,255,255,.55)"/>
+      <circle cx="38" cy="25" r="1.5" fill="rgba(255,255,255,.5)"/>
+      <circle cx="34" cy="30" r="1.4" fill="rgba(255,255,255,.45)"/>
+      <!-- Yellow petals -->
+      <ellipse cx="21" cy="35" rx="4.5" ry="7.5" transform="rotate(-22 21 35)" fill="#f0c90a"/>
+      <ellipse cx="29" cy="35" rx="4.5" ry="7.5" transform="rotate(22 29 35)"  fill="#f0c90a"/>
+      <!-- Green center -->
+      <circle cx="25" cy="19" r="6" fill="#397e2b"/>
     </svg>
     <div>
       <div class="sb-logo-word"><span class="k">KEY</span> <span class="w">WELLNESS</span></div>
@@ -1392,11 +1403,6 @@ function closeSidebar() {
   document.getElementById('sidebar-overlay').classList.remove('open');
   document.body.style.overflow = '';
 }
-
-// Topbar hairline border appears once the page has scrolled (presentational only).
-window.addEventListener('scroll', () => {
-  document.querySelector('.page-header')?.classList.toggle('is-scrolled', window.scrollY > 4);
-}, { passive: true });
 
 function buildNav(current) {
   const navItems = [...NAV];
