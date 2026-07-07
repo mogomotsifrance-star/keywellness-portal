@@ -314,13 +314,37 @@ with the manual follow-ups every batch produced.
   historical code comment and the stale `CLAUDE.md` "Bookings: FormSubmit.co"
   line reference it.
 
-- **No PNG logo asset exists.** Only `assets/img/kw-icon.svg` and
-  `assets/img/kw-logo-horizontal.svg` are in the repo (confirmed on `dev`;
-  `assets/img/` doesn't exist on `main` at all yet). `KW_LOGO_URL` in
-  `kw-email.ts` points to `https://keywellness.co.bw/assets/img/kw-logo-horizontal.png`,
-  which **does not resolve** until (a) a PNG export is added at that path and
-  (b) `dev` is merged to `main`. Until then every email's logo will show as a
-  broken image. See "Manual follow-ups" below.
+- **PNG logo asset — resolved.** `assets/img/kw-logo-horizontal.png` (420×62,
+  2x for retina at the 210px display width) and `assets/img/kw-icon.png` now
+  exist, rasterized directly from the corrected SVG sources via `sharp`
+  (no design tool available in this environment). `KW_LOGO_URL` in
+  `kw-email.ts` already pointed at the right path
+  (`https://keywellness.co.bw/assets/img/kw-logo-horizontal.png`) — no change
+  needed there. **Still blocked on `main`**: `assets/img/` doesn't exist on
+  `main` at all yet, so the URL 404s in production until `dev` is merged. See
+  "Manual follow-ups" below.
+
+- **Icon design mismatch — resolved.** `assets/img/kw-icon.svg` and
+  `kw-logo-horizontal.svg` previously used a stale single-blob icon (no
+  yellow) that didn't match the actual brand mark used live on the login
+  screen (`index.html`'s inline `auth-logo` SVG — dot-ring + green circle +
+  yellow petals). Confirmed with Tshenolo that the login-screen version is
+  authoritative; both asset files were rebuilt from those exact paths (icon
+  cropped to `viewBox="0 0 62 62"`, horizontal lockup to
+  `viewBox="0 0 286 62"`, tagline dropped for the horizontal version since
+  email/small-size contexts don't carry it). Since `admin.html`'s favicon
+  already referenced `kw-icon.svg`, this also fixes the favicon site-wide,
+  not just email.
+
+- **"KEY"/"WELLNESS" text overlap — resolved, in three places.** The
+  original coordinates (`WELLNESS` at `x="116"`) put it under "KEY"'s actual
+  rendered end (~x=128 at font-size 25, measured via `getBBox()`), causing
+  visible overlap at larger render sizes. Fixed to `x="134"` in
+  `assets/img/kw-logo-horizontal.svg`, in `index.html`'s inline `auth-logo`
+  SVG (the original source of the bug, carried over when it was copied), and
+  implicitly in the newly-generated `kw-logo-horizontal.png` (rasterized
+  after the fix). Verified overlap-free at both 210px and 420px render
+  widths in-browser.
 
 - **No physical address or Help/Privacy pages exist yet.** The member footer
   needs a mailing address and Help/Privacy links per the prompt's spec. No
@@ -422,20 +446,19 @@ template; flag back if so.
 
 ## Batch 5 — logo, retirement, sweep
 
-- **Logo**: no PNG export exists (see Batch 0). Requesting a **no-slogan**
-  horizontal lockup from the brand manual is worth doing at the same time —
-  the current SVG (`assets/img/kw-logo-horizontal.svg`) includes the
-  "Wellness Is Key, Be About It." slogan lockup used on the login screen,
-  which will be illegible at 210px in an email. Once a PNG (ideally
-  slogan-less) exists at a stable path, update the one `KW_LOGO_URL`
-  constant in `kw-email.ts` — nothing else needs to change.
+- **Logo — resolved.** `assets/img/kw-logo-horizontal.svg` was never the
+  slogan lockup (that correction above was based on a mistaken read — the
+  slogan only ever lived in `index.html`'s separate inline `auth-logo` SVG).
+  The actual gap was that `assets/img/`'s SVGs used a stale, mismatched icon
+  design; both were rebuilt from the login screen's real mark and PNGs
+  generated (see the "resolved" entries above). `KW_LOGO_URL` needed no
+  change — it already pointed at the correct path.
 - **FormSubmit**: retired, not just reported (see Batch 0/2 above).
 - **Sweep**: repo-wide grep for ad-hoc email HTML strings outside the shared
   module and the auth template files found none remaining.
 - **Post-merge check (do after `dev` → `main`)**: confirm
-  `https://keywellness.co.bw/assets/img/kw-logo-horizontal.png` (or whatever
-  path the eventual PNG lands at) returns 200, then send one test of each
-  email family from production.
+  `https://keywellness.co.bw/assets/img/kw-logo-horizontal.png` returns 200,
+  then send one test of each email family from production.
 
 ## Manual follow-up — NOT attempted by Claude
 
@@ -447,12 +470,14 @@ template; flag back if so.
   Not checkable from code.
 - **Which Supabase Auth template types are enabled**, and the actual
   OTP/link expiry value — dashboard-only, see Batch 0/4 above.
-- **PNG logo export** (ideally slogan-less) — see Batch 5.
 - **Physical address and Help/Privacy page URLs** for the member email
   footer — see Batch 0.
-- **`admin.html` env/deploy note**: this batch didn't touch any Supabase
-  schema or RPCs, but the booking Edge Function change (Batch 2) is
-  undeployed — see the deploy checklist there before it's live.
+- **`admin.html` / Edge Function deploy — done.** `send-booking-email` was
+  redeployed to the shared Supabase project (`supabase functions deploy`)
+  after a real test booking-confirm on `dev` was requested. Note this is a
+  shared-project function: the "new booking received" email on `main` now
+  also renders through the new shared template as of that deploy, even
+  though `main`'s git branch itself wasn't touched.
 - **`CLAUDE.md`'s tech-stack table still lists "Bookings: FormSubmit.co"** —
   stale even before this batch (bookings have gone through the Edge Function
   since the earlier "Replace FormSubmit..." commit); worth a one-line fix
