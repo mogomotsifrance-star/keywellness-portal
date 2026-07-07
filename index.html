@@ -301,10 +301,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 /* ── New Booking Form ── */
 .bk-info-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:18px}
 .bk-info-item{display:flex;align-items:center;gap:9px;padding:10px 12px;background:var(--white);border:1px solid var(--border);border-radius:8px;font-size:.75rem;color:var(--slate)}
-.bk-header{background:var(--kw-green-wash);border:1px solid var(--kw-line);border-radius:14px;padding:24px 24px 20px;margin-bottom:18px;position:relative;overflow:hidden}
+.bk-header{background:var(--kw-navy);border-radius:14px;padding:24px 24px 20px;margin-bottom:18px;position:relative;overflow:hidden}
 .bk-header-inner{position:relative;z-index:1}
-.bk-header h2{color:var(--navy);font-size:1.2rem;font-weight:800;margin-bottom:4px}
-.bk-header p{color:var(--kw-body);font-size:.82rem;line-height:1.5}
+.bk-header h2{color:#fff;font-size:1.2rem;font-weight:800;margin-bottom:4px}
+.bk-header p{color:rgba(255,255,255,.65);font-size:.82rem;line-height:1.5}
 .bk-badge{display:inline-flex;align-items:center;gap:6px;background:var(--kw-yellow-tint);border:1px solid var(--kw-yellow);border-radius:999px;padding:4px 12px;font-size:.7rem;font-weight:700;color:var(--kw-yellow-ink);margin-bottom:10px}
 .bk-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--kw-yellow);animation:bkpulse 2s infinite}
 @keyframes bkpulse{0%,100%{opacity:1}50%{opacity:.4}}
@@ -1922,10 +1922,10 @@ VIEWS['assessment'] = function () {
           datasets: [{
             label: 'Wellness Score',
             data: scores,
-            borderColor: '#c8973a',
-            backgroundColor: 'rgba(200,151,58,.12)',
+            borderColor: '#397e2b',
+            backgroundColor: 'rgba(57,126,43,.12)',
             borderWidth: 2.5,
-            pointBackgroundColor: '#c8973a',
+            pointBackgroundColor: '#397e2b',
             pointRadius: 5,
             tension: 0.3,
             fill: true,
@@ -3585,7 +3585,7 @@ VIEWS['progress'] = function () {
       if (ctx) new Chart(ctx, {
         type:'line',
         data:{ labels: asc.map(a=>fmtDate(a.created_at)),
-          datasets:[{ label:'Score', data: asc.map(a=>a.score), borderColor:'#c8973a', backgroundColor:'rgba(200,151,58,.1)', tension:.3, pointBackgroundColor:'#1a2744', pointRadius:5, fill:true }] },
+          datasets:[{ label:'Score', data: asc.map(a=>a.score), borderColor:'#397e2b', backgroundColor:'rgba(57,126,43,.1)', tension:.3, pointBackgroundColor:'#1a2744', pointRadius:5, fill:true }] },
         options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
       });
     }, 100);
@@ -3596,7 +3596,7 @@ VIEWS['progress'] = function () {
       if (ctx) new Chart(ctx, {
         type:'bar',
         data:{ labels: csc.map(c=>fmtDate(c.created_at)),
-          datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score), backgroundColor:'rgba(200,151,58,.7)', borderColor:'#c8973a', borderWidth:2, borderRadius:6 }] },
+          datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score), backgroundColor:'rgba(57,126,43,.7)', borderColor:'#397e2b', borderWidth:2, borderRadius:6 }] },
         options:{ scales:{y:{min:0,max:100}}, plugins:{legend:{display:false}} }
       });
     }, 100);
