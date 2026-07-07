@@ -745,6 +745,36 @@ function enforceUserScope(userId) {
 }
 
 // ══════════════════════════════════════════════════
+//  SESSION TRUST (time-based re-auth window)
+// ══════════════════════════════════════════════════
+// A stored Supabase session lives in localStorage, shared by every tab on this
+// browser. Trusting it forever after one password confirmation means a device
+// left logged in and unattended stays wide open indefinitely — the actual risk
+// this screen exists for. Trusting it per-tab (the old approach, sessionStorage)
+// solves that but re-prompts the real owner on every new tab/bookmark, since
+// sessionStorage doesn't carry across tabs.
+// Instead: one confirmation covers every tab (localStorage), but it expires
+// after SESSION_TRUST_MS of inactivity — touched on navigation and on a
+// once-a-minute heartbeat while the tab is visible, so active use never
+// re-prompts, but a left-open idle tab does.
+const SESSION_TRUST_MS = 30 * 60 * 1000; // 30 minutes of inactivity
+function getSessionTrust() {
+  try { return JSON.parse(localStorage.getItem('kw_session_trust') || 'null'); }
+  catch { return null; }
+}
+function touchSessionTrust(uid) {
+  if (!uid) return;
+  localStorage.setItem('kw_session_trust', JSON.stringify({ uid, ts: Date.now() }));
+}
+function clearSessionTrust() {
+  localStorage.removeItem('kw_session_trust');
+}
+function isSessionTrusted(uid) {
+  const t = getSessionTrust();
+  return !!(t && t.uid === uid && (Date.now() - t.ts) < SESSION_TRUST_MS);
+}
+
+// ══════════════════════════════════════════════════
 //  DATA — SUPABASE READ / WRITE
 // ══════════════════════════════════════════════════
 async function loadAllData() {
@@ -1108,8 +1138,8 @@ async function confirmSession() {
     return;
   }
 
-  // Password correct — stamp this tab so refresh/back don't re-prompt.
-  sessionStorage.setItem('kw_session_confirmed', currentUser.id);
+  // Password correct — trust this session (all tabs) for SESSION_TRUST_MS.
+  touchSessionTrust(currentUser.id);
   document.getElementById('session-confirm').style.display = 'none';
 
   await loadAllData();
@@ -1122,7 +1152,7 @@ async function confirmSession() {
 
 async function switchAccount() {
   await sb.auth.signOut();
-  sessionStorage.removeItem('kw_session_confirmed');
+  clearSessionTrust();
   currentUser = null;
   document.getElementById('session-confirm').style.display = 'none';
   showAuthScreen(true);
@@ -1417,6 +1447,7 @@ window.addEventListener('hashchange', route);
 
 function route() {
   if (!currentUser) { showAuthScreen(true); return; }
+  touchSessionTrust(currentUser.id);
   showAuthScreen(false);
   let view = window.location.hash.replace('#', '') || 'dashboard';
   const hasOnboarded = state.user?.onboarded === true || !!state.user?.first_name;
@@ -4492,13 +4523,14 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
 
-  // If a session is stored, require password confirmation — but only when the page
-  // is opened fresh from outside (e.g. a shared link). Skip if the user already
-  // confirmed this session in the current browser tab (sessionStorage flag).
+  // If a session is stored, require password confirmation — but only when the
+  // trust window has expired (SESSION_TRUST_MS of inactivity). Any tab that
+  // touched it recently keeps every tab trusted; an idle/left-open session doesn't.
   if (currentUser) {
-    const alreadyConfirmed = sessionStorage.getItem('kw_session_confirmed') === currentUser.id;
+    const alreadyConfirmed = isSessionTrusted(currentUser.id);
     if (alreadyConfirmed) {
-      // Same tab, same user — proceed without interrupting.
+      // Still within the trust window — proceed without interrupting, and slide the window forward.
+      touchSessionTrust(currentUser.id);
       await loadAllData();
       if (window._isAdmin) { window.location.replace('admin.html'); return; }
       if (window._employerOrgId) { window.location.replace('employer.html'); return; }
@@ -4522,7 +4554,7 @@ async function init() {
     if (event === 'SIGNED_IN') {
       clearLocalUserCache();
       currentUser = session?.user ?? null;
-      if (currentUser) enforceUserScope(currentUser.id);
+      if (currentUser) { enforceUserScope(currentUser.id); touchSessionTrust(currentUser.id); }
       await loadAllData();
       // Admins skip onboarding, consent, the welcome video, assessment nags and all
       // member surfaces — send them straight to the admin home.
@@ -4572,6 +4604,12 @@ async function init() {
 }
 
 init();
+
+// Keep the session-trust window sliding while the tab is actively open/visible,
+// so a long stretch of reading (no navigation) doesn't wrongly expire it.
+setInterval(() => {
+  if (currentUser && document.visibilityState === 'visible') touchSessionTrust(currentUser.id);
+}, 60000);
 </script>
 </body>
 </html>
