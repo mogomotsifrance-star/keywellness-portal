@@ -54,7 +54,7 @@ const KWProfile = (function () {
     if (filled.length > 0 && !document.getElementById('kw-profile-notice')) {
       const notice = document.createElement('div');
       notice.id = 'kw-profile-notice';
-      notice.style.cssText = 'background:#fffbf0;border-left:4px solid #c8973a;border-radius:0 8px 8px 0;padding:10px 16px;font-size:13px;color:#1a2744;margin-bottom:16px';
+      notice.style.cssText = 'background:var(--kw-yellow-tint);border-left:4px solid var(--kw-yellow-ink);border-radius:0 8px 8px 0;padding:10px 16px;font-size:13px;color:var(--kw-ink);margin-bottom:16px';
       notice.innerHTML = '<strong>Pre-filled from your profile.</strong> Adjust below if needed — when you save we\'ll ask whether to update your shared profile.';
       const parent = noticeParentSelector
         ? document.querySelector(noticeParentSelector)
@@ -85,16 +85,16 @@ const KWProfile = (function () {
       if (!changes || !changes.length) return resolve(false);
       const ov = document.createElement('div');
       ov.id = 'kw-profile-modal';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(26,39,68,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,38,31,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
       ov.innerHTML = `
-        <div style="background:#fff;border-radius:12px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(26,39,68,.3)">
-          <div style="font-size:18px;font-weight:700;color:#1a2744;margin-bottom:8px">Update your profile?</div>
-          <p style="font-size:13px;line-height:1.65;color:#6b7280;margin-bottom:20px">
+        <div style="background:#fff;border-radius:12px;padding:28px 24px;max-width:400px;width:100%;box-shadow:0 8px 40px rgba(35,38,31,.3)">
+          <div style="font-size:18px;font-weight:700;color:var(--kw-ink);margin-bottom:8px">Update your profile?</div>
+          <p style="font-size:13px;line-height:1.65;color:var(--kw-grey);margin-bottom:20px">
             This will update your saved financial profile and recalculate your hub scores. Continue?
           </p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button id="kwp-yes" style="flex:1;padding:11px 8px;background:#c8973a;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px">Update profile</button>
-            <button id="kwp-no"  style="flex:1;padding:11px 8px;background:#f5f0e8;color:#1a2744;border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Keep for this tool only</button>
+            <button id="kwp-yes" style="flex:1;padding:11px 8px;background:var(--kw-green);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:13px">Update profile</button>
+            <button id="kwp-no"  style="flex:1;padding:11px 8px;background:var(--kw-surface);color:var(--kw-ink);border:none;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Keep for this tool only</button>
           </div>
         </div>`;
       document.body.appendChild(ov);

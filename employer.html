@@ -4,60 +4,65 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Key Wellness — Employer Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏢</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/kw-reveal.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="kw-report-charts.js"></script>
 <style>
 :root{
-  --navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--gold-light:#e8b85a;
-  --cream:#f5f0e8;--cream-dark:#ede7d9;--white:#ffffff;
-  --green:#2d8a4e;--red:#c0392b;--orange:#e67e22;--muted:#6b7280;
-  --teal:#0d7377;--text:#1a2744;--border:#ddd6c8;
-  --radius:12px;--radius-sm:8px;--shadow:0 2px 12px rgba(26,39,68,.10);--sidebar-w:240px;
+  --navy:var(--kw-ink);--navy-light:var(--kw-green-deep);--gold:var(--kw-green);--gold-light:var(--kw-green-deep);
+  --cream:var(--kw-canvas);--cream-dark:var(--kw-surface);--white:var(--kw-white);
+  --green:var(--kw-green);--red:var(--kw-red);--orange:var(--kw-orange);--muted:var(--kw-grey);
+  --teal:var(--kw-green);--text:var(--kw-body);--border:var(--kw-line);
+  --radius:var(--kw-r-lg);--radius-sm:var(--kw-r);--shadow:0 1px 3px rgba(35,38,31,.06);--sidebar-w:240px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
-button{cursor:pointer;font-family:'Inter',sans-serif}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
+button{cursor:pointer;font-family:'Nunito',sans-serif}
 .mono{font-family:'DM Mono',monospace}
 
 /* Sidebar */
-#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--kw-navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
 .sb-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
-.sb-logo h1{color:#fff;font-size:14px;font-weight:700}
-.sb-logo span{color:var(--gold);font-size:11px;font-weight:500;display:block;margin-top:2px}
+.sb-logo h1{color:#fff;font-size:14px;font-weight:800}
+.sb-logo span{color:var(--kw-yellow);font-size:11px;font-weight:500;display:block;margin-top:2px}
 .sb-org{padding:12px 20px;border-bottom:1px solid rgba(255,255,255,.08);font-size:12px;color:rgba(255,255,255,.5);line-height:1.6}
 .sb-org strong{color:rgba(255,255,255,.85);display:block;font-size:13px;margin-bottom:1px}
-.sb-nav{flex:1;padding:12px 0}
-.sb-item{display:flex;align-items:center;gap:12px;padding:10px 20px;color:rgba(255,255,255,.65);font-size:13px;font-weight:500;border-left:3px solid transparent}
-.sb-item.active{color:#fff;background:rgba(200,151,58,.15);border-left-color:var(--gold)}
+.sb-nav{flex:1;padding:14px 12px}
+.sb-item{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:2px;border-radius:999px;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;transition:background-color .2s var(--kw-ease),color .2s var(--kw-ease)}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.08)}
+.sb-item.active{color:var(--kw-green);background:var(--white);box-shadow:0 1px 4px rgba(0,0,0,.2)}
 .sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1)}
 .sb-user{color:rgba(255,255,255,.5);font-size:11px;margin-bottom:10px;word-break:break-all}
-.sb-logout{background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.6);font-size:11px;font-weight:600;padding:6px 12px;border-radius:6px;cursor:pointer;width:100%}
-.sb-logout:hover{background:rgba(255,255,255,.15);color:#fff}
+.sb-logout{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;width:100%;transition:.15s}
+.sb-logout:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);color:#fff}
 
 /* Main */
 #main{margin-left:var(--sidebar-w);flex:1;min-height:100vh}
 .page-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
-.page-header h2{font-size:19px;font-weight:700;flex:1}
+.page-header h2{font-size:19px;font-weight:800;flex:1}
 .page-content{padding:28px 32px}
-.privacy-badge{display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark);border:1px solid var(--border);border-radius:99px;padding:4px 12px;font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap}
+.privacy-badge{display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark);border:1px solid var(--border);border-radius:999px;padding:4px 12px;font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap}
 
 /* Cards */
-.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
-.card-title{font-size:14px;font-weight:700;margin-bottom:4px;color:var(--navy)}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:14px;font-weight:800;margin-bottom:4px;color:var(--navy)}
 .card-subtitle{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5}
 
 /* Stat boxes */
 .stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px}
-.stat-box{background:var(--white);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border-left:4px solid var(--border)}
+.stat-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .3s var(--kw-ease),box-shadow .3s var(--kw-ease)}
+.stat-box:hover{transform:translateY(-3px);box-shadow:var(--kw-shadow-hover)}
 .stat-val{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--navy)}
 .stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
 .stat-delta{font-size:11px;margin-top:6px;font-weight:600}
-.stat-box.gold{border-left-color:var(--gold)}.stat-box.gold .stat-val{color:var(--gold)}
-.stat-box.green{border-left-color:var(--green)}.stat-box.green .stat-val{color:var(--green)}
-.stat-box.navy{border-left-color:var(--navy)}
-.stat-box.orange{border-left-color:var(--orange)}.stat-box.orange .stat-val{color:var(--orange)}
+.stat-box.gold .stat-val{color:var(--kw-yellow-ink)}
+.stat-box.green .stat-val{color:var(--green)}
+.stat-box.orange .stat-val{color:var(--orange)}
 
 /* Funnel */
 .funnel-list{display:flex;flex-direction:column;gap:12px}
@@ -83,10 +88,10 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 .dim-row{display:flex;align-items:center;gap:12px}
 .dim-label-wrap{width:170px;flex-shrink:0;display:flex;align-items:center}
 .dim-label{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dim-focus-tag{display:inline-block;background:var(--gold);color:var(--navy);font-size:9px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
-.dim-bar-bg{flex:1;background:var(--cream-dark);border-radius:99px;height:8px;overflow:hidden}
-.dim-bar-fill{height:100%;border-radius:99px;background:var(--teal);transition:.5s}
-.dim-bar-fill.focus{background:var(--gold)}
+.dim-focus-tag{display:inline-block;background:var(--kw-yellow);color:var(--kw-yellow-ink);font-size:9px;font-weight:700;padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:middle;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.dim-bar-bg{flex:1;background:var(--cream-dark);border-radius:999px;height:8px;overflow:hidden}
+.dim-bar-fill{height:100%;border-radius:999px;background:var(--teal);transition:.5s}
+.dim-bar-fill.focus{background:var(--kw-yellow)}
 .dim-score{width:36px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;color:var(--muted)}
 
 /* Distress */
@@ -95,22 +100,22 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 .distress-desc{font-size:13px;color:var(--text);line-height:1.6}
 
 /* Actions */
-.action-strip{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);border-radius:var(--radius);padding:24px;color:#fff;margin-bottom:20px}
-.action-strip h3{font-size:16px;font-weight:700;margin-bottom:6px}
+.action-strip{background:var(--kw-navy);border-radius:var(--radius);padding:24px;color:#fff;margin-bottom:20px}
+.action-strip h3{font-size:16px;font-weight:800;margin-bottom:6px}
 .action-strip p{font-size:13px;color:rgba(255,255,255,.75);margin-bottom:18px;line-height:1.6}
 .action-btns{display:flex;gap:12px;flex-wrap:wrap}
-.btn-action{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:13px;font-weight:600;padding:9px 18px;border-radius:var(--radius-sm);cursor:pointer;transition:.15s}
-.btn-action:hover{background:rgba(200,151,58,.3);border-color:var(--gold)}
-.btn-action.primary{background:var(--gold);border-color:var(--gold);color:var(--navy)}
-.btn-action.primary:hover{background:var(--gold-light)}
+.btn-action{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:13px;font-weight:700;padding:9px 18px;border-radius:999px;cursor:pointer;transition:.15s}
+.btn-action:hover{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.4)}
+.btn-action.primary{background:var(--kw-green);border-color:var(--kw-green);color:#fff}
+.btn-action.primary:hover{background:var(--kw-green-deep)}
 /* .btn-action is designed for the dark .action-strip background — on a white
    .card, its default rgba(255,255,255,.12) fill is nearly invisible. .on-light
    gives it navy-on-white contrast instead, used for the Rewards tab's Reward
    buttons and Categories/History sub-tab toggles. */
-.btn-action.on-light{background:var(--navy);border-color:var(--navy);color:#fff}
-.btn-action.on-light:hover{background:var(--navy-light)}
-.btn-action.on-light.primary{background:var(--gold);border-color:var(--gold);color:var(--navy)}
-.btn-action.on-light.primary:hover{background:var(--gold-light)}
+.btn-action.on-light{background:var(--white);border-color:var(--border);color:var(--navy)}
+.btn-action.on-light:hover{border-color:var(--kw-grey)}
+.btn-action.on-light.primary{background:var(--kw-green);border-color:var(--kw-green);color:#fff}
+.btn-action.on-light.primary:hover{background:var(--kw-green-deep)}
 
 /* Chart */
 .chart-wrap{position:relative;height:220px}
@@ -132,15 +137,15 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 
 /* Spinner */
 .spinner{display:flex;align-items:center;justify-content:center;padding:80px;color:var(--muted);font-size:14px;gap:10px}
-.spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite}
+.spin{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--kw-green);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Empty state */
 .empty-state{text-align:center;padding:64px 32px;max-width:480px;margin:0 auto}
-.empty-state h3{font-size:18px;font-weight:700;margin-bottom:10px}
+.empty-state h3{font-size:18px;font-weight:800;margin-bottom:10px}
 .empty-state p{font-size:14px;color:var(--muted);line-height:1.6}
 .empty-icon{font-size:48px;margin-bottom:16px}
-.notice-gold{background:#fffbf2;border:1px solid #f0d88e;color:#7a5c10;padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;margin-top:16px;text-align:left;line-height:1.5}
+.notice-gold{background:var(--kw-yellow-tint);border:1px solid var(--kw-yellow);color:var(--kw-yellow-ink);padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;margin-top:16px;text-align:left;line-height:1.5}
 
 @media(max-width:768px){
   #sidebar{display:none}
@@ -148,6 +153,58 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
   .page-content{padding:16px}
   .page-header{padding:14px 16px}
   .dim-label-wrap{width:120px}
+}
+
+/* Reports */
+.report-status-published{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+.chart-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;min-width:0}
+.chart-box h4{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px}
+.chart-canvas-wrap{position:relative;height:220px;width:100%}
+.chart-canvas-wrap canvas{max-width:100%}
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;min-width:0}
+@media (max-width:900px){.report-grid{grid-template-columns:1fr}}
+.suppression-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+.severity-pill{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;text-transform:uppercase}
+.severity-high{background:#fdf2f2;color:var(--red)}
+.severity-medium{background:#fff8f0;color:var(--orange)}
+.severity-low{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+.risk-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.risk-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--border)}
+.risk-table td{padding:10px;border-bottom:1px solid var(--border);vertical-align:top}
+.narrative-text{font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap}
+.chart-caption{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5}
+
+/* ── International-grade report: cover, sections, KPI strip, appendix ── */
+.report-doc{max-width:840px;margin:0 auto}
+.report-cover{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:48px 40px;margin-bottom:24px;text-align:center}
+.report-cover-brandbar{height:4px;width:64px;background:var(--kw-green);border-radius:2px;margin:0 auto 28px}
+.report-cover h1{font-size:26px;font-weight:800;color:var(--navy);margin-bottom:6px;letter-spacing:-.01em}
+.report-cover .report-cover-sub{font-size:14px;color:var(--muted);margin-bottom:32px}
+.report-cover-meta{display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:8px}
+.report-cover-meta div{text-align:left}
+.report-cover-meta .meta-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px}
+.report-cover-meta .meta-val{font-size:14px;font-weight:700;color:var(--navy)}
+.report-section{margin-bottom:24px}
+.report-section-title{font-size:17px;font-weight:800;color:var(--navy);margin-bottom:4px;padding-bottom:10px;border-bottom:2px solid var(--kw-green)}
+.report-section-sub{font-size:12px;color:var(--muted);margin:8px 0 16px;line-height:1.6}
+.report-kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:8px}
+.report-appendix{background:var(--cream-dark);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.report-appendix h4{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--navy);margin:16px 0 6px}
+.report-appendix h4:first-child{margin-top:0}
+.report-appendix p,.report-appendix li{font-size:12px;color:var(--text);line-height:1.7}
+.report-appendix ul{margin-left:18px}
+.confidentiality-line{font-size:12px;color:var(--muted);font-style:italic;margin-top:14px;line-height:1.6}
+
+@media print {
+  #sidebar, .page-header .privacy-badge, .report-list-link, .btn-outline { display:none !important; }
+  #main { margin-left:0 !important; }
+  .page-content { padding:0 !important; }
+  .card { break-inside:avoid; page-break-inside:avoid; box-shadow:none; border:1px solid #ccc; }
+  body { background:#fff; }
+  .report-cover { page-break-after: always; border:none; }
+  .report-section { break-inside: avoid; page-break-inside: avoid; }
+  .chart-box { break-inside: avoid; page-break-inside: avoid; }
+  .report-appendix { break-before: page; page-break-before: always; }
 }
 </style>
 </head>
@@ -163,6 +220,7 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
   <div class="sb-nav">
     <div class="sb-item active" id="nav-overview" onclick="switchTab('overview')">&#128202; Wellbeing Overview</div>
     <div class="sb-item" id="nav-rewards" onclick="switchTab('rewards')">&#127942; Rewards</div>
+    <div class="sb-item" id="nav-reports" onclick="switchTab('reports')">&#128196; Reports</div>
   </div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-user-email"></div>
@@ -192,6 +250,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 window._isEmployer = false;
 
 let trendChart = null;
+let currentOrgName = 'Your Organisation';
 
 const DIM_LABELS = {
   income:     'Income & Cash Flow',
@@ -257,6 +316,7 @@ async function init() {
       .eq('id', empRes.data.org_id)
       .maybeSingle();
     if (orgRow && orgRow.name) {
+      currentOrgName = orgRow.name;
       document.getElementById('sb-org-name').innerHTML =
         '<strong>' + escHtml(orgRow.name) + '</strong>HR / Employer view';
       document.getElementById('page-org-title').textContent =
@@ -285,6 +345,7 @@ async function init() {
   window._finData = finRes.error ? null : finRes.data;
 
   render(window._overviewData);
+  KW.reveal('.card, .stat-box');
 }
 
 // Quarter key matching the server's to_char(now(),'YYYY"-Q"Q'), e.g. "2026-Q3".
@@ -313,11 +374,15 @@ let headcountEditing = false;
 async function switchTab(tab) {
   document.getElementById('nav-overview').classList.toggle('active', tab === 'overview');
   document.getElementById('nav-rewards').classList.toggle('active', tab === 'rewards');
+  document.getElementById('nav-reports').classList.toggle('active', tab === 'reports');
   if (tab === 'overview') {
     render(window._overviewData);
+  } else if (tab === 'reports') {
+    await loadReports();
   } else {
     await loadRewards(rewardsSeason || quarterKey(0));
   }
+  KW.reveal('.card, .stat-box');
 }
 
 async function loadRewards(season) {
@@ -1035,9 +1100,9 @@ function renderTrendChart(trendData) {
       datasets: [{
         label: 'Avg Wellbeing Score',
         data: trendData.map(function(t){ return t.avg_score; }),
-        borderColor: '#c8973a',
-        backgroundColor: 'rgba(200,151,58,.08)',
-        pointBackgroundColor: '#c8973a',
+        borderColor: '#397e2b',
+        backgroundColor: 'rgba(57,126,43,.08)',
+        pointBackgroundColor: '#397e2b',
         pointRadius: 5,
         pointHoverRadius: 7,
         tension: 0.3,
@@ -1049,7 +1114,7 @@ function renderTrendChart(trendData) {
       maintainAspectRatio: false,
       scales: {
         y: { min: 0, max: 100,
-             grid: { color: '#ede7d9' },
+             grid: { color: '#e7e9e3' },
              ticks: { font: { family: 'DM Mono', size: 11 } } },
         x: { grid: { display: false },
              ticks: { font: { family: 'Inter', size: 11 } } }
@@ -1082,6 +1147,264 @@ function renderError(msg) {
     + '<h3>Could not load dashboard</h3>'
     + '<p>' + escHtml(msg || 'An unexpected error occurred. Please refresh or contact support at wellness@keywellness.co.bw') + '</p>'
     + '</div>';
+}
+
+// ══════════════════════════════════════════════════════════════
+//  REPORTS — published utilisation reports (HR view)
+//  Renders ENTIRELY from data_snapshot / narrative already stored on the
+//  row — never a live RPC call — so what HR sees is exactly what was
+//  published, even if live data has since changed.
+// ══════════════════════════════════════════════════════════════
+
+let reportsRows = [];
+let currentHrReport = null;
+
+async function loadReports() {
+  document.getElementById('page-content').innerHTML = '<div class="spinner"><div class="spin"></div> Loading reports&hellip;</div>';
+  currentHrReport = null;
+  const { data, error } = await sb.from('org_reports')
+    .select('*')
+    .eq('status', 'published')
+    .order('period_start', { ascending: false });
+  if (error) {
+    renderError(error.message);
+    return;
+  }
+  reportsRows = data || [];
+  renderReportsList();
+}
+
+function fmtReportDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderReportsList() {
+  if (!reportsRows.length) {
+    document.getElementById('page-content').innerHTML =
+      '<div class="empty-state">'
+      + '<div class="empty-icon">&#128196;</div>'
+      + '<h3>No reports published yet</h3>'
+      + '<p>Your Key Wellness counsellor publishes a utilisation report each period. Once published, it will appear here.</p>'
+      + '</div>';
+    return;
+  }
+  let html = '<div class="card">'
+    + '<div class="card-title">Utilisation Reports</div>'
+    + '<div class="card-subtitle">Published quarterly reports for your organisation.</div>'
+    + '<div class="table-wrap" style="overflow-x:auto;border-radius:8px;border:1px solid var(--border)">'
+    + '<table class="rewards-table"><thead><tr><th>Period</th><th>Published</th><th></th></tr></thead><tbody>'
+    + reportsRows.map(function (r) {
+        return '<tr><td style="font-weight:600">' + escHtml(r.period_label) + '</td>'
+          + '<td class="mono" style="font-size:12px;color:var(--muted)">' + fmtReportDate(r.published_at) + '</td>'
+          + '<td><button class="btn-action on-light" onclick="openHrReport(\'' + r.id + '\')">View Report &rarr;</button></td></tr>';
+      }).join('')
+    + '</tbody></table></div></div>';
+  document.getElementById('page-content').innerHTML = html;
+}
+
+function openHrReport(id) {
+  currentHrReport = reportsRows.find(function (r) { return r.id === id; });
+  if (!currentHrReport) { renderError('Could not find this report.'); return; }
+  renderHrReportDetail();
+}
+
+function fmtPctHr(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
+
+function renderHrReportDetail() {
+  const RC = window.KWReportCharts;
+  const row = currentHrReport;
+  const snap = row.data_snapshot;
+
+  if (!snap) {
+    document.getElementById('page-content').innerHTML =
+      '<div class="report-list-link" style="margin-bottom:16px"><button class="btn-action on-light" onclick="renderReportsList()">&larr; Back to reports</button></div>'
+      + '<div class="empty-state"><div class="empty-icon">&#9888;&#65039;</div><h3>Report data unavailable</h3>'
+      + '<p>This report was published but its data snapshot could not be loaded. Please contact wellness@keywellness.co.bw.</p></div>';
+    return;
+  }
+
+  const narrative = row.narrative || {};
+  const funnel = snap.engagement_funnel || {};
+  const sessions = snap.sessions || {};
+  const kpi = snap.kpi_summary || {};
+  const activities = snap.program_activities || {};
+  const wellnessAreas = snap.wellness_areas || {};
+  const dataCoverage = snap.data_coverage || {};
+  const clientSplit = snap.client_type_split || {};
+  const intensity = snap.session_intensity || {};
+  const demographics = snap.demographics || {};
+  const prev = snap.previous_period && !snap.previous_period.insufficient_cohort ? snap.previous_period : null;
+  const prevKpi = prev ? (prev.kpi_summary || {}) : null;
+  const risks = narrative.challenges_risks || [];
+
+  let html = '<div class="report-list-link" style="margin-bottom:16px"><button class="btn-action on-light" onclick="renderReportsList()">&larr; Back to reports</button></div>';
+  html += '<div class="report-doc">';
+
+  // ── 1. Cover block ──────────────────────────────────────────
+  html += '<div class="report-cover">'
+    + '<div class="report-cover-brandbar"></div>'
+    + '<h1>Financial Wellbeing Utilisation Report</h1>'
+    + '<div class="report-cover-sub">' + escHtml(currentOrgName) + '</div>'
+    + '<div class="report-cover-meta">'
+    + '<div><div class="meta-label">Reporting period</div><div class="meta-val">' + escHtml(row.period_label) + '</div></div>'
+    + '<div><div class="meta-label">Prepared by</div><div class="meta-val">Key Wellness</div></div>'
+    + '<div><div class="meta-label">Published</div><div class="meta-val">' + fmtReportDate(row.published_at) + '</div></div>'
+    + '</div></div>';
+
+  // ── 2. Executive summary + KPI strip ─────────────────────────
+  html += '<div class="report-section card">'
+    + '<div class="report-section-title">Executive Summary</div>'
+    + (narrative.executive_summary ? '<div class="narrative-text" style="margin:14px 0 20px">' + escHtml(narrative.executive_summary) + '</div>' : '')
+    + '<div class="report-kpi-strip">'
+    + '<div class="stat-box"><div class="stat-val mono">' + fmtRateHr(kpi.participation_rate) + '</div><div class="stat-lbl">Participation Rate</div>'
+    + (prevKpi ? '<div class="stat-delta">' + RC.qoqBadge(RC.cellValue(kpi.participation_rate), RC.cellValue(prevKpi.participation_rate), {suffix:'pp'}) + '</div>' : '') + '</div>'
+    + '<div class="stat-box green"><div class="stat-val mono">' + fmtRateHr(kpi.attendance_rate) + '</div><div class="stat-lbl">Attendance Rate</div>'
+    + (prevKpi ? '<div class="stat-delta">' + RC.qoqBadge(RC.cellValue(kpi.attendance_rate), RC.cellValue(prevKpi.attendance_rate), {suffix:'pp'}) + '</div>' : '') + '</div>'
+    + '<div class="stat-box gold"><div class="stat-val mono">' + (kpi.total_reach ?? '—') + '</div><div class="stat-lbl">Total Reach</div></div>'
+    + '<div class="stat-box"><div class="stat-val mono">' + (kpi.total_touchpoints ?? '—') + '</div><div class="stat-lbl">Total Touchpoints</div></div>'
+    + '</div></div>';
+
+  // ── 3. Programme delivery ────────────────────────────────────
+  html += '<div class="report-section card">'
+    + '<div class="report-section-title">Programme Delivery</div>'
+    + '<div class="report-section-sub">Delivery through both portal-booked coaching sessions and off-platform group activities.</div>'
+    + '<div class="report-grid">'
+    + '<div class="chart-box"><h4>Delivery Mode</h4><div class="chart-canvas-wrap"><canvas id="hr-chart-deliverymode"></canvas></div>'
+    + '<div class="chart-caption">Share of sessions and activities delivered physically vs. virtually.</div></div>'
+    + '<div class="chart-box"><h4>Monthly Touchpoint Trend</h4><div class="chart-canvas-wrap"><canvas id="hr-chart-touchpoints"></canvas></div>'
+    + '<div class="chart-caption">Combined portal attendance and activity attendees, by month.</div></div>'
+    + '</div>'
+    + '<h4 style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 10px">Off-Platform Activities</h4>'
+    + RC.renderActivitiesListTable(activities.activities_list)
+    + '</div>';
+
+  // ── 4. Programme utilisation ─────────────────────────────────
+  html += '<div class="report-section card">'
+    + '<div class="report-section-title">Programme Utilisation</div>'
+    + '<div class="report-grid">'
+    + '<div class="chart-box"><h4>Engagement Funnel</h4><div class="chart-canvas-wrap"><canvas id="hr-chart-funnel"></canvas></div>'
+    + '<div class="chart-caption">Where employees are in the programme, from enrolment through to attended sessions.</div></div>'
+    + '<div class="chart-box"><h4>Session Intensity</h4><div class="chart-canvas-wrap"><canvas id="hr-chart-intensity"></canvas></div>'
+    + '<div class="chart-caption">Clients grouped by number of sessions attended this period.</div>'
+    + (RC.anySuppressed(Object.values(intensity)) ? '<div class="suppression-note">Cells under 3 are suppressed to protect confidentiality.</div>' : '') + '</div>'
+    + '</div>'
+    + '<div class="chart-box"><h4>Member vs. Dependent Reach</h4>'
+    + '<div style="display:flex;gap:32px;padding:12px 0">'
+    + '<div><div class="stat-val mono" style="font-size:24px">' + RC.cellDisplay(clientSplit.member) + '</div><div class="stat-lbl">Member sessions</div></div>'
+    + '<div><div class="stat-val mono" style="font-size:24px">' + RC.cellDisplay(clientSplit.dependent) + '</div><div class="stat-lbl">Dependent sessions</div></div>'
+    + '</div>'
+    + '<div class="chart-caption">Dependent sessions are coaching sessions booked under an employee\'s account on behalf of a family member.</div>'
+    + '</div></div>';
+
+  // ── 5. Who we reached (demographics) ─────────────────────────
+  html += '<div class="report-section card">'
+    + '<div class="report-section-title">Who We Reached</div>'
+    + '<div class="report-grid">'
+    + '<div class="chart-box"><h4>Age Bands</h4><div class="chart-canvas-wrap"><canvas id="hr-chart-age"></canvas></div>'
+    + '<div class="chart-caption">' + escHtml(demographics.gender_note || '') + '</div></div>'
+    + '<div class="chart-box"><h4>Age &times; Session Intensity</h4>'
+    + RC.renderDemographicsCrossTable(snap.demographics_cross)
+    + '<div class="chart-caption">How engagement intensity varies by age band.</div></div>'
+    + '</div>'
+    + '<p class="confidentiality-line">All data is aggregated and cells under 3 are suppressed. Individual records are never shown &mdash; this protects your employees and is required under the Botswana Data Protection Act.</p>'
+    + '</div>';
+
+  // ── 6. Wellness areas addressed ──────────────────────────────
+  html += '<div class="report-section card">'
+    + '<div class="report-section-title">Wellness Areas Addressed</div>'
+    + '<div class="chart-box"><h4>Assessment Band Distribution</h4>'
+    + '<div class="chart-canvas-wrap" style="height:280px"><canvas id="hr-chart-categories"></canvas></div>'
+    + '<div class="chart-caption">Employees\' latest wellness-assessment scores this period, by financial dimension.</div>'
+    + '<div class="suppression-note">Cells under 3 are suppressed to protect confidentiality.</div></div>'
+    + ((wellnessAreas.most_engaged || []).length ? '<div class="chart-box"><h4>Most Engaged Wellness Areas</h4>'
+      + wellnessAreas.most_engaged.map(function (m) {
+          return '<div style="display:flex;justify-content:space-between;padding:5px 0;font-size:13px"><span>' + (DIM_LABELS[m.dimension] || m.dimension) + '</span><span class="mono">' + RC.cellDisplay(m.engaged_count) + '</span></div>';
+        }).join('')
+      + '<div class="chart-caption">Ranked by number of employees who used a related self-service tool this period.</div></div>' : '')
+    + '</div>';
+
+  // ── 7. Insights & observations ───────────────────────────────
+  if (narrative.insights) {
+    html += '<div class="report-section card"><div class="report-section-title">Insights &amp; Observations</div><div class="narrative-text" style="margin-top:14px">' + escHtml(narrative.insights) + '</div></div>';
+  }
+
+  // ── 8. Progress & outcomes ───────────────────────────────────
+  if (narrative.progress_outcomes) {
+    html += '<div class="report-section card"><div class="report-section-title">Progress &amp; Outcomes</div><div class="narrative-text" style="margin-top:14px">' + escHtml(narrative.progress_outcomes) + '</div></div>';
+  }
+
+  // ── 9. Challenges & risk register ────────────────────────────
+  if (risks.length) {
+    html += '<div class="report-section card"><div class="report-section-title">Challenges &amp; Risk Register</div>'
+      + '<table class="risk-table"><thead><tr><th>Challenge</th><th>Severity</th><th>Impact</th><th>Mitigation</th></tr></thead><tbody>'
+      + risks.map(function (r) {
+          return '<tr><td>' + escHtml(r.challenge) + '</td>'
+            + '<td><span class="severity-pill severity-' + (r.severity || 'low') + '">' + escHtml(r.severity || 'low') + '</span></td>'
+            + '<td>' + escHtml(r.impact) + '</td><td>' + escHtml(r.mitigation) + '</td></tr>';
+        }).join('')
+      + '</tbody></table></div>';
+  }
+
+  // ── 10. Next steps / recommendations ─────────────────────────
+  if (narrative.next_steps) {
+    html += '<div class="report-section card"><div class="report-section-title">Next Steps &amp; Recommendations</div><div class="narrative-text" style="margin-top:14px">' + escHtml(narrative.next_steps) + '</div></div>';
+  }
+
+  // ── 11. Appendix — methodology & confidentiality ─────────────
+  html += '<div class="report-section report-appendix">'
+    + '<div class="report-section-title" style="border-bottom-color:var(--border)">Appendix &mdash; Methodology &amp; Confidentiality</div>'
+    + '<h4>Data Sources</h4>'
+    + '<p>Portal wellness assessments, coaching-session bookings and confirmed attendance, self-service tool usage, and counsellor-logged off-platform activities (group talks, education sessions, webinars, clinics).</p>'
+    + '<h4>Snapshot Date</h4>'
+    + '<p>This report reflects data captured at the moment it was published (' + fmtReportDate(row.published_at) + '). Figures do not update afterwards, even if underlying portal data later changes.</p>'
+    + '<h4>Data Coverage</h4>'
+    + '<p>Attendance confirmed: <strong>' + fmtPctHr(dataCoverage.attendance_confirmation_pct) + '</strong> of booked sessions &middot; Assessment completion: <strong>' + fmtRateHr(dataCoverage.assessment_completion_pct) + '</strong> of enrolled employees.<br>' + escHtml(dataCoverage.statement || '') + '</p>'
+    + '<h4>Suppression Methodology</h4>'
+    + '<p>Any figure representing fewer than 3 individuals is withheld and shown as "&mdash;", to prevent identifying any one employee by elimination in a small group. Where withholding a single cell in a row or column would let its value be worked out from a visible total, that total is withheld too.</p>'
+    + '<h4>Aggregation Statement</h4>'
+    + '<p>Every figure in this report is a workforce-level aggregate. No individual assessment answers, financial figures, scores, or names appear anywhere in this document.</p>'
+    + '</div>';
+
+  html += '</div>'; // .report-doc
+
+  document.getElementById('page-content').innerHTML = html;
+
+  setTimeout(function () {
+    RC.renderModeSplit('hr-chart-deliverymode', mergeModeSplits(sessions.mode_split, activities.mode_split));
+    RC.renderTouchpointsTrend('hr-chart-touchpoints', sessions.monthly_trend, activities.activities_list);
+    RC.renderFunnel('hr-chart-funnel', funnel);
+    RC.renderSessionIntensity('hr-chart-intensity', intensity);
+    RC.renderAgeBands('hr-chart-age', demographics.age_bands);
+    RC.renderCategoryBands('hr-chart-categories', snap.assessment_categories, DIM_LABELS);
+  }, 0);
+
+  KW.reveal('.card, .stat-box');
+}
+
+function fmtRateHr(cell) {
+  if (cell === null || cell === undefined) return '—';
+  const v = window.KWReportCharts.cellValue(cell);
+  return v === null ? '—' : v + '%';
+}
+
+// Combines portal session-mode counts with off-platform activity mode
+// counts into one delivery-mode split for the doughnut in Programme
+// Delivery. Both sides are already aggregate counts (sessions' cells are
+// suppression-aware, activities' are plain — activities describe events,
+// never people, so they need no suppression — see BUILD-NOTES.md).
+function mergeModeSplits(sessionModeSplit, activityModeSplit) {
+  const RC = window.KWReportCharts;
+  const merged = {};
+  Object.keys(sessionModeSplit || {}).forEach(function (k) {
+    const v = RC.cellValue(sessionModeSplit[k]);
+    if (v === null) return;
+    merged[k] = (merged[k] || 0) + v;
+  });
+  Object.keys(activityModeSplit || {}).forEach(function (k) {
+    merged[k] = (merged[k] || 0) + (activityModeSplit[k] || 0);
+  });
+  return merged;
 }
 
 // Action handlers — intent only in v1, open mailto

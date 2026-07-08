@@ -4,34 +4,38 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Net Worth Tracker — Key Wellness</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="kw-profile-sync.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="js/kw-reveal.js"></script>
+<link rel="stylesheet" href="css/kw-theme.css">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--navy:#1a2744;--navy-light:#243360;--gold:#c8973a;--cream:#f5f0e8;--cream-dark:#ede7d9;--white:#fff;--green:#2d8a4e;--red:#c0392b;--muted:#6b7280;--border:#ddd6c8;--radius:12px;--radius-sm:8px;--shadow:0 2px 12px rgba(26,39,68,.1)}
+:root{--navy:var(--kw-ink);--navy-light:var(--kw-green-deep);--gold:var(--kw-green);--cream:var(--kw-canvas);--cream-dark:var(--kw-surface);--white:var(--kw-white);--green:var(--kw-green);--red:var(--kw-red);--muted:var(--kw-grey);--border:var(--kw-line);--radius:var(--kw-r-lg);--radius-sm:var(--kw-r);--shadow:0 1px 3px rgba(35,38,31,.06)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh}
-.topbar{background:var(--navy);padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
-.topbar h1{color:#fff;font-size:15px;font-weight:700}
-.topbar span{color:var(--gold);font-size:11px;display:block;margin-top:2px}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh}
+.topbar{background:var(--kw-navy);padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+.topbar h1{color:#fff;font-size:15px;font-weight:800}
+.topbar span{color:var(--kw-yellow);font-size:11px;display:block;margin-top:2px}
 .topbar a{color:rgba(255,255,255,.6);font-size:13px;text-decoration:none}.topbar a:hover{color:#fff}
 .container{max-width:920px;margin:0 auto;padding:28px 20px}
-.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
-.card-title{font-size:15px;font-weight:700;margin-bottom:16px}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:none;cursor:pointer;font-family:'Inter',sans-serif;transition:.15s}
-.btn-primary{background:var(--gold);color:var(--navy)}.btn-primary:hover{opacity:.9}
-.btn-outline{background:transparent;border:2px solid var(--border);color:var(--navy)}.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
-.btn-sm{padding:6px 12px;font-size:12px}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:15px;font-weight:800;margin-bottom:16px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:10px 20px;border-radius:999px;font-size:13px;font-weight:700;border:none;cursor:pointer;font-family:'Nunito',sans-serif;transition:background-color .2s var(--kw-ease),transform .1s}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--kw-green);color:#fff}.btn-primary:hover{background:var(--kw-green-deep)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--navy)}.btn-outline:hover{border-color:var(--kw-grey)}
+.btn-sm{padding:7px 14px;font-size:12px}
 .btn-danger{background:var(--red);color:#fff}
 .top-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px}
-.sum-box{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;text-align:center}
+.sum-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;text-align:center}
 .sum-val{font-family:'DM Mono',monospace;font-size:26px;font-weight:500}
 .sum-lbl{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.two-col{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
 .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.section-header h3{font-size:14px;font-weight:700}
+.section-header h3{font-size:14px;font-weight:800}
 .item-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--cream);border-radius:var(--radius-sm);margin-bottom:8px}
 .item-cat{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;width:80px;flex-shrink:0}
 .item-name{flex:1;font-size:13px;font-weight:500}
@@ -39,17 +43,17 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 .item-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 4px}.item-del:hover{color:var(--red)}
 .add-form{margin-top:12px;display:flex;flex-direction:column;gap:8px}
 .add-row{display:flex;gap:8px}
-.add-row input,.add-row select{flex:1;padding:8px 10px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:#fff;outline:none;font-family:'Inter',sans-serif;transition:.15s}
-.add-row input:focus,.add-row select:focus{border-color:var(--gold)}
-.progress-bar{background:var(--cream-dark);border-radius:99px;height:10px;overflow:hidden;margin-top:6px}
-.progress-fill{height:100%;border-radius:99px;transition:.4s}
+.add-row input,.add-row select{flex:1;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:#fff;outline:none;font-family:'Nunito',sans-serif;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease)}
+.add-row input:focus,.add-row select:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
+.progress-bar{background:var(--cream-dark);border-radius:999px;height:8px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;border-radius:999px;transition:.4s}
 .history-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
-.snapshot-btn{background:var(--gold);color:var(--navy);border:none;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif}
-.snapshot-btn:hover{opacity:.9}
+.snapshot-btn{background:var(--kw-green);color:#fff;border:none;padding:9px 18px;border-radius:999px;font-size:13px;font-weight:700;cursor:pointer;font-family:'Nunito',sans-serif;transition:background-color .2s var(--kw-ease)}
+.snapshot-btn:hover{background:var(--kw-green-deep)}
 .notice{padding:12px 16px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;margin-bottom:16px}
-.notice-green{background:#f0faf4;border-left:4px solid var(--green);color:#1a4a2e}
+.notice-green{background:var(--kw-green-tint);border-left:4px solid var(--green);color:var(--kw-green-deep)}
 .notice-red{background:#fdf2f2;border-left:4px solid var(--red);color:#7b1a1a}
-.notice-gold{background:#fffbf2;border-left:4px solid var(--gold);color:var(--navy)}
+.notice-gold{background:var(--kw-yellow-tint);border-left:4px solid var(--kw-yellow);color:var(--kw-yellow-ink)}
 @media(max-width:640px){.two-col{grid-template-columns:1fr}.top-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -63,10 +67,10 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 
 <!-- ── Back + User ── -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
   <div style="display:flex;align-items:center;gap:10px">
-    <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
-    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    <div id="tool-user-initial" style="width:32px;height:32px;background:#397e2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#fff;flex-shrink:0">?</div>
+    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#23261f">Loading…</div>
   </div>
 </div>
 
@@ -233,10 +237,10 @@ function render(){
   const tl = data.liabilities.reduce((s,i)=>s+i.amt,0);
   const nw = ta - tl;
 
-  document.getElementById('s-assets').textContent = fmt(ta);
-  document.getElementById('s-liabilities').textContent = fmt(tl);
+  KW.countUp(document.getElementById('s-assets'), ta, { format: fmt });
+  KW.countUp(document.getElementById('s-liabilities'), tl, { format: fmt });
   const nwEl = document.getElementById('s-networth');
-  nwEl.textContent = fmt(nw);
+  KW.countUp(nwEl, nw, { format: fmt });
   nwEl.style.color = nw>=0 ? 'var(--green)' : 'var(--red)';
 
   document.getElementById('total-assets').textContent = fmt(ta);
@@ -298,6 +302,7 @@ function render(){
 ['liab-name','liab-amt'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{if(e.key==='Enter')addLiability()}));
 
 render();
+KW.reveal('.card, .sum-box');
 
 // ── Auth init ──
 (function() {
@@ -320,7 +325,7 @@ render();
       }
     });
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'net_worth_tracker').maybeSingle();
-    if (toolRow?.data) { data = toolRow.data; render(); }
+    if (toolRow?.data) { data = toolRow.data; render(); KW.reveal('.card, .sum-box'); }
   });
 })();
 </script>

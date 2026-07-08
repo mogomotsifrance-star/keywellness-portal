@@ -4,58 +4,61 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Rent vs Buy – Key Wellness</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔑</text></svg>">
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="js/kw-reveal.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --navy:#0D2545;--navy2:#163561;--gold:#C8991A;--gold-lt:#f0c842;
-  --cream:#F7F4EE;--slate:#4A5568;--muted:#8896A8;--border:#D6DDE8;
-  --green:#1A8C5B;--red:#C0392B;--orange:#D97706;--white:#fff;
-  --radius:12px;--radius-sm:8px;--shadow:0 4px 24px rgba(13,37,69,.1);
+  --navy:var(--kw-ink);--navy2:var(--kw-grey);--gold:var(--kw-green);--gold-lt:var(--kw-green-deep);
+  --cream:var(--kw-canvas);--slate:var(--kw-body);--muted:var(--kw-grey);--border:var(--kw-line);
+  --green:var(--kw-green);--red:var(--kw-red);--orange:var(--kw-orange);--white:var(--kw-white);
+  --radius:var(--kw-r-lg);--radius-sm:var(--kw-r);--shadow:0 1px 3px rgba(35,38,31,.06);
 }
-body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);min-height:100vh;padding:24px 16px 60px}
 .wrap{max-width:800px;margin:0 auto}
 .back-link{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--navy);text-decoration:none;margin-bottom:18px;opacity:.7;transition:opacity .15s}
 .back-link:hover{opacity:1}
-.tool-header{background:var(--navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px;position:relative;overflow:hidden}
-.tool-header::before{content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(200,153,26,.18) 0%,transparent 70%)}
+.tool-header{background:var(--kw-navy);border-radius:14px;padding:24px 28px 20px;margin-bottom:22px}
 .tool-header-inner{position:relative;z-index:1;display:flex;align-items:center;gap:16px}
-.tool-icon{font-size:2.2rem}
-.tool-header h1{color:#fff;font-size:1.3rem;font-weight:700;margin-bottom:3px}
-.tool-header p{color:rgba(255,255,255,.6);font-size:.82rem}
-.card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
-.card-title{font-size:.62rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:18px}
+.tool-icon{font-size:2.2rem;width:52px;height:52px;background:var(--kw-green);border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.tool-header h1{color:#fff;font-size:1.3rem;font-weight:800;margin-bottom:3px}
+.tool-header p{color:rgba(255,255,255,.65);font-size:.82rem}
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:16px}
+.card-title{font-size:.62rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--kw-green);margin-bottom:18px}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:520px){.field-grid{grid-template-columns:1fr}}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:.75rem;font-weight:600;color:var(--slate)}
-.field input,.field select{padding:10px 13px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border .15s;width:100%}
-.field input:focus,.field select:focus{outline:none;border-color:var(--gold)}
+.field input,.field select{padding:10px 13px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:.88rem;color:var(--navy);background:var(--white);transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease);width:100%}
+.field input:focus,.field select:focus{outline:none;border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .field-hint{font-size:.7rem;color:var(--muted);margin-top:2px}
-.btn{padding:12px 24px;border-radius:var(--radius-sm);font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:.15s}
-.btn-primary{background:var(--gold);color:var(--navy)}
-.btn-primary:hover{background:var(--gold-lt)}
-.btn-outline{background:transparent;border:2px solid var(--navy);color:var(--navy)}
-.btn-outline:hover{background:var(--navy);color:#fff}
+.btn{padding:12px 24px;border-radius:999px;font-weight:700;font-size:.88rem;border:none;cursor:pointer;font-family:inherit;transition:background-color .2s var(--kw-ease),transform .1s}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--kw-green);color:#fff}
+.btn-primary:hover{background:var(--kw-green-deep)}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--navy)}
+.btn-outline:hover{border-color:var(--kw-grey)}
 .results{display:none}
 .results.show{display:block}
 
 /* Verdict banner */
 .verdict{border-radius:var(--radius);padding:20px 24px;margin-bottom:16px;display:flex;align-items:center;gap:16px}
-.verdict.buy{background:linear-gradient(135deg,#e8f7f0,#d4f0e2);border-left:5px solid var(--green)}
-.verdict.rent{background:linear-gradient(135deg,#fff8e8,#fef0c0);border-left:5px solid var(--gold)}
-.verdict.neutral{background:linear-gradient(135deg,#f0f4ff,#e8eeff);border-left:5px solid var(--navy2)}
+.verdict.buy{background:var(--kw-green-tint);border-left:5px solid var(--green)}
+.verdict.rent{background:var(--kw-yellow-tint);border-left:5px solid var(--kw-yellow)}
+.verdict.neutral{background:var(--kw-surface);border-left:5px solid var(--kw-grey)}
 .verdict-icon{font-size:2.2rem;flex-shrink:0}
 .verdict-title{font-size:1.05rem;font-weight:800;color:var(--navy);margin-bottom:4px}
 .verdict-sub{font-size:.82rem;color:var(--slate);line-height:1.5}
 
 /* Stat grid */
 .stat-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:16px}
-.stat-box{background:var(--white);border-radius:var(--radius-sm);padding:16px;box-shadow:var(--shadow);border-top:3px solid var(--border);text-align:center}
-.stat-box.buy{border-top-color:var(--green)}.stat-box.rent{border-top-color:var(--gold)}.stat-box.neutral{border-top-color:var(--navy2)}
+.stat-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;box-shadow:var(--shadow);text-align:center}
+.stat-box.buy .stat-value{color:var(--green)}.stat-box.rent .stat-value{color:var(--kw-yellow-ink)}.stat-box.neutral .stat-value{color:var(--kw-grey)}
 .stat-label{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
 .stat-value{font-family:'DM Mono',monospace;font-size:1.15rem;font-weight:600;color:var(--navy)}
 .stat-sub{font-size:.7rem;color:var(--muted);margin-top:3px}
@@ -64,7 +67,7 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 .cost-bars{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:4px}
 @media(max-width:520px){.cost-bars{grid-template-columns:1fr}}
 .cost-col-title{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
-.cost-col-title.buy{color:var(--green)}.cost-col-title.rent{color:var(--gold)}
+.cost-col-title.buy{color:var(--green)}.cost-col-title.rent{color:var(--kw-yellow-ink)}
 .cost-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--cream);font-size:.8rem}
 .cost-row:last-child{border-bottom:none;font-weight:700;padding-top:10px}
 .cost-label{color:var(--slate)}
@@ -72,7 +75,7 @@ body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--navy);mi
 
 /* Break-even */
 .breakeven-bar-wrap{background:var(--cream);border-radius:8px;height:12px;overflow:hidden;margin:10px 0 4px}
-.breakeven-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--gold-lt));border-radius:8px;transition:width .6s ease}
+.breakeven-bar{height:100%;background:linear-gradient(90deg,var(--green),var(--kw-yellow));border-radius:8px;transition:width .6s ease}
 
 /* Chart */
 .chart-wrap{overflow-x:auto}
@@ -80,32 +83,32 @@ canvas{display:block;max-width:100%}
 
 /* Schedule table */
 .sched-wrap table{width:100%;border-collapse:collapse;font-size:.78rem}
-.sched-wrap th{background:var(--navy);color:#fff;padding:8px 10px;text-align:right;font-weight:600;font-size:.72rem}
+.sched-wrap th{background:var(--kw-ink);color:#fff;padding:8px 10px;text-align:right;font-weight:600;font-size:.72rem}
 .sched-wrap th:first-child{text-align:left}
 .sched-wrap td{padding:7px 10px;border-bottom:1px solid var(--cream);text-align:right}
 .sched-wrap td:first-child{text-align:left;font-weight:600}
-.sched-wrap tr.buy-wins{background:#f0fbf5}
-.sched-wrap tr.rent-wins{background:#fffbf0}
-.sched-wrap tr.breakeven-row{background:#eef2ff;font-weight:700}
-.show-more-btn{font-size:.75rem;color:var(--navy);font-weight:600;cursor:pointer;border:none;background:none;padding:8px 0;text-decoration:underline;text-underline-offset:3px;margin-top:6px}
+.sched-wrap tr.buy-wins{background:var(--kw-green-tint)}
+.sched-wrap tr.rent-wins{background:var(--kw-yellow-tint)}
+.sched-wrap tr.breakeven-row{background:var(--kw-surface);font-weight:700}
+.show-more-btn{font-size:.75rem;color:var(--kw-green);font-weight:600;cursor:pointer;border:none;background:none;padding:8px 0;text-decoration:underline;text-underline-offset:3px;margin-top:6px}
 
 /* Toggle */
-.tab-toggle{display:flex;gap:0;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:14px;width:fit-content}
+.tab-toggle{display:flex;gap:0;border:1px solid var(--border);border-radius:999px;overflow:hidden;margin-bottom:14px;width:fit-content}
 .tab-btn{padding:7px 16px;border:none;background:var(--cream);font-size:.78rem;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit;transition:.15s}
-.tab-btn.active{background:var(--navy);color:#fff}
-.tab-btn+.tab-btn{border-left:1.5px solid var(--border)}
+.tab-btn.active{background:var(--kw-green);color:#fff}
+.tab-btn+.tab-btn{border-left:1px solid var(--border)}
 
-.info-note{background:#f0f4ff;border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
+.info-note{background:var(--kw-surface);border-left:3px solid var(--navy2);border-radius:6px;padding:10px 14px;font-size:.75rem;color:var(--slate);line-height:1.5;margin-top:4px}
 </style>
 </head>
 <body>
 <div class="wrap">
 <!-- ── Back + User ── -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:2px solid #D6DDE8;background:transparent;color:#0D2545;font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#C8991A';this.style.color='#C8991A'" onmouseout="this.style.borderColor='#D6DDE8';this.style.color='#0D2545'">← Back to Portal</button>
+  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
   <div style="display:flex;align-items:center;gap:10px">
-    <div id="tool-user-initial" style="width:32px;height:32px;background:#C8991A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#0D2545;flex-shrink:0">?</div>
-    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#0D2545">Loading…</div>
+    <div id="tool-user-initial" style="width:32px;height:32px;background:#397e2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#fff;flex-shrink:0">?</div>
+    <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#23261f">Loading…</div>
   </div>
 </div>
 
@@ -499,18 +502,18 @@ function drawChart() {
     data: {
       labels,
       datasets: [
-        { label:'Buying', data:buyData, borderColor:'#1A8C5B', backgroundColor:'rgba(26,140,91,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true },
-        { label:'Renting', data:rentData, borderColor:'#C8991A', backgroundColor:'rgba(200,153,26,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true }
+        { label:'Buying', data:buyData, borderColor:'#397e2b', backgroundColor:'rgba(57,126,43,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true },
+        { label:'Renting', data:rentData, borderColor:'#93790a', backgroundColor:'rgba(147,121,10,.08)', borderWidth:2.5, pointRadius:3, tension:.35, fill:true }
       ]
     },
     options: {
       responsive:true, interaction:{mode:'index',intersect:false},
       plugins:{
-        legend:{labels:{font:{family:'Inter',size:11},boxWidth:14}},
+        legend:{labels:{font:{family:'Nunito',size:11},boxWidth:14}},
         tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': BWP '+ctx.parsed.y.toLocaleString('en-BW')}}
       },
       scales:{
-        x:{grid:{display:false},ticks:{font:{family:'Inter',size:11}}},
+        x:{grid:{display:false},ticks:{font:{family:'Nunito',size:11}}},
         y:{ticks:{font:{family:'DM Mono',size:10},callback:v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':v},grid:{color:'rgba(214,221,232,.5)'}}
       }
     }
@@ -624,6 +627,7 @@ document.addEventListener('DOMContentLoaded', function() {
       else { const _inp = row && row.data && row.data.inputs; if (_inp) { Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); } }
     } catch(e){ console.warn('Rent-vs-buy restore error:', e); }
     document.addEventListener('input', _toolSave);
+    KW.reveal('.card');
   });
 });
 </script>
