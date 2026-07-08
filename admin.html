@@ -402,11 +402,18 @@ function renderUsers(filter = '', statusFilter = 'all') {
         banner.innerHTML = `<strong>Privacy notice:</strong> ${ov.message} (${ov.n_employees} enrolled so far)`;
         return;
       }
+      // org_overview()'s real shape nests these under `summary` (this
+      // banner previously read them off the top level, which has never
+      // matched the RPC's actual response — always rendered "undefined").
+      // participation_pct/avg_score are null (not a number) when fewer
+      // than 3 employees have been assessed, to avoid an average/percentage
+      // revealing 1-2 individuals' real scores.
+      const summary = ov.summary || {};
       const orgName = allOrgs.find(o => o.id === selectedOrgId)?.name || 'Organisation';
       banner.innerHTML = `<strong>${orgName}:</strong> &nbsp;
-        ${ov.n_employees} enrolled &nbsp;·&nbsp;
-        ${ov.participation_pct ?? '—'}% participated &nbsp;·&nbsp;
-        Avg score <strong>${ov.avg_score ?? '—'}</strong>`;
+        ${summary.n_employees ?? '—'} enrolled &nbsp;·&nbsp;
+        ${summary.participation_pct == null ? '—' : summary.participation_pct + '%'} participated &nbsp;·&nbsp;
+        Avg score <strong>${summary.avg_score == null ? '—' : summary.avg_score}</strong>`;
     }, 0);
   }
 

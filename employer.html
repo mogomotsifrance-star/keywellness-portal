@@ -927,17 +927,22 @@ function render(data) {
   const trend   = data.trend;
 
   const nEmp    = s.n_employees       || 0;
-  const partPct = s.participation_pct || 0;
-  const avg     = s.avg_score         || 0;
+  // participation_pct/avg_score are null (not 0) when the assessed
+  // sub-cohort is under 3 — org_overview() suppresses them as a pair to
+  // avoid an average/percentage revealing 1-2 individuals' real scores.
+  const partSuppressed = s.participation_pct == null;
+  const avgSuppressed  = s.avg_score == null;
+  const partPct = partSuppressed ? null : s.participation_pct;
+  const avg     = avgSuppressed  ? null : s.avg_score;
 
   // 1. Headline stats
   let html = '<div class="stat-grid">';
   html += '<div class="stat-box navy"><div class="stat-val mono">' + nEmp + '</div><div class="stat-lbl">Enrolled Employees</div></div>';
-  html += '<div class="stat-box gold"><div class="stat-val mono">' + partPct + '%</div><div class="stat-lbl">Completed Assessment</div></div>';
-  html += '<div class="stat-box" style="border-left-color:' + scoreBandColor(avg) + '">'
-        + '<div class="stat-val mono" style="color:' + scoreBandColor(avg) + '">' + (avg || '&mdash;') + '</div>'
+  html += '<div class="stat-box gold"><div class="stat-val mono">' + (partSuppressed ? '&mdash;' : partPct + '%') + '</div><div class="stat-lbl">Completed Assessment</div></div>';
+  html += '<div class="stat-box" style="border-left-color:' + (avgSuppressed ? 'var(--border)' : scoreBandColor(avg)) + '">'
+        + '<div class="stat-val mono" style="color:' + (avgSuppressed ? 'var(--muted)' : scoreBandColor(avg)) + '">' + (avgSuppressed ? '&mdash;' : avg) + '</div>'
         + '<div class="stat-lbl">Avg Wellbeing Score</div>'
-        + (avg ? '<div class="stat-delta" style="color:' + scoreBandColor(avg) + '">' + scoreBandLabel(avg) + '</div>' : '')
+        + (!avgSuppressed ? '<div class="stat-delta" style="color:' + scoreBandColor(avg) + '">' + scoreBandLabel(avg) + '</div>' : '')
         + '</div>';
   if (distress && distress.pct_low_emergency_fund != null) {
     html += '<div class="stat-box orange"><div class="stat-val mono">' + distress.pct_low_emergency_fund + '%</div>'
@@ -969,9 +974,12 @@ function render(data) {
   html += '</div>';
 
   // 2. Engagement funnel
-  const signedUp  = f.signed_up            || nEmp;
-  const assessed  = f.completed_assessment || 0;
-  const checkedIn = f.did_checkin          || 0;
+  // completed_assessment/did_checkin are null (not 0) when the true count
+  // is under 3 — funnelStep() renders "—" for a null count rather than a
+  // misleading "0 employees · 0%".
+  const signedUp  = f.signed_up || nEmp;
+  const assessed  = f.completed_assessment;
+  const checkedIn = f.did_checkin;
   html += '<div class="card">'
         + '<div class="card-title">Engagement Funnel</div>'
         + '<div class="card-subtitle">Where employees are in the programme &mdash; the drop-off point shows HR&apos;s highest-leverage action.</div>'
@@ -984,12 +992,21 @@ function render(data) {
         + '</div>';
 
   // 3. Workforce distribution
-  const struggling = d.struggling || { pct: 0, count: 0 };
-  const coping     = d.coping     || { pct: 0, count: 0 };
-  const thriving   = d.thriving   || { pct: 0, count: 0 };
-  const assessed2  = d.assessed_count || 0;
+  // d.suppressed (new) means the assessed sub-cohort is under 3 — every
+  // band would be individually attributable, so the whole section is
+  // withheld rather than rendering zeroed-out bands. assessed_count is
+  // always present (a raw headcount, not a derived aggregate).
+  const assessed2 = d.assessed_count || 0;
 
-  if (assessed2 > 0) {
+  if (d.suppressed) {
+    html += '<div class="card">'
+          + '<div class="card-title">Workforce Distribution</div>'
+          + '<div class="card-subtitle">Appears once at least 3 employees have completed the assessment (' + assessed2 + ' so far), to protect individual privacy.</div>'
+          + '</div>';
+  } else if (assessed2 > 0) {
+    const struggling = d.struggling || { pct: 0, count: 0 };
+    const coping     = d.coping     || { pct: 0, count: 0 };
+    const thriving    = d.thriving   || { pct: 0, count: 0 };
     html += '<div class="card">'
           + '<div class="card-title">Workforce Distribution</div>'
           + '<div class="card-subtitle">Across ' + assessed2 + ' employees who completed the assessment. The average score alone can mask a split workforce.</div>'
@@ -1006,10 +1023,18 @@ function render(data) {
   }
 
   // 4. By dimension
+  // dims.items/focus_dimension are null (via the same assessed<3 gate as
+  // Workforce Distribution above) rather than omitted, so this explicitly
+  // notes why the card is hidden instead of just not appearing.
   const dimItems    = dims.items           || [];
   const focusDimKey = dims.focus_dimension || '';
 
-  if (dimItems.length > 0) {
+  if (dims.suppressed) {
+    html += '<div class="card">'
+          + '<div class="card-title">By Financial Dimension</div>'
+          + '<div class="card-subtitle">Appears once at least 3 employees have completed the assessment, to protect individual privacy.</div>'
+          + '</div>';
+  } else if (dimItems.length > 0) {
     html += '<div class="card">'
           + '<div class="card-title">By Financial Dimension</div>'
           + '<div class="card-subtitle">Average across all assessed employees. The <strong style="color:var(--gold)">focus</strong> dimension has the lowest score &mdash; a targeted push here will have the greatest impact.</div>'
@@ -1049,11 +1074,16 @@ function render(data) {
   html += renderFinancialStress(window._finData);
 
   // 6. Trend chart
+  // Each quarter is suppressed independently (t.suppressed) when it had
+  // fewer than 3 assessors — avg_score/participants are null for that
+  // point, rendered as a gap in the line rather than a data point.
+  const anyTrendSuppressed = (trend || []).some(function (t) { return t.suppressed; });
   html += '<div class="card">'
         + '<div class="card-title">Wellbeing Score Over Time</div>'
         + '<div class="card-subtitle">Quarterly average across all assessed workforce members.</div>'
         + '<div class="chart-wrap"><canvas id="trendChart"></canvas></div>'
         + '<p class="trend-caption">Wellbeing improvement is gradual &mdash; engagement metrics above are the leading indicator early in the programme. Score movement typically becomes visible after 2&ndash;4 quarters.</p>'
+        + (anyTrendSuppressed ? '<p class="suppression-note">Some quarters are not shown &mdash; fewer than 3 employees completed an assessment that quarter, to protect individual privacy.</p>' : '')
         + '</div>';
 
   // 7. Recommended actions
@@ -1082,6 +1112,12 @@ function render(data) {
 }
 
 function funnelStep(label, count, total, color) {
+  if (count == null) {
+    return '<div class="funnel-step">'
+         + '<div class="funnel-label-row"><span>' + escHtml(label) + '</span><span class="funnel-count">&mdash;</span></div>'
+         + '<div class="funnel-bar-bg"><div class="funnel-bar-fill" style="width:0%;background:' + color + '"></div></div>'
+         + '</div>';
+  }
   var pct = total > 0 ? Math.round(100 * count / total) : 0;
   return '<div class="funnel-step">'
        + '<div class="funnel-label-row"><span>' + escHtml(label) + '</span><span class="funnel-count">' + count + ' employees &middot; ' + pct + '%</span></div>'

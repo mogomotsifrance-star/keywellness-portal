@@ -1,3 +1,136 @@
+# org_overview() suppression fix — remediating audit findings #1 and #2
+
+Fixes both related findings from the "HR Reporting Audit" section below:
+(#1) `trend[]` can disclose an individual member's real wellness score when
+a historical quarter had exactly one assessor, and (#2) `funnel`/
+`distribution`/`distress` counts had no `<3` suppression at all — only the
+whole-org `n≥5` gate. Requested together since they're the same root
+cause: `org_overview()` predates the `<3` suppression pattern
+`org_report_data()` established later in this file, and both findings are
+in the same live, currently-in-production RPC.
+
+Rollback (file: `supabase_org_overview_fix.sql`): re-apply the exact
+function body from `supabase_employer_dashboard.sql` (the pre-this-fix
+version, unchanged) — `CREATE OR REPLACE`, same signature.
+
+## A broader vulnerability found while implementing the fix
+
+The original Batch 0 audit flagged `trend[]` specifically (row #6) but
+classified `summary`/`dimensions` as `AGGREGATE_SAFE` without scrutinising
+their own small-cohort exposure. Implementing the fix surfaced that
+**`summary.avg_score` and `dimensions.items[].avg` have the identical
+vulnerability as `trend[]`, just for the current period instead of a
+historical quarter**: both are computed by averaging `cat_scores`/`score`
+across "however many members have completed an assessment" — a sub-cohort
+the outer `n≥5` gate does **not** protect, since it only checks total org
+headcount, not how many of them have actually been assessed. If an org has
+12 employees but only 1–2 have completed an assessment, `avg_score` and
+every `dimensions.items[].avg` value **is** that person's (or those two
+people's) real score — not an approximation, the actual value. `distress`
+has the same shape of risk via its own `n_assessed`. `distribution`'s
+`assessed_count` is the same denominator again.
+
+**Fix**: compute `v_assessed_n` (distinct members with ≥1 assessment,
+org-wide) once, up front. Any output derived from that sub-cohort —
+`summary.avg_score`/`participation_pct`, the whole `distribution` section,
+the whole `dimensions` section, `distress.pct_low_emergency_fund` — is
+suppressed as a unit when `v_assessed_n < 3`, since with fewer than 3
+assessed people, no cut of that data (an average, a band count, a
+per-dimension average) can be shown without it being attributable to a
+specific 1–2 individuals. This is broader than the original audit's
+finding #2 called for, but it's the same underlying bug, found by tracing
+the fix through rather than patching only the fields explicitly named.
+
+## Shape decisions (kept deliberately minimal, not a full `{value,suppressed}` rewrite)
+
+`org_report_data()`'s convention wraps every suppressible cell in
+`{value, suppressed}`. Adopting that everywhere in `org_overview()` too
+would touch every rendering function in both `employer.html`'s Overview
+tab and `admin.html`'s org-overview banner, for a fix whose actual goal is
+closing a data leak, not a redesign. Instead:
+
+- **Scalars** (`summary.avg_score`, `summary.participation_pct`,
+  `funnel.completed_assessment`, `funnel.did_checkin`,
+  `distress.pct_low_emergency_fund`, each quarter's `avg_score`/
+  `participants` in `trend[]`) become plain SQL `null` when suppressed —
+  frontend code already has a `value == null ? '—' : ...` pattern in
+  several places (`fmtPct`-style helpers) and needs only a small check
+  added where it doesn't yet.
+- **Section-level objects** (`distribution`, `dimensions`) gain a new
+  `suppressed` boolean; when `true`, their detail fields (`struggling`/
+  `coping`/`thriving`, `items`/`focus_dimension`) are `null` instead of
+  populated. Raw headcounts (`n_employees`, `distribution.assessed_count`,
+  `distress.n_assessed`) are **always** shown, matching the existing
+  precedent that the whole-org suppressed state already discloses
+  `n_employees` — a headcount alone isn't the leak; the derived
+  aggregate computed from a too-small headcount is.
+- Each `trend[]` entry gains its own `suppressed` boolean (independent
+  per quarter — a quarter with 1 assessor is suppressed even if the org
+  currently has hundreds of members and plenty of other well-populated
+  quarters).
+
+## Frontend changes required (both call sites)
+
+- `employer.html`'s Overview tab (`render()`, `funnelStep()`, the
+  distribution/dimensions/distress/trend rendering blocks) — each needs a
+  `suppressed` check before rendering real numbers, falling back to a
+  "—" / privacy note, matching the pattern its own `finBandsHtml()`/
+  `finSuppressedNote()` already uses for `org_financial_indicators()`.
+- `admin.html`'s one-line org-overview banner (`renderUsers()`'s async
+  banner load) — currently reads `ov.participation_pct`/`ov.avg_score`
+  directly; needs a null check.
+
+## Pre-existing bug found and fixed while implementing this (unrelated to the leak itself)
+
+`admin.html`'s org-overview banner read `ov.n_employees`/
+`ov.participation_pct`/`ov.avg_score` off the **top level** of the RPC
+response. That was only ever correct for `org_overview()`'s original v1
+shape (`supabase_multitenancy.sql`) — the moment it was extended to the
+current six-section shape (`supabase_employer_dashboard.sql`, nesting
+these three under `summary`), this banner started reading `undefined` for
+all three fields on every non-suppressed call, and nobody had touched it
+since. Fixed alongside this leak fix (same lines, same function) to read
+`ov.summary.n_employees`/`.participation_pct`/`.avg_score`, with the new
+null-suppression handling built in from the start.
+
+## Files changed
+
+`supabase_org_overview_fix.sql` (new — the fixed `org_overview()`),
+`employer.html` (Overview tab: headline stats, `funnelStep()`, workforce
+distribution, by-dimension, trend chart caption — all now check for
+`null`/`suppressed` before rendering a real number), `admin.html`
+(org-overview banner — reads the correct nested path and the fix above).
+
+## Verified in-browser
+
+Temporary mock harness (added to `employer.html`, exercised, then fully
+removed — confirmed via `grep mocktest` after cleanup): rendered a fully
+suppressed response (summary/funnel/distribution/dimensions/distress all
+suppressed, one suppressed quarter in `trend[]` alongside two normal
+quarters) and confirmed every affected element shows "—" or a privacy
+note — no `NaN`, no `undefined`, no blank space, and critically no real
+score/percentage anywhere in a suppressed field. Then rendered a fully
+populated non-suppressed response and confirmed real values (75%, 68.4,
+"Debt Management" dimension label, distribution bands) still render
+correctly — the fix doesn't regress the normal case. No console errors in
+either pass.
+
+## Not yet done
+
+- **This SQL file has not been applied to the live Supabase project** —
+  same "no DB credentials in this environment" constraint as every prior
+  batch. `supabase_org_overview_fix.sql` needs to be run in the SQL
+  Editor; recommend testing against a real org with a known small
+  assessed sub-cohort (per the file's own verification queries) before
+  considering this closed.
+- Findings #3 (Rewards individual-level exposure — deliberate, consented,
+  flagged for legal sign-off) and #4 (narrative free-text, process
+  control only) from the original audit remain unremediated, as before —
+  not requested in this fix and not the same category of bug (both are
+  by-design, not accidental leaks).
+
+---
+
 # HR Reporting Audit & International-Grade Report Upgrade
 
 Batch 0 (read-only — no files or DB objects modified): prerequisite check
