@@ -130,6 +130,25 @@ tbody td{padding:12px 14px;vertical-align:middle}
 /* ── Empty state ── */
 .empty{text-align:center;padding:48px;color:var(--muted);font-size:14px}
 
+/* ── Bookings calendar (view-only month grid) ── */
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.cal-nav-label{font-size:15px;font-weight:800;color:var(--navy);min-width:150px;text-align:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-align:center;padding:4px 0;text-transform:uppercase;letter-spacing:.04em}
+.cal-cell{min-height:92px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px;background:var(--white);display:flex;flex-direction:column;gap:3px}
+.cal-cell.cal-outside{background:var(--cream-dark);opacity:.5}
+.cal-cell.cal-today{border-color:var(--gold);border-width:2px}
+.cal-daynum{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+.cal-today .cal-daynum{color:var(--gold)}
+.cal-entry{font-size:10px;background:var(--kw-green-tint);color:var(--kw-green-deep);border-radius:5px;padding:2px 5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.cal-entry:hover{background:var(--kw-green);color:#fff}
+.cal-more{font-size:10px;color:var(--muted);cursor:pointer;font-weight:700;padding:2px 5px}
+.cal-more:hover{color:var(--navy)}
+@media (max-width:900px){
+  .cal-cell{min-height:64px;font-size:11px}
+  .cal-dow{font-size:9px}
+}
+
 /* ── Reports ── */
 .report-status-draft{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
 .report-status-published{background:var(--kw-green-tint);color:var(--kw-green-deep)}
@@ -156,6 +175,21 @@ tbody td{padding:12px 14px;vertical-align:middle}
 .save-banner.ok{background:var(--kw-green-tint);color:var(--kw-green-deep)}
 .save-banner.err{background:#fdf2f2;color:var(--red)}
 .suppression-note{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+
+/* ── Print (published report only — draft builder chrome is hidden the
+   same way; the "suggest draft"/"+ Add row" edit controls are already
+   absent from the DOM in the readOnly/published state, so nothing extra
+   is needed there beyond hiding the page's own navigation chrome). ── */
+@media print {
+  #sidebar, .btn-outline { display:none !important; }
+  #main { margin-left:0 !important; }
+  .page-content { padding:0 !important; }
+  body { background:#fff; }
+  .report-print-doc { break-inside:avoid; page-break-inside:avoid; box-shadow:none; border:1px solid #ccc; }
+  .chart-box { break-inside:avoid; page-break-inside:avoid; }
+  .kw-print-chart-snapshot { max-width:100%; }
+  @page { margin: 16mm 14mm; }
+}
 </style>
 </head>
 <body>
@@ -241,6 +275,17 @@ tbody td{padding:12px 14px;vertical-align:middle}
   </div>
 </div>
 
+<!-- ══ CALENDAR DAY DETAIL MODAL (view-only) ══ -->
+<div class="modal-overlay" id="calDayModal">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <h3 id="cal-day-modal-title">Confirmed Bookings</h3>
+      <button class="modal-close" onclick="closeCalDayModal()">✕</button>
+    </div>
+    <div id="cal-day-modal-body"></div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
@@ -253,6 +298,13 @@ let allAssessments = [];
 let allBadges = [];
 let allBookings = [];
 let activeTab = 'users';
+
+// ── Bookings Calendar (view-only, confirmed bookings only) ──
+let bkView = 'table';   // 'table' | 'calendar'
+let calCursor = (function () { var d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d; })();
+let calBookings = [];
+let calLoading = false;
+let calError = null;
 
 // ── Helpers ──
 function fmtDate(iso) {
@@ -599,7 +651,14 @@ function renderBookings(filter = '', statusFilter = 'all') {
   el.innerHTML = `
     ${buildStats()}
     <div class="card">
-      <div class="card-title">Appointments (${bookings.length})</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <span>Appointments (${bookings.length})</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm ${bkView==='table'?'btn-primary':'btn-outline'}" onclick="switchBookingsView('table')">Table</button>
+          <button class="btn btn-sm ${bkView==='calendar'?'btn-primary':'btn-outline'}" onclick="switchBookingsView('calendar')">Calendar</button>
+        </div>
+      </div>
+      ${bkView === 'calendar' ? '<div id="cal-container"></div>' : `
       <div class="search-row">
         <input class="search-input" type="text" placeholder="Search by client name or email…" id="bk-search" value="${filter}" oninput="renderBookings(this.value, document.getElementById('bk-status-filter').value)">
         <select id="bk-status-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="renderBookings(document.getElementById('bk-search').value, this.value)">
@@ -619,6 +678,7 @@ function renderBookings(filter = '', statusFilter = 'all') {
               <th>Service</th>
               <th>Session Type</th>
               <th>Requested Date</th>
+              <th>Requested Time</th>
               <th>Status</th>
               <th>Attendance</th>
               <th>Actions</th>
@@ -652,6 +712,7 @@ function renderBookings(filter = '', statusFilter = 'all') {
                 <td style="font-size:12px">${b.service||'—'}</td>
                 <td style="font-size:12px">${b.session_type||'—'}</td>
                 <td style="font-size:12px;color:var(--muted)">${fmtDate(b.requested_date||b.created_at)}</td>
+                <td class="mono" style="font-size:12px;color:var(--muted)">${escNar(b.requested_time||'—')}</td>
                 <td><span class="status-pill status-${status}">${status}</span></td>
                 <td>${attendanceCell}</td>
                 <td style="display:flex;gap:6px;flex-wrap:wrap">
@@ -666,7 +727,160 @@ function renderBookings(filter = '', statusFilter = 'all') {
           </tbody>
         </table>
       </div>`}
+      `}
     </div>`;
+
+  if (bkView === 'calendar') renderCalendarView();
+}
+
+function switchBookingsView(view) {
+  bkView = view;
+  renderBookings(
+    document.getElementById('bk-search')?.value || '',
+    document.getElementById('bk-status-filter')?.value || 'all'
+  );
+}
+
+// ── Bookings Calendar ──
+function calMonthLabel(d) {
+  return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+}
+function calDateKey(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+async function loadCalMonth() {
+  calLoading = true;
+  calError = null;
+  const container = document.getElementById('cal-container');
+  if (container) container.innerHTML = '<div class="spinner"><div class="spin"></div> Loading calendar…</div>';
+
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  const startStr = calDateKey(new Date(y, m, 1));
+  const endStr = calDateKey(new Date(y, m + 1, 0));
+
+  const { data, error } = await sb
+    .from('bookings')
+    .select('id,user_name,user_email,service,session_type,requested_date,requested_time,status,session_mode')
+    .eq('status', 'confirmed')
+    .gte('requested_date', startStr)
+    .lte('requested_date', endStr)
+    .order('requested_date')
+    .order('requested_time');
+
+  calLoading = false;
+  if (error) {
+    console.error('Calendar month fetch failed:', error);
+    calError = error.message || 'unknown error';
+    calBookings = [];
+  } else {
+    calError = null;
+    calBookings = data || [];
+  }
+  renderCalGrid();
+}
+
+function calNav(delta) {
+  calCursor = new Date(calCursor.getFullYear(), calCursor.getMonth() + delta, 1);
+  loadCalMonth();
+}
+function calToday() {
+  const d = new Date();
+  calCursor = new Date(d.getFullYear(), d.getMonth(), 1);
+  loadCalMonth();
+}
+
+function renderCalendarView() {
+  const container = document.getElementById('cal-container');
+  if (!container) return;
+  container.innerHTML = `
+    <div class="cal-nav">
+      <button class="btn btn-outline btn-sm" onclick="calNav(-1)">&larr; Prev</button>
+      <div class="cal-nav-label">${calMonthLabel(calCursor)}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" onclick="calToday()">Today</button>
+        <button class="btn btn-outline btn-sm" onclick="calNav(1)">Next &rarr;</button>
+      </div>
+    </div>
+    <div id="cal-grid-wrap"></div>`;
+  loadCalMonth();
+}
+
+function renderCalGrid() {
+  const wrap = document.getElementById('cal-grid-wrap');
+  if (!wrap) return;
+
+  if (calError) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--red)">Could not load confirmed bookings for this month: ${escNar(calError)}.</div>`;
+    return;
+  }
+
+  // Group confirmed bookings for this month by requested_date.
+  const byDay = {};
+  calBookings.forEach(b => {
+    if (!b.requested_date) return;
+    (byDay[b.requested_date] = byDay[b.requested_date] || []).push(b);
+  });
+
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  const firstOfMonth = new Date(y, m, 1);
+  const startWeekday = firstOfMonth.getDay(); // 0=Sun
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const todayKey = calDateKey(new Date());
+
+  let cells = '';
+  const dows = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  let html = '<div class="cal-grid">' + dows.map(d => `<div class="cal-dow">${d}</div>`).join('');
+
+  // Leading blanks for days before the 1st.
+  for (let i = 0; i < startWeekday; i++) {
+    html += '<div class="cal-cell cal-outside"></div>';
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(y, m, day);
+    const key = calDateKey(dateObj);
+    const dayBookings = byDay[key] || [];
+    const isToday = key === todayKey;
+    const shown = dayBookings.slice(0, 3);
+    const overflow = dayBookings.length - shown.length;
+
+    html += `<div class="cal-cell${isToday ? ' cal-today' : ''}">
+      <div class="cal-daynum">${day}</div>
+      ${shown.map(b => `<div class="cal-entry" title="${escNar(b.user_name || 'Client')} — ${escNar(b.service || '')}" onclick="openCalDayModal('${key}')">${escNar(b.requested_time || '')} ${escNar(b.service || '')}</div>`).join('')}
+      ${overflow > 0 ? `<div class="cal-more" onclick="openCalDayModal('${key}')">+${overflow} more</div>` : ''}
+    </div>`;
+  }
+
+  html += '</div>';
+  wrap.innerHTML = html;
+
+  if (calBookings.length === 0) {
+    wrap.innerHTML += '<p style="text-align:center;color:var(--muted);font-size:13px;padding:16px 0">No confirmed bookings this month.</p>';
+  }
+}
+
+function openCalDayModal(dateKey) {
+  const dayBookings = calBookings.filter(b => b.requested_date === dateKey);
+  const dateLabel = new Date(dateKey + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  document.getElementById('cal-day-modal-title').textContent = dateLabel;
+  document.getElementById('cal-day-modal-body').innerHTML = dayBookings.length === 0
+    ? '<div class="empty">No confirmed bookings on this day.</div>'
+    : dayBookings.map(b => `
+      <div class="modal-row">
+        <div>
+          <div class="modal-label">${escNar(b.requested_time || '—')}</div>
+          <div class="modal-val" style="text-align:left;font-size:13px">${escNar(b.user_name || '—')} &middot; ${escNar(b.service || '—')}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="modal-label">${escNar(b.session_type || '')}</div>
+          <div class="modal-val" style="font-size:11px;color:var(--muted)">${b.session_mode ? escNar(b.session_mode) : '—'}</div>
+        </div>
+      </div>`).join('');
+  document.getElementById('calDayModal').classList.add('open');
+}
+function closeCalDayModal() {
+  document.getElementById('calDayModal').classList.remove('open');
 }
 
 async function updateBookingStatus(id, status) {
@@ -886,11 +1100,14 @@ async function createReport() {
   openReportBuilder(data.id);
 }
 
+let currentReportDataError = null; // distinguishes a real RPC failure from legitimate insufficient_cohort suppression
+
 async function openReportBuilder(id) {
   reportsView = 'builder';
   currentReportId = id;
   currentReportRow = null;
   currentReportData = null;
+  currentReportDataError = null;
 
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading report…</div>';
@@ -909,6 +1126,7 @@ async function openReportBuilder(id) {
   });
   if (rpcErr) {
     console.error('org_report_data failed:', rpcErr);
+    currentReportDataError = rpcErr;
   }
   currentReportData = rpcData || null;
 
@@ -917,12 +1135,35 @@ async function openReportBuilder(id) {
 
 function fmtPct(v) { return (v === null || v === undefined) ? '—' : `${v}%`; }
 
+// Only rendered/wired when readOnly (row.status === 'published') — draft
+// reports have no Download PDF button at all (see renderReportBuilder()).
+function downloadAdminReportPdf() {
+  const row = currentReportRow;
+  if (!row) return;
+  const title = 'KeyWellness-Report-' + orgName(row.org_id).replace(/[^a-z0-9]+/gi, '-') + '-' + (row.period_label || '').replace(/[^a-z0-9]+/gi, '-');
+  window.KWReportCharts.printReport(title);
+}
+
 function renderReportBuilder() {
   const el = document.getElementById('page-content');
   const row = currentReportRow;
   const data = currentReportData;
   const readOnly = row.status === 'published';
   const RC = window.KWReportCharts;
+
+  // A real RPC failure must never be repainted as "insufficient cohort" —
+  // those are different situations (a bug vs. a legitimate privacy guard)
+  // and showing the wrong one hides real problems (see BUILD-NOTES.md,
+  // the _suppress_count(bigint) incident).
+  if (currentReportDataError) {
+    el.innerHTML = `
+      <div style="margin-bottom:16px"><button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button></div>
+      <div class="card">
+        <div class="card-title">${orgName(row.org_id)} — ${row.period_label}</div>
+        <div class="empty">Could not load report data: ${currentReportDataError.message || 'unknown error'}. This is a system error, not a privacy suppression — please contact support or try again.</div>
+      </div>`;
+    return;
+  }
 
   if (!data || data.insufficient_cohort) {
     el.innerHTML = `
@@ -945,12 +1186,15 @@ function renderReportBuilder() {
   const incomplete = coveragePct !== null && coveragePct !== undefined && coveragePct < 100;
 
   el.innerHTML = `
-    <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button>
-      <span class="status-pill report-status-${row.status}">${row.status}</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        ${readOnly ? `<button class="btn btn-outline btn-sm" onclick="downloadAdminReportPdf()">⬇️ Download PDF</button>` : ''}
+        <span class="status-pill report-status-${row.status}">${row.status}</span>
+      </div>
     </div>
 
-    <div class="card">
+    <div class="card report-print-doc">
       <div class="card-title">${orgName(row.org_id)} — ${row.period_label}</div>
       ${incomplete ? `<div class="save-banner err show" style="background:#fff8f0;color:var(--orange)">
         ${funnel.bookings_unconfirmed ?? '—'} of ${RC.cellValue(sessions.total_booked) ?? 0} booked sessions unconfirmed —

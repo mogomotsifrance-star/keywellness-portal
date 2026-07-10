@@ -11,6 +11,19 @@
 -- extend org_report_data()") before this file was written. Rollback is:
 -- re-apply supabase_org_report_data.sql (the pre-this-batch version)
 -- unchanged.
+--
+-- REVISED after live testing found two bugs this file's browser-only
+-- verification never caught (see BUILD-NOTES.md, "CRITICAL:
+-- org_report_data() has never worked against real data" and the
+-- ambiguous-"n"-column follow-up):
+--   1. _suppress_count(bigint) does not exist — fixed separately in
+--      supabase_suppress_count_bigint_fix.sql (run that file too).
+--   2. demographics_cross's CTEs used "n" as a column alias, colliding
+--      with this function's own plpgsql variable `n` (org headcount) —
+--      Postgres raised "column reference \"n\" is ambiguous" (42702).
+--      Fixed in place below (renamed to "cnt" throughout that block).
+-- If you already ran this file once, just re-run it — CREATE OR REPLACE
+-- makes it idempotent and this version supersedes the earlier one.
 -- ============================================================
 
 
@@ -414,7 +427,7 @@ begin
     from cohort_members
   ),
   session_counts as (
-    select b.user_id, count(*) as n
+    select b.user_id, count(*) as cnt
     from bookings b
     where b.user_id in (select id from member_ages)
       and coalesce(b.client_type, 'member') = 'member'
@@ -424,9 +437,9 @@ begin
   ),
   tiered as (
     select ma.id, ma.age_band,
-      case when sc.n is null then null
-           when sc.n = 1 then '1'
-           when sc.n = 2 then '2'
+      case when sc.cnt is null then null
+           when sc.cnt = 1 then '1'
+           when sc.cnt = 2 then '2'
            else '3_plus' end as tier
     from member_ages ma
     left join session_counts sc on sc.user_id = ma.id
@@ -438,29 +451,33 @@ begin
     from age_bands ab cross join tiers t
   ),
   counts as (
-    select age_band, tier, count(*) as n
+    select age_band, tier, count(*) as cnt
     from tiered
     where age_band is not null and tier is not null
     group by age_band, tier
   ),
   full_grid as (
-    select g.age_band, g.tier, coalesce(c.n, 0) as n
+    -- Column deliberately NOT named "n" — that collides with this
+    -- function's own plpgsql variable `n` (the org headcount) and
+    -- raises "column reference is ambiguous" (42702). Discovered live —
+    -- see BUILD-NOTES.md.
+    select g.age_band, g.tier, coalesce(c.cnt, 0) as cnt
     from grid g left join counts c using (age_band, tier)
   ),
   cell_flags as (
-    select age_band, tier, n, (n < 3) as cell_suppressed
+    select age_band, tier, cnt, (cnt < 3) as cell_suppressed
     from full_grid
   ),
   row_stats as (
     select age_band,
-      sum(n) as row_total,
+      sum(cnt) as row_total,
       count(*) filter (where cell_suppressed) as row_suppressed_count
     from cell_flags
     group by age_band
   ),
   col_stats as (
     select tier,
-      sum(n) as col_total,
+      sum(cnt) as col_total,
       count(*) filter (where cell_suppressed) as col_suppressed_count
     from cell_flags
     group by tier
@@ -475,7 +492,7 @@ begin
               cf.tier,
               case when cf.cell_suppressed
                    then jsonb_build_object('value', null, 'suppressed', true)
-                   else jsonb_build_object('value', cf.n, 'suppressed', false)
+                   else jsonb_build_object('value', cf.cnt, 'suppressed', false)
               end
             )
             from cell_flags cf where cf.age_band = rs.age_band
