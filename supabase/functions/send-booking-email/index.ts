@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { renderEmail, KW_FROM, KW_REPLY_TO } from "../_shared/kw-email.ts";
+import { renderEmail, KW_FROM, KW_REPLY_TO, KW_PORTAL_URL } from "../_shared/kw-email.ts";
 
 // To restrict to specific origins instead of *, replace "*" with the origin
 // from the incoming request if it matches one of these:
@@ -144,7 +144,7 @@ serve(async (req) => {
     heading: "New booking request",
     bodyHtml: `<p style="margin:0 0 14px;">A new booking request has come in via the portal.</p>`,
     ledger: teamLedger,
-    button: { label: "Open in admin", url: "https://keywellness.co.bw/admin.html" },
+    button: { label: "Open in admin", url: `${KW_PORTAL_URL}/admin.html` },
     variant: "internal",
   });
 

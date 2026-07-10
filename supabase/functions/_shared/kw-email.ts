@@ -18,10 +18,16 @@ export const KW_COLORS = {
 export const KW_FROM = "Key Wellness <noreply@keywellness.co.bw>";
 export const KW_REPLY_TO = "wellness@keywellness.co.bw";
 
-// No PNG export of the logo exists in the repo yet (only SVG — see
-// BUILD-NOTES.md). This constant is the single place to update once one
-// does; it is intentionally the only hardcoded reference to the asset path.
-export const KW_LOGO_URL = "https://keywellness.co.bw/assets/img/kw-logo-horizontal.png";
+// Portal production URL. `keywellness.co.bw` is a separate, unrelated
+// WordPress marketing site (confirmed 404 on every portal path) — the
+// planned home for the portal is the future subdomain
+// `portal.keywellness.co.bw`, not yet live. Until that DNS is live, every
+// absolute portal link in this file must point at the real deployed portal,
+// GitHub Pages. Swap this one constant (and nothing else) once the
+// subdomain goes live. See BATCH-0-FINDINGS.md and BUILD-NOTES.md.
+export const KW_PORTAL_URL = "https://mogomotsifrance-star.github.io/keywellness-portal";
+
+export const KW_LOGO_URL = `${KW_PORTAL_URL}/assets/img/kw-logo-horizontal.png`;
 
 export interface LedgerRow {
   label: string;
@@ -87,9 +93,8 @@ function renderFooter(variant: "member" | "internal"): string {
     </p>
     <p style="margin:0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:${KW_COLORS.muted};line-height:1.6;">
       Key Wellness &middot; Botswana<br>
-      <a href="https://keywellness.co.bw" style="color:${KW_COLORS.muted};text-decoration:underline;">keywellness.co.bw</a>
+      <a href="${KW_PORTAL_URL}" style="color:${KW_COLORS.muted};text-decoration:underline;">Key Wellness Portal</a>
       &middot; <a href="mailto:${KW_REPLY_TO}" style="color:${KW_COLORS.muted};text-decoration:underline;">Help</a>
-      &middot; <a href="https://keywellness.co.bw/privacy" style="color:${KW_COLORS.muted};text-decoration:underline;">Privacy</a>
     </p>`;
 }
 
@@ -204,7 +209,7 @@ export function certificateReadyEmail(opts: CertificateReadyEmailOpts): { subjec
     variant: "member",
     footerExtraHtml: `
       <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:11.5px;color:${KW_COLORS.muted};line-height:1.6;">
-        You're receiving reward emails because you opted in. <a href="https://keywellness.co.bw/#profile" style="color:${KW_COLORS.muted};text-decoration:underline;">Manage preferences</a>
+        You're receiving reward emails because you opted in. <a href="${KW_PORTAL_URL}/#profile" style="color:${KW_COLORS.muted};text-decoration:underline;">Manage preferences</a>
       </p>`,
   });
   return { subject, html };

@@ -382,3 +382,40 @@ To also revert the Batch 2 tightening (revoking `anon` SELECT on
 ```sql
 grant select on public.quiz_questions_public to anon;
 ```
+
+## supabase_lms_pathway1_update.sql (Learning Pathways — video reorg + new lesson + welcome video)
+
+Tshenolo moved all 15 Pathway-1 files into a `Foundation/` subfolder, added
+a new "Psychology of Spending" lesson (inserted as lesson 4, everything
+from the old lesson 4 onward shifted down one), and uploaded a real
+welcome video. This file UPDATEs existing `content_items` rows in place
+(not delete+recreate) specifically so any `content_progress` already
+recorded against these ids survives — rollback restores the PRE-reorg
+values (original flat bucket-root paths, original 15-lesson order, no
+Psychology of Spending row, welcome video back to the Batch 2 placeholder):
+
+```sql
+update public.content_items set sort_order = 1,  video_path = 'Module 1_Introduction to Financial Literacy_video.mp4'                    where pathway_id = 1 and title = 'Introduction to Financial Literacy';
+update public.content_items set sort_order = 2,  video_path = 'Module 2_Understanding Your Relationship with Money_video.mp4'            where pathway_id = 1 and title = 'Understanding Your Relationship with Money';
+update public.content_items set sort_order = 3,  video_path = 'Module 3_Emotional Spending_video.mp4'                                    where pathway_id = 1 and title = 'Emotional Spending';
+update public.content_items set sort_order = 4,  video_path = 'Module 4_Lifestyle Inflation_video.mp4'                                   where pathway_id = 1 and title = 'Lifestyle Inflation';
+update public.content_items set sort_order = 5,  video_path = 'Module 5_Qualifying vs Affording_video.mp4'                               where pathway_id = 1 and title = 'Qualifying vs Affording';
+update public.content_items set sort_order = 6,  video_path = 'Module 6_The Three Money Problems_video.mp4'                              where pathway_id = 1 and title = 'The Three Money Problems';
+update public.content_items set sort_order = 7,  video_path = 'Module 7_Setting SMART Financial Goals_video.mp4'                         where pathway_id = 1 and title = 'Setting SMART Financial Goals';
+update public.content_items set sort_order = 8,  video_path = 'Module 8_Understanding Your Payslip_video.mp4'                            where pathway_id = 1 and title = 'Understanding Your Payslip';
+update public.content_items set sort_order = 9,  video_path = 'Module 9_Creating a Personal Budget_video.mp4'                            where pathway_id = 1 and title = 'Creating a Personal Budget';
+update public.content_items set sort_order = 10, video_path = 'Module 10_Managing Cash Flow_video.mp4'                                   where pathway_id = 1 and title = 'Managing Cash Flow';
+update public.content_items set sort_order = 11, video_path = 'Module 11 -Needs vs Wants_video_4k.mp4'                                   where pathway_id = 1 and title = 'Needs vs Wants';
+update public.content_items set sort_order = 12, video_path = 'Module 12 -Building Better Money Habits_video_4k.mp4'                     where pathway_id = 1 and title = 'Building Better Money Habits';
+update public.content_items set sort_order = 13, video_path = 'Module 13 - Emergency Funds_video_4k.mp4'                                 where pathway_id = 1 and title = 'Emergency Funds';
+update public.content_items set sort_order = 14, video_path = 'Module 14 - Understanding Debt_video_4k.mp4'                              where pathway_id = 1 and title = 'Understanding Debt';
+update public.content_items set sort_order = 15, video_path = 'Module 15 - Assets vs Liabilities_video_4k (1).mp4'                       where pathway_id = 1 and title = 'Assets vs Liabilities';
+delete from public.content_items where pathway_id = 1 and title = 'Psychology of Spending';
+update public.content_items set video_path = 'welcome.mp4' where pathway_id is null and title = 'Welcome to Key Wellness';
+```
+
+Note: the DELETE above only removes the Psychology of Spending row itself
+— if a real member has already completed it by the time of rollback,
+their `content_progress` row for it is cascade-deleted too (unrecoverable
+for that one lesson; every other lesson's progress is untouched since
+this whole file only ever UPDATEs by matching on `id`-stable rows).

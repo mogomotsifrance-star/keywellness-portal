@@ -349,6 +349,62 @@
       ' <span style="color:' + COLORS.grey + ';font-size:12px">vs. prior period</span>';
   }
 
+  // ── Print reliability ────────────────────────────────────────
+  // Chart.js <canvas> backing stores can go blank on print in some browsers
+  // (the print layout reflow clears/resizes the canvas before it paints) —
+  // flagged as a risk, not yet confirmed one way or the other, in
+  // BATCH-0-FINDINGS.md. Rather than gamble on it, every registered chart is
+  // swapped for a static <img> snapshot (canvas.toDataURL()) just before
+  // print and swapped back immediately after — the smallest change that
+  // makes print reliable regardless of how any given browser handles it.
+  let printSnapshots = [];
+
+  function snapshotChartsForPrint() {
+    printSnapshots = [];
+    Object.keys(registry).forEach(function (canvasId) {
+      const canvas = document.getElementById(canvasId);
+      if (!canvas || !canvas.parentNode) return;
+      let dataUrl;
+      try {
+        dataUrl = canvas.toDataURL('image/png');
+      } catch (e) {
+        return; // tainted/unsupported canvas — leave it as-is rather than fail print
+      }
+      const img = document.createElement('img');
+      img.src = dataUrl;
+      img.className = 'kw-print-chart-snapshot';
+      img.style.width = canvas.style.width || '100%';
+      img.style.height = canvas.offsetHeight ? canvas.offsetHeight + 'px' : 'auto';
+      canvas.parentNode.insertBefore(img, canvas);
+      canvas.style.display = 'none';
+      printSnapshots.push({ canvas, img });
+    });
+  }
+
+  function restoreChartsAfterPrint() {
+    printSnapshots.forEach(function (s) {
+      s.img.remove();
+      s.canvas.style.display = '';
+    });
+    printSnapshots = [];
+  }
+
+  // Sets document.title (for the browser's suggested PDF filename), snapshots
+  // charts, prints, and restores both afterward. titleFn/restoreTitle are
+  // plain strings; the caller computes them since only it knows the org/period.
+  function printReport(printTitle) {
+    const originalTitle = document.title;
+    if (printTitle) document.title = printTitle;
+    snapshotChartsForPrint();
+    function cleanup() {
+      restoreChartsAfterPrint();
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', cleanup);
+    }
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  }
+
   global.KWReportCharts = {
     cellValue,
     cellDisplay,
@@ -363,6 +419,7 @@
     renderDemographicsCrossTable,
     renderActivitiesListTable,
     qoqBadge,
+    printReport,
     COLORS,
   };
 })(window);

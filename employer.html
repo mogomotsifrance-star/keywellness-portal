@@ -129,6 +129,11 @@ button{cursor:pointer;font-family:'Nunito',sans-serif}
 .fin-leg-item{display:flex;align-items:center;gap:6px}
 .fin-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 
+/* Top-causes list (Financial Stress card) */
+.cause-list{display:flex;flex-direction:column;gap:6px}
+.cause-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--cream-dark);border-radius:var(--radius-sm);font-size:13px}
+.cause-count{color:var(--muted);font-size:12px;white-space:nowrap;margin-left:12px}
+
 /* Rewards table */
 .rewards-table{width:100%;border-collapse:collapse;font-size:13px}
 .rewards-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding:8px 10px;border-bottom:2px solid var(--border)}
@@ -205,6 +210,14 @@ button{cursor:pointer;font-family:'Nunito',sans-serif}
   .report-section { break-inside: avoid; page-break-inside: avoid; }
   .chart-box { break-inside: avoid; page-break-inside: avoid; }
   .report-appendix { break-before: page; page-break-before: always; }
+  .kw-print-chart-snapshot { max-width:100%; }
+  /* Best-effort — @page margin-box page numbers have inconsistent browser
+     support (notably Chrome ignores @bottom-center); harmless no-op where
+     unsupported, so kept rather than omitted. */
+  @page {
+    margin: 16mm 14mm;
+    @bottom-center { content: counter(page) " / " counter(pages); font-size: 9px; color: #888; }
+  }
 }
 </style>
 </head>
@@ -327,12 +340,14 @@ async function init() {
       '<strong>Admin</strong>Viewing as administrator';
   }
 
-  // Call both RPCs with no argument — employer_org() resolves their org
-  // server-side for each. Financial indicators failing shouldn't block the
-  // rest of the dashboard, so it's handled separately from org_overview.
-  const [overviewRes, finRes] = await Promise.all([
+  // Call all RPCs with no argument — employer_org() resolves their org
+  // server-side for each. Financial indicators / stress summary failing
+  // shouldn't block the rest of the dashboard, so they're handled
+  // separately from org_overview.
+  const [overviewRes, finRes, stressRes] = await Promise.all([
     sb.rpc('org_overview'),
     sb.rpc('org_financial_indicators'),
+    sb.rpc('org_stress_summary'),
   ]);
 
   if (overviewRes.error) {
@@ -340,9 +355,15 @@ async function init() {
     return;
   }
   if (finRes.error) console.error('org_financial_indicators failed:', finRes.error);
+  if (stressRes.error) console.error('org_stress_summary failed:', stressRes.error);
 
   window._overviewData = overviewRes.data;
   window._finData = finRes.error ? null : finRes.data;
+  // A real RPC error must stay distinguishable from a legitimate
+  // insufficient_cohort response — same reasoning as admin.html's
+  // currentReportDataError (see BUILD-NOTES.md).
+  window._stressData = stressRes.error ? null : stressRes.data;
+  window._stressError = stressRes.error || null;
 
   render(window._overviewData);
   KW.reveal('.card, .stat-box');
@@ -834,42 +855,78 @@ function renderDebtHealth(fin) {
   return html;
 }
 
-function renderFinancialStress(fin) {
-  if (!fin || fin.eligible === false) return emptyFinCard('Financial Stress', fin);
-  var st = fin.stress;
-  if (!st) return ''; // older cached response shape before this indicator existed
-  var total = st.reported_count || 0;
-  var colors = { low: 'var(--green)', moderate: 'var(--gold)', high: 'var(--red)' };
+// ── Financial Stress card (org_stress_summary()) ───────────────────────
+// Replaces the old org_financial_indicators()-based card: that RPC had
+// stress_logs.level's scale backwards (see BUILD-NOTES.md — a live,
+// pre-existing bug, not fixed here), and showed bands only, no causes.
+// org_stress_summary() uses the corrected direction and adds top causes.
+var STRESS_BAND_LABELS = { low: 'Low', moderate: 'Moderate', high: 'High' };
+// Never brand yellow (--kw-yellow) as text/fill here — moderate uses a
+// muted amber (--kw-orange), high uses the deep, non-alarmist --kw-red.
+var STRESS_BAND_COLORS = { low: 'var(--green)', moderate: 'var(--orange)', high: 'var(--red)' };
 
+function renderStressCard(data, error) {
   var html = '<div class="card">'
-    + '<div class="card-title">Financial Stress</div>'
-    + '<div class="card-subtitle">Self-reported stress level from ' + total + ' employee' + (total === 1 ? '' : 's') + "' most recent fortnightly check-in. Median: <strong>" + (st.median != null ? st.median + '/10' : '&mdash;') + '</strong>.</div>';
+    + '<div class="card-title">How financially stressed are employees?</div>';
 
-  if (total > 0) {
-    html += '<div class="fin-bands">' + finBandsHtml(st.bands, total, colors) + '</div>'
-      + '<div class="fin-legend">' + finLegendHtml(st.bands, colors) + '</div>'
-      + finSuppressedNote(st.bands);
+  if (error) {
+    html += '<p style="color:var(--red);font-size:13px">Could not load the stress summary: '
+      + escHtml(error.message || 'unknown error') + '. This is a system error, not a privacy suppression &mdash; please try again or contact support.</p></div>';
+    return html;
+  }
+
+  if (!data || data.insufficient_cohort) {
+    html += '<p style="color:var(--muted);font-size:13px">Not enough check-in data yet to show this while protecting individual privacy &mdash; shown once at least 5 employees have checked in.</p></div>';
+    return html;
+  }
+
+  // _suppress_count/_suppress_rate both return {value, suppressed} —
+  // value is null when suppressed, never a placeholder string.
+  var bands = ['low', 'moderate', 'high'].map(function (key) {
+    var b = data.bands[key] || {};
+    var cnt = b.count || {};
+    var pct = b.pct || {};
+    return { key: key, label: STRESS_BAND_LABELS[key], count: cnt.value, pct: pct.value, suppressed: !!cnt.suppressed };
+  });
+
+  html += '<div class="fin-bands">' + finBandsHtml(bands.map(function (b) {
+      return { key: b.key, label: b.label, count: b.count || 0, suppressed: b.suppressed };
+    }), data.cohort_size, STRESS_BAND_COLORS) + '</div>'
+    + '<div class="fin-legend">' + finLegendHtml(bands, STRESS_BAND_COLORS) + '</div>'
+    + finSuppressedNote(bands)
+    + '<p style="font-size:11px;color:var(--muted);margin-top:10px">Based on latest check-ins from ' + data.cohort_size + ' employee' + (data.cohort_size === 1 ? '' : 's') + ', last ' + data.window_days + ' days.</p>';
+
+  var causes = data.top_causes || [];
+  html += '<div style="margin-top:18px">'
+    + '<div style="font-weight:800;font-size:13px;margin-bottom:8px">Top causes of stress</div>';
+  if (causes.length === 0) {
+    html += '<p style="color:var(--muted);font-size:13px">No single cause was reported by enough employees to show without risking individual privacy.</p>';
   } else {
-    html += '<p style="color:var(--muted);font-size:13px">No employees have logged a stress check-in yet.</p>';
+    html += '<div class="cause-list">' + causes.map(function (c) {
+      var mc = c.member_count || {};
+      var cp = c.pct || {};
+      var countDisplay = mc.suppressed ? '&lt;3 employees' : (mc.value + ' employee' + (mc.value === 1 ? '' : 's'));
+      var pctDisplay = cp.suppressed ? '' : (' &middot; ' + cp.value + '%');
+      return '<div class="cause-row"><span>' + escHtml(c.cause) + '</span><span class="cause-count">' + countDisplay + pctDisplay + '</span></div>';
+    }).join('') + '</div>';
   }
   html += '</div>';
 
-  if (total > 0) {
-    var highN = (st.bands.filter(function (b) { return b.key === 'high'; })[0] || {}).count || 0;
-    var highPct = Math.round(100 * highN / total);
-
-    if (highPct >= 25) {
-      html += '<div class="action-strip">'
-        + '<h3>Recommended Next Step</h3>'
-        + '<p><strong>' + highPct + '% of reporting employees</strong> are logging high financial stress. Proactive wellbeing outreach or an EAP referral would directly support this group.</p>'
-        + '<div class="action-btns">'
-        + '<button class="btn-action primary" onclick="requestWorkshop(\'Financial Stress Support\')">Request wellbeing outreach</button>'
-        + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
-        + '</div></div>';
-    } else {
-      html += '<div class="notice-gold" style="margin-bottom:20px">Reported stress levels look manageable across your workforce &mdash; no urgent action flagged.</div>';
-    }
+  var highBand = bands.filter(function (b) { return b.key === 'high'; })[0];
+  var highPct = (!highBand.suppressed && typeof highBand.pct === 'number') ? highBand.pct : 0;
+  if (highPct >= 25) {
+    html += '<div class="action-strip">'
+      + '<h3>Recommended Next Step</h3>'
+      + '<p><strong>' + highPct + '% of reporting employees</strong> are logging high financial stress. Proactive wellbeing outreach or an EAP referral would directly support this group.</p>'
+      + '<div class="action-btns">'
+      + '<button class="btn-action primary" onclick="requestWorkshop(\'Financial Stress Support\')">Request wellbeing outreach</button>'
+      + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
+      + '</div></div>';
+  } else {
+    html += '<div class="notice-gold" style="margin-bottom:20px">Reported stress levels look manageable across your workforce &mdash; no urgent action flagged.</div>';
   }
+
+  html += '</div>';
   return html;
 }
 
@@ -1068,10 +1125,12 @@ function render(data) {
           + '</div>';
   }
 
-  // 5.5 Debt Health, Retirement Readiness & Financial Stress (org_financial_indicators)
+  // 5.5 Debt Health & Retirement Readiness (org_financial_indicators)
   html += renderDebtHealth(window._finData);
   html += renderRetirementReadiness(window._finData);
-  html += renderFinancialStress(window._finData);
+  // Financial Stress (org_stress_summary()) — corrected scale + top causes,
+  // replacing the old org_financial_indicators()-based stress card.
+  html += renderStressCard(window._stressData, window._stressError);
 
   // 6. Trend chart
   // Each quarter is suppressed independently (t.suppressed) when it had
@@ -1247,6 +1306,16 @@ function openHrReport(id) {
 
 function fmtPctHr(v) { return (v === null || v === undefined) ? '—' : v + '%'; }
 
+// Published-only by construction — loadReports() already filters
+// `.eq('status','published')`, so every report reachable here (and this
+// button) is a published snapshot; there is no draft path in this view.
+function downloadHrReportPdf() {
+  var row = currentHrReport;
+  if (!row) return;
+  var title = 'KeyWellness-Report-' + (currentOrgName || 'Org').replace(/[^a-z0-9]+/gi, '-') + '-' + (row.period_label || '').replace(/[^a-z0-9]+/gi, '-');
+  window.KWReportCharts.printReport(title);
+}
+
 function renderHrReportDetail() {
   const RC = window.KWReportCharts;
   const row = currentHrReport;
@@ -1274,7 +1343,10 @@ function renderHrReportDetail() {
   const prevKpi = prev ? (prev.kpi_summary || {}) : null;
   const risks = narrative.challenges_risks || [];
 
-  let html = '<div class="report-list-link" style="margin-bottom:16px"><button class="btn-action on-light" onclick="renderReportsList()">&larr; Back to reports</button></div>';
+  let html = '<div class="report-list-link" style="margin-bottom:16px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    + '<button class="btn-action on-light" onclick="renderReportsList()">&larr; Back to reports</button>'
+    + '<button class="btn-action on-light" onclick="downloadHrReportPdf()">&#11015;&#65039; Download PDF</button>'
+    + '</div>';
   html += '<div class="report-doc">';
 
   // ── 1. Cover block ──────────────────────────────────────────
