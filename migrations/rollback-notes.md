@@ -318,3 +318,67 @@ drop function if exists public.set_org_headcount(int, uuid);
 Note: `org_headcount_reports` itself is owned by Batch 4's rollback entry
 above (it was pre-created there) — don't drop it here if Batch 4 is still
 in place; org_rewards_summary() still reads it for reported_headcount.
+
+## supabase_lms_storage.sql (Learning Pathways Batch 1 — `Videos` storage bucket)
+
+REVISED: the bucket is `Videos` (capital V), created by hand via the
+dashboard before this file's second revision — not the lowercase `videos`
+the first revision created (that stray empty bucket was cleaned up by the
+revised file itself, see its own header comment). Rollback for the real
+bucket — this DOES NOT remove the 15 Pathway-1 videos + welcome file
+Tshenolo uploaded directly, only the RLS policy:
+
+```sql
+drop policy if exists "videos_public_read" on storage.objects;
+```
+
+To also remove the bucket and every uploaded file (destructive — only if
+the pathway videos are being fully retired, not just the DB policy): **not
+possible via raw SQL** — Supabase blocks direct `DELETE` on
+`storage.objects`/`storage.buckets` with a `protect_delete()` trigger
+(`42501`, "Use the Storage API instead" — confirmed live). Use the
+dashboard's Storage → Buckets UI, or the Storage REST/JS API with a
+service-role key, instead.
+
+## supabase_lms_schema.sql (Learning Pathways Batch 2 — pathways/content_items/quizzes/certificates)
+
+`content_items`/`content_progress` did not exist before this batch (confirmed
+in Batch 0 discovery via REST schema-cache probe) — both are created fresh
+here, not altered. Nothing pre-existing references any of these six new
+tables or the `quiz_questions_public` view, so dropping is safe and complete:
+
+```sql
+drop view if exists public.quiz_questions_public;
+drop table if exists public.certificates;
+drop table if exists public.quiz_attempts;
+drop table if exists public.quiz_questions;
+drop table if exists public.quizzes;
+drop table if exists public.content_progress;
+drop table if exists public.content_items;
+drop table if exists public.pathways;
+```
+
+Note: this permanently discards all member video-completion progress, quiz
+attempts, and issued certificates recorded since this batch shipped — only
+roll back before real members have used the feature, or after exporting
+`quiz_attempts`/`certificates` if member records must be preserved.
+
+## supabase_lms_rpcs.sql (Learning Pathways Batch 3 — complete_video/submit_quiz/issue_certificate RPCs)
+
+Nothing pre-existing referenced these functions, so dropping is safe and
+complete (the tables/view they read and write are owned by Batch 2's
+rollback entry above — don't drop those here if Batch 3 is being rolled
+back in isolation while Batch 2 stays in place):
+
+```sql
+drop function if exists public.issue_certificate(smallint, text);
+drop function if exists public.submit_quiz(uuid, jsonb);
+drop function if exists public.complete_video(uuid);
+```
+
+To also revert the Batch 2 tightening (revoking `anon` SELECT on
+`quiz_questions_public`, applied in this same file):
+
+```sql
+grant select on public.quiz_questions_public to anon;
+```

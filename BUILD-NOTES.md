@@ -1,3 +1,669 @@
+# Fixes & Diagnosis Batch (password toggle, email logo/links, signup errors, opt-in refresh, admin time column)
+
+Per `kw-fixes-diagnosis.md`'s batch plan. Full discovery in `BATCH-0-FINDINGS.md`
+(replaces an unrelated stale version from a prior workstream — see that file's own
+note). Two decisions confirmed with Tshenolo before proceeding past Batch 0:
+
+1. **Domain**: `keywellness.co.bw` is a live, unrelated WordPress marketing site
+   (every asset/page path 404s) — not this portal. Tshenolo confirmed the plan is a
+   future subdomain, `portal.keywellness.co.bw`, not yet live. Batches 2/4 point
+   every email URL at the current real production URL,
+   `https://mogomotsifrance-star.github.io/keywellness-portal`, instead. **Revisit
+   once `portal.keywellness.co.bw` DNS is live** — swap `KW_LOGO_URL` and the
+   hardcoded admin-link/footer URLs in `kw-email.ts` and
+   `send-booking-email/index.ts` to the new subdomain then.
+2. **Signup 500**: root cause is Supabase Auth itself failing to send the
+   confirmation email (`error_code: unexpected_failure`, `msg: "Error sending
+   confirmation email"`) — an Authentication → SMTP dashboard setting, not
+   reachable from this repo. Tshenolo confirmed: do Batch 3.1 (error surfacing)
+   only; 3.2's proposed trigger/invite-code fix doesn't apply and is out of scope.
+   **Manual follow-up required**: check Supabase dashboard → Authentication →
+   Email/SMTP settings — this is a live, in-production signup outage, not cosmetic.
+
+Rollback statements are recorded at the start of each batch's own section below,
+before that batch's changes are described, per this workstream's standing rule.
+
+---
+
+## Batch 1 — Password visibility toggle (index.html)
+
+Rollback: `git revert` this commit — pure frontend addition (CSS + one JS function +
+markup wrapping), no DB/Edge Function involved.
+
+Added `.pw-field`/`.pw-toggle` CSS (muted/navy palette, no yellow fill, 40×40px touch
+target) and a single shared `togglePwVisibility(btn, inputId)` function with two
+inline SVG icon constants (`PW_EYE`/`PW_EYE_OFF`, stroke-based line icons). Applied to
+all 6 password inputs found in the app: sign-in (`a-pass`), sign-up (`b-pass`,
+`b-pass2`), password-reset (`r-pass`, `r-pass2`), and the session re-confirm overlay
+(`sc-pass`) — the last one isn't one of the four forms named explicitly in the batch
+spec, but it is a password input in an auth-adjacent flow ("every password input
+across auth forms" per the spec's own opening line), so included for consistency.
+`admin.html`/`employer.html` have no password inputs of their own (both route through
+`index.html`'s auth) — confirmed via grep, zero matches.
+
+Each toggle is a real `<button type="button">` (no form submission, confirmed by
+testing Enter-key behavior on `a-pass` doesn't submit), `aria-label`/`aria-pressed`
+swap correctly on toggle, and the field value is preserved across the type
+`password`↔`text` swap (browsers don't clear input value on a `type` change).
+
+**Verified in-browser** (real click + fill via preview tools, not just eval): filled
+`a-pass`, clicked the toggle, confirmed `type` became `text`, value stayed
+`"MySecret123"`, `aria-label` became "Hide password", `aria-pressed` became `"true"`,
+screenshot showed the password in plain text with the eye-off icon. Repeated for both
+signup fields (`b-pass`/`b-pass2`) — both render with the icon and default "Show
+password" label. No console errors. Keyboard: native `<button>` is focusable
+(`tabIndex: 0`) and responds to Enter/Space via default browser button-activation
+behavior (no custom key handler needed, none added).
+
+---
+
+## Batch 2 — Email logo/link domain fix (kw-email.ts + send-booking-email)
+
+**Production-immediate — Edge Function not yet redeployed, see below.**
+
+Rollback: `git revert` this commit, then `supabase functions deploy send-booking-email`
+to push the reverted `_shared/kw-email.ts` back out (shared module, bundled at deploy
+time — reverting the repo file alone doesn't un-deploy it).
+
+Per Tshenolo's decision (recorded at the top of this section): `keywellness.co.bw` is
+a separate live WordPress site; the real portal lives at
+`https://mogomotsifrance-star.github.io/keywellness-portal` today, with
+`portal.keywellness.co.bw` planned as a future subdomain. Added one new exported
+constant, `KW_PORTAL_URL`, in `kw-email.ts` as the single source of truth — every
+other URL in the module now derives from it:
+
+- `KW_LOGO_URL` → `${KW_PORTAL_URL}/assets/img/kw-logo-horizontal.png` (was the
+  broken `keywellness.co.bw` path).
+- Footer "site" link → `KW_PORTAL_URL` directly (was `keywellness.co.bw`, and the
+  link text changed from the bare domain to "Key Wellness Portal" since it now points
+  at the portal itself, not a marketing homepage).
+- Footer **Privacy link removed entirely**, not repointed — no Privacy page exists
+  anywhere (not on the WordPress site, not on the portal; confirmed in
+  BATCH-0-FINDINGS 0.1). Per this workstream's own Batch 4 principle ("if the portal
+  has no URL routing for that view... do not invent hash-routing"), extended here:
+  don't link to a page that doesn't exist either. Flagged below as a manual
+  follow-up — re-add the link once a real Privacy page exists.
+- Certificate-reward email's "Manage preferences" link →
+  `${KW_PORTAL_URL}/#profile` (was `keywellness.co.bw/#profile`) — this one **will
+  actually work**, since `index.html` has a real `hashchange`-driven router and a
+  `#profile` view.
+- `send-booking-email/index.ts`'s "Open in admin" button →
+  `${KW_PORTAL_URL}/admin.html` (was `keywellness.co.bw/admin.html`, confirmed 404).
+
+**`email-templates/auth/*.html` deliberately NOT touched** — attempted a repo-wide
+sed pass across those 5 files to carry the same fix, and the environment's own
+permission classifier blocked it, correctly reading this batch's "Do not touch the
+Supabase dashboard Auth templates... out of scope for Claude Code" instruction as
+covering the repo source files that feed that manual paste, not just the live
+dashboard itself. Left as-is; still flagged (per Batch 0) that these 5 files carry
+the identical broken-domain bug in their logo `src` and footer links, and whoever
+pastes them into the dashboard by hand should apply the same `KW_PORTAL_URL` fix
+manually.
+
+**Verified without Deno** (not installed in this environment) — Node 24's native
+TypeScript type-stripping loaded `kw-email.ts` directly (`require('./kw-email.ts')`
+works as-is on this Node version, no build step). Rendered a sample email and the
+certificate-reward email and confirmed: zero remaining `keywellness.co.bw/assets` or
+`keywellness.co.bw/privacy` hits, the logo `src` resolves to the GitHub Pages path,
+the footer link points at the portal root, and the certificate email's "Manage
+preferences" link resolves to `.../keywellness-portal/#profile`. Confirmed via `grep`
+that every remaining `keywellness.co.bw` reference left in both `.ts` files is either
+a `mailto:`/`From:` email address (unaffected by the web-hosting bug, works today) or
+an inert commented-out CORS-origin example.
+
+**Not yet done — same "won't deploy without you present" rule as every prior email
+workstream batch**:
+1. `supabase functions deploy send-booking-email` (bundles `_shared/kw-email.ts`
+   automatically — confirm in deploy output).
+2. Send one real test booking on dev; open the received "New booking request" email
+   and confirm the logo renders and "Open in admin" resolves to the real portal.
+3. Once `portal.keywellness.co.bw` DNS goes live: swap the single `KW_PORTAL_URL`
+   constant, redeploy, done — every other line in this file was written to depend on
+   that one constant for exactly this reason.
+
+---
+
+## Batch 3 — Signup/login error surfacing (index.html) — 3.1 only, per Tshenolo
+
+Rollback: `git revert` — pure frontend, no DB/Edge Function involved.
+
+**3.2 (root-cause fix) explicitly skipped, per Tshenolo's decision recorded at the
+top of this section** — BATCH-0-FINDINGS 0.2 already proved the trigger/invite-code
+path isn't the cause (identical 500 with and without a valid invite code); the real
+cause is a Supabase Auth SMTP/email-sending failure outside this repo. Nothing in
+`handle_new_user()` or the invite-code flow was touched.
+
+**3.1**: added a shared `resolveAuthErrorMessage(error, fallback)` helper — tries
+`error.message` → `error.error_description` → `error.msg` in order, but **rejects any
+candidate that looks like raw JSON** (`/^[\{\[]/` on the trimmed string) rather than
+just falling back on falsy/empty values. This is the actual fix for the reported bug:
+`error.message` in the reproduced case is the non-empty string `"{}"`, so the old
+`error.message || fallback` pattern never reached the fallback at all — a length/
+truthiness check alone doesn't catch a garbage-but-truthy message. Both `doLogin()`
+and `doSignup()` now: log the full error via `JSON.stringify(err,
+Object.getOwnPropertyNames(err))` before doing anything else with it (nothing was
+logged before — this is why the `{}` went undiagnosed as long as it did), route the
+resolved message through the same category-detection branches as before (unchanged
+behavior for real, recognizable errors like "already registered" or "invalid login
+credentials"), and — new — wrap the whole Supabase call in `try/catch/finally` so a
+thrown network exception (not a returned `{error}`, an actual `fetch` failure) no
+longer leaves the button stuck on "Signing in…"/"Creating account…" forever; the
+`finally` block unconditionally restores button state.
+
+**Verified live** against the real reproduced bug from Batch 0 (same dev preview,
+real Supabase project): called `doSignup()` with a fresh throwaway address — result
+is now the generic message `"Account creation failed — please try again or contact
+wellness@keywellness.co.bw."` instead of `{}`, button correctly re-enabled
+("Create Account", not disabled), and the console now shows
+`doSignup failed: {"message":"{}","name":"AuthRetryableFetchError","status":500}` —
+the full error is finally visible for diagnosis. Regression-tested `doLogin()` with a
+deliberately wrong password against a nonexistent account: still correctly shows the
+specific field-level "Incorrect email or password" message (not the generic banner),
+confirming the existing category-detection branches weren't broken by routing through
+`resolveAuthErrorMessage` first.
+
+**Manual follow-up (carried over from Batch 0, restated here since it blocks real
+verification of this fix's actual production value)**: signup remains broken for
+every real user until someone checks Supabase dashboard → Authentication →
+Email/SMTP settings. This batch makes the failure legible instead of cryptic; it does
+not make signup work.
+
+---
+
+## Batch 4 — Booking confirmation links
+
+**No separate code change — already fixed by Batch 2.** Per BATCH-0-FINDINGS 0.3, the
+booking emails' only broken link was the internal "New booking request" email's
+"Open in admin" button (the client-facing "booking received"/"booking confirmed"
+emails have no links at all beyond the shared footer) — both are built from the same
+`kw-email.ts`/`send-booking-email/index.ts` pair Batch 2 already repointed at
+`KW_PORTAL_URL`. Nothing left to fix in code; this batch is the dedicated
+verification pass the checklist calls for.
+
+**Verified**: rendered both the `type:"confirmed"` (client) and `type:"new"`
+(internal/team) email bodies exactly as `send-booking-email/index.ts` builds them,
+via the same Node-native-TS `require('./kw-email.ts')` approach used in Batch 2, and
+extracted every `href`:
+- Client "confirmed" email: `https://mogomotsifrance-star.github.io/keywellness-portal`
+  (footer) + `mailto:wellness@keywellness.co.bw` (aside/help).
+- Internal "new booking" email: `https://mogomotsifrance-star.github.io/keywellness-portal/admin.html`
+  (button, appears twice — mso/non-mso conditional markup, both branches correct).
+
+Zero relative hrefs, zero literal `{{`/`${` leftovers, zero `mailto:`-adjacent false
+positives — every non-`mailto:` href is absolute `https://` and resolves to a real,
+live page (confirmed in Batch 0's `curl` pass: portal root and `/admin.html` both
+200).
+
+**Not yet done — requires a real Resend send, same "won't send real test emails
+without you present" rule as Batch 2**:
+- [ ] Real test booking on dev → open the received email → click every link → confirm
+  each lands on a live page (mechanically expected to pass, given the href audit
+  above, but not yet observed against a real inbox's rendered HTML).
+- [ ] Resend dashboard click-tracking setting — still unverifiable from code (Batch
+  0.3); if links appear rewritten in the real send despite the correct hrefs above,
+  this is where to look.
+
+---
+
+## Batch 5 — Opt-in state refresh (index.html)
+
+Rollback: `git revert` — pure frontend, no DB/RLS change (per BATCH-0-FINDINGS 0.4,
+the write path itself — `profiles` upsert via the existing `saveUser()` — already had
+working RLS; this batch fixes the caller's handling of that write's outcome, not the
+write itself).
+
+`saveUser()` now returns `true`/`false` (previously returned `undefined` on both
+success *and* failure — every other call site (`saveUser().catch(()=>{})`,
+`await saveUser();` with the value discarded) was already ignoring the return value,
+confirmed by grep across all 8 call sites, so this is additive and doesn't change
+existing behavior anywhere else).
+
+`saveRewardsOptIn()` rewritten per BATCH-0-FINDINGS 0.4's exact diagnosis: the
+optimistic flip to `state.user.leaderboard_opt_in` now gets **reverted** if
+`saveUser()` returns `false`, instead of staying flipped regardless of outcome. On
+success, no separate refetch call was added — `saveUser()` already sets `state.user`
+to the row Postgres just returned from `.upsert(...).select().single()`, which is the
+authoritative post-write state, not a re-assertion of the guess. The misleading
+"You're sharing your points with HR" success toast now **only fires when the write
+actually succeeded**; on failure, no second toast is added on top of `saveUser()`'s
+own `'⚠️ Could not save your profile...'` toast — a distinct opt-in-specific error
+string was considered (per the batch spec's example wording) but `showToast()`
+appends a new fixed-position element per call with no dismiss/stacking logic
+(confirmed by reading its implementation), so two toasts firing back-to-back would
+visually overlap at the same screen position rather than replace each other. Relying
+on the shared helper's existing, already-explicit error is enough to satisfy
+"no silent failures" without introducing that visual bug. The view always re-renders
+after either outcome (unchanged from before) — but now off the corrected `state.user`,
+so a failed save renders the true, pre-save state instead of the false "it worked"
+state.
+
+**Verified via a mock harness** (not a real authenticated session — signup is
+currently broken in production per Batch 0/3, so no way to reach the Badges page
+end-to-end as a real logged-in member in this environment): stubbed `window.saveUser`
+and `window.VIEWS` in the live page, drove `saveRewardsOptIn()` through both outcomes
+directly — success case: checkbox checked, stub resolves `true`, `state.user.leaderboard_opt_in`
+ends `true` (kept). Failure case (run second, starting from the `true` state the
+success case left behind): checkbox unchecked, stub resolves `false`,
+`state.user.leaderboard_opt_in` **stays `true`** — confirms the optimistic flip to
+`false` was correctly reverted rather than persisted. No console errors introduced by
+either run.
+
+**Not yet done**: a real end-to-end pass (check the box → Save → confirm the card
+re-renders opted-in without a manual refresh → hard refresh → confirm it persisted →
+force a write failure via devtools → confirm the inline/toast error and that the
+checkbox doesn't silently show "opted in" when it isn't) needs a real authenticated
+member session, blocked on the same signup-SMTP issue as Batch 3's remaining manual
+follow-up.
+
+---
+
+## Batch 6 — Admin appointments requested-time column (admin.html)
+
+Rollback: `git revert` — pure frontend rendering change, no SQL. Per
+BATCH-0-FINDINGS 0.5, `admin.html`'s main bookings fetch already `select('*')`s
+`requested_time` into `allBookings` — the Table view just never displayed it. Added
+one `<th>Requested Time</th>` next to `<th>Requested Date</th>` and a matching
+`<td class="mono">${escNar(b.requested_time||'—')}</td>` in the same row map,
+formatted as the existing 24-hour `HH:MM` string (no reformatting needed — matches
+the Calendar view's existing display of the same field). Used `escNar()` (this file's
+existing generic escaper, already used for the identical purpose in the Calendar
+view) rather than rendering the value raw, even though it only ever comes from a
+fixed `BK_TIMES` slot list today — consistent with the rest of this table, which
+escapes every other user/booking-derived cell the same way. `.table-wrap` already has
+`overflow-x:auto` (pre-existing), so the extra column degrades to horizontal scroll on
+narrow viewports rather than breaking layout — no new CSS needed.
+
+**Dependency flagged, not re-verified here**: BATCH-0-FINDINGS 0.5 noted
+`supabase_bookings_missing_columns.sql` (an existing untracked file in this repo)
+adds `requested_time` to the live `bookings` table, but whether it's actually been
+run against the shared project couldn't be confirmed from this environment. If it
+hasn't, this column will show "—" for every row (graceful, not broken) until it's
+run — worth a quick check before considering this batch fully live.
+
+**Verified**: real authenticated admin session isn't available in this environment
+(no admin credentials, and admin.html redirects unauthenticated visitors back to
+`index.html` before its script's functions become reachable via the same
+direct-navigation approach used for the signup tests above). Instead, replicated the
+exact two edited template-literal lines (date cell + new time cell, using this file's
+real `escNar`) against three constructed rows: a normal `"14:00"` value, a `null`
+value (renders `—`, not `"null"` or blank), and a `<script>` payload in
+`requested_time` (renders HTML-escaped, confirming the new cell doesn't introduce an
+XSS path). Also ran `new Function()` against the full extracted `<script>` block from
+`admin.html` post-edit — zero syntax errors, confirming the edit didn't break the
+template-literal nesting.
+
+**Not yet done**: a real click-through in an authenticated admin session against live
+data (no admin credentials in this environment), and confirming whether the
+`supabase_bookings_missing_columns.sql` dependency above has actually been applied.
+
+---
+
+# Batch 5 — Member view of HR-awarded rewards (index.html + new RPC)
+
+**Required a new RPC that wasn't anticipated by the original plan.**
+BATCH-0-FINDINGS 0.4.3 confirmed `reward_fulfilments` has zero RLS policies
+for `authenticated` — every existing read path (`org_reward_history()`) is
+employer-only, and the plan's assumption ("member reads own rows only —
+existing RLS; verify, don't assume") did not hold. Added
+`my_reward_fulfilments()` (`supabase_my_reward_fulfilments.sql`, `language
+sql security definer`, hard-scoped `where rf.user_id = auth.uid()` in the
+query itself, no parameters — a caller literally cannot ask for anyone
+else's rows). Rollback: `drop function if exists my_reward_fulfilments();`.
+This is not a new HR-facing surface — it mirrors the existing member-scoped
+security-definer pattern (`award_points()`); no HR view changed in this
+batch.
+
+**Frontend**: `renderRewardsProgressCard()` (`index.html`) gained a
+"Rewards received" section with a `.kw-skeleton` placeholder, filled in by
+a new `loadMyRewardFulfilments()` async call (fired from `VIEWS['badges']`
+right after the synchronous render — same render-then-fill-in-async
+pattern already used for `admin.html`'s org-overview banner). Newest first
+(RPC already orders `by rf.created_at desc`); friendly empty state
+("Nothing redeemed yet — keep earning!") instead of a blank block; explicit
+error message on RPC failure. `category` → label mapping
+(`REWARD_CATEGORY_LABELS`) covers all four fulfilment categories
+(`utilisation`/`learning`/`progress`/`overall`) — the data can always
+describe itself (per BATCH-0-FINDINGS 0.4.3, the schema already has what's
+needed), so no BUILD-NOTES flag was needed for an undescribable-award case.
+
+**Verified** with a mock harness — extracted `escHtml`/`fmtDate`/
+`loadMyRewardFulfilments` from the live page source and ran them with a
+*locally shadowed* `sb` mock (a direct `eval()` inside a wrapper function
+declaring its own `const sb`, since `index.html`'s own top-level `const sb`
+is a real Supabase client already active on the page and a `window.sb`
+reassignment doesn't shadow a lexical `const` — worth noting for future
+sessions testing this file the same way): populated state (2 rows, newest
+first, correct labels/dates), a `<script>` payload in the `note` field
+rendered HTML-escaped rather than executed, empty state, and error state
+all behave correctly. `new Function()` parse-check on the full extracted
+`<script>` block: no syntax errors. Grep for `improvement` in the new SQL
+file: zero matches.
+
+**Not yet done**: `supabase_my_reward_fulfilments.sql` has not been applied
+to the live Supabase project (same "no DB credentials in this environment"
+constraint as every batch above — see Batch 1's "Execution path" note);
+real two-account cross-member isolation test needs to happen once it's
+applied.
+
+---
+
+# Batch 4 — Report download via print (employer.html + admin.html)
+
+Print-to-PDF via the existing browser print dialog (`window.print()`), no
+server-side PDF generation, per the locked design decision.
+
+**Chart print-reliability handled proactively, not gambled on.** BATCH-0-FINDINGS
+flagged Chart.js `<canvas>` print rendering as "not yet verified" and this
+environment has no real print-preview tool to test it visually. Rather than
+ship the button and hope, added `KWReportCharts.printReport(title)` (new
+shared function in `kw-report-charts.js`, alongside the existing
+`registry` of canvasId → Chart instance): on call, every registered chart
+canvas is swapped for a `<img>` snapshot (`canvas.toDataURL()`), printed,
+then swapped back on `afterprint`. `document.title` is set to
+`KeyWellness-Report-<org>-<period>` for the duration (browser's suggested
+PDF filename) and restored afterward. Both `employer.html`'s
+`downloadHrReportPdf()` and `admin.html`'s `downloadAdminReportPdf()` call
+this one shared function — verified end-to-end with a real Chart.js chart
+rendered into a real canvas, calling `printReport()` with `window.print`
+stubbed: confirmed the title swap, image-snapshot insertion, canvas hiding,
+and full restore-on-`afterprint` all fire correctly, in that order.
+
+**Button is structurally published-only, not just conditionally hidden.**
+`employer.html`'s Reports tab already queries `.eq('status','published')`
+(nothing else is reachable there), so no draft-check was needed on that
+side. `admin.html`'s builder serves both drafts and published reports —
+the button only renders when `readOnly` (`row.status === 'published'`),
+matching the existing draft/published toggle already in
+`renderReportBuilder()`.
+
+**`admin.html` had no `@media print` block at all** (confirmed by
+BATCH-0-FINDINGS) — added one scoped to hide `#sidebar`/`.btn-outline`
+(which also hides the Download button itself during the actual print,
+same treatment `employer.html` already gives its own chrome) and to apply
+`break-inside:avoid` to the report card/chart boxes. Deliberately did
+**not** rebuild admin's read-only report view into `employer.html`'s
+full cover-page/appendix `report-doc` layout — that would be a much larger
+change than "add a print stylesheet"; admin's existing read-only builder
+view (chart boxes + disabled narrative fields, no cover/appendix) is what
+gets printed there, matching what the spec asked for literally.
+
+**Page numbers**: added a `@page { @bottom-center { content: counter(page)
+"/" counter(pages) } }` rule in both files, per the spec's own "if
+achievable with CSS counters" hedge — flagging honestly that `@page`
+margin-box content has inconsistent/no support in mainstream browsers
+(notably Chrome); it's a harmless no-op where unsupported, kept rather than
+omitted.
+
+**Verified**: `new Function()` parse-check on all three modified files
+(`employer.html`, `admin.html`, `kw-report-charts.js`) confirmed no syntax
+errors from the edits; the `printReport()` mock test above exercised the
+real, unmodified rendering code, not a stub.
+
+**Not yet done**: an actual browser print-preview/print-to-PDF pass on a
+real published report (no print-preview tool available in this
+environment, same gap noted in the prior workstream's Batch 4 notes above)
+— this remains the one genuinely unverified piece and should be checked
+manually before this ships to a client.
+
+---
+
+# Batch 3 — Admin confirmed-bookings calendar (admin.html)
+
+Custom month grid, view-only, no external calendar library — placed as a
+**view toggle inside the existing Appointments tab** ("Table" / "Calendar"
+buttons in the card header), not a new top-level sidebar tab and not a
+replacement of the existing table, per the spec's "adjacent to the
+appointments table, not replacing it."
+
+- **Month-scoped fetch**: `loadCalMonth()` queries `bookings` directly with
+  `.eq('status','confirmed').gte('requested_date', monthStart).lte('requested_date', monthEnd)`
+  on every month navigation — does not filter the existing `allBookings` full
+  cache (that cache stays dedicated to the Table view/search, per the
+  existing pattern; BATCH-0-FINDINGS explicitly flagged these as needing to
+  stay separate).
+- **`requested_time` is actually 24-hour `"HH:MM"`** (confirmed via
+  `index.html`'s `BK_TIMES` constant, e.g. `'08:00'`, `'14:00'`) — corrects
+  BATCH-0-FINDINGS 0.2.2's guess of a `"10:00 AM"`-style label. Lexical sort
+  (`.order('requested_time')`) is therefore already correct with no parsing
+  needed.
+- **No `escHtml` helper existed in `admin.html`** (unlike `employer.html`) —
+  reused the existing `escNar()` function verbatim (defined further down the
+  file for narrative fields, but a generic `&`/`<`/`>` escaper; already used
+  inside `value="..."` attributes elsewhere in this file, so matching that
+  established convention rather than introducing a second, slightly-more-
+  correct escaping helper). Confirmed via a mock test that a `<script>` tag
+  in a booking's `user_name` renders escaped, not executed.
+- **Day cell** shows up to 3 compact `time + service` entries, `+N more`
+  beyond that; clicking either opens the day-detail modal (new
+  `calDayModal`, following this file's existing static-modal-shell +
+  `classList.add('open')` pattern) listing every confirmed booking that day
+  with time, service, client name, session type, and delivery mode (no
+  "counsellor" field — confirmed absent from the schema in
+  BATCH-0-FINDINGS 0.2.2).
+- **Verified** with a mock harness: extracted `renderCalGrid`/
+  `openCalDayModal`/`calDateKey`/`calMonthLabel`/`escNar` from the live page
+  source via `window.eval`, drove them against constructed bookings —
+  correct leading-blank cell count for the month's start weekday (verified
+  July 2026 = 3 blanks + 31 days = 34 cells), correct 3-shown +
+  "+1 more" overflow, correct empty-month message, and confirmed a `<script>`
+  payload in `user_name` renders HTML-escaped, not executed. Also ran
+  `new Function(mainScriptSource)` against the full extracted `<script>`
+  block to confirm no template-literal nesting/syntax errors from the
+  toggle-view refactor of `renderBookings()`.
+- **Not yet done**: a real click-through in an authenticated admin session
+  (no admin credentials in this environment — same constraint as every
+  prior batch); tablet-width visual check beyond the CSS media query added.
+
+---
+
+# Batch 2 — HR dashboard Financial Stress card (employer.html)
+
+Consumes `org_stress_summary()` (Batch 1, below). Not yet applied to Supabase
+— frontend is ready but will show the new card's explicit error state until
+`supabase_org_stress_summary.sql` is run in the SQL Editor.
+
+**Replaced the existing `renderFinancialStress()` card rather than adding a
+second one, per Tshenolo's explicit choice.** `employer.html` already had a
+live "Financial Stress" card fed by `org_financial_indicators()`'s `stress`
+section — per BUILD-NOTES above, that RPC has `stress_logs.level`'s scale
+backwards (mislabels calm members as high-stress) and shows bands only, no
+causes. Asked whether to replace it, add a second card, or replace-and-also-
+patch the older RPC; chose **replace** (not the deeper RPC patch) — the old
+RPC's bug is out of scope for this batch and flagged separately. `fin.stress`
+from `org_financial_indicators()` is now unused in `employer.html`; the RPC
+itself is untouched (still called for `dti`/`retirement`, which
+`renderDebtHealth()`/`renderRetirementReadiness()` still consume).
+
+**Error vs. insufficient_cohort kept distinguishable**, same reasoning as
+admin.html's `currentReportDataError` (see the "ambiguous column n" incident
+above) — `init()` now stores `window._stressError` separately from
+`window._stressData`, and `renderStressCard()` checks the error branch first.
+
+**Suppression shape**: `_suppress_count`/`_suppress_rate` return
+`{value, suppressed}` (confirmed by reading their actual definitions in
+`supabase_org_report_data.sql`/`supabase_suppress_count_bigint_fix.sql`/
+`supabase_org_report_data_v2.sql`) — not a `"<smallest reportable"` string as
+the batch spec's wording suggested. Rendering reads `.value`/`.suppressed`
+directly; a suppressed band shows the existing 🔒 lock-icon segment
+(`finBandsHtml()`, reused verbatim from the Debt Health/Retirement cards).
+
+**High-stress action-strip threshold treats a suppressed `high` band as 0**,
+matching `renderDebtHealth()`'s exact existing precedent ("the true count
+never reaches the client, so the threshold check can only work off what was
+actually disclosed") — in a small-cohort edge case this could under-trigger
+the "Request wellbeing outreach" prompt, but that's the established,
+deliberate tradeoff already made elsewhere in this file, not a new gap.
+
+**Verified** with a temporary mock harness (fetched the live page source,
+`window.eval`'d only `renderStressCard()` + its direct dependencies —
+`escHtml`/`finBandsHtml`/`finLegendHtml`/`finSuppressedNote` — with
+constructed mock data, never touched the actual DOM/init() flow): full data
+(low/moderate bands + one suppressed high band + 3 causes), `insufficient_cohort`,
+and error states all render distinct, correct output; grep for `improvement`
+in the new code: zero matches (one pre-existing unrelated hit elsewhere in
+the file, already flagged above).
+
+**Not yet done**: real end-to-end test against a live org once
+`supabase_org_stress_summary.sql` is applied (mobile layout check also
+pending a real render, though the card reuses the existing responsive
+`.fin-bands`/`.fin-legend` layout unchanged).
+
+---
+
+# Batch 1 — org_stress_summary() RPC — rollback + design notes
+
+**Rollback (recorded before execution, per process):**
+```sql
+drop function if exists org_stress_summary(int);
+```
+File: `supabase_org_stress_summary.sql`. Pure addition — one new function, nothing existing altered.
+
+**Design decisions:**
+- Source table is `stress_logs` (fortnightly Check-in flow), not the `financial_stress_tracker`
+  tool's `tool_data` blob — see "headline finding" in `BATCH-0-FINDINGS.md` for why two stress
+  sources exist and why they're on opposite scales.
+- **Band thresholds correct a scale-direction bug found in `org_financial_indicators()`.**
+  `stress_logs.level` is 1–10 where **lower = more stressed** ("1 = Barely coping" ... "10 =
+  Completely at ease" — see `index.html`'s `stressLabel` array). `org_financial_indicators()`
+  (already shipped) assumed the opposite direction and mislabels calm members as "high stress".
+  `org_stress_summary()` uses the same numeric cut points (≤3 / 4–6 / ≥7) but the corrected
+  label mapping: **level ≤3 = High stress, 4–6 = Moderate, ≥7 = Low stress.** This does NOT fix
+  `org_financial_indicators()` itself — that's a separate, pre-existing bug, flagged but out of
+  scope for this batch. Exact cutoffs should still be reviewed with whoever owns the check-in
+  instrument (see follow-up list at the bottom of this file).
+- Cohort guard: <5 distinct members with a check-in in the window → `{"insufficient_cohort":
+  true}` only, matching `org_report_data()`'s exact convention.
+- Suppression: reuses `_suppress_count(bigint)` and `_suppress_rate(int,int)` verbatim from
+  `supabase_org_report_data_v2.sql` / `supabase_suppress_count_bigint_fix.sql` — no new
+  suppression logic invented.
+- Top causes: assumes `stress_logs.tags` is a Postgres `text[]` (matches how `index.html` inserts
+  a plain JS array via supabase-js). **Verify this before running** — if it's actually `jsonb`,
+  `unnest(sl.tags)` must be swapped for `jsonb_array_elements_text(sl.tags)`. Verification query
+  included at the bottom of `supabase_org_stress_summary.sql`.
+- Causes are filtered to `count >= 3` first, then ranked and the top 3 taken — so "fewer than 3
+  causes" happens by a cause simply not clearing the suppression bar, never by ranking then
+  blanking a slot.
+
+---
+
+# Follow-up: a SECOND bug behind the same symptom — ambiguous column "n"
+
+After applying `supabase_suppress_count_bigint_fix.sql`, the bigint error
+was gone, but `admin.html` still showed "This organisation has fewer than
+5 enrolled members" for `Test Co` (28 enrolled) — the legitimate
+insufficient-cohort message, not the new error banner, so at first glance
+this looked like it might be a real small-cohort edge case. Calling
+`org_report_data()` directly confirmed it was not:
+
+```
+{"code":"42702","message":"column reference \"n\" is ambiguous",
+ "details":"It could refer to either a PL/pgSQL variable or a table column.","hint":null}
+```
+
+**Root cause**: `_org_report_period_data()` declares a plpgsql variable
+`n int` (the org headcount, used throughout). The `demographics_cross`
+section's CTE chain (`session_counts`, `counts`, `full_grid`, `cell_flags`,
+`row_stats`, `col_stats`) used `count(*) as n` as a column alias in several
+places — Postgres raises "ambiguous" whenever a bare identifier inside a
+plpgsql function's embedded SQL could refer to either the outer plpgsql
+variable or a query column of the same name. This is the exact class of
+bug this file's own "general lesson" (from the Rewards-reshape build,
+further below) already warned about, and I didn't catch it when writing
+that CTE chain in Batch 2 of the HR-audit workstream.
+
+**Fix**: renamed the colliding alias from `n` to `cnt` throughout the
+`demographics_cross` block in `supabase_org_report_data_v2.sql` (in place
+— same file, same `CREATE OR REPLACE`, no new file needed). Swept the
+rest of the function for any other bare `n` column aliases — none found;
+this was the only collision.
+
+**Why the UI showed the wrong message again**: this is the exact same
+"real error repainted as insufficient-cohort" gap the bigint fix's
+`admin.html` change was supposed to close — and it DID work correctly
+this time (no error was silently swallowed into a misleading state)...
+except `renderReportBuilder()`'s two checks are ordered
+`currentReportDataError` first, `data.insufficient_cohort` second, and
+that ordering is correct — the actual reason the wrong message still
+showed is that `data` legitimately doesn't exist when there's an error
+(`currentReportData = rpcData || null`), so it should have hit the error
+branch. Re-confirmed by testing again after this second fix that the
+error-banner path does trigger correctly when a real RPC error occurs —
+the visible "fewer than 5 members" Tshenolo saw was from the SQL error
+existing *before* `admin.html`'s fix had been deployed/loaded in that
+particular page load. Noting this only so a future session doesn't assume
+the error-surfacing fix itself was broken.
+
+**Manual follow-up still needed**: re-run `supabase_org_report_data_v2.sql`
+(now fixed) and reopen the Q3 2026 Test Co draft to confirm real data
+loads end-to-end, then retest `publish_org_report()`.
+
+---
+
+# CRITICAL: org_report_data() has never worked against real data — `_suppress_count(bigint)` type mismatch
+
+Discovered live, in production, while helping Tshenolo verify the
+`org_overview()` fix (below) and reproduce a separate, unrelated
+"row-level security policy" error he'd hit creating a report in
+`admin.html`. That RLS error did not reproduce (created two real test
+draft reports against `Test Co` live, both inserts succeeded — almost
+certainly a transient PostgREST schema-cache lag right after the SQL was
+first applied, which self-resolves). But opening either draft's builder
+then failed with:
+
+```
+{"code":"42883","message":"function _suppress_count(bigint) does not exist",
+ "hint":"No function matches the given name and argument types. You might
+ need to add explicit type casts."}
+```
+
+**Root cause**: `_suppress_count(v int)` (defined in the very first
+`supabase_org_report_data.sql`, never touched by the Batch 2 v2 extension)
+is called throughout the RPC with raw `count(*)`/`count(distinct ...)`
+subquery results — Postgres's `count()` always returns `bigint`, and
+Postgres has no implicit cast from `bigint` to `int` for direct function-
+argument resolution (only the reverse, `int`→`bigint`, is implicit). This
+means **every call to `org_report_data()`, for every org and every
+period, has always failed** since the very first version of this RPC —
+not a regression introduced by the HR-audit workstream's Batch 2
+extension. It was never caught because every prior verification pass in
+this file used mocked JS data in the browser (which never touches
+Postgres's type system) — this is the first time the RPC was actually
+invoked against live data end-to-end.
+
+**Compounding "no silent failures" gap**: `admin.html`'s
+`openReportBuilder()` catches the RPC error and only `console.error`s it;
+`currentReportData` becomes `null`, and `renderReportBuilder()`'s
+`if (!data || data.insufficient_cohort)` branch then shows "This
+organisation has fewer than 5 enrolled members" — a real error was
+silently repainted as a misleading, unrelated legitimate-suppression
+message. Fixed alongside the type bug so a real RPC failure is visibly
+distinguishable from an actual small-cohort suppression.
+
+**Fix** (file: `supabase_suppress_count_bigint_fix.sql`): add a `bigint`
+overload of `_suppress_count` rather than touching the ~20 call sites
+across `supabase_org_report_data_v2.sql` — Postgres resolves to whichever
+overload matches the argument's actual type, so both `int` and `bigint`
+callers keep working with no other SQL changes needed. Rollback:
+`drop function if exists _suppress_count(bigint);` (the original
+`_suppress_count(int)` overload is untouched either way).
+
+**This also means `publish_org_report()` has never worked** — it calls
+`org_report_data()` internally and would hit the identical error, so no
+report has ever been publishable against real data either. Once this fix
+is applied, the publish flow needs a real end-to-end retest (not just the
+draft-builder retest done here).
+
+**Side effect of diagnosis — disclosed and remediated**: two real draft
+`org_reports` rows were created against the live `Test Co` org while
+reproducing this (Q1 2026, then Q3 2026), both with Tshenolo's explicit
+go-ahead. The Q1 2026 one was deleted immediately after. The Q3 2026 one
+was left in place (status: draft, org_id for Test Co) since it has real
+value as the report Tshenolo was actually trying to build — needs a
+refresh (reopen the draft) once the SQL fix below is applied, since its
+data preview never successfully loaded.
+
+---
+
 # org_overview() suppression fix — remediating audit findings #1 and #2
 
 Fixes both related findings from the "HR Reporting Audit" section below:
@@ -1662,3 +2328,330 @@ template; flag back if so.
   since the earlier "Replace FormSubmit..." commit); worth a one-line fix
   next time that file is touched. Not changed here since it's the project's
   instruction file, not build output.
+
+---
+
+# Learning Pathways — Video LMS, Quizzes & Prolearn Certificates
+
+Full discovery in `BATCH-0-LMS-FINDINGS.md`. Two decisions confirmed with
+Tshenolo before proceeding past Batch 0:
+
+1. **`quiz_passed` points stay at 50** — already seeded in `points_catalog`
+   (category `learning`) in anticipation of this exact feature, never
+   emitted by any code yet. Not bumped to the brief's 75.
+2. **Full replacement of the existing 8-module `VIDEOS` array** (YouTube/
+   Vimeo embeds, 2 live: `welcome`, `budget`) — no archive/legacy view kept.
+
+Rollback statements are recorded in `migrations/rollback-notes.md`, one
+entry per SQL file, before that file's own section below is written —
+same standing rule as the rest of this document.
+
+## Batch 1 — `Videos` storage bucket & path conventions
+
+SQL: `supabase_lms_storage.sql`. **Revised after first application**:
+Tshenolo had already created the bucket by hand via the dashboard, named
+`Videos` (capital V — Supabase bucket ids are case-sensitive), and uploaded
+all 15 Pathway-1 videos + a welcome/emergency-fund file directly into its
+root with descriptive filenames (e.g. `Module 1_Introduction to...mp4`),
+**not** the `lesson-01.mp4`/`pathway-1/` subfolder convention originally
+planned below. Decision: keep the real uploaded filenames as-is and point
+`content_items.video_path` (Batch 2) at them directly rather than asking
+for a re-upload/rename. The revised SQL file cleans up the stray empty
+lowercase `videos` bucket the first version created and points the public-
+read policy at the real `Videos` bucket instead. No insert/update/delete
+policy for `anon`/`authenticated` — only `service_role` (bypasses RLS by
+default) can write.
+
+**Original path convention (superseded by the real uploaded names above —
+kept here for the welcome video and any future pathway, where there's no
+existing upload to match):**
+```
+Videos/welcome.mp4
+Videos/pathway-1/lesson-01.mp4  …  Videos/pathway-1/lesson-15.mp4
+Videos/posters/lesson-01.webp   …  (16:9, ~40KB target)
+```
+
+**Manual step (outside Claude Code) — encoding standard for every upload:**
+```
+ffmpeg -i in.mp4 -c:v libx264 -profile:v main -crf 23 -maxrate 1500k \
+  -bufsize 3000k -vf "scale=-2:720" -c:a aac -b:a 96k -movflags +faststart out.mp4
+```
+Poster:
+```
+ffmpeg -i out.mp4 -ss 00:00:02 -frames:v 1 -vf "scale=640:-2" poster.png
+```
+then convert `poster.png` to WebP. Upload via the Supabase dashboard Storage
+UI or a service-role script — never via the anon/authenticated client (RLS
+blocks it by design, see `supabase_lms_storage.sql` verification query 3).
+**No posters uploaded yet** — Pathway 1's chapter-shelf cards (Batch 4) will
+need a poster image per lesson; flagged as a Batch 5 follow-up if not
+supplied before frontend work reaches that screen.
+
+**Status:** applied successfully (revised, DELETE-free version). Confirmed
+working via a live anon-key storage listing — all 15 Pathway-1 videos plus
+one stray `Starting your emergency fund_video_4k.mp4` file are readable.
+That stray file doesn't match any of the 15 Pathway-1 titles (Module 13
+already covers "Emergency Funds" separately) — looks like leftover debris
+from the old `VIDEOS` array system, not referenced by any Batch 2 seed row.
+Left in the bucket, harmless, ignorable.
+
+## Batch 2 — pathways/content_items/quizzes/quiz_questions/quiz_attempts/certificates schema + seeds
+
+SQL: `supabase_lms_schema.sql`. `content_items`/`content_progress` created
+fresh (Batch 0 confirmed they didn't pre-exist — brief's ALTER-based plan
+corrected to CREATE, see BATCH-0-LMS-FINDINGS.md). All 6 tables + the
+`quiz_questions_public` view, RLS policies (no HR/employer policy on any of
+them), 3 pathways, 15 Pathway-1 content_items (real uploaded filenames from
+Batch 1), 1 welcome content_item (placeholder path, pending upload), and
+quiz 1's 8 questions seeded exactly per the brief.
+
+`quiz_questions_public` deliberately omits `security_invoker` (defaults to
+false/definer semantics) so it can read past the base table's total RLS
+lockout while only ever exposing 6 whitelisted columns — the opposite
+pattern from `my_points` (which explicitly sets `security_invoker = true`
+so per-user RLS *does* apply). Two different problems, two different view
+semantics, both already used correctly elsewhere in this codebase.
+
+**Known gaps carried into later batches:** `duration_seconds` and
+`poster_path` are null for every Pathway-1 lesson (no durations measured,
+no posters uploaded yet — flagged in Batch 1 above) — Batch 4's chapter-
+shelf cards and duration chips will need a fallback (e.g. read duration
+from the `<video>` element's `loadedmetadata` event client-side) until
+these are backfilled.
+
+**Status:** applied successfully on the second attempt. First attempt failed
+with `relation "your" does not exist` (`42P01`) — traced via the Supabase
+log explorer to the Studio SQL Editor's own auto-append behavior: after
+detecting `CREATE TABLE` statements, it appends `-- Added by Supabase:
+enable Row Level Security on newly created tables` + an `ALTER TABLE ...
+ENABLE ROW LEVEL SECURITY;` suggestion to the query text before running —
+and its table-name extraction mis-fired, injecting the literal word `your`.
+Not a defect in this file (every table already has an explicit `alter
+table ... enable row level security` statement of its own); re-running
+without accepting/appending that suggestion succeeded cleanly. Verified
+live via REST: `pathways`/`content_items`/`quiz_questions` correctly return
+empty for the anon role (RLS blocks non-authenticated reads exactly as
+designed), `quiz_questions_public` returns all 8 questions with sections
+A,A,A,B,C,C,D,E matching the brief, no `correct_index` in any row.
+
+**One tightening carried into Batch 3's file**: `quiz_questions_public` is
+also readable by the `anon` role, not just `authenticated` — this project's
+default schema privileges appear to grant `anon` SELECT on new objects
+until RLS narrows it, and since a view has no RLS of its own (it runs with
+the *view owner's* privileges against the base table, by design, so
+`correct_index` stays hidden either way), `anon` slips through. Not a
+security issue (never exposes answers or per-member data), but tightened to
+authenticated-only for consistency with every other new table's policy.
+
+## Batch 3 — complete_video() / submit_quiz() / issue_certificate() RPCs
+
+SQL: `supabase_lms_rpcs.sql`. All three SECURITY DEFINER, reusing existing
+infrastructure instead of adding new plumbing: `award_points()` (already
+seeded `video_watched`=25pts and `quiz_passed`=50pts, category=learning —
+no catalog changes needed) and `is_admin()` (existing helper from
+`supabase_multitenancy.sql`, checks the `admins` table by JWT email — reused
+directly rather than re-implementing an admin lookup per RPC).
+
+**Admin handling — a judgment call, flagging it explicitly**: the brief's
+Batch 3 §1 says "Reject if caller is an admin account (no points events for
+admins)." Implemented as a hard reject (raises an exception, blocks the
+call entirely) in `complete_video()` and `submit_quiz()`, not just silent
+point-suppression — read literally, and consistent with how this app
+already treats admin accounts as staff-only (never members). Consequence:
+**admin accounts cannot exercise the pathway/quiz flow at all, including
+for QA** — testing the member-facing loop end-to-end needs a real
+(non-admin) test member account. `issue_certificate()` has no separate
+admin check; it's unreachable for admins by construction (requires a prior
+passing `quiz_attempts` row, which `submit_quiz()` already refuses to
+create for them). If this reading is wrong and admins should be able to
+click through the flow (just without earning points), this is a one-line
+change per function (swap the `raise exception` for skipping only the
+`perform award_points(...)` call) — flagging for Tshenolo to confirm before
+Batch 4 QA depends on it.
+
+`submit_quiz()`'s `p_answers` shape: `[{"question_id":"<uuid>",
+"selected_index":0-3}, ...]` — matched by question id, not array position,
+so the frontend doesn't need to preserve fetch order. Unanswered/unmatched
+questions grade as incorrect rather than erroring, so a partial submission
+still returns a real score.
+
+**Status:** applied successfully. Verified via REST: all three RPCs exist
+and correctly reject unauthenticated calls (`P0001 "not authenticated"`),
+and the `quiz_questions_public` anon-revoke from Batch 2's addendum is
+confirmed live (401 for anon now, was 200 before).
+
+**Admin-access decision confirmed by Tshenolo**: hard reject stands as
+written — admin accounts cannot exercise `complete_video()`/`submit_quiz()`
+at all. QA of the pathway/quiz/certificate loop requires a real
+(non-admin) member test account, not the admin login.
+
+## Batch 4 — Frontend rebuild (index.html, css/kw-pathways.css, js/certificate-template.js)
+
+Design reference: `docs/design/kw-pathways-preview-v2.html` (committed by
+Tshenolo mid-batch — see the "Design reference" decision below). Rebuilt
+Learn → Videos entirely around the new Supabase-backed pathway system;
+Learn → Articles is untouched.
+
+**Design adaptation, not a pixel copy**: the preview uses its own
+standalone palette/fonts (Inter + Bricolage Grotesque + hardcoded hex) for
+fast prototyping. Production uses this app's real token system
+(`css/kw-theme.css`'s `--kw-*` custom properties) and font stack (Nunito +
+DM Mono, already loaded) instead — same layout, component structure, and
+interaction logic, reskinned onto the live design system so it doesn't
+fork the app's actual brand tokens. All new classes are `.lp-`-prefixed
+(Learning Pathways) to avoid colliding with the existing `.pw-*` classes,
+which already mean "password toggle" in this codebase, not "pathway".
+
+**What's live:**
+- `state.lp` namespace + `loadPathwaysData()` (lazy-loaded on first Learn →
+  Videos visit, matches the old `loadVideoProgress()` lazy-load pattern) —
+  fetches `pathways`/`content_items`/`quizzes`/`quiz_attempts`/`certificates`
+  in parallel, every failure surfaces a toast (`showToast`) and logs to
+  console, never fails silently.
+- `state.videoProgress` is now populated from `content_progress` (via
+  `loadBadgeData()`), not `tool_data.video_progress` — and is the *same
+  array reference* as `state.lp.progress`, so a push from the Learning
+  Pathways player and a read from the Confident Learner badge system never
+  drift out of sync. `state.videoTotal` (live `content_items` count)
+  replaces the old hardcoded `VIDEOS.length` in the PART 6 learning-%
+  calculation.
+- Landing (continue-learning hero + 3 pathway cards + welcome strip),
+  pathway detail (chapter shelves grouped by `section_label`, grid desktop
+  / horizontal snap-scroll mobile), video player (real `<video controls
+  preload="metadata">` streaming from the `Videos` bucket, `ended` +
+  ≥90%-`timeupdate` fallback both guarded by a single `_lpFired` flag so
+  `complete_video()` never double-fires), up-next 5-second countdown
+  overlay, quiz (intro w/ certificate-name field → one-question-at-a-time →
+  result w/ per-question ✓/✗, no correct answers ever rendered), celebration
+  (confetti, `prefers-reduced-motion` respected), certificate claim →
+  `issue_certificate()` → SVG render → PNG download / print.
+- Poster art: real `poster_path` image if set (none are yet — Batch 1
+  flag), else a templated SVG gradient card using live `--kw-green*`/
+  `--kw-yellow` tokens (so it themes correctly, unlike a flat hardcoded
+  hex) with a per-lesson emoji icon lookup (`LP_ICONS`, sort_order 1–15).
+- Retired completely: `VIDEOS` array, `loadVideoProgress()`/
+  `saveVideoProgress()`, `markVideoComplete()`, `_ensureYTApi()`,
+  `_attachVideoPlayers()`, the dead `window.markVideoWatched`/`kw_watched`
+  honour-system code. **Kept**: `_ensureVimeoApi()` — still used by the
+  *unrelated* onboarding welcome-modal player (`showWelcomeVideo()`,
+  a one-time signup-flow video gate, not part of Learn → Videos at all;
+  confirmed by tracing every call site before removing anything nearby).
+
+**Verification performed** (no Docker/real login available in this
+environment — see below for what still needs a human pass): started the
+static-file preview server, drove the app via `preview_eval` with
+simulated `state.lp` data shaped exactly like the real Batch 2 schema
+(since real login wasn't available this session — Tshenolo will do the
+logged-in pass). Confirmed: all six views (landing/pathway/quiz-intro/
+quiz/quiz-result/celebrate) render through the *real* `VIEWS['learn']`
+router with zero console errors; `KWCertificate.svgMarkup()` produces
+valid SVG containing the supplied name; the player builds a correctly
+URL-encoded Storage URL that resolves live (`curl -I` → `200 video/mp4`,
+confirmed against a real uploaded filename with spaces); quiz answer
+picking/nav/button-disable-until-answered all work; mobile shelf
+scroll-snap CSS (`display:flex;overflow-x:auto`) applies under the
+`max-width:640px` breakpoint; the "unlocks next pathway" celebration line
+renders correctly for both an active and a not-yet-active next pathway.
+
+**NOT verified in this session (needs Tshenolo, real login)**: the actual
+RPC round-trip (`complete_video`/`submit_quiz`/`issue_certificate` against
+real auth), sequence-bypass rejection end-to-end through the UI, the full
+watch → auto-advance → quiz fail → retake → pass → certificate PNG
+download loop, and visual screenshot comparison against the design
+preview (the preview tool's screenshot capture timed out consistently in
+this environment, on the plain login screen too, before any Learning
+Pathways code ran — an environment/tool issue, not a page issue;
+`preview_snapshot`/`preview_eval` were used instead and are consistent
+with correct rendering, but a human visual pass is still worth doing).
+
+**Known follow-ups, not blockers:**
+- No poster images uploaded yet (Batch 1) — SVG gradient fallback covers
+  this today; swap in real WebP posters via `content_items.poster_path`
+  whenever they're ready, no code change needed.
+- `duration_seconds` is null for every lesson — no duration chip is shown
+  anywhere yet (the brief's "duration chips" were dropped from this build
+  since there's no data to show); add back once durations are measured
+  and backfilled.
+- The welcome video's `content_items.video_path` is still the Batch 2
+  placeholder (`'welcome.mp4'`) — the real file hasn't been uploaded (Batch
+  0/1 finding). Update that one row's `video_path` via the SQL Editor once
+  it's live in the `Videos` bucket; nothing else needs to change.
+- Certificate template uses placeholder navy/orange/gold values and
+  `<image>` tags pointing at `assets/img/prolearn-logo.png` /
+  `assets/img/prolearn-signature.png` — neither asset nor the referenced
+  `prolearn-certificate-preview.html` were available this session (flagged
+  in BATCH-0-LMS-FINDINGS.md and again here). Certificate will render with
+  broken image icons in place of the logo/signature until those two PNGs
+  are added to `assets/img/`.
+
+## Batch 5 — Wrap-up flags
+
+Manual follow-ups only; no code/SQL in this section.
+
+1. **Video/poster uploads — Pathway 1 is mostly done, two pieces remain.**
+   All 15 Pathway-1 lesson videos are already uploaded to the `Videos`
+   bucket (done by Tshenolo mid-build, real filenames like `Module
+   1_Introduction to Financial Literacy_video.mp4`, 20–43MB each). Still
+   needed to fully go live: (a) the **welcome video** — not uploaded at
+   all yet, `content_items` has a placeholder path (`welcome.mp4`) that
+   will 404 until the real file is uploaded and that one row's
+   `video_path` is updated to match; (b) **posters** — none uploaded for
+   any of the 15 lessons; the app falls back to a generated SVG gradient
+   card today, which works but isn't the real WebP artwork. Encoding
+   standard for both is documented in Batch 1 above.
+2. **Pathway 2 — titles pending from a colleague, per the original brief.**
+   Seed its `content_items` rows + a second quiz using the exact same
+   pattern as `supabase_lms_schema.sql`'s Pathway 1 section once titles
+   arrive, then flip `pathways.status` from `'locked'` to `'active'` for
+   `id=2` — only then does it become reachable in the UI (the
+   `complete_video()`/`submit_quiz()` reachability logic already checks
+   "previous pathway's quiz passed" generically, so no RPC changes are
+   needed, just data).
+3. **Point values — resolved for Pathway 1, but the threshold math behind
+   them is a real, already-confirmed problem, not a hypothetical.**
+   `quiz_passed` stays at the pre-existing 50 points (Tshenolo's call in
+   Batch 0, not the brief's 75 — see BATCH-0-LMS-FINDINGS.md). But
+   `reward_thresholds` already has `learning.returning_points = 150`,
+   seeded before this feature existed, with its own code comment flagging
+   that it "MUST be reviewed each season against new content published."
+   Pathway 1 alone now injects up to `15×25 + 50 = 425` Learning points
+   per member — **2.8× the current returning-member threshold**, confirmed
+   directly (not estimated) once real completions start flowing through
+   `points_events`. This needs a staff decision (raise the threshold, or
+   accept that returning members will clear it almost immediately) before
+   or shortly after go-live — recommend raising `reward_thresholds` via
+   the SQL Editor (`update reward_thresholds set returning_points = ...
+   where category = 'learning'`) rather than leaving it stale.
+4. **Prolearn authorisation — now blocking two things, not one.** The
+   brief's original ask (written intra-group authorisation covering
+   digital issuance of the "Certificate of Completion," explicitly
+   non-BQA-registrable wording) still stands. In addition, this session
+   could not obtain the actual `prolearn-certificate-preview.html`
+   reference or the `prolearn-logo.png`/`prolearn-signature.png` image
+   assets — flagged twice already (Batch 0, Batch 4) — the certificate is
+   live in code but will show broken image placeholders for the logo and
+   signature until those two files are dropped into `assets/img/`. Same
+   authorisation conversation should settle both the wording and the
+   asset hand-off at once.
+5. **Privacy notice** — update employee-facing copy to disclose that the
+   portal now stores a member-entered certificate name and quiz attempt
+   history, visible only to the member. Confirmed unchanged/still true:
+   this data never reaches any HR surface (see point 7).
+6. **Ops — Supabase Storage egress.** With real files now uploaded (15
+   videos, 20–43MB each, ~380MB total for Pathway 1 alone before Pathway
+   2/3 or posters), check the Storage egress figure in the Supabase
+   dashboard after the first month of real member traffic. Escape hatch
+   if it trends over the plan's quota: move the `Videos` bucket's contents
+   to Cloudflare R2 — a URL swap in `LP_VIDEOS_BASE` (index.html) and the
+   `content_items.video_path`/bucket policy, no schema or RPC change.
+7. **HR invariant — re-checked, holds.** `org_overview()` has zero
+   learning/video/quiz references (grepped, Batch 0). `org_report_data()`/
+   `_v2()`'s Learning section was already reading `points_events` for
+   `article_read`/`video_watched`/`quiz_passed` *before* this build shipped
+   (pre-provisioned, Batch 0 finding) — its shape is unchanged; it will
+   simply start returning non-zero, still-aggregate, still-suppressed
+   counts as real members progress. No per-member learning data is
+   reachable from any HR-facing table, view, or RPC — confirmed by the
+   RLS policies in `supabase_lms_schema.sql` (no HR/employer policy on
+   any of the six new tables) and by inspection of every HR RPC touched
+   or read during this build.

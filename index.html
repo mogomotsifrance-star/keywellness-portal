@@ -8,9 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/kw-theme.css">
+<link rel="stylesheet" href="css/kw-pathways.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
+<script src="js/certificate-template.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{
@@ -98,6 +100,12 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 .field input,.field select,.field textarea{width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--white);transition:.15s;outline:none}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .field .hint{font-size:12px;color:var(--muted);margin-top:4px}
+.pw-field{position:relative}
+.pw-field input{padding-right:44px}
+.pw-toggle{position:absolute;top:50%;right:2px;transform:translateY(-50%);width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:var(--muted);padding:0}
+.pw-toggle:hover{color:var(--navy)}
+.pw-toggle:focus-visible{outline:2px solid var(--kw-green);outline-offset:-2px;border-radius:var(--radius-sm)}
+.pw-toggle svg{pointer-events:none}
 
 /* ── Progress bar ── */
 .progress-bar{background:var(--cream-dark);border-radius:999px;height:6px;overflow:hidden;margin-top:6px}
@@ -495,14 +503,42 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <p id="sc-email" style="font-size:15px;font-weight:600;color:var(--navy);margin-bottom:20px;word-break:break-all"></p>
     <div style="text-align:left;margin-bottom:16px">
       <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Enter your password to continue</label>
-      <input id="sc-pass" type="password" placeholder="Your password"
-        style="width:100%;padding:11px 14px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Inter',sans-serif;outline:none"
-        onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
-        onkeydown="if(event.key==='Enter')confirmSession()">
+      <div class="pw-field">
+        <input id="sc-pass" type="password" placeholder="Your password"
+          style="width:100%;padding:11px 14px;padding-right:44px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Inter',sans-serif;outline:none"
+          onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
+          onkeydown="if(event.key==='Enter')confirmSession()">
+        <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'sc-pass')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      </div>
       <div id="sc-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none"></div>
     </div>
     <button id="sc-btn" onclick="confirmSession()" style="width:100%;padding:12px;background:var(--gold);color:var(--navy);font-size:14px;font-weight:700;border:none;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:12px">Confirm &amp; Continue</button>
     <button onclick="switchAccount()" style="width:100%;padding:12px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;border:2px solid var(--border);border-radius:var(--radius-sm);cursor:pointer">Sign in as someone else</button>
+  </div>
+</div>
+
+<!-- ══ LEARNING PATHWAYS: VIDEO PLAYER MODAL ══ -->
+<div class="lp-modal" id="lp-player-modal" role="dialog" aria-modal="true">
+  <div class="lp-modal-box">
+    <div class="lp-modal-title" id="lp-pm-title"></div>
+    <div class="lp-modal-sub" id="lp-pm-sub"></div>
+    <div class="lp-complete-flash" id="lp-pm-flash">✓ Lesson complete <span class="lp-pts-chip">+25 pts · Learning</span></div>
+    <div class="lp-player">
+      <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)"></video>
+      <div class="lp-upnext" id="lp-pm-upnext">
+        <div class="lp-un-eyebrow">Up next</div>
+        <div class="lp-un-title" id="lp-un-title"></div>
+        <div class="lp-un-meta" id="lp-un-meta"></div>
+        <div class="lp-un-count"><svg width="52" height="52"><circle class="lp-track" cx="26" cy="26" r="21" fill="none" stroke-width="4"/><circle class="lp-fill" id="lp-un-ring" cx="26" cy="26" r="21" fill="none" stroke-width="4"/></svg><b id="lp-un-num">5</b></div>
+        <div class="lp-un-actions">
+          <button class="lp-btn lp-btn-ghost lp-btn-sm" onclick="lpCancelUpNext()">Not now</button>
+          <button class="lp-btn lp-btn-light lp-btn-sm" onclick="lpPlayNextNow()">▶ Play now</button>
+        </div>
+      </div>
+    </div>
+    <div class="lp-modal-foot">
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpClosePlayer()">Close</button>
+    </div>
   </div>
 </div>
 
@@ -555,9 +591,12 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
       </div>
       <div class="field">
         <label for="a-pass">Password</label>
-        <input type="password" id="a-pass" placeholder="Your password" aria-label="Password"
-          oninput="authFieldInput('a-pass','a-pass-err')"
-          onkeydown="if(event.key==='Enter')doLogin()">
+        <div class="pw-field">
+          <input type="password" id="a-pass" placeholder="Your password" aria-label="Password"
+            oninput="authFieldInput('a-pass','a-pass-err')"
+            onkeydown="if(event.key==='Enter')doLogin()">
+          <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'a-pass')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <div class="field-err" id="a-pass-err"></div>
         <div style="text-align:right;margin-top:5px"><button type="button" style="background:none;border:none;color:var(--gold);font-size:12px;font-weight:600;cursor:pointer;padding:0" onclick="toggleForgotPanel()">Forgot password?</button></div>
       </div>
@@ -574,8 +613,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <!-- Password reset form (shown when redirected back with recovery token) -->
     <div id="auth-reset-form" style="display:none">
       <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Enter a new password for your account.</p>
-      <div class="field"><label for="r-pass">New Password</label><input type="password" id="r-pass" placeholder="At least 8 characters" aria-label="New password"></div>
-      <div class="field"><label for="r-pass2">Confirm Password</label><input type="password" id="r-pass2" placeholder="Repeat new password" aria-label="Confirm new password" onkeydown="if(event.key==='Enter')doResetPassword()"></div>
+      <div class="field"><label for="r-pass">New Password</label><div class="pw-field"><input type="password" id="r-pass" placeholder="At least 8 characters" aria-label="New password"><button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'r-pass')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="field"><label for="r-pass2">Confirm Password</label><div class="pw-field"><input type="password" id="r-pass2" placeholder="Repeat new password" aria-label="Confirm new password" onkeydown="if(event.key==='Enter')doResetPassword()"><button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'r-pass2')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="reset-btn" onclick="doResetPassword()">Set New Password</button>
     </div>
 
@@ -590,15 +629,21 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
       </div>
       <div class="field">
         <label for="b-pass">Password</label>
-        <input type="password" id="b-pass" placeholder="At least 8 characters" aria-label="Password"
-          oninput="authPassInput()">
+        <div class="pw-field">
+          <input type="password" id="b-pass" placeholder="At least 8 characters" aria-label="Password"
+            oninput="authPassInput()">
+          <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'b-pass')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <div id="pw-hint" class="field-err" style="color:var(--muted)">At least 8 characters</div>
       </div>
       <div class="field">
         <label for="b-pass2">Confirm Password</label>
-        <input type="password" id="b-pass2" placeholder="Repeat password" aria-label="Confirm password"
-          oninput="authPassConfirmInput()"
-          onkeydown="if(event.key==='Enter')doSignup()">
+        <div class="pw-field">
+          <input type="password" id="b-pass2" placeholder="Repeat password" aria-label="Confirm password"
+            oninput="authPassConfirmInput()"
+            onkeydown="if(event.key==='Enter')doSignup()">
+          <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'b-pass2')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </div>
         <div class="field-err" id="b-pass2-err"></div>
       </div>
       <div class="field">
@@ -865,7 +910,7 @@ async function loadAllData() {
 }
 
 async function saveUser() {
-  if (!currentUser) { console.warn('saveUser called with no currentUser'); return; }
+  if (!currentUser) { console.warn('saveUser called with no currentUser'); return false; }
   // Whitelist known columns so unknown keys never cause RLS/schema rejections
   const u = state.user || {};
   const payload = {
@@ -910,9 +955,10 @@ async function saveUser() {
   if (error) {
     console.error('saveUser/profiles upsert failed:', error);
     showToast('⚠️ Could not save your profile. Please try again.');
-    return;
+    return false;
   }
   state.user = data;
+  return true;
 }
 
 function saveBadges() {
@@ -960,11 +1006,23 @@ async function loadBadgeData() {
   try {
     const { data: rows } = await sb.from('tool_data')
       .select('tool, data').eq('user_id', currentUser.id)
-      .in('tool', ['budget_planner','net_worth_tracker','retirement','investment_calc','video_progress','articles_read']);
+      .in('tool', ['budget_planner','net_worth_tracker','retirement','investment_calc','articles_read']);
     state.toolData = {};
     (rows || []).forEach(r => { state.toolData[r.tool] = r.data; });
   } catch (e) { console.warn('[KW] loadBadgeData failed:', e); }
-  state.videoProgress = (state.toolData.video_progress && state.toolData.video_progress.completed) || state.videoProgress || [];
+  // Video completion now lives in content_progress (Learning Pathways), not tool_data.
+  try {
+    const [{ data: cp }, { count }] = await Promise.all([
+      sb.from('content_progress').select('content_id'),
+      sb.from('content_items').select('id', { count: 'exact', head: true }),
+    ]);
+    state.videoProgress = (cp || []).map(r => r.content_id);
+    state.videoTotal = count || 0;
+  } catch (e) {
+    console.warn('[KW] video progress load failed:', e);
+    state.videoProgress = state.videoProgress || [];
+    state.videoTotal = state.videoTotal || 0;
+  }
   state.articlesRead  = (state.toolData.articles_read  && state.toolData.articles_read.read)       || [];
   try { state.badgeProgress = await KWBadges.loadProgress(); } catch { state.badgeProgress = {}; }
   try { state._efRow = await loadEF(); } catch { state._efRow = null; }
@@ -1057,7 +1115,7 @@ function computeBadgeMetrics() {
   {
     const vids = (state.videoProgress || []).length;
     const arts = (state.articlesRead || []).length;
-    const total = (typeof VIDEOS !== 'undefined' ? VIDEOS.length : 0)
+    const total = (state.videoTotal || 0)
                 + (typeof CONTENT !== 'undefined' ? CONTENT.length : 0);
     m.learning = { value: total > 0 ? _clamp((vids + arts) / total * 100, 0, 100) : 0,
       detail: { vids, arts, total } };
@@ -1242,6 +1300,31 @@ function authPassConfirmInput() {
   else setFieldOk('b-pass2','b-pass2-err','✓ Passwords match');
 }
 
+const PW_EYE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const PW_EYE_OFF = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a21.62 21.62 0 0 1 5.06-6.06M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 8 11 8a21.6 21.6 0 0 1-2.87 3.94M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePwVisibility(btn, inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const showing = input.type === 'password';
+  input.type = showing ? 'text' : 'password';
+  btn.setAttribute('aria-label', showing ? 'Hide password' : 'Show password');
+  btn.setAttribute('aria-pressed', showing ? 'true' : 'false');
+  btn.innerHTML = showing ? PW_EYE_OFF : PW_EYE;
+}
+
+// Picks a human-readable message off a Supabase error, in the field order the
+// client library actually populates depending on error type — and rejects any
+// candidate that is itself raw JSON (some 500-class Auth errors surface with
+// error.message literally set to a stringified body like "{}", which must not
+// reach the user verbatim).
+function resolveAuthErrorMessage(error, fallback) {
+  const candidates = [error && error.message, error && error.error_description, error && error.msg];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim() && !/^[\{\[]/.test(c.trim())) return c;
+  }
+  return fallback;
+}
+
 async function doLogin() {
   const email = document.getElementById('a-email').value.trim();
   const pass  = document.getElementById('a-pass').value;
@@ -1251,18 +1334,26 @@ async function doLogin() {
   if (!pass) { setFieldErr('a-pass','a-pass-err','Please enter your password.'); return; }
   const btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Signing in…';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
-  btn.disabled = false; btn.textContent = 'Sign In';
-  if (error) {
-    const m = (error.message || '').toLowerCase();
-    if (error.code === 'email_not_confirmed' || m.includes('not confirmed')) {
-      setFieldErr('a-email','a-email-err','Email not confirmed — check your inbox (and spam) for the confirmation link.');
-    } else if (m.includes('invalid login credentials') || m.includes('invalid')) {
-      setFieldErr('a-pass','a-pass-err','Incorrect email or password. Please try again.');
-    } else {
-      authErr(error.message || 'Could not sign in. Please try again.');
+  const GENERIC = 'Could not sign in — please try again or contact wellness@keywellness.co.bw.';
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if (error) {
+      console.error('doLogin failed:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      const msg = resolveAuthErrorMessage(error, GENERIC);
+      const m = msg.toLowerCase();
+      if (error.code === 'email_not_confirmed' || m.includes('not confirmed')) {
+        setFieldErr('a-email','a-email-err','Email not confirmed — check your inbox (and spam) for the confirmation link.');
+      } else if (m.includes('invalid login credentials') || m.includes('invalid')) {
+        setFieldErr('a-pass','a-pass-err','Incorrect email or password. Please try again.');
+      } else {
+        authErr(msg);
+      }
     }
-    return;
+  } catch (e) {
+    console.error('doLogin threw:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+    authErr(GENERIC);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
   }
 }
 
@@ -1280,26 +1371,35 @@ async function doSignup() {
   const btn = document.getElementById('signup-btn');
   btn.disabled = true; btn.textContent = 'Creating account…';
   const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
-  const { error } = await sb.auth.signUp({
-    email, password: pass,
-    options: {
-      data: { invite_code: inviteCode || null },
-      emailRedirectTo: window.location.origin + window.location.pathname
+  const GENERIC = 'Account creation failed — please try again or contact wellness@keywellness.co.bw.';
+  try {
+    const { error } = await sb.auth.signUp({
+      email, password: pass,
+      options: {
+        data: { invite_code: inviteCode || null },
+        emailRedirectTo: window.location.origin + window.location.pathname
+      }
+    });
+    if (error) {
+      console.error('doSignup failed:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      const msg = resolveAuthErrorMessage(error, GENERIC);
+      const m = msg.toLowerCase();
+      if (m.includes('already registered') || m.includes('already exists') || error.code === 'user_already_exists') {
+        setFieldErr('b-email','b-email-err','An account with this email already exists — try logging in instead.');
+      } else if (m.includes('valid email') || m.includes('invalid email')) {
+        setFieldErr('b-email','b-email-err','Please enter a valid email address.');
+      } else {
+        authErr(msg);
+      }
+      return;
     }
-  });
-  btn.disabled = false; btn.textContent = 'Create Account';
-  if (error) {
-    const m = (error.message || '').toLowerCase();
-    if (m.includes('already registered') || m.includes('already exists') || error.code === 'user_already_exists') {
-      setFieldErr('b-email','b-email-err','An account with this email already exists — try logging in instead.');
-    } else if (m.includes('valid email') || m.includes('invalid email')) {
-      setFieldErr('b-email','b-email-err','Please enter a valid email address.');
-    } else {
-      authErr(error.message || 'Could not create your account. Please try again.');
-    }
-    return;
+    authOk('Account created! Check your email to confirm, then sign in.');
+  } catch (e) {
+    console.error('doSignup threw:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+    authErr(GENERIC);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Account';
   }
-  authOk('Account created! Check your email to confirm, then sign in.');
 }
 
 async function doLogout() {
@@ -2616,40 +2716,6 @@ window.saveNameModal = function () {
   document.getElementById('name-modal').classList.remove('visible');
 };
 
-// ══════════════════════════════════════════════════
-//  VIDEOS CONFIG
-//  To add a real video: replace null with a YouTube embed URL
-//  e.g. 'https://www.youtube.com/embed/dQw4w9WgXcQ'
-// ══════════════════════════════════════════════════
-const VIDEOS = [
-  { id:'welcome',    title:'Welcome to Key Wellness',        cat:'Getting Started', duration:'3 min', points:50, yt:null, vimeo:'1204871701' },
-  { id:'budget',     title:'How to Build a Budget',           cat:'Budgeting',       duration:'5 min', points:50, yt:null, vimeo:'1206500893' },
-  { id:'credit',     title:'Understanding Your Credit Score', cat:'Debt',            duration:'4 min', points:50, yt:null },
-  { id:'emfund',     title:'Starting Your Emergency Fund',    cat:'Savings',         duration:'4 min', points:50, yt:null },
-  { id:'retire',     title:'Retirement Planning 101',         cat:'Retirement',      duration:'6 min', points:50, yt:null },
-  { id:'investing',  title:'Investing for Beginners',         cat:'Investing',       duration:'7 min', points:50, yt:null },
-  { id:'stress',     title:'Managing Financial Stress',       cat:'Mindset',         duration:'5 min', points:50, yt:null },
-  { id:'insurance',  title:'Insurance Explained Simply',      cat:'Insurance',       duration:'4 min', points:50, yt:null },
-];
-
-// ── Video modules: sequential unlock + points, Supabase-backed (tool_data 'video_progress') ──
-async function loadVideoProgress() {
-  if (state.videoProgress) return state.videoProgress;
-  state.videoProgress = [];
-  try {
-    if (currentUser) {
-      const { data } = await sb.from('tool_data').select('data').eq('user_id', currentUser.id).eq('tool', 'video_progress').maybeSingle();
-      state.videoProgress = (data && data.data && data.data.completed) || [];
-    }
-  } catch (e) { console.warn('video_progress load failed:', e); }
-  return state.videoProgress;
-}
-async function saveVideoProgress() {
-  if (!currentUser) return;
-  try {
-    await sb.from('tool_data').upsert({ user_id: currentUser.id, tool: 'video_progress', data: { completed: state.videoProgress || [] }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
-  } catch (e) { console.error('video_progress save failed:', e); }
-}
 // Record a read article (by title), persist to Supabase, and refresh learning badge.
 async function markArticleRead(title) {
   if (!state.articlesRead) state.articlesRead = [];
@@ -2662,24 +2728,9 @@ async function markArticleRead(title) {
   const _res = await KWBadges.recordPoints('article_read', title);
   if (_res && typeof _res.total === 'number') state.points = { ...state.points, total: _res.total, season: state.points?.season || 0 };
 }
-window.markVideoComplete = async function (vidId, pts) {
-  if (!state.videoProgress) state.videoProgress = [];
-  if (state.videoProgress.includes(vidId)) return;   // already complete — never double-award points
-  state.videoProgress.push(vidId);
-  await saveVideoProgress();
-  syncProgressBadges();   // recompute the Confident Learner badge (videos + articles)
-  const res = await KWBadges.recordPoints('video_watched', vidId);
-  if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
-  showToast(res && res.awarded ? `🎬 Video completed — +${res.points} points!` : '🎬 Video completed!');
-  if ((window.location.hash.replace('#','') || '') === 'learn') VIEWS['learn']('videos');  // re-render: unlock next + show ✓
-};
-function _ensureYTApi() {
-  if (window.YT && window.YT.Player) return;
-  if (document.querySelector('script[src*="iframe_api"]')) return;
-  const tag = document.createElement('script'); tag.src = 'https://www.youtube.com/iframe_api';
-  document.head.appendChild(tag);
-}
-// Load the Vimeo Player API once, then run cb() when it's ready.
+// Load the Vimeo Player API once, then run cb() when it's ready. Still used by the
+// onboarding welcome-modal player (showWelcomeVideo()) — NOT by Learning Pathways,
+// which streams native <video> from Supabase Storage instead of Vimeo embeds.
 function _ensureVimeoApi(cb) {
   if (window.Vimeo && window.Vimeo.Player) { if (cb) cb(); return; }
   let tag = document.querySelector('script[src*="player.vimeo.com/api/player.js"]');
@@ -2690,34 +2741,607 @@ function _ensureVimeoApi(cb) {
   }
   if (cb) tag.addEventListener('load', cb);
 }
-function _attachVideoPlayers() {
-  // Vimeo-backed modules: attach the Vimeo player and award on 'ended'.
-  const vimeoFrames = document.querySelectorAll('iframe[data-vid][data-provider="vimeo"]');
-  if (vimeoFrames.length) {
-    _ensureVimeoApi(() => {
-      vimeoFrames.forEach(iframe => {
-        if (iframe._vimeoAttached) return;
-        iframe._vimeoAttached = true;
-        const vid = iframe.getAttribute('data-vid');
-        const pts = parseInt(iframe.getAttribute('data-pts'), 10) || 0;
-        try { new Vimeo.Player(iframe).on('ended', () => markVideoComplete(vid, pts)); }
-        catch (err) { console.warn('Vimeo player attach failed:', err); }
-      });
-    });
+
+// ══════════════════════════════════════════════════
+//  LEARNING PATHWAYS — video LMS, quizzes, Prolearn certificates
+//  Supabase-backed: pathways / content_items / content_progress / quizzes /
+//  quiz_questions(_public) / quiz_attempts / certificates, plus the
+//  complete_video() / submit_quiz() / issue_certificate() RPCs.
+// ══════════════════════════════════════════════════
+const LP_VIDEOS_BASE = 'https://tarmpqxsabbehgjaonfz.supabase.co/storage/v1/object/public/Videos/';
+const LP_ICONS = {1:'🧭',2:'🪞',3:'💭',4:'📈',5:'⚖️',6:'🔍',7:'🎯',8:'📄',9:'📊',10:'🌊',11:'🛒',12:'🔁',13:'🆘',14:'⛓️',15:'🏛️'};
+
+state.lp = {
+  loaded: false,
+  pathways: [], items: [], quizzes: [], attempts: [], certificates: [],
+  questions: {},          // quizId -> [{id,quiz_id,sort_order,section_label,question,options}]
+  view: 'landing',        // landing | pathway | quiz-intro | quiz | quiz-result | celebrate
+  pathwayId: 1,
+  quizIdx: 0,
+  quizAnswers: {},        // question_id -> selected_index
+  quizResult: null,
+  certName: '',
+  playingId: null,
+  upNextId: null,
+};
+
+function lpStorageUrl(path) { return LP_VIDEOS_BASE + String(path).split('/').map(encodeURIComponent).join('/'); }
+function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
+function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null); }
+function lpFindItem(id) { return state.lp.items.find(i => i.id === id); }
+function lpDone(id) { return (state.lp.progress || []).includes(id); }
+function lpNextItem(pathwayId) { return lpItemsFor(pathwayId).find(i => !lpDone(i.id)) || null; }
+function lpPathway(id) { return state.lp.pathways.find(p => p.id === id); }
+function lpQuizFor(pathwayId) { return state.lp.quizzes.find(q => q.pathway_id === pathwayId); }
+function lpPassedAttempt(quizId) { return state.lp.attempts.find(a => a.quiz_id === quizId && a.passed); }
+function lpBestAttempt(quizId) { return state.lp.attempts.filter(a => a.quiz_id === quizId).sort((a,b)=>b.score-a.score)[0]; }
+function lpCertFor(pathwayId) { return state.lp.certificates.find(c => c.pathway_id === pathwayId); }
+
+async function loadPathwaysData(force) {
+  if (state.lp.loaded && !force) return;
+  try {
+    const [pwR, ciR, qzR, caR, ceR] = await Promise.all([
+      sb.from('pathways').select('*').order('sort_order'),
+      sb.from('content_items').select('*'),
+      sb.from('quizzes').select('*'),
+      sb.from('quiz_attempts').select('*'),
+      sb.from('certificates').select('*'),
+    ]);
+    const errs = [pwR, ciR, qzR, caR, ceR].filter(r => r.error);
+    if (errs.length) {
+      showToast('⚠️ Could not load Learning Pathways — check your connection and try again.');
+      console.error('[LP] load error', errs.map(e => e.error));
+      return;
+    }
+    state.lp.pathways = pwR.data || [];
+    state.lp.items = ciR.data || [];
+    state.lp.quizzes = qzR.data || [];
+    state.lp.attempts = caR.data || [];
+    state.lp.certificates = ceR.data || [];
+    if (!state.videoProgress) {
+      const { data: cp, error: cpErr } = await sb.from('content_progress').select('content_id');
+      if (cpErr) { showToast('⚠️ Could not load your video progress.'); console.error('[LP] content_progress error', cpErr); return; }
+      state.videoProgress = (cp || []).map(r => r.content_id);
+    }
+    state.lp.progress = state.videoProgress; // shared array — a push from either system stays in sync
+    state.lp.loaded = true;
+  } catch (e) {
+    showToast('⚠️ Could not load Learning Pathways — check your connection and try again.');
+    console.error('[LP] loadPathwaysData failed:', e);
   }
-  // YouTube-backed modules (default provider).
-  const ytFrames = document.querySelectorAll('iframe[data-vid]:not([data-provider="vimeo"])');
-  if (!ytFrames.length) return;
-  if (!(window.YT && window.YT.Player)) { _ensureYTApi(); setTimeout(_attachVideoPlayers, 500); return; }
-  ytFrames.forEach(iframe => {
-    if (iframe._ytAttached) return;
-    iframe._ytAttached = true;
-    const vid = iframe.getAttribute('data-vid');
-    const pts = parseInt(iframe.getAttribute('data-pts'), 10) || 0;
-    try {
-      new YT.Player(iframe.id, { events: { onStateChange: e => { if (e.data === YT.PlayerState.ENDED) markVideoComplete(vid, pts); } } });
-    } catch (err) { console.warn('YT player attach failed:', err); }
+}
+async function lpLoadQuizQuestions(quizId) {
+  if (state.lp.questions[quizId]) return;
+  const { data, error } = await sb.from('quiz_questions_public').select('*').eq('quiz_id', quizId).order('sort_order');
+  if (error) { showToast('⚠️ Could not load the quiz — check your connection and try again.'); console.error('[LP] quiz_questions_public error', error); return; }
+  state.lp.questions[quizId] = data || [];
+}
+
+function lpGo(view) { state.lp.view = view; VIEWS['learn']('videos'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function lpCrumb(parts) {
+  return `<div class="lp-crumb">${parts.map((p,i)=> i<parts.length-1
+    ? `<button onclick="lpGo('${p.view}')">${p.label}</button><span class="lp-sep">›</span>`
+    : `<span>${p.label}</span>`).join('')}</div>`;
+}
+function lpRingSvg(pct, size, sw) {
+  size = size || 46; sw = sw || 4.5;
+  const r = (size-sw)/2, c = 2*Math.PI*r, off = c*(1-pct);
+  return `<svg width="${size}" height="${size}"><circle class="lp-track" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}"/><circle class="lp-fill" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;
+}
+function lpPoster(item, w) {
+  w = w || 320;
+  if (item.poster_path) return `<img src="${lpStorageUrl(item.poster_path)}" alt="${escHtml(item.title)}" style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block">`;
+  const h = Math.round(w*9/16);
+  const icon = item.sort_order ? (LP_ICONS[item.sort_order] || '🎬') : '👋';
+  const label = item.sort_order ? ('LESSON ' + String(item.sort_order).padStart(2,'0')) : 'WELCOME';
+  const gid = `lpg-${item.id}-${w}`;
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escHtml(item.title)}">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--kw-green-deep)"/><stop offset="1" stop-color="var(--kw-green)"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#${gid})"/>
+    <circle cx="${w-34}" cy="-14" r="58" fill="none" stroke="var(--kw-yellow)" stroke-opacity=".18" stroke-width="14"/>
+    <text x="18" y="${h-46}" font-size="30">${icon}</text>
+    <text x="18" y="${h-18}" font-family="'DM Mono',monospace" font-size="11" fill="var(--kw-yellow)" letter-spacing="2">${label}</text>
+  </svg>`;
+}
+function lpPathwayArt(pathway) {
+  const w=340, h=142, gid = `lppg-${pathway.id}`;
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--kw-green-deep)"/><stop offset="1" stop-color="var(--kw-green)"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#${gid})"/>
+    <circle cx="${w-40}" cy="${h+22}" r="66" fill="none" stroke="var(--kw-yellow)" stroke-opacity=".2" stroke-width="16"/>
+    <text x="20" y="${h-20}" font-weight="800" font-size="40" fill="#ffffff" fill-opacity=".16">0${pathway.id}</text>
+    <text x="${w-16}" y="26" text-anchor="end" font-family="'DM Mono',monospace" font-size="10" fill="var(--kw-yellow)" letter-spacing="2">PATHWAY</text>
+  </svg>`;
+}
+
+// ── Landing ──────────────────────────────────────────────
+function renderLpLanding(el) {
+  const p1 = lpPathway(1);
+  const items1 = lpItemsFor(1);
+  const done1 = items1.filter(i=>lpDone(i.id)).length;
+  const next = lpNextItem(1);
+  const quiz1 = lpQuizFor(1);
+  const passed1 = quiz1 && lpPassedAttempt(quiz1.id);
+  const welcome = lpWelcome();
+
+  let hero;
+  if (next) {
+    const pct = items1.length ? done1/items1.length : 0;
+    hero = `<div class="lp-hero">
+      <button class="lp-hero-poster" onclick="lpOpenPlayer('${next.id}')" aria-label="Play ${escHtml(next.title)}">
+        ${lpPoster(next, 320)}
+        <div class="lp-hp-play"><span class="lp-play-badge"></span></div>
+      </button>
+      <div class="lp-hero-body">
+        <div class="lp-eyebrow">Continue learning · ${escHtml(p1?.title||'Pathway 1')}</div>
+        <div class="lp-hero-title">Lesson ${next.sort_order} — ${escHtml(next.title)}</div>
+        <div class="lp-hero-meta">${escHtml(next.section_label||'')}</div>
+        <div class="lp-bar"><i style="width:${Math.round(pct*100)}%"></i></div>
+        <div class="lp-bar-lbl">${done1} of ${items1.length} lessons · ${items1.length-done1} to go before your quiz</div>
+        <div class="lp-hero-actions">
+          <button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${next.id}')">▶ Resume learning</button>
+          <button class="lp-btn lp-btn-ghost" onclick="lpGo('pathway')">View pathway</button>
+        </div>
+      </div>
+    </div>`;
+  } else {
+    hero = `<div class="lp-hero">
+      <div class="lp-hero-body">
+        <div class="lp-eyebrow">${escHtml(p1?.title||'Pathway 1')} complete</div>
+        <div class="lp-hero-title">${passed1?'Foundation mastered':'One step left: the Foundation quiz'}</div>
+        <div class="lp-hero-meta">${passed1?'Your Prolearn certificate is ready.':'Pass the quiz to earn your certificate and unlock what comes next.'}</div>
+        <div class="lp-hero-actions" style="margin-top:14px">
+          ${passed1
+            ? `<button class="lp-btn lp-btn-light" onclick="lpViewCertificate(1)">View your certificate</button>`
+            : `<button class="lp-btn lp-btn-light" onclick="lpStartQuiz(1)">Start the quiz →</button>`}
+          <button class="lp-btn lp-btn-ghost" onclick="lpGo('pathway')">View pathway</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  const cards = state.lp.pathways.map(p => {
+    const isActive = p.status === 'active';
+    const itemsP = lpItemsFor(p.id);
+    const doneP = itemsP.filter(i=>lpDone(i.id)).length;
+    const quizP = lpQuizFor(p.id);
+    const passedP = quizP && lpPassedAttempt(quizP.id);
+    const pctP = itemsP.length ? doneP/itemsP.length : 0;
+    const veil = p.status==='coming_soon'
+      ? `<div class="lp-lock-veil"><span class="lp-lv-chip">◆ Coming soon</span></div>`
+      : p.status==='locked'
+        ? `<div class="lp-lock-veil"><span class="lp-lv-chip">🔒 Locked</span></div>`
+        : '';
+    return `<div class="lp-pw-card ${isActive?'clickable':'locked'}" ${isActive?`tabindex="0" role="button" onclick="lpGo('pathway')" onkeydown="if(event.key==='Enter')lpGo('pathway')"`:''}>
+      <div class="lp-pw-art">${lpPathwayArt(p)}${veil}</div>
+      <div class="lp-pw-body">
+        <div class="lp-pw-num">PATHWAY ${String(p.id).padStart(2,'0')}${isActive?' · IN PROGRESS':''}</div>
+        <div class="lp-pw-title">${escHtml(p.title)}</div>
+        <div class="lp-pw-desc">${escHtml(p.description||'')}</div>
+        ${isActive ? `<div class="lp-pw-foot">
+          <span class="lp-pw-count">${itemsP.length} lesson${itemsP.length===1?'':'s'}</span>
+          <div class="lp-ring">${lpRingSvg(pctP)}<span class="lp-ring-label">${doneP}/${itemsP.length}</span></div>
+        </div>` : `<div class="lp-pw-foot"><span class="lp-pw-count">${itemsP.length||'—'} lessons</span></div>`}
+        <div class="lp-cert-strip">🎓 Earns: Prolearn ${escHtml(p.certificate_level||'')} certificate${passedP?' · ✓ earned':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    ${hero}
+    <div class="lp-row-title">Your pathways <small>quiz + certificate at the end of each</small></div>
+    <div class="lp-pathway-grid">${cards}</div>
+    ${welcome ? `<div class="lp-welcome-strip">
+      <div class="lp-welcome-thumb">${lpPoster(welcome, 200)}</div>
+      <div class="lp-w-body">
+        <div class="lp-w-tag">Not part of a pathway</div>
+        <div class="lp-w-title">${escHtml(welcome.title)}</div>
+      </div>
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
+    </div>` : ''}`;
+}
+
+// ── Pathway detail — chapter shelves ──────────────────────
+function renderLpPathway(el) {
+  const pid = state.lp.pathwayId || 1;
+  const pathway = lpPathway(pid);
+  const items = lpItemsFor(pid);
+  const done = items.filter(i=>lpDone(i.id)).length;
+  const total = items.length;
+  const next = lpNextItem(pid);
+  const allDone = total>0 && done===total;
+  const quiz = lpQuizFor(pid);
+  const passed = quiz && lpPassedAttempt(quiz.id);
+  const best = quiz && lpBestAttempt(quiz.id);
+
+  const sections = [];
+  items.forEach(it => {
+    let sec = sections.find(s=>s.label===it.section_label);
+    if (!sec) { sec = { label: it.section_label, letter: String.fromCharCode(65+sections.length), items: [] }; sections.push(sec); }
+    sec.items.push(it);
   });
+
+  const shelves = sections.map((sec, si) => {
+    const secDone = sec.items.filter(i=>lpDone(i.id)).length;
+    const secLocked = next ? sec.items.every(i => (i.sort_order||0) > (next.sort_order||0)) : false;
+    const isLastSection = si === sections.length - 1;
+    const cards = sec.items.map(it => {
+      const isDone = lpDone(it.id);
+      const isCur = !!next && it.id === next.id;
+      const locked = !isDone && !isCur;
+      const cls = isDone?'playable':isCur?'playable current':'locked';
+      return `<div class="lp-lesson-card ${cls}" ${!locked?`role="button" tabindex="0" onclick="lpOpenPlayer('${it.id}')" onkeydown="if(event.key==='Enter')lpOpenPlayer('${it.id}')"`:''}>
+        <div class="lp-lc-art">
+          ${lpPoster(it, 320)}
+          ${isCur?'<span class="lp-lc-upnext">UP NEXT</span>':''}
+          ${!locked?'<div class="lp-lc-overlay"><span class="lp-lc-play"></span></div>':''}
+          ${isDone?'<div class="lp-lc-done-veil"></div><span class="lp-lc-check">✓</span>':''}
+          ${locked?'<div class="lp-lc-lock-veil"><span>🔒</span></div>':''}
+        </div>
+        <div class="lp-lc-body">
+          <div class="lp-lc-num">LESSON ${String(it.sort_order).padStart(2,'0')}</div>
+          <div class="lp-lc-title">${escHtml(it.title)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    const quizCard = isLastSection ? `
+      <div class="lp-quiz-shelf-card ${allDone?'ready':''}">
+        <div class="lp-q-ttl">◆ Pathway Quiz</div>
+        <div class="lp-q-sub">${quiz?quiz.question_count:8} questions · 70% pass mark · earns your Prolearn ${escHtml(pathway?.certificate_level||'')} certificate</div>
+        ${passed
+          ? `<button class="lp-quiz-passed-pill" style="border:none;cursor:pointer" onclick="lpViewCertificate(${pid})">✓ Passed ${best?best.score:''}/${quiz?quiz.question_count:8}</button>`
+          : allDone
+            ? `<button class="lp-btn lp-btn-primary lp-btn-sm" onclick="lpStartQuiz(${pid})">Start quiz</button>`
+            : `<button class="lp-btn lp-btn-outline lp-btn-sm" disabled>🔒 Finish all lessons first</button>`}
+      </div>` : '';
+    return `<div class="lp-chapter">
+      <div class="lp-ch-head ${secLocked?'locked':''}">
+        <span class="lp-ch-letter">SECTION ${sec.letter}</span>
+        <span class="lp-ch-title">${escHtml(sec.label||'')}</span>
+        <span class="lp-ch-meta">${secDone}/${sec.items.length}</span>
+      </div>
+      <div class="lp-shelf">${cards}${quizCard}</div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    ${lpCrumb([{label:'Learn', view:'landing'},{label:escHtml(pathway?.title||'Pathway')}])}
+    <div class="lp-pw-head">
+      <div class="lp-h-body">
+        <h2>${escHtml(pathway?.title||'')}</h2>
+        <div class="lp-h-sub">${total} lessons${sections.length?` across ${sections.length} sections`:''}. Each lesson unlocks the next — finish them all, pass the quiz, and your Prolearn ${escHtml(pathway?.certificate_level||'')} certificate is yours.</div>
+        <div class="lp-bar" style="max-width:380px"><i style="width:${total?Math.round(done/total*100):0}%"></i></div>
+        <div class="lp-bar-lbl">${done} of ${total} lessons complete</div>
+      </div>
+      ${next?`<button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${next.id}')">▶ Resume · Lesson ${next.sort_order}</button>`:''}
+    </div>
+    ${shelves}`;
+}
+
+// ── Player + up-next ───────────────────────────────────────
+let _lpUnTimer = null;
+function lpOpenPlayer(id) {
+  clearInterval(_lpUnTimer);
+  state.lp.playingId = id;
+  const item = lpFindItem(id);
+  if (!item) return;
+  document.getElementById('lp-pm-title').textContent = (item.sort_order?`Lesson ${item.sort_order} — `:'') + item.title;
+  document.getElementById('lp-pm-sub').textContent = item.section_label || (item.sort_order?'':'Not part of a pathway');
+  document.getElementById('lp-pm-flash').classList.remove('on');
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+  const video = document.getElementById('lp-pm-video');
+  video.pause();
+  video._lpFired = false;
+  video.src = lpStorageUrl(item.video_path);
+  video.currentTime = 0;
+  document.getElementById('lp-player-modal').classList.add('on');
+}
+function lpVideoTimeUpdate(e) {
+  const v = e.target;
+  if (v.duration && v.currentTime / v.duration >= 0.9 && !v._lpFired) {
+    v._lpFired = true;
+    lpOnVideoEnded();
+  }
+}
+function lpVideoEnded(e) {
+  if (e.target._lpFired) return; // already fired via the ≥90% fallback
+  e.target._lpFired = true;
+  lpOnVideoEnded();
+}
+async function lpOnVideoEnded() {
+  const id = state.lp.playingId;
+  const item = lpFindItem(id);
+  if (!item) return;
+  try {
+    const { data, error } = await sb.rpc('complete_video', { p_content_id: id });
+    if (error) { showToast('⚠️ ' + (error.message || 'Could not save your progress')); return; }
+    if (!state.lp.progress.includes(id)) state.lp.progress.push(id);
+    if (data && data.first_completion) document.getElementById('lp-pm-flash').classList.add('on');
+    syncProgressBadges();
+    const nextId = data && data.next_content_id;
+    if (nextId) {
+      const nextItem = lpFindItem(nextId);
+      if (nextItem) {
+        state.lp.upNextId = nextId;
+        document.getElementById('lp-un-title').textContent = 'Lesson ' + nextItem.sort_order + ' — ' + nextItem.title;
+        document.getElementById('lp-un-meta').textContent = nextItem.section_label || '';
+        const ring = document.getElementById('lp-un-ring');
+        const c = 2*Math.PI*21;
+        ring.setAttribute('stroke-dasharray', c); ring.setAttribute('stroke-dashoffset', 0);
+        document.getElementById('lp-pm-upnext').classList.add('on');
+        let left = 5;
+        document.getElementById('lp-un-num').textContent = left;
+        _lpUnTimer = setInterval(() => {
+          left--;
+          document.getElementById('lp-un-num').textContent = Math.max(left,0);
+          ring.setAttribute('stroke-dashoffset', c*(1-(left/5)));
+          if (left<=0) lpPlayNextNow();
+        }, 1000);
+      }
+    } else if (item.pathway_id) {
+      setTimeout(() => {
+        lpClosePlayer();
+        const quiz = lpQuizFor(item.pathway_id);
+        state.lp.pathwayId = item.pathway_id;
+        if (quiz && !lpPassedAttempt(quiz.id)) lpStartQuiz(item.pathway_id);
+        else if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
+      }, 900);
+    } else if (state.lp.view==='pathway' || state.lp.view==='landing') {
+      VIEWS['learn']('videos');
+    }
+  } catch (err) {
+    showToast('⚠️ Could not save your progress — check your connection and try again.');
+    console.error('[LP] complete_video failed:', err);
+  }
+}
+function lpPlayNextNow() {
+  clearInterval(_lpUnTimer);
+  if (state.lp.upNextId) { lpOpenPlayer(state.lp.upNextId); document.getElementById('lp-pm-video').play().catch(()=>{}); }
+}
+function lpCancelUpNext() {
+  clearInterval(_lpUnTimer);
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+}
+function lpClosePlayer() {
+  clearInterval(_lpUnTimer);
+  const video = document.getElementById('lp-pm-video');
+  video.pause(); video.removeAttribute('src'); video.load();
+  document.getElementById('lp-player-modal').classList.remove('on');
+  if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
+}
+
+// ── Quiz ─────────────────────────────────────────────────
+function lpStartQuiz(pathwayId) {
+  state.lp.pathwayId = pathwayId;
+  state.lp.quizIdx = 0;
+  state.lp.quizAnswers = {};
+  state.lp.quizResult = null;
+  lpGo('quiz-intro');
+}
+function renderLpQuizIntro(el) {
+  const pid = state.lp.pathwayId;
+  const pathway = lpPathway(pid);
+  const quiz = lpQuizFor(pid);
+  if (!state.lp.certName) {
+    const f = state.user?.first_name||''; const l = state.user?.last_name||'';
+    state.lp.certName = (l?`${f} ${l}`:f).trim();
+  }
+  el.innerHTML = `
+    ${lpCrumb([{label:'Learn',view:'landing'},{label:escHtml(pathway?.title||''),view:'pathway'},{label:'Quiz'}])}
+    <div class="lp-quiz-shell">
+      <div class="lp-quiz-intro">
+        <div class="lp-q-eyebrow">${escHtml(pathway?.title||'')}</div>
+        <h2>Pathway Quiz</h2>
+        <p>A short check on what you've learned. Pass it to earn your <b>Prolearn ${escHtml(pathway?.certificate_level||'')} certificate</b>.</p>
+        <div class="lp-quiz-rules">
+          <div><b>${quiz?quiz.question_count:8}</b> multiple-choice questions, one at a time</div>
+          <div><b>70%</b> pass mark — that's ${quiz?quiz.pass_mark:6} correct answers</div>
+          <div><b>∞</b> unlimited retakes; points awarded on your first pass</div>
+        </div>
+        <div class="lp-cert-name-field">
+          <label for="lp-cert-name">Name for your certificate</label>
+          <input id="lp-cert-name" type="text" maxlength="60" value="${escHtml(state.lp.certName)}" oninput="state.lp.certName=this.value">
+          <div class="lp-cert-name-hint">You'll confirm this again before downloading — max 60 characters.</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="lp-btn lp-btn-primary" onclick="state.lp.quizIdx=0;state.lp.quizAnswers={};lpGo('quiz')">Start quiz →</button>
+          <button class="lp-btn lp-btn-outline" onclick="lpGo('pathway')">Back to pathway</button>
+        </div>
+      </div>
+    </div>`;
+}
+function renderLpQuizQuestion(el) {
+  const pid = state.lp.pathwayId;
+  const pathway = lpPathway(pid);
+  const quiz = lpQuizFor(pid);
+  const questions = (quiz && state.lp.questions[quiz.id]) || [];
+  const idx = state.lp.quizIdx;
+  const q = questions[idx];
+  if (!q) { lpGo('quiz-intro'); return; }
+  const picked = state.lp.quizAnswers[q.id];
+  el.innerHTML = `
+    ${lpCrumb([{label:'Learn',view:'landing'},{label:escHtml(pathway?.title||''),view:'pathway'},{label:'Quiz'}])}
+    <div class="lp-quiz-shell">
+      <div class="lp-quiz-q">
+        <div class="lp-q-progress">${questions.map((_,i)=>`<i class="${i<idx?'done':i===idx?'now':''}"></i>`).join('')}</div>
+        <div class="lp-q-count">QUESTION ${idx+1} OF ${questions.length} · SECTION ${escHtml(q.section_label||'')}</div>
+        <div class="lp-q-text">${escHtml(q.question)}</div>
+        ${q.options.map((o,i)=>`
+          <button class="lp-opt ${picked===i?'picked':''}" onclick="lpPickAnswer('${q.id}',${i})">
+            <span class="lp-o-key">${'ABCD'[i]}</span><span>${escHtml(o)}</span>
+          </button>`).join('')}
+        <div class="lp-q-nav">
+          <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpQuizNav(-1)" ${idx===0?'disabled':''}>← Back</button>
+          <button class="lp-btn lp-btn-primary lp-btn-sm" onclick="lpQuizNav(1)" ${picked==null?'disabled':''}>${idx===questions.length-1?'Submit answers':'Next →'}</button>
+        </div>
+      </div>
+    </div>`;
+}
+function lpPickAnswer(qid, i) { state.lp.quizAnswers[qid] = i; VIEWS['learn']('videos'); }
+function lpQuizNav(dir) {
+  const quiz = lpQuizFor(state.lp.pathwayId);
+  const questions = (quiz && state.lp.questions[quiz.id]) || [];
+  if (dir===1 && state.lp.quizIdx === questions.length-1) { lpSubmitQuizNow(); return; }
+  state.lp.quizIdx += dir;
+  VIEWS['learn']('videos');
+}
+async function lpSubmitQuizNow() {
+  const pid = state.lp.pathwayId;
+  const quiz = lpQuizFor(pid);
+  if (!quiz) return;
+  const questions = state.lp.questions[quiz.id] || [];
+  const answers = questions.map(q => ({ question_id: q.id, selected_index: state.lp.quizAnswers[q.id] ?? -1 }));
+  try {
+    const { data, error } = await sb.rpc('submit_quiz', { p_quiz_id: quiz.id, p_answers: answers });
+    if (error) { showToast('⚠️ ' + (error.message || 'Could not submit the quiz')); return; }
+    state.lp.quizResult = data;
+    const { data: attempts } = await sb.from('quiz_attempts').select('*').eq('quiz_id', quiz.id);
+    if (attempts) state.lp.attempts = state.lp.attempts.filter(a=>a.quiz_id!==quiz.id).concat(attempts);
+    syncProgressBadges();
+    if (data.passed) {
+      const pts = await sb.from('my_points').select('*').maybeSingle();
+      if (pts.data) state.points = { ...state.points, total: pts.data.total_points, season: pts.data.season_points };
+    }
+    lpGo('quiz-result');
+  } catch (err) {
+    showToast('⚠️ Could not submit the quiz — check your connection and try again.');
+    console.error('[LP] submit_quiz failed:', err);
+  }
+}
+function renderLpQuizResult(el) {
+  const pid = state.lp.pathwayId;
+  const pathway = lpPathway(pid);
+  const result = state.lp.quizResult;
+  if (!result) { lpGo('quiz-intro'); return; }
+  const quiz = lpQuizFor(pid);
+  const questions = (quiz && state.lp.questions[quiz.id]) || [];
+  const size=96, sw=8, r=(size-sw)/2, c=2*Math.PI*r, off=c*(1-(questions.length?result.score/questions.length:0));
+  el.innerHTML = `
+    ${lpCrumb([{label:'Learn',view:'landing'},{label:escHtml(pathway?.title||''),view:'pathway'},{label:'Quiz result'}])}
+    <div class="lp-quiz-shell">
+      <div class="lp-quiz-result">
+        <div class="lp-q-eyebrow">${escHtml(pathway?.title||'')}</div>
+        <h2>${result.passed?'Quiz passed':'Not quite yet'}</h2>
+        <div class="lp-score-wrap">
+          <div class="lp-score-ring ${result.passed?'':'fail'}">
+            <svg width="${size}" height="${size}"><circle class="lp-track" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}"/><circle class="lp-fill" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
+            <span class="lp-s-label">${result.score}/${questions.length}</span>
+          </div>
+          <div class="lp-result-msg">
+            ${result.passed
+              ? `You scored <b>${result.score} out of ${questions.length}</b> — you passed.`
+              : `You scored <b>${result.score} out of ${questions.length}</b>. You need <b>${result.pass_mark} correct</b> to pass. Retakes are unlimited.`}
+          </div>
+        </div>
+        <div class="lp-review-list">
+          ${questions.map((q,i)=>`<div><span class="${result.per_question[i]?'lp-rv-ok':'lp-rv-no'}">${result.per_question[i]?'✓':'✗'}</span><span>Q${i+1} · Section ${escHtml(q.section_label||'')} — ${escHtml(q.question)}</span></div>`).join('')}
+        </div>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          ${result.passed
+            ? `<button class="lp-btn lp-btn-primary" onclick="lpGo('celebrate')">Claim your certificate →</button>`
+            : `<button class="lp-btn lp-btn-primary" onclick="state.lp.quizIdx=0;state.lp.quizAnswers={};lpGo('quiz')">Retake quiz</button>`}
+          <button class="lp-btn lp-btn-outline" onclick="lpGo('pathway')">View pathway</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Celebration + certificate ─────────────────────────────
+function lpViewCertificate(pathwayId) { state.lp.pathwayId = pathwayId; lpGo('celebrate'); }
+function renderLpCelebrate(el) {
+  const pid = state.lp.pathwayId;
+  const pathway = lpPathway(pid);
+  const colors = ['var(--kw-yellow)','var(--kw-green)','var(--kw-yellow-tint)','var(--kw-green-deep)','#ffffff'];
+  const confetti = Array.from({length:36},(_,i)=>{
+    const l=Math.random()*100, d=2.4+Math.random()*2.2, dl=Math.random()*1.4, c=colors[i%colors.length], rot=Math.random()*360;
+    return `<span class="lp-confetti" style="left:${l}%;background:${c};animation-duration:${d}s;animation-delay:${dl}s;transform:rotate(${rot}deg)"></span>`;
+  }).join('');
+  el.innerHTML = `
+    ${lpCrumb([{label:'Learn',view:'landing'},{label:'Pathway complete'}])}
+    <div class="lp-celebrate">
+      ${confetti}
+      <div class="lp-cel-eyebrow">${escHtml(pathway?.title||'')} complete</div>
+      <div class="lp-cel-title">You've mastered ${escHtml(pathway?.title||'this pathway')}.</div>
+      <div class="lp-cel-sub">That's a real change in how you understand money — and it's certified.</div>
+      <div id="lp-cert-claim-area"></div>
+      ${(() => {
+        const nextPathway = state.lp.pathways.find(p => p.id === pid + 1);
+        if (!nextPathway) return '';
+        return nextPathway.status === 'active'
+          ? `<div class="lp-unlock-line">🔓 <span><b>${escHtml(nextPathway.title)}</b> is now unlocked</span></div>`
+          : `<div class="lp-unlock-line">🔓 <span><b>${escHtml(nextPathway.title)}</b> unlocks once its content is published</span></div>`;
+      })()}
+      <div class="lp-cel-actions">
+        <button class="lp-btn lp-btn-light" onclick="lpGo('landing')">Back to Learning Pathways</button>
+        <button class="lp-btn lp-btn-ghost" onclick="lpGo('pathway')">Review ${escHtml(pathway?.title||'pathway')}</button>
+      </div>
+    </div>`;
+  lpRenderCertClaim(document.getElementById('lp-cert-claim-area'), pid);
+}
+function lpRenderCertClaim(container, pathwayId) {
+  const cert = lpCertFor(pathwayId);
+  const pathway = lpPathway(pathwayId);
+  if (cert) {
+    container.innerHTML = `
+      <div class="lp-cert-claim">
+        <div class="lp-cert-preview-wrap" id="lp-cert-svg-${pathwayId}"></div>
+        <div class="lp-cert-actions">
+          <button class="lp-btn lp-btn-primary" onclick="lpDownloadCertificate(${pathwayId})">⬇ Download PNG</button>
+          <button class="lp-btn lp-btn-outline" onclick="lpPrintCertificate(${pathwayId})">🖨 Print</button>
+        </div>
+      </div>`;
+    document.getElementById(`lp-cert-svg-${pathwayId}`).innerHTML =
+      KWCertificate.svgMarkup({ name: cert.certificate_name, date: fmtDate(cert.completed_on), level: pathway?.certificate_level });
+    return;
+  }
+  container.innerHTML = `
+    <div class="lp-cert-claim">
+      <div class="lp-cert-name-field" style="text-align:left">
+        <label for="lp-claim-name">Confirm the name for your certificate</label>
+        <input id="lp-claim-name" type="text" maxlength="60" value="${escHtml(state.lp.certName||'')}">
+      </div>
+      <div class="lp-cert-actions">
+        <button class="lp-btn lp-btn-primary" onclick="lpIssueCertificate(${pathwayId})">🎓 Claim my certificate</button>
+      </div>
+    </div>`;
+}
+async function lpIssueCertificate(pathwayId) {
+  const nameInput = document.getElementById('lp-claim-name');
+  const name = (nameInput?.value || '').trim();
+  if (!name) { showToast('⚠️ Enter a name for your certificate first.'); return; }
+  try {
+    const { data, error } = await sb.rpc('issue_certificate', { p_pathway_id: pathwayId, p_name: name });
+    if (error) { showToast('⚠️ ' + (error.message || 'Could not issue your certificate')); return; }
+    state.lp.certificates = state.lp.certificates.filter(c=>c.pathway_id!==pathwayId).concat([data]);
+    state.lp.certName = name;
+    const area = document.getElementById('lp-cert-claim-area');
+    if (area) lpRenderCertClaim(area, pathwayId);
+    showToast('🎓 Certificate issued!');
+  } catch (err) {
+    showToast('⚠️ Could not issue your certificate — check your connection and try again.');
+    console.error('[LP] issue_certificate failed:', err);
+  }
+}
+async function lpDownloadCertificate(pathwayId) {
+  const cert = lpCertFor(pathwayId);
+  const pathway = lpPathway(pathwayId);
+  if (!cert) return;
+  try {
+    await KWCertificate.downloadPNG(
+      { name: cert.certificate_name, date: fmtDate(cert.completed_on), level: pathway?.certificate_level },
+      `key-wellness-${(pathway?.title||'certificate').toLowerCase().replace(/\s+/g,'-')}`
+    );
+  } catch (err) {
+    showToast('⚠️ Could not generate the certificate image — try Print instead.');
+    console.error('[LP] downloadPNG failed:', err);
+  }
+}
+function lpPrintCertificate(pathwayId) {
+  const cert = lpCertFor(pathwayId);
+  const pathway = lpPathway(pathwayId);
+  if (!cert) return;
+  const ok = KWCertificate.printCertificate({ name: cert.certificate_name, date: fmtDate(cert.completed_on), level: pathway?.certificate_level });
+  if (!ok) showToast('⚠️ Could not open the print view — check your pop-up blocker.');
 }
 
 // ══════════════════════════════════════════════════
@@ -2744,17 +3368,31 @@ VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
   const activeTab = tab || 'articles';
 
-  // Videos tab needs the user's saved progress before it can render unlock states — lazy-load once
-  if (activeTab === 'videos' && state.videoProgress === undefined) {
-    el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
-    loadVideoProgress().then(() => VIEWS['learn']('videos'));
-    return;
+  if (activeTab === 'videos') {
+    // Pathways/content/quiz/attempt/certificate data — lazy-load once per session.
+    if (!state.lp.loaded) {
+      el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
+      loadPathwaysData().then(() => VIEWS['learn']('videos'));
+      return;
+    }
+    // Quiz questions for the active pathway — lazy-load once per quiz (never
+    // fetched until the member actually opens the quiz intro/question screen).
+    if (state.lp.view === 'quiz-intro' || state.lp.view === 'quiz') {
+      const quiz = lpQuizFor(state.lp.pathwayId);
+      if (quiz && !state.lp.questions[quiz.id]) {
+        el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
+        lpLoadQuizQuestions(quiz.id).then(() => VIEWS['learn']('videos'));
+        return;
+      }
+    }
   }
 
-  // Learning engagement = the "confidence in financial decisions" indicator.
+  // Learning engagement = the "confidence in financial decisions" indicator
+  // (articles tab only — the Videos tab's own pathway hero/progress bars
+  // already surface engagement prominently, so this would be redundant there).
   const _learnVids = (state.videoProgress || []).length;
   const _learnArts = (state.articlesRead || []).length;
-  const _learnTotal = VIDEOS.length + CONTENT.length;
+  const _learnTotal = (state.videoTotal || 0) + CONTENT.length;
   const _learnPct = _learnTotal ? Math.round((_learnVids + _learnArts) / _learnTotal * 100) : 0;
 
   el.innerHTML = `
@@ -2763,16 +3401,15 @@ VIEWS['learn'] = function (tab) {
       <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Videos</button>
     </div>
 
-    <div class="card" style="margin-bottom:18px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:700;color:var(--navy)">💪 Confidence in financial decisions</div>
-        <div class="mono" style="font-size:13px;font-weight:700;color:var(--gold)">${_learnPct}%</div>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${_learnPct}%"></div></div>
-      <div style="font-size:11px;color:var(--muted);margin-top:7px">${_learnArts + _learnVids} of ${_learnTotal} Learn items engaged — the more you learn, the more confident your money decisions become.</div>
-    </div>
-
     ${activeTab==='articles' ? `
+      <div class="card" style="margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--navy)">💪 Confidence in financial decisions</div>
+          <div class="mono" style="font-size:13px;font-weight:700;color:var(--gold)">${_learnPct}%</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${_learnPct}%"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:7px">${_learnArts + _learnVids} of ${_learnTotal} Learn items engaged — the more you learn, the more confident your money decisions become.</div>
+      </div>
       <div class="notice notice-gold" style="margin-bottom:18px">📚 <strong>Learn, then apply.</strong> Each article connects to tools and real-world actions.</div>
       <div class="learn-grid">
         ${CONTENT.map((c,idx)=>`
@@ -2785,43 +3422,18 @@ VIEWS['learn'] = function (tab) {
               <div style="margin-top:12px"><button class="btn btn-outline btn-sm">Read More →</button></div>
             </div>
           </div>`).join('')}
-      </div>` : `
-      <div class="notice notice-gold" style="margin-bottom:18px">🎬 <strong>Video modules</strong> — finish each video to unlock the next and earn points. Progress saves to your account and syncs across devices.</div>
-      <div class="learn-grid">
-        ${(() => {
-          const _done = state.videoProgress || [];
-          return VIDEOS.map((v,i)=>{
-            const isDone   = _done.includes(v.id);
-            const unlocked = i === 0 || _done.includes(VIDEOS[i-1].id);
-            const playable = unlocked && (!!v.yt || !!v.vimeo);
-            let media;
-            if (playable && v.vimeo) {
-              media = `<div style="padding:56.25% 0 0 0;position:relative;border-radius:8px;overflow:hidden"><iframe id="vmm-${i}" data-vid="${v.id}" data-pts="${v.points}" data-provider="vimeo" src="https://player.vimeo.com/video/${v.vimeo}?badge=0&autopause=0&player_id=0&app_id=58479" frameborder="0" allow="autoplay;fullscreen;picture-in-picture;clipboard-write;encrypted-media;web-share" referrerpolicy="strict-origin-when-cross-origin" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="${v.title}"></iframe></div>`;
-            } else if (playable) {
-              media = `<iframe id="ytm-${i}" class="video-embed" data-vid="${v.id}" data-pts="${v.points}" src="https://www.youtube.com/embed/${v.yt}?enablejsapi=1" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>`;
-            } else if (unlocked) {
-              media = `<div class="video-placeholder" style="cursor:default"><span class="add-url-tag">Coming Soon</span><div class="play-btn" style="opacity:.4"><div class="play-icon"></div></div><p>This module will be available soon</p></div>`;
-            } else {
-              media = `<div class="video-placeholder" style="cursor:default;opacity:.7"><span class="add-url-tag" style="background:var(--navy);color:#fff">🔒 Locked</span><div class="play-btn" style="opacity:.3"><div class="play-icon"></div></div><p>Finish "${VIDEOS[i-1] ? VIDEOS[i-1].title : 'the previous video'}" to unlock</p></div>`;
-            }
-            return `<div class="learn-card" style="cursor:default${unlocked?'':';opacity:.9'}">
-              <div class="learn-body" style="padding-top:18px">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                  <div class="video-tag">Module ${i+1} · ${v.cat}</div>
-                  ${isDone?'<span title="Completed" style="font-size:16px">✅</span>':(unlocked?'':'<span title="Locked" style="font-size:14px">🔒</span>')}
-                </div>
-                <div class="learn-title" style="margin-bottom:10px">${v.title}</div>
-                ${media}
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
-                  <div style="font-size:12px;color:var(--muted)">⏱ ${v.duration}</div>
-                  <span style="font-size:11px;font-weight:700;color:${isDone?'var(--green)':'var(--muted)'}">${isDone?`✓ Completed · +${v.points} pts`:`▶ Watch fully to earn ${v.points} pts`}</span>
-                </div>
-              </div>
-            </div>`;
-          }).join('');
-        })()}
-      </div>`}`;
-  if (activeTab === 'videos') setTimeout(_attachVideoPlayers, 100);
+      </div>` : `<div id="lp-root"></div>`}`;
+
+  if (activeTab === 'videos') {
+    const root = document.getElementById('lp-root');
+    const v = state.lp.view;
+    if (v==='pathway') renderLpPathway(root);
+    else if (v==='quiz-intro') renderLpQuizIntro(root);
+    else if (v==='quiz') renderLpQuizQuestion(root);
+    else if (v==='quiz-result') renderLpQuizResult(root);
+    else if (v==='celebrate') renderLpCelebrate(root);
+    else renderLpLanding(root);
+  }
 };
 
 // ── Article renderer helper ──────────────────────────────────────
@@ -3888,9 +4500,22 @@ window.bkResetForm = function () {
 // the column is dormant (see BUILD-NOTES.md), and no UI writes to it anymore.
 async function saveRewardsOptIn() {
   const optIn = document.getElementById('lb-optin').checked;
+  const prevOptIn = state.user?.leaderboard_opt_in ?? false;
+  // Optimistic flip, but only kept if the write actually succeeds — reverted
+  // below on failure so the re-render never shows an unsaved state as saved.
   state.user = { ...state.user, leaderboard_opt_in: optIn };
-  await saveUser();
-  showToast(optIn ? "You're sharing your points with HR" : 'Rewards opt-in updated');
+  const ok = await saveUser();
+  if (ok) {
+    // state.user is already the authoritative post-write row (saveUser()
+    // sets it from the upsert's own .select().single() response) — no
+    // separate refetch needed.
+    showToast(optIn ? "You're sharing your points with HR" : 'Rewards opt-in updated');
+  } else {
+    // saveUser() already surfaced the failure via its own toast; revert the
+    // optimistic flip so the re-render below reflects reality, not the
+    // unsaved guess.
+    state.user = { ...state.user, leaderboard_opt_in: prevOptIn };
+  }
   const _cur = location.hash.replace('#','') || 'badges';
   if (VIEWS[_cur]) VIEWS[_cur]();
 }
@@ -3968,7 +4593,44 @@ function renderRewardsProgressCard() {
       ${u.leaderboard_opt_in
         ? ''
         : `<p style="font-size:12px;color:var(--muted);margin-top:12px">Your points are private. Opt in below to share your name and points with your employer's HR for rewards eligibility.</p>`}
+      <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+        <h5 style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Rewards received</h5>
+        <div id="my-reward-fulfilments"><div class="kw-skeleton" style="height:44px"></div></div>
+      </div>
     </div>`;
+}
+
+// Category → member-friendly label for the "Rewards received" list.
+const REWARD_CATEGORY_LABELS = { utilisation: 'Utilisation', learning: 'Learning', progress: 'Progress', overall: 'Overall Season' };
+
+// Loads the member's own reward fulfilments via the new my_reward_fulfilments()
+// RPC (Batch 5) — member-scoped, returns only the caller's own rows, no new
+// HR-facing surface. Called after the Rewards Progress card is already in the
+// DOM (its skeleton placeholder is #my-reward-fulfilments), same
+// render-then-fill-in-async pattern used elsewhere for org-level banners.
+async function loadMyRewardFulfilments() {
+  const el = document.getElementById('my-reward-fulfilments');
+  if (!el) return;
+  const { data, error } = await sb.rpc('my_reward_fulfilments');
+  // The user may have navigated away from the Badges view while this was in flight.
+  if (!document.getElementById('my-reward-fulfilments')) return;
+  if (error) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--red)">Could not load your rewards history: ${escHtml(error.message || 'unknown error')}.</p>`;
+    return;
+  }
+  const rows = data || [];
+  if (rows.length === 0) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--muted)">Nothing redeemed yet &mdash; keep earning!</p>`;
+    return;
+  }
+  el.innerHTML = rows.map(r => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--navy)">${escHtml(REWARD_CATEGORY_LABELS[r.category] || r.category)}${r.note ? ' &mdash; ' + escHtml(r.note) : ''}</div>
+        <div style="font-size:11px;color:var(--muted)">${escHtml(r.season)}</div>
+      </div>
+      <div style="font-size:12px;color:var(--muted)">${fmtDate(r.fulfilled_at)}</div>
+    </div>`).join('');
 }
 
 // ══════════════════════════════════════════════════
@@ -3996,6 +4658,7 @@ VIEWS['badges'] = function () {
     <div class="badge-grid">
       ${renderBadgeCards()}
     </div>`;
+  loadMyRewardFulfilments();
 };
 
 // Builds the badge grid: simple one-off badges + behaviour filling badges
@@ -4317,24 +4980,6 @@ function initProfileUI() {
   const emailEl = document.getElementById('sb-email');
   if (emailEl && currentUser?.email) emailEl.textContent = currentUser.email;
 }
-
-// ══════════════════════════════════════════════════
-//  VIDEO WATCH POINTS
-// ══════════════════════════════════════════════════
-window.markVideoWatched = function (btn, title) {
-  const watched = JSON.parse(localStorage.getItem('kw_watched')||'[]');
-  if (watched.includes(title)) return;
-  watched.push(title);
-  localStorage.setItem('kw_watched', JSON.stringify(watched));
-  syncProgressBadges(); // refresh Confident Learner (the watched_video badge is now part of the learning fill badge)
-  KWBadges.recordPoints('video_watched', title).then(res => {
-    if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
-  });
-  // Update button
-  btn.textContent = '✓ Watched';
-  btn.classList.add('watched');
-  btn.disabled = true;
-};
 
 // ══════════════════════════════════════════════════
 //  NOTIFICATIONS
