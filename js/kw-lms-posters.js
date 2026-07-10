@@ -1,173 +1,212 @@
-// js/kw-lms-posters.js — AURORA/GLASS lesson poster illustrations
-// kwPoster(item, width) → inline SVG string
-// item: content_items DB row { sort_order, title, section_label, duration_seconds }
+// js/kw-lms-posters.js — AURORA/GLASS edition v2
+// kwPoster(item, width) → SVG string
+// item: content_items row { sort_order, title, section_label, duration_seconds }
 
 (function (global) {
   'use strict';
 
-  var G1 = '#E8C018', G2 = '#F4DC7A', W = 'white', DK = '#10240F';
+  var DK = '#10240F';   // deep-ink outlines / text
+  var G1 = '#E8C018';   // main gold
+  var G2 = '#F4DC7A';   // soft gold
 
+  // Light pastel gradient pairs [top-left → bottom-right]
   var SEC_GRAD = {
-    'Mindset & Psychology':  ['#0F3D24', '#1A5E38'],
-    'Diagnosis & Direction': ['#083543', '#125668'],
-    'Practical Foundations': ['#3E2508', '#664010'],
-    'Protection & Debt':     ['#131E30', '#1E304A'],
-    'Wealth Thinking':       ['#3D1610', '#62261A'],
+    'Mindset & Psychology':  ['#F0F9EA', '#C6E0AC'],
+    'Diagnosis & Direction': ['#E8F7F7', '#AEDADC'],
+    'Practical Foundations': ['#FAF4E0', '#E8D28A'],
+    'Protection & Debt':     ['#E8EEF8', '#AABCD4'],
+    'Wealth Thinking':       ['#F8EDE8', '#D8A898'],
   };
-  var NAV_GRAD = ['#0F1B30', '#1A2D4E'];
+  var NAV_GRAD = ['#ECECF8', '#ACACD4'];
 
-  // ── Illustrations (drawn in 100 × 100 coordinate space) ───────────────
-  // Palette: G1 (#E8C018) main gold · G2 (#F4DC7A) soft gold ·
-  //          W (white) line work  ·  DK (#10240F) deep-ink detail
+  // ── Illustrations — 100 × 100 coordinate space ───────────────────────
+  // Style: DK (#10240F) stroke outlines · G1 (#E8C018) gold accents · clean line art
   var ILLOS = {
 
-    // 0 — Welcome to Key Wellness: ornate key
-    0: '<circle cx="40" cy="50" r="21" fill="none" stroke="' + W + '" stroke-width="5.5" opacity=".9"/>' +
-       '<circle cx="40" cy="50" r="14" fill="' + G1 + '"/>' +
-       '<circle cx="40" cy="50" r="6" fill="' + DK + '"/>' +
-       '<rect x="57" y="47" width="33" height="7" rx="3.5" fill="' + G1 + '"/>' +
-       '<rect x="75" y="54" width="8" height="11" rx="3.5" fill="' + G2 + '"/>' +
-       '<rect x="83" y="54" width="7" height="8" rx="3" fill="' + G2 + '"/>',
+    // 0 — Welcome: open door with golden light spilling through
+    0: // door frame
+       '<rect x="22" y="14" width="48" height="70" rx="4" fill="none" stroke="' + DK + '" stroke-width="4"/>' +
+       // open door leaf (pivots right) — shows golden light inside
+       '<path d="M44,14 Q60,22 62,49 Q60,76 44,84 Z" fill="' + G1 + '" fill-opacity=".4"/>' +
+       '<path d="M44,14 Q60,22 62,49 Q60,76 44,84" fill="none" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<line x1="44" y1="14" x2="44" y2="84" stroke="' + DK + '" stroke-width="2.5"/>' +
+       // door knob
+       '<circle cx="58" cy="51" r="4.5" fill="' + G1 + '" stroke="' + DK + '" stroke-width="1.5"/>' +
+       // floor light triangle
+       '<path d="M44,84 L18,98 L74,98 Z" fill="' + G1 + '" fill-opacity=".35"/>' +
+       '<line x1="8" y1="98" x2="92" y2="98" stroke="' + DK + '" stroke-width="2" opacity=".2"/>',
 
-    // 1 — Introduction to Financial Literacy: open book + light rays
-    1: '<path d="M48,22 L16,30 14,78 48,72 Z" fill="' + G1 + '"/>' +
-       '<path d="M52,22 L84,30 86,78 52,72 Z" fill="' + G2 + '"/>' +
-       '<rect x="47" y="22" width="6" height="50" rx="2" fill="' + W + '" opacity=".85"/>' +
-       '<line x1="22" y1="44" x2="44" y2="40" stroke="' + W + '" stroke-width="2" opacity=".55"/>' +
-       '<line x1="22" y1="54" x2="44" y2="50" stroke="' + W + '" stroke-width="2" opacity=".55"/>' +
-       '<line x1="22" y1="64" x2="44" y2="60" stroke="' + W + '" stroke-width="2" opacity=".55"/>' +
-       '<line x1="50" y1="18" x2="50" y2="4" stroke="' + W + '" stroke-width="2.5" stroke-linecap="round" opacity=".9"/>' +
-       '<line x1="50" y1="18" x2="60" y2="7" stroke="' + W + '" stroke-width="2" stroke-linecap="round" opacity=".7"/>' +
-       '<line x1="50" y1="18" x2="40" y2="7" stroke="' + W + '" stroke-width="2" stroke-linecap="round" opacity=".7"/>' +
-       '<line x1="50" y1="18" x2="67" y2="12" stroke="' + W + '" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>' +
-       '<line x1="50" y1="18" x2="33" y2="12" stroke="' + W + '" stroke-width="1.5" stroke-linecap="round" opacity=".5"/>',
-
-    // 2 — Understanding Your Relationship with Money: heart + Pula coin
-    2: '<circle cx="64" cy="58" r="26" fill="' + G1 + '"/>' +
-       '<circle cx="64" cy="58" r="20" fill="' + G2 + '"/>' +
-       '<text x="64" y="66" text-anchor="middle" font-size="21" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>' +
-       '<path d="M34,46 C34,32 14,32 14,46 C14,56 34,72 34,72 C34,72 54,56 54,46 C54,32 34,32 34,46 Z" fill="' + W + '" opacity=".85"/>' +
-       '<path d="M34,48 C34,37 19,37 19,48 C19,56 34,68 34,68 C34,68 49,56 49,48 C49,37 34,37 34,48 Z" fill="' + G1 + '"/>',
-
-    // 3 — Emotional Spending: shopping bag + impulse spark
-    3: '<path d="M30,30 C30,14 70,14 70,30" fill="none" stroke="' + W + '" stroke-width="5" stroke-linecap="round"/>' +
-       '<path d="M14,30 L18,84 L82,84 L86,30 Z" fill="' + G1 + '"/>' +
-       '<rect x="14" y="25" width="72" height="8" rx="2" fill="' + G2 + '"/>' +
-       '<path d="M28,56 Q36,46 44,56 Q52,66 60,56 Q68,46 76,56" stroke="' + W + '" stroke-width="3" fill="none" stroke-linecap="round" opacity=".9"/>' +
-       '<path d="M78,15 L80,8 L82,15 L89,13 L84,17.5 L86.5,25 L80,20.5 L73.5,25 L76,17.5 L71,13 Z" fill="' + G2 + '" opacity=".92"/>',
-
-    // 4 — Lifestyle Inflation: expanding rings + upward arrow
-    4: '<circle cx="50" cy="60" r="40" fill="none" stroke="' + G1 + '" stroke-width="1.5" opacity=".22"/>' +
-       '<circle cx="50" cy="60" r="29" fill="none" stroke="' + G1 + '" stroke-width="2" opacity=".38"/>' +
-       '<circle cx="50" cy="60" r="19" fill="none" stroke="' + G1 + '" stroke-width="2.5" opacity=".58"/>' +
-       '<circle cx="50" cy="60" r="10" fill="' + G1 + '" opacity=".75"/>' +
-       '<line x1="50" y1="78" x2="50" y2="10" stroke="' + W + '" stroke-width="5" stroke-linecap="round"/>' +
-       '<path d="M36,28 L50,8 L64,28 Z" fill="' + W + '"/>' +
-       '<text x="50" y="65" text-anchor="middle" font-size="10" font-weight="bold" fill="' + DK + '" font-family="sans-serif">P</text>',
-
-    // 5 — Qualifying vs Affording: balance scale
-    5: '<line x1="50" y1="12" x2="50" y2="72" stroke="' + W + '" stroke-width="4" stroke-linecap="round"/>' +
-       '<path d="M32,72 L50,72 L68,72 L72,84 L28,84 Z" fill="' + W + '" opacity=".7"/>' +
-       '<line x1="6" y1="28" x2="94" y2="22" stroke="' + G1 + '" stroke-width="5" stroke-linecap="round"/>' +
-       '<path d="M0,34 Q8,52 18,52 Q28,52 36,34 Z" fill="' + G1 + '"/>' +
-       '<path d="M64,28 Q72,44 82,44 Q92,44 100,28 Z" fill="' + G2 + '"/>' +
-       '<line x1="6" y1="28" x2="18" y2="34" stroke="' + W + '" stroke-width="1.5" opacity=".55"/>' +
-       '<line x1="36" y1="34" x2="24" y2="28" stroke="' + W + '" stroke-width="1.5" opacity=".55"/>' +
-       '<line x1="64" y1="28" x2="72" y2="34" stroke="' + W + '" stroke-width="1.5" opacity=".55"/>' +
-       '<line x1="100" y1="28" x2="88" y2="34" stroke="' + W + '" stroke-width="1.5" opacity=".55"/>' +
-       '<text x="18" y="49" text-anchor="middle" font-size="18" fill="' + DK + '" font-family="sans-serif">✓</text>' +
-       '<text x="82" y="41" text-anchor="middle" font-size="14" fill="' + DK + '" font-weight="bold" font-family="sans-serif">P</text>',
-
-    // 6 — The Three Money Problems: three overlapping coin-circles
-    6: '<circle cx="30" cy="40" r="23" fill="' + G1 + '" opacity=".95"/>' +
-       '<circle cx="70" cy="40" r="23" fill="' + G1 + '" opacity=".85"/>' +
-       '<circle cx="50" cy="68" r="23" fill="' + G1 + '" opacity=".75"/>' +
-       '<circle cx="30" cy="40" r="16" fill="' + G2 + '" opacity=".45"/>' +
-       '<circle cx="70" cy="40" r="16" fill="' + G2 + '" opacity=".4"/>' +
-       '<circle cx="50" cy="68" r="16" fill="' + G2 + '" opacity=".38"/>' +
-       '<text x="27" y="46" text-anchor="middle" font-size="18" font-weight="bold" fill="' + DK + '" font-family="sans-serif">1</text>' +
-       '<text x="73" y="46" text-anchor="middle" font-size="18" font-weight="bold" fill="' + DK + '" font-family="sans-serif">2</text>' +
-       '<text x="50" y="74" text-anchor="middle" font-size="18" font-weight="bold" fill="' + DK + '" font-family="sans-serif">3</text>',
-
-    // 7 — Setting SMART Goals: bullseye target + arrow
-    7: '<circle cx="50" cy="52" r="36" fill="none" stroke="' + G1 + '" stroke-width="3.5"/>' +
-       '<circle cx="50" cy="52" r="24" fill="none" stroke="' + G1 + '" stroke-width="3.5"/>' +
-       '<circle cx="50" cy="52" r="12" fill="' + G1 + '"/>' +
+    // 1 — Introduction to Financial Literacy: compass
+    1: '<circle cx="50" cy="52" r="34" fill="none" stroke="' + DK + '" stroke-width="4"/>' +
+       '<circle cx="50" cy="52" r="26" fill="none" stroke="' + DK + '" stroke-width="1.5" opacity=".3"/>' +
+       // cardinal tick marks
+       '<line x1="50" y1="18" x2="50" y2="26" stroke="' + DK + '" stroke-width="3"/>' +
+       '<line x1="50" y1="78" x2="50" y2="86" stroke="' + DK + '" stroke-width="3"/>' +
+       '<line x1="16" y1="52" x2="24" y2="52" stroke="' + DK + '" stroke-width="3"/>' +
+       '<line x1="76" y1="52" x2="84" y2="52" stroke="' + DK + '" stroke-width="3"/>' +
+       // north needle (gold)
+       '<path d="M50,52 L44,28 L56,28 Z" fill="' + G1 + '"/>' +
+       // south needle (dark)
+       '<path d="M50,52 L44,76 L56,76 Z" fill="' + DK + '" opacity=".6"/>' +
+       // pivot
        '<circle cx="50" cy="52" r="5" fill="' + DK + '"/>' +
-       '<line x1="10" y1="12" x2="51" y2="51" stroke="' + W + '" stroke-width="4" stroke-linecap="round"/>' +
-       '<path d="M4,8 L16,6 L18,18 Z" fill="' + W + '"/>' +
-       '<circle cx="51" cy="51" r="3.5" fill="' + G2 + '"/>',
+       '<circle cx="50" cy="52" r="2.5" fill="' + G1 + '"/>',
 
-    // 8 — Understanding Your Payslip: document with rows + Pula header
-    8: '<rect x="18" y="6" width="64" height="86" rx="6" fill="' + G1 + '"/>' +
-       '<rect x="22" y="10" width="56" height="20" rx="3" fill="' + G2 + '" opacity=".55"/>' +
-       '<text x="50" y="27" text-anchor="middle" font-size="17" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>' +
-       '<rect x="26" y="36" width="32" height="4" rx="2" fill="' + W + '" opacity=".7"/>' +
-       '<rect x="62" y="36" width="14" height="4" rx="2" fill="' + W + '" opacity=".7"/>' +
-       '<rect x="26" y="46" width="28" height="4" rx="2" fill="' + W + '" opacity=".6"/>' +
-       '<rect x="62" y="46" width="14" height="4" rx="2" fill="' + W + '" opacity=".6"/>' +
-       '<rect x="26" y="56" width="36" height="4" rx="2" fill="' + W + '" opacity=".5"/>' +
-       '<rect x="66" y="56" width="10" height="4" rx="2" fill="' + W + '" opacity=".5"/>' +
-       '<line x1="22" y1="66" x2="74" y2="66" stroke="' + W + '" stroke-width="1.5" opacity=".4"/>' +
-       '<rect x="26" y="72" width="24" height="6" rx="3" fill="' + G2 + '" opacity=".8"/>' +
-       '<rect x="56" y="72" width="18" height="6" rx="3" fill="' + G2 + '" opacity=".8"/>',
+    // 2 — Understanding Your Relationship with Money: magnifying glass on Pula coin
+    2: // coin
+       '<circle cx="42" cy="42" r="22" fill="' + G1 + '" fill-opacity=".28"/>' +
+       '<circle cx="42" cy="42" r="16" fill="none" stroke="' + G1 + '" stroke-width="2.5"/>' +
+       '<text x="42" y="50" text-anchor="middle" font-size="18" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>' +
+       // magnifying glass ring (over coin)
+       '<circle cx="42" cy="42" r="28" fill="none" stroke="' + DK + '" stroke-width="5"/>' +
+       // handle
+       '<line x1="63" y1="63" x2="86" y2="86" stroke="' + DK + '" stroke-width="7" stroke-linecap="round"/>' +
+       // lens glint
+       '<path d="M27,27 Q32,22 39,22" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" opacity=".65"/>',
 
-    // 9 — Creating a Personal Budget: horizontal budget bars
-    9: '<rect x="10" y="14" width="80" height="10" rx="5" fill="' + G1 + '"/>' +
-       '<rect x="10" y="32" width="64" height="10" rx="5" fill="' + G2 + '"/>' +
-       '<rect x="10" y="50" width="44" height="10" rx="5" fill="' + G1 + '" opacity=".7"/>' +
-       '<rect x="10" y="68" width="28" height="10" rx="5" fill="' + G2 + '" opacity=".7"/>' +
-       '<line x1="8" y1="84" x2="92" y2="84" stroke="' + W + '" stroke-width="2.5" opacity=".4"/>' +
-       '<text x="95" y="23" font-size="8" fill="' + W + '" opacity=".75" font-family="monospace">50%</text>' +
-       '<text x="79" y="41" font-size="8" fill="' + W + '" opacity=".75" font-family="monospace">30%</text>' +
-       '<text x="59" y="59" font-size="8" fill="' + W + '" opacity=".75" font-family="monospace">15%</text>' +
-       '<text x="43" y="77" font-size="8" fill="' + W + '" opacity=".75" font-family="monospace">5%</text>',
+    // 3 — Emotional Spending: heart with price tag
+    3: // heart outline (bold)
+       '<path d="M50,34 C50,22 34,18 26,28 C18,38 28,50 50,70 C72,50 82,38 74,28 C66,18 50,22 50,34 Z"' +
+       ' fill="' + G1 + '" fill-opacity=".18" stroke="' + DK + '" stroke-width="4" stroke-linejoin="round"/>' +
+       // price tag string
+       '<line x1="50" y1="70" x2="50" y2="82" stroke="' + DK + '" stroke-width="2" opacity=".6"/>' +
+       // price tag rectangle
+       '<rect x="36" y="82" width="28" height="16" rx="4" fill="' + G2 + '" fill-opacity=".5" stroke="' + DK + '" stroke-width="2.5"/>' +
+       // tag hole
+       '<circle cx="50" cy="82" r="2.5" fill="' + DK + '"/>' +
+       // P on tag
+       '<text x="50" y="95" text-anchor="middle" font-size="10" font-weight="bold" fill="' + DK + '" font-family="sans-serif">P</text>',
 
-    // 10 — Managing Cash Flow: in/out circular arrows
-    10: '<path d="M26,30 A30,30 0 1,1 74,30" fill="none" stroke="' + G1 + '" stroke-width="7" stroke-linecap="round"/>' +
-        '<path d="M28,26 L18,36 L36,40 Z" fill="' + G1 + '"/>' +
-        '<path d="M74,70 A30,30 0 1,1 26,70" fill="none" stroke="' + G2 + '" stroke-width="7" stroke-linecap="round"/>' +
-        '<path d="M72,74 L82,64 L64,60 Z" fill="' + G2 + '"/>' +
-        '<text x="50" y="56" text-anchor="middle" font-size="14" font-weight="bold" fill="' + W + '" opacity=".9" font-family="sans-serif">P</text>',
+    // 4 — Lifestyle Inflation: rising bar chart with coin at top
+    4: // bars (left to right, increasing height)
+       '<rect x="10" y="68" width="20" height="20" rx="3" fill="' + G1 + '" fill-opacity=".25"/>' +
+       '<rect x="10" y="48" width="20" height="40" rx="3" fill="none" stroke="' + DK + '" stroke-width="3"/>' +
+       '<rect x="36" y="44" width="20" height="44" rx="3" fill="' + G1 + '" fill-opacity=".2"/>' +
+       '<rect x="36" y="28" width="20" height="60" rx="3" fill="none" stroke="' + DK + '" stroke-width="3"/>' +
+       '<rect x="62" y="16" width="20" height="72" rx="3" fill="' + G1 + '" fill-opacity=".35"/>' +
+       '<rect x="62" y="16" width="20" height="72" rx="3" fill="none" stroke="' + DK + '" stroke-width="3"/>' +
+       // trend line
+       '<path d="M20,56 L46,36 L72,22" stroke="' + G1 + '" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>' +
+       // coin at top of tallest bar
+       '<circle cx="72" cy="12" r="9" fill="' + G1 + '" stroke="' + DK + '" stroke-width="2"/>' +
+       '<text x="72" y="16.5" text-anchor="middle" font-size="9" font-weight="bold" fill="' + DK + '" font-family="sans-serif">P</text>' +
+       // baseline
+       '<line x1="8" y1="90" x2="92" y2="90" stroke="' + DK + '" stroke-width="2.5" opacity=".3"/>',
 
-    // 11 — Needs vs Wants: split circle
-    11: '<path d="M50,14 A36,36 0 0,0 50,86 Z" fill="' + G1 + '"/>' +
-        '<path d="M50,14 A36,36 0 0,1 50,86 Z" fill="' + G2 + '" opacity=".8"/>' +
-        '<circle cx="50" cy="50" r="36" fill="none" stroke="' + W + '" stroke-width="2.5" opacity=".6"/>' +
-        '<line x1="50" y1="14" x2="50" y2="86" stroke="' + W + '" stroke-width="2.5" opacity=".75"/>' +
-        '<circle cx="34" cy="40" r="5" fill="' + DK + '" opacity=".4"/>' +
-        '<circle cx="34" cy="60" r="3.5" fill="' + DK + '" opacity=".35"/>' +
-        '<circle cx="66" cy="40" r="4" fill="' + DK + '" opacity=".3"/>' +
-        '<path d="M62,56 L70,52 L74,62 L64,64 Z" fill="' + DK + '" opacity=".28"/>',
+    // 5 — Qualifying vs Affording: tilted balance scale
+    5: '<line x1="50" y1="12" x2="50" y2="72" stroke="' + DK + '" stroke-width="4" stroke-linecap="round"/>' +
+       '<path d="M32,72 L50,72 L68,72 L72,84 L28,84 Z" fill="none" stroke="' + DK + '" stroke-width="3"/>' +
+       // beam (slightly tilted — left pan lower/heavier)
+       '<line x1="6" y1="30" x2="94" y2="22" stroke="' + DK + '" stroke-width="4.5" stroke-linecap="round"/>' +
+       // left pan strings
+       '<line x1="6" y1="30" x2="18" y2="36" stroke="' + DK + '" stroke-width="2" opacity=".55"/>' +
+       '<line x1="36" y1="28" x2="26" y2="34" stroke="' + DK + '" stroke-width="2" opacity=".55"/>' +
+       // left pan (heavier/lower — "qualify: ✓")
+       '<path d="M4,36 Q10,54 20,54 Q30,54 36,36 Z" fill="' + G1 + '" fill-opacity=".25" stroke="' + DK + '" stroke-width="3"/>' +
+       '<path d="M12,46 L18,52 L28,40" stroke="' + DK + '" stroke-width="2.5" fill="none" stroke-linecap="round"/>' +
+       // right pan strings
+       '<line x1="94" y1="22" x2="84" y2="30" stroke="' + DK + '" stroke-width="2" opacity=".55"/>' +
+       '<line x1="64" y1="26" x2="74" y2="20" stroke="' + DK + '" stroke-width="2" opacity=".55"/>' +
+       // right pan ("afford: P")
+       '<path d="M64,20 Q70,38 80,38 Q90,38 96,20 Z" fill="' + DK + '" fill-opacity=".08" stroke="' + DK + '" stroke-width="3"/>' +
+       '<text x="80" y="34" text-anchor="middle" font-size="13" fill="' + G1 + '" font-weight="bold" font-family="sans-serif">P</text>',
 
-    // 12 — Building Better Money Habits: habit loop + checkmark
-    12: '<path d="M50,12 A38,38 0 1,1 12,50" fill="none" stroke="' + G1 + '" stroke-width="8" stroke-linecap="round"/>' +
-        '<path d="M14,44 L6,56 L24,58 Z" fill="' + G1 + '"/>' +
-        '<circle cx="50" cy="50" r="18" fill="' + G2 + '" opacity=".85"/>' +
+    // 6 — The Three Money Problems: three overlapping circles
+    6: '<circle cx="30" cy="40" r="24" fill="' + G1 + '" fill-opacity=".18" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<circle cx="70" cy="40" r="24" fill="' + G1 + '" fill-opacity=".14" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<circle cx="50" cy="70" r="24" fill="' + G1 + '" fill-opacity=".12" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<text x="26" y="46" text-anchor="middle" font-size="20" font-weight="bold" fill="' + DK + '" font-family="sans-serif">1</text>' +
+       '<text x="74" y="46" text-anchor="middle" font-size="20" font-weight="bold" fill="' + DK + '" font-family="sans-serif">2</text>' +
+       '<text x="50" y="76" text-anchor="middle" font-size="20" font-weight="bold" fill="' + DK + '" font-family="sans-serif">3</text>',
+
+    // 7 — Setting SMART Financial Goals: bullseye with arrow
+    7: '<circle cx="50" cy="54" r="36" fill="none" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<circle cx="50" cy="54" r="24" fill="none" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<circle cx="50" cy="54" r="12" fill="' + G1 + '" fill-opacity=".35" stroke="' + DK + '" stroke-width="3.5"/>' +
+       '<circle cx="50" cy="54" r="5" fill="' + DK + '"/>' +
+       // arrow from top-left into bullseye
+       '<line x1="10" y1="14" x2="50" y2="53" stroke="' + G1 + '" stroke-width="4" stroke-linecap="round"/>' +
+       '<path d="M4,10 L17,8 L19,21 Z" fill="' + G1 + '"/>',
+
+    // 8 — Understanding Your Payslip: document with Pula header and data rows
+    8: '<rect x="18" y="6" width="64" height="88" rx="6" fill="' + DK + '" fill-opacity=".04" stroke="' + DK + '" stroke-width="3.5"/>' +
+       // header band
+       '<rect x="22" y="10" width="56" height="20" rx="3" fill="' + G1 + '" fill-opacity=".3"/>' +
+       '<text x="50" y="27" text-anchor="middle" font-size="16" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>' +
+       // data rows
+       '<rect x="26" y="36" width="32" height="4" rx="2" fill="' + DK + '" opacity=".2"/>' +
+       '<rect x="62" y="36" width="14" height="4" rx="2" fill="' + DK + '" opacity=".2"/>' +
+       '<rect x="26" y="46" width="28" height="4" rx="2" fill="' + DK + '" opacity=".16"/>' +
+       '<rect x="62" y="46" width="14" height="4" rx="2" fill="' + DK + '" opacity=".16"/>' +
+       '<rect x="26" y="56" width="36" height="4" rx="2" fill="' + DK + '" opacity=".13"/>' +
+       '<rect x="66" y="56" width="10" height="4" rx="2" fill="' + DK + '" opacity=".13"/>' +
+       // divider
+       '<line x1="22" y1="66" x2="74" y2="66" stroke="' + DK + '" stroke-width="1.5" opacity=".25"/>' +
+       // totals
+       '<rect x="26" y="72" width="24" height="7" rx="3" fill="' + G1 + '" fill-opacity=".65"/>' +
+       '<rect x="56" y="72" width="18" height="7" rx="3" fill="' + G1 + '" fill-opacity=".5"/>',
+
+    // 9 — Creating a Personal Budget: horizontal bar chart
+    9: '<rect x="10" y="14" width="78" height="10" rx="5" fill="' + G1 + '" fill-opacity=".3" stroke="' + DK + '" stroke-width="2.5"/>' +
+       '<rect x="10" y="32" width="60" height="10" rx="5" fill="' + G1 + '" fill-opacity=".22" stroke="' + DK + '" stroke-width="2.5"/>' +
+       '<rect x="10" y="50" width="44" height="10" rx="5" fill="' + G1 + '" fill-opacity=".16" stroke="' + DK + '" stroke-width="2.5"/>' +
+       '<rect x="10" y="68" width="28" height="10" rx="5" fill="' + G1 + '" fill-opacity=".12" stroke="' + DK + '" stroke-width="2.5"/>' +
+       '<line x1="8" y1="84" x2="92" y2="84" stroke="' + DK + '" stroke-width="2.5" opacity=".28"/>',
+
+    // 10 — Managing Cash Flow: in/out circular arrows with Pula center
+    10: '<path d="M26,30 A30,30 0 1,1 74,30" fill="none" stroke="' + DK + '" stroke-width="5.5" stroke-linecap="round"/>' +
+        '<path d="M28,26 L18,36 L36,40 Z" fill="' + DK + '"/>' +
+        '<path d="M74,70 A30,30 0 1,1 26,70" fill="none" stroke="' + G1 + '" stroke-width="5.5" stroke-linecap="round"/>' +
+        '<path d="M72,74 L82,64 L64,60 Z" fill="' + G1 + '"/>' +
+        '<circle cx="50" cy="50" r="13" fill="' + G1 + '" fill-opacity=".35"/>' +
+        '<text x="50" y="55" text-anchor="middle" font-size="14" font-weight="bold" fill="' + DK + '" font-family="sans-serif">P</text>',
+
+    // 11 — Needs vs Wants: split circle with symbols
+    11: '<circle cx="50" cy="50" r="36" fill="none" stroke="' + DK + '" stroke-width="3.5"/>' +
+        '<path d="M50,14 A36,36 0 0,0 50,86 Z" fill="' + DK + '" fill-opacity=".08"/>' +
+        '<path d="M50,14 A36,36 0 0,1 50,86 Z" fill="' + G1 + '" fill-opacity=".18"/>' +
+        '<line x1="50" y1="14" x2="50" y2="86" stroke="' + DK + '" stroke-width="2.5"/>' +
+        // left side (need): simple house
+        '<path d="M20,56 L20,66 L40,66 L40,56" fill="none" stroke="' + DK + '" stroke-width="2.5"/>' +
+        '<path d="M18,56 L30,44 L42,56" fill="none" stroke="' + DK + '" stroke-width="2.5"/>' +
+        // right side (want): 5-point star outline
+        '<path d="M68,42 L70.5,49 L78,49 L72,53.5 L74,61 L68,56.5 L62,61 L64,53.5 L58,49 L65.5,49 Z"' +
+        ' fill="' + G1 + '" fill-opacity=".5" stroke="' + DK + '" stroke-width="1.5"/>',
+
+    // 12 — Building Better Money Habits: circular arrow loop + checkmark
+    12: '<path d="M50,12 A38,38 0 1,1 12,50" fill="none" stroke="' + DK + '" stroke-width="6.5" stroke-linecap="round"/>' +
+        '<path d="M14,44 L6,56 L24,58 Z" fill="' + DK + '"/>' +
+        '<circle cx="50" cy="50" r="19" fill="' + G1 + '" fill-opacity=".28"/>' +
+        '<circle cx="50" cy="50" r="19" fill="none" stroke="' + DK + '" stroke-width="2.5"/>' +
         '<path d="M39,50 L47,59 L63,40" stroke="' + DK + '" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
 
     // 13 — Emergency Funds: shield with Pula
-    13: '<path d="M50,8 L84,22 L84,56 Q84,80 50,94 Q16,80 16,56 L16,22 Z" fill="' + G1 + '"/>' +
-        '<path d="M50,18 L76,30 L76,56 Q76,74 50,86 Q24,74 24,56 L24,30 Z" fill="' + G2 + '" opacity=".55"/>' +
-        '<text x="50" y="65" text-anchor="middle" font-size="30" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>',
+    13: '<path d="M50,8 L84,22 L84,56 Q84,80 50,94 Q16,80 16,56 L16,22 Z"' +
+        ' fill="' + G1 + '" fill-opacity=".2" stroke="' + DK + '" stroke-width="4"/>' +
+        '<path d="M50,20 L76,32 L76,56 Q76,74 50,84 Q24,74 24,56 L24,32 Z"' +
+        ' fill="none" stroke="' + DK + '" stroke-width="2" opacity=".3"/>' +
+        '<text x="50" y="65" text-anchor="middle" font-size="28" font-weight="bold" fill="' + DK + '" font-family="serif">P</text>',
 
-    // 14 — Understanding Debt: interlocking chain links
-    14: '<rect x="8" y="26" width="30" height="18" rx="9" fill="none" stroke="' + G1 + '" stroke-width="5.5"/>' +
-        '<rect x="34" y="34" width="30" height="18" rx="9" fill="none" stroke="' + G2 + '" stroke-width="5.5"/>' +
-        '<rect x="60" y="26" width="30" height="18" rx="9" fill="none" stroke="' + G1 + '" stroke-width="5.5"/>' +
-        '<rect x="20" y="50" width="30" height="18" rx="9" fill="none" stroke="' + G2 + '" stroke-width="5.5"/>' +
-        '<rect x="48" y="50" width="30" height="18" rx="9" fill="none" stroke="' + G1 + '" stroke-width="5.5"/>',
+    // 14 — Understanding Debt: interlocking chain links (outline)
+    14: '<rect x="8" y="26" width="30" height="18" rx="9" fill="' + G1 + '" fill-opacity=".18" stroke="' + DK + '" stroke-width="5"/>' +
+        '<rect x="34" y="34" width="30" height="18" rx="9" fill="' + DK + '" fill-opacity=".06" stroke="' + DK + '" stroke-width="5"/>' +
+        '<rect x="60" y="26" width="30" height="18" rx="9" fill="' + G1 + '" fill-opacity=".18" stroke="' + DK + '" stroke-width="5"/>' +
+        '<rect x="20" y="50" width="30" height="18" rx="9" fill="' + DK + '" fill-opacity=".06" stroke="' + DK + '" stroke-width="5"/>' +
+        '<rect x="48" y="50" width="30" height="18" rx="9" fill="' + G1 + '" fill-opacity=".18" stroke="' + DK + '" stroke-width="5"/>',
 
-    // 15 — Assets vs Liabilities: two-column bar chart
-    15: '<rect x="12" y="44" width="32" height="42" rx="4" fill="' + G1 + '"/>' +
-        '<rect x="12" y="20" width="32" height="22" rx="4" fill="' + G1 + '" opacity=".5"/>' +
-        '<rect x="56" y="60" width="32" height="26" rx="4" fill="' + G2 + '" opacity=".85"/>' +
-        '<line x1="8" y1="88" x2="92" y2="88" stroke="' + W + '" stroke-width="2.5" opacity=".5"/>' +
-        '<text x="28" y="36" text-anchor="middle" font-size="16" fill="' + W + '" font-weight="bold" font-family="sans-serif">+</text>' +
-        '<text x="72" y="78" text-anchor="middle" font-size="16" fill="' + DK + '" font-weight="bold" font-family="sans-serif">−</text>',
+    // 15 — Assets vs Liabilities: two-column bar comparison
+    15: // assets column (taller, gold tint)
+        '<rect x="14" y="22" width="32" height="64" rx="4" fill="' + G1 + '" fill-opacity=".28" stroke="' + DK + '" stroke-width="3.5"/>' +
+        // liabilities column (shorter, plain)
+        '<rect x="54" y="54" width="32" height="32" rx="4" fill="' + DK + '" fill-opacity=".07" stroke="' + DK + '" stroke-width="3.5"/>' +
+        // baseline
+        '<line x1="10" y1="88" x2="90" y2="88" stroke="' + DK + '" stroke-width="2.5" opacity=".3"/>' +
+        // labels
+        '<text x="30" y="40" text-anchor="middle" font-size="16" fill="' + DK + '" font-weight="bold" font-family="sans-serif">+</text>' +
+        '<text x="70" y="74" text-anchor="middle" font-size="16" fill="' + DK + '" font-weight="bold" font-family="sans-serif">−</text>',
   };
 
-  // ── Helpers ────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────
   function fmtDur(secs) {
     if (!secs || secs < 0) return null;
     if (secs < 90) return secs + 's';
@@ -182,74 +221,89 @@
       .replace(/>/g, '&gt;');
   }
 
-  // ── kwPoster ───────────────────────────────────────────────
-  // item: content_items row { sort_order, title, section_label, duration_seconds }
-  // width: render width in px (height = width × 9/16)
+  // ── kwPoster ─────────────────────────────────────────────
   function kwPoster(item, width) {
     width = width || 320;
     var h    = Math.round(width * 9 / 16);
-    var n    = item.sort_order;   // null for welcome video
+    var n    = item.sort_order;            // null for welcome
     var dur  = fmtDur(item.duration_seconds);
     var grad = SEC_GRAD[item.section_label] || NAV_GRAD;
     var c1   = grad[0], c2 = grad[1];
     var key  = n == null ? 'w' : n;
     var gid  = 'kwpg-' + key + '-' + width;
-    var fid  = 'kwgr-' + gid;   // grain filter
-    var sid  = 'kwsh-' + gid;   // tile shadow
-    var tcid = 'kwtc-' + gid;   // tile clip
+    var sid  = 'kwsh-' + gid;   // tile shadow filter
+    var tcid = 'kwtc-' + gid;   // tile clipPath
 
-    // Illustration: illo drawn in 100×100 space, placed in glass tile
-    // Tile: x=88,y=16,w=144,h=106 → centre (160,69)
-    // Scale 0.80 → 80×80, translate so centre lands at (160,69)
-    var illo  = ILLOS[n == null ? 0 : n] || '';
-    var tx    = 120, ty = 29, sc = 0.80;
+    // Illustration: 100×100 illo → scale 0.82 (82×82) centered at (160, 72)
+    // translate(160-41, 72-41) = translate(119, 31)
+    var illo = ILLOS[n == null ? 0 : n] || '';
+    var tx = 119, ty = 31, sc = 0.82;
 
-    // Duration pill: right-edge at x=287, width estimated from text length
+    // Glass tile: x=12,y=10 w=296 h=124  → right:308 bottom:134
+    var tileX = 12, tileY = 10, tileW = 296, tileH = 124;
+
+    // Bottom strip: y ≈ 142–178
+    // Lesson label bottom-left
+    var label = n ? ('LESSON ' + String(n).padStart(2, '0')) : 'WELCOME';
+    // Play+duration pill — right-aligned to x=308
     var durStr = dur ? _esc(dur) : '';
-    var durW   = dur ? Math.round(durStr.length * 5.6 + 14) : 0;
-    var durX   = dur ? (287 - durW) : 0;
-    var durTx  = dur ? (durX + durW / 2) : 0;
+    // pill: fixed 9px monospace → ~5.6px/char + 28px overhead (icon + padding)
+    var pillW = dur ? Math.round(durStr.length * 5.6 + 30) : 0;
+    var pillX = dur ? (308 - pillW) : 0;
+    // play triangle inside pill
+    var triX  = pillX + 9;
 
     return '<svg viewBox="0 0 320 180" width="' + width + '" height="' + h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + _esc(item.title) + '">\n' +
 '<defs>\n' +
 '<linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1">' +
 '<stop offset="0%" stop-color="' + c1 + '"/><stop offset="100%" stop-color="' + c2 + '"/>' +
 '</linearGradient>\n' +
-'<filter id="' + fid + '" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">' +
-'<feTurbulence type="fractalNoise" baseFrequency=".70 .62" numOctaves="4" stitchTiles="stitch" result="noise"/>' +
-'<feColorMatrix in="noise" type="saturate" values="0" result="gn"/>' +
-'<feBlend in="SourceGraphic" in2="gn" mode="overlay" result="blend"/>' +
-'<feComposite in="blend" in2="SourceGraphic" operator="in"/>' +
+'<filter id="' + sid + '" x="-8%" y="-8%" width="116%" height="116%">' +
+'<feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="' + DK + '" flood-opacity=".10"/>' +
 '</filter>\n' +
-'<filter id="' + sid + '" x="-15%" y="-15%" width="130%" height="130%">' +
-'<feDropShadow dx="0" dy="3" stdDeviation="8" flood-color="#000" flood-opacity=".35"/>' +
-'</filter>\n' +
-'<clipPath id="' + tcid + '"><rect x="88" y="16" width="144" height="106" rx="10"/></clipPath>\n' +
+'<clipPath id="' + tcid + '">' +
+'<rect x="' + tileX + '" y="' + tileY + '" width="' + tileW + '" height="' + tileH + '" rx="14"/>' +
+'</clipPath>\n' +
 '</defs>\n' +
-// ── scene background ──
+
+// ── background gradient ──
 '<rect width="320" height="180" fill="url(#' + gid + ')"/>\n' +
-// ── gold depth rings ──
-'<circle cx="290" cy="-18" r="74" fill="none" stroke="' + G1 + '" stroke-width="1" opacity=".12"/>\n' +
-'<circle cx="290" cy="-18" r="55" fill="none" stroke="' + G1 + '" stroke-width="1.5" opacity=".09"/>\n' +
-'<circle cx="22" cy="196" r="62" fill="none" stroke="' + G1 + '" stroke-width="1" opacity=".1"/>\n' +
-// ── film grain overlay ──
-'<rect width="320" height="180" fill="white" opacity=".04" filter="url(#' + fid + ')"/>\n' +
+
+// ── subtle depth dots (gold accents) ──
+'<circle cx="300" cy="18" r="5" fill="' + G1 + '" opacity=".55"/>\n' +
+'<circle cx="286" cy="28" r="3" fill="' + G1 + '" opacity=".3"/>\n' +
+'<circle cx="18" cy="162" r="4" fill="' + DK + '" opacity=".1"/>\n' +
+
 // ── frosted-glass tile ──
-'<rect x="88" y="16" width="144" height="106" rx="10" fill="white" fill-opacity=".11" stroke="white" stroke-opacity=".22" stroke-width="1" filter="url(#' + sid + ')"/>\n' +
-'<rect x="89" y="17" width="142" height="3" rx="1.5" fill="white" fill-opacity=".13"/>\n' +
-// ── bespoke illustration ──
-(illo ? '<g transform="translate(' + tx + ',' + ty + ') scale(' + sc + ')" clip-path="url(#' + tcid + ')">' + illo + '</g>\n' : '') +
-// ── duration pill ──
-(dur ? '<rect x="' + durX + '" y="151" width="' + durW + '" height="18" rx="9" fill="black" fill-opacity=".38"/>\n' +
-       '<text x="' + durTx + '" y="164.5" text-anchor="middle" font-family="\'DM Mono\',monospace" font-size="9.5" fill="white" fill-opacity=".9" letter-spacing=".5">' + durStr + '</text>\n' : '') +
-// ── persistent gold play badge ──
-'<circle cx="303" cy="161" r="12" fill="' + G1 + '"/>\n' +
-'<circle cx="303" cy="161" r="9.5" fill="' + G2 + '" fill-opacity=".4"/>\n' +
-'<polygon points="300,155.5 300,166.5 311,161" fill="' + DK + '" opacity=".88"/>\n' +
+'<rect x="' + tileX + '" y="' + tileY + '" width="' + tileW + '" height="' + tileH + '" rx="14"' +
+  ' fill="white" fill-opacity=".82"' +
+  ' stroke="' + DK + '" stroke-opacity=".06" stroke-width="1"' +
+  ' filter="url(#' + sid + ')"/>\n' +
+
+// ── bespoke illustration (clipped to tile) ──
+(illo
+  ? '<g transform="translate(' + tx + ',' + ty + ') scale(' + sc + ')" clip-path="url(#' + tcid + ')">' + illo + '</g>\n'
+  : '') +
+
+// ── lesson label chip (bottom-left) ──
+'<rect x="14" y="150" width="' + (label.length * 6.2 + 12) + '" height="18" rx="9"' +
+  ' fill="' + DK + '" fill-opacity=".72"/>\n' +
+'<text x="20" y="163" font-family="\'DM Mono\',monospace" font-size="9" fill="white" letter-spacing="1.6">' + label + '</text>\n' +
+
+// ── play + duration pill (bottom-right) ──
+(dur
+  ? '<rect x="' + pillX + '" y="150" width="' + pillW + '" height="18" rx="9"' +
+      ' fill="' + DK + '" fill-opacity=".72"/>\n' +
+    '<polygon points="' + triX + ',155.5 ' + triX + ',165.5 ' + (triX + 6.5) + ',160.5" fill="white"/>\n' +
+    '<text x="' + (triX + 11) + '" y="163" font-family="\'DM Mono\',monospace" font-size="9" fill="white" letter-spacing=".4">' + durStr + '</text>\n'
+  : // no duration: show bare play badge
+    '<rect x="294" y="150" width="18" height="18" rx="9" fill="' + DK + '" fill-opacity=".72"/>\n' +
+    '<polygon points="299,155.5 299,165.5 309,160.5" fill="white"/>\n') +
+
 '</svg>';
   }
 
-  global.kwPoster    = kwPoster;
-  global.ILLOS       = ILLOS;
+  global.kwPoster = kwPoster;
+  global.ILLOS    = ILLOS;
 
 })(typeof window !== 'undefined' ? window : this);
