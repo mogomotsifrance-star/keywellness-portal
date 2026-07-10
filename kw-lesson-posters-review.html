@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Key Wellness — Lesson Poster Review</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="js/kw-lms-posters.js"></script>
+<style>
+  body { background:#0d0d0d; font-family:Inter,sans-serif; color:white; padding:32px; margin:0; }
+  h1 { font-size:22px; font-weight:700; margin:0 0 8px; color:#E8C018; }
+  p { font-size:13px; color:#aaa; margin:0 0 32px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:20px; }
+  .card { background:#1a1a1a; border-radius:12px; overflow:hidden; }
+  .card svg { display:block; width:100%; height:auto; }
+  .info { padding:12px 14px; }
+  .n { font-family:'DM Mono',monospace; font-size:9px; color:#E8C018; letter-spacing:2px; }
+  .t { font-size:13px; font-weight:600; margin:4px 0 2px; }
+  .s { font-size:11px; color:#888; }
+  .welcome { grid-column:1/-1; max-width:360px; }
+  h2 { font-size:13px; font-weight:600; color:#666; letter-spacing:2px; margin:32px 0 12px; text-transform:uppercase; }
+  .dur-test { font-size:11px; color:#555; margin-top:2px; }
+</style>
+</head>
+<body>
+<h1>Lesson Poster Review — AURORA/GLASS</h1>
+<p>All 16 bespoke illustrations rendered via <code>kwPoster()</code>. Verify: gradient scenes · frosted-glass tile · illustration · play badge · duration pill.</p>
+
+<h2>Welcome</h2>
+<div class="grid">
+  <div class="card welcome" id="p-welcome"></div>
+</div>
+
+<h2>Section A — Mindset &amp; Psychology</h2>
+<div class="grid" id="sec-a"></div>
+
+<h2>Section B — Diagnosis &amp; Direction</h2>
+<div class="grid" id="sec-b"></div>
+
+<h2>Section C — Practical Foundations</h2>
+<div class="grid" id="sec-c"></div>
+
+<h2>Section D — Protection &amp; Debt</h2>
+<div class="grid" id="sec-d"></div>
+
+<h2>Section E — Wealth Thinking</h2>
+<div class="grid" id="sec-e"></div>
+
+<h2>Edge cases</h2>
+<div class="grid" id="sec-edge"></div>
+
+<script>
+const LESSONS = [
+  { sort_order:null, title:'Welcome to Key Wellness', section_label:null, duration_seconds:null, _sec:'welcome' },
+  { sort_order:1,  title:'Introduction to Financial Literacy',          section_label:'Mindset & Psychology',  duration_seconds:240,  _sec:'a' },
+  { sort_order:2,  title:'Understanding Your Relationship with Money',  section_label:'Mindset & Psychology',  duration_seconds:195,  _sec:'a' },
+  { sort_order:3,  title:'Emotional Spending',                          section_label:'Mindset & Psychology',  duration_seconds:310,  _sec:'a' },
+  { sort_order:4,  title:'Lifestyle Inflation',                         section_label:'Mindset & Psychology',  duration_seconds:270,  _sec:'a' },
+  { sort_order:5,  title:'Qualifying vs Affording',                     section_label:'Mindset & Psychology',  duration_seconds:220,  _sec:'a' },
+  { sort_order:6,  title:'The Three Money Problems',                    section_label:'Diagnosis & Direction', duration_seconds:350,  _sec:'b' },
+  { sort_order:7,  title:'Setting SMART Financial Goals',               section_label:'Diagnosis & Direction', duration_seconds:290,  _sec:'b' },
+  { sort_order:8,  title:'Understanding Your Payslip',                  section_label:'Practical Foundations', duration_seconds:420,  _sec:'c' },
+  { sort_order:9,  title:'Creating a Personal Budget',                  section_label:'Practical Foundations', duration_seconds:385,  _sec:'c' },
+  { sort_order:10, title:'Managing Cash Flow',                          section_label:'Practical Foundations', duration_seconds:260,  _sec:'c' },
+  { sort_order:11, title:'Needs vs Wants',                              section_label:'Practical Foundations', duration_seconds:180,  _sec:'c' },
+  { sort_order:12, title:'Building Better Money Habits',                section_label:'Practical Foundations', duration_seconds:330,  _sec:'c' },
+  { sort_order:13, title:'Emergency Funds',                             section_label:'Protection & Debt',     duration_seconds:400,  _sec:'d' },
+  { sort_order:14, title:'Understanding Debt',                          section_label:'Protection & Debt',     duration_seconds:375,  _sec:'d' },
+  { sort_order:15, title:'Assets vs Liabilities',                       section_label:'Wealth Thinking',       duration_seconds:310,  _sec:'e' },
+];
+
+const EDGE = [
+  { sort_order:99, title:'Future lesson — no illustration yet', section_label:'Mindset & Psychology', duration_seconds:180 },
+  { sort_order:1,  title:'No duration seconds set',             section_label:'Practical Foundations', duration_seconds:null },
+];
+
+function makeCard(item) {
+  const label = item.sort_order ? 'LESSON ' + String(item.sort_order).padStart(2,'0') : 'WELCOME';
+  const dur = item.duration_seconds ? Math.round(item.duration_seconds/60) + ' min' : '—';
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.innerHTML = kwPoster(item, 280) +
+    '<div class="info">' +
+    '<div class="n">' + label + '</div>' +
+    '<div class="t">' + item.title + '</div>' +
+    '<div class="s">' + (item.section_label || 'Welcome · outside pathways') + '</div>' +
+    '<div class="dur-test">duration_seconds=' + (item.duration_seconds||'null') + ' → ' + dur + '</div>' +
+    '</div>';
+  return div;
+}
+
+LESSONS.forEach(it => {
+  const target = it._sec === 'welcome' ? document.getElementById('p-welcome') :
+                 it._sec === 'a' ? document.getElementById('sec-a') :
+                 it._sec === 'b' ? document.getElementById('sec-b') :
+                 it._sec === 'c' ? document.getElementById('sec-c') :
+                 it._sec === 'd' ? document.getElementById('sec-d') :
+                                   document.getElementById('sec-e');
+  target.appendChild(makeCard(it));
+});
+EDGE.forEach(it => document.getElementById('sec-edge').appendChild(makeCard(it)));
+</script>
+</body>
+</html>
