@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Key Wellness — Learning Pathways v2 Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --green:#387838; --green-dark:#2A5C2A; --green-deep:#18351A; --green-night:#0F2410;
+  --green-tint:#EAF4EA; --green-tint2:#DCEEDC;
+  --gold:#E8C018; --gold-soft:#FBF3D2;
+  --ink:#1C271C; --muted:#5E6E5E; --faint:#8A968A;
+  --cream:#F7F6EF; --white:#FFFFFF;
+  --border:#E1E5D9; --border-dark:#CBD3C3;
+  --red:#B84A3E;
+  --radius:16px; --radius-sm:11px;
+  --shadow:0 2px 10px rgba(24,53,26,.07);
+  --shadow-lg:0 16px 44px rgba(24,53,26,.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:var(--cream);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;cursor:pointer}
+img,svg{display:block}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+.preview-banner{background:var(--green-night);color:#fff;font-size:12px;padding:9px 20px;text-align:center;letter-spacing:.03em}
+.preview-banner strong{color:var(--gold)}
+.shell{max-width:1020px;margin:0 auto;padding:26px 20px 90px}
+.crumb{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-bottom:16px;min-height:22px}
+.crumb button{background:none;border:none;color:var(--green);font-size:13px;font-weight:600;padding:0}
+.crumb button:hover{text-decoration:underline}
+.crumb .sep{color:var(--faint)}
+
+h1.page-title{font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,4vw,34px);font-weight:800;letter-spacing:-.01em;margin-bottom:4px}
+.page-sub{color:var(--muted);font-size:14.5px;margin-bottom:24px;max-width:600px}
+
+.btn{display:inline-flex;align-items:center;gap:7px;border-radius:var(--radius-sm);font-weight:600;font-size:13.5px;padding:10px 18px;border:1.5px solid transparent;transition:.16s}
+.btn-primary{background:var(--green);color:#fff}
+.btn-primary:hover{background:var(--green-dark)}
+.btn-light{background:#fff;color:var(--green-deep)}
+.btn-light:hover{background:var(--gold-soft)}
+.btn-outline{background:transparent;border-color:var(--border-dark);color:var(--ink)}
+.btn-outline:hover{border-color:var(--green);color:var(--green)}
+.btn-ghost-dark{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.25)}
+.btn-ghost-dark:hover{background:rgba(255,255,255,.22)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:8px 14px;font-size:12.5px}
+
+/* ══ HERO: continue learning ══ */
+.hero{background:linear-gradient(112deg,var(--green-deep) 0%,var(--green-dark) 62%,var(--green) 100%);border-radius:20px;padding:26px;display:flex;gap:26px;align-items:center;color:#fff;margin-bottom:34px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;right:-70px;top:-70px;width:260px;height:260px;border-radius:50%;border:44px solid rgba(232,192,24,.09)}
+.hero-poster{width:300px;min-width:220px;border-radius:var(--radius-sm);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35);position:relative;flex-shrink:1}
+.hero-poster svg{width:100%;height:auto}
+.hero-poster .hp-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,36,16,.18);transition:.2s}
+.hero-poster:hover .hp-play{background:rgba(15,36,16,.02)}
+.hp-play i{width:54px;height:54px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center}
+.hp-play i::after{content:'';width:0;height:0;border-style:solid;border-width:10px 0 10px 16px;border-color:transparent transparent transparent var(--green-deep);margin-left:3px}
+.hero-body{flex:1;min-width:0;z-index:1}
+.hero-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);margin-bottom:8px}
+.hero-title{font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(20px,3vw,27px);font-weight:800;letter-spacing:-.01em;margin-bottom:6px}
+.hero-meta{font-size:13px;opacity:.75;margin-bottom:16px}
+.hero-bar{height:7px;background:rgba(255,255,255,.18);border-radius:99px;overflow:hidden;max-width:340px;margin-bottom:8px}
+.hero-bar i{display:block;height:100%;background:var(--gold);border-radius:99px}
+.hero-bar-lbl{font-family:'DM Mono',monospace;font-size:11.5px;opacity:.7;margin-bottom:18px}
+.hero-actions{display:flex;gap:10px;flex-wrap:wrap}
+@media(max-width:720px){.hero{flex-direction:column;align-items:stretch}.hero-poster{width:100%}}
+
+/* ══ Pathway cards ══ */
+.row-title{font-family:'Bricolage Grotesque',sans-serif;font-size:18px;font-weight:700;margin-bottom:14px;display:flex;align-items:baseline;gap:10px}
+.row-title small{font-size:12px;color:var(--muted);font-weight:500;font-family:'Inter',sans-serif}
+.pathway-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:36px}
+@media(max-width:820px){.pathway-grid{grid-template-columns:1fr}}
+.pw-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;position:relative;transition:transform .2s,box-shadow .2s,border-color .2s;text-align:left;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.pw-card.clickable{cursor:pointer}
+.pw-card.clickable:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg);border-color:var(--green)}
+.pw-card:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.pw-art{position:relative}
+.pw-art svg{width:100%;height:auto}
+.pw-art .lock-veil{position:absolute;inset:0;background:rgba(247,246,239,.55);display:flex;align-items:center;justify-content:center}
+.lock-veil .lv-chip{background:var(--green-night);color:#fff;border-radius:99px;font-size:11.5px;font-weight:700;padding:7px 14px;display:inline-flex;gap:6px;align-items:center;box-shadow:0 4px 14px rgba(0,0,0,.25);text-align:center}
+.pw-body{padding:16px 18px 18px;flex:1;display:flex;flex-direction:column}
+.pw-num{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.1em;margin-bottom:5px}
+.pw-title{font-family:'Bricolage Grotesque',sans-serif;font-size:20px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px}
+.pw-desc{font-size:12.5px;color:var(--muted);flex:1;margin-bottom:14px}
+.pw-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pw-count{font-size:11.5px;color:var(--muted);font-weight:600}
+.ring{width:46px;height:46px;position:relative;flex-shrink:0}
+.ring svg{transform:rotate(-90deg)}
+.ring .track{stroke:var(--green-tint2)}
+.ring .fill{stroke:var(--gold);stroke-linecap:round}
+.ring .ring-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10.5px;font-weight:500;color:var(--green-dark)}
+.cert-strip{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--green-dark);font-weight:600;background:var(--green-tint);border-radius:8px;padding:7px 10px;margin-top:12px}
+.pw-card.locked .cert-strip{background:#F1F0E8;color:var(--faint)}
+
+/* Welcome mini strip */
+.welcome-strip{display:flex;align-items:center;gap:14px;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:34px;box-shadow:var(--shadow)}
+.welcome-thumb{width:110px;min-width:110px;border-radius:9px;overflow:hidden;position:relative}
+.welcome-thumb svg{width:100%;height:auto}
+.w-body{flex:1;min-width:0}
+.w-tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--green);margin-bottom:1px}
+.w-title{font-weight:700;font-size:14px}
+.w-meta{font-size:12px;color:var(--muted)}
+
+/* ══ Pathway detail: chapter shelves ══ */
+.pw-head{background:linear-gradient(112deg,var(--green-deep),var(--green-dark));color:#fff;border-radius:20px;padding:24px 26px;margin-bottom:30px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+.pw-head::after{content:'';position:absolute;right:-60px;bottom:-90px;width:230px;height:230px;border-radius:50%;border:38px solid rgba(232,192,24,.08)}
+.pw-head .h-body{flex:1;min-width:240px;z-index:1}
+.pw-head h2{font-family:'Bricolage Grotesque',sans-serif;font-size:25px;font-weight:800;letter-spacing:-.01em}
+.pw-head .h-sub{font-size:13px;opacity:.75;margin-top:3px;max-width:520px}
+.pw-bar{height:7px;background:rgba(255,255,255,.18);border-radius:99px;overflow:hidden;margin-top:14px;max-width:380px}
+.pw-bar i{display:block;height:100%;background:var(--gold);border-radius:99px;transition:width .7s cubic-bezier(.4,0,.2,1)}
+.pw-bar-lbl{font-family:'DM Mono',monospace;font-size:11px;opacity:.7;margin-top:6px}
+
+.chapter{margin-bottom:30px}
+.ch-head{display:flex;align-items:baseline;gap:12px;margin-bottom:13px;flex-wrap:wrap}
+.ch-letter{font-family:'DM Mono',monospace;font-size:11px;background:var(--green);color:#fff;border-radius:6px;padding:3px 8px;font-weight:500}
+.ch-head.ch-locked .ch-letter{background:var(--border-dark)}
+.ch-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:17px}
+.ch-head.ch-locked .ch-title{color:var(--faint)}
+.ch-meta{font-size:12px;color:var(--muted);font-weight:600;margin-left:auto;font-family:'DM Mono',monospace}
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:14px}
+@media(max-width:640px){
+  .shelf{display:flex;overflow-x:auto;gap:12px;padding-bottom:10px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+  .shelf .lesson-card,.shelf .quiz-shelf-card{min-width:200px;scroll-snap-align:start}
+}
+.lesson-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;text-align:left;transition:transform .18s,box-shadow .18s,border-color .18s;position:relative;padding:0;display:flex;flex-direction:column}
+.lesson-card.playable{cursor:pointer}
+.lesson-card.playable:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.lesson-card.current{border-color:var(--gold);box-shadow:0 4px 18px rgba(232,192,24,.22)}
+.lesson-card:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.lc-art{position:relative}
+.lc-art svg{width:100%;height:auto}
+.lc-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:.18s}
+.lc-overlay .lc-play{width:42px;height:42px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;transform:scale(.85);transition:.18s}
+.lesson-card.playable:hover .lc-play{opacity:1;transform:scale(1)}
+.lesson-card.current .lc-play{opacity:1;transform:scale(1)}
+.lc-play::after{content:'';width:0;height:0;border-style:solid;border-width:8px 0 8px 13px;border-color:transparent transparent transparent var(--green-deep);margin-left:3px}
+.lc-done-veil{position:absolute;inset:0;background:rgba(247,246,239,.35)}
+.lc-check{position:absolute;top:9px;right:9px;width:24px;height:24px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.lc-lock-veil{position:absolute;inset:0;background:rgba(247,246,239,.62);display:flex;align-items:center;justify-content:center}
+.lc-lock-veil span{background:var(--green-night);color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;box-shadow:0 3px 10px rgba(0,0,0,.25)}
+.lc-dur{position:absolute;bottom:8px;right:8px;background:rgba(15,36,16,.82);color:#fff;font-family:'DM Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:5px}
+.lc-upnext{position:absolute;top:9px;left:9px;background:var(--gold);color:var(--green-deep);font-size:10px;font-weight:800;letter-spacing:.05em;padding:3px 9px;border-radius:99px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.lc-body{padding:11px 13px 13px}
+.lc-num{font-family:'DM Mono',monospace;font-size:10.5px;color:var(--faint);margin-bottom:2px}
+.lc-title{font-weight:600;font-size:13.5px;line-height:1.35}
+.lesson-card.locked .lc-title{color:var(--faint)}
+
+/* quiz shelf card */
+.quiz-shelf-card{border:2px dashed var(--border-dark);border-radius:var(--radius-sm);background:var(--green-tint);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;padding:18px;gap:8px}
+.quiz-shelf-card.ready{border-style:solid;border-color:var(--green);background:var(--white)}
+.quiz-shelf-card .q-ttl{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:15px}
+.quiz-shelf-card .q-sub{font-size:12px;color:var(--muted)}
+.quiz-passed-pill{display:inline-flex;align-items:center;gap:6px;background:var(--green);color:#fff;border-radius:99px;font-size:11.5px;font-weight:700;padding:5px 12px}
+
+/* ══ Player modal + Up Next ══ */
+.modal{display:none;position:fixed;inset:0;background:rgba(12,25,13,.78);z-index:100;align-items:center;justify-content:center;padding:18px}
+.modal.on{display:flex}
+.modal-box{background:var(--white);border-radius:18px;max-width:660px;width:100%;padding:22px;box-shadow:var(--shadow-lg);animation:rise .3s cubic-bezier(.3,1.2,.4,1)}
+@keyframes rise{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+.player{background:var(--green-night);border-radius:var(--radius-sm);aspect-ratio:16/9;position:relative;overflow:hidden;margin-bottom:14px;display:flex;align-items:center;justify-content:center}
+.player .brand-mark{font-family:'Bricolage Grotesque',sans-serif;color:rgba(255,255,255,.22);font-weight:800;font-size:20px}
+.player .big-play{position:absolute;width:60px;height:60px;border-radius:50%;background:var(--gold);border:none;display:flex;align-items:center;justify-content:center;transition:.18s;z-index:2}
+.player .big-play:hover{transform:scale(1.08)}
+.player .big-play i{width:0;height:0;border-style:solid;border-width:11px 0 11px 19px;border-color:transparent transparent transparent var(--green-deep);margin-left:4px}
+.play-track{position:absolute;bottom:0;left:0;right:0;height:6px;background:rgba(255,255,255,.15)}
+.play-track i{display:block;height:100%;background:var(--gold);width:0%}
+.upnext{position:absolute;inset:0;background:linear-gradient(112deg,rgba(15,36,16,.96),rgba(42,92,42,.96));display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#fff;z-index:3;padding:18px;text-align:center}
+.upnext.on{display:flex}
+.upnext .un-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.upnext .un-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:19px}
+.upnext .un-meta{font-size:12px;opacity:.7}
+.un-count{width:52px;height:52px;position:relative;margin:4px 0}
+.un-count svg{transform:rotate(-90deg)}
+.un-count .track{stroke:rgba(255,255,255,.2)}
+.un-count .fill{stroke:var(--gold);stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+.un-count b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:16px}
+.upnext .un-actions{display:flex;gap:10px}
+.modal-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18px;margin-bottom:2px}
+.modal-sub{font-size:12.5px;color:var(--muted);margin-bottom:12px}
+.complete-flash{display:none;align-items:center;gap:10px;background:var(--green-tint);border:1.5px solid var(--green);border-radius:var(--radius-sm);padding:10px 14px;font-size:13.5px;font-weight:600;color:var(--green-dark);margin-bottom:12px}
+.complete-flash.on{display:flex}
+.pts-chip{font-family:'DM Mono',monospace;background:var(--green);color:#fff;border-radius:99px;font-size:11.5px;padding:3px 10px}
+.modal-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sim-note{font-size:11px;color:var(--faint);font-style:italic}
+
+/* ══ Quiz ══ */
+.quiz-shell{max-width:640px;margin:0 auto}
+.quiz-intro,.quiz-q,.quiz-result{background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius);padding:28px;box-shadow:var(--shadow)}
+.q-eyebrow{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--green);margin-bottom:8px}
+.quiz-intro h2,.quiz-result h2{font-family:'Bricolage Grotesque',sans-serif;font-size:24px;font-weight:800;margin-bottom:8px;letter-spacing:-.01em}
+.quiz-intro p{font-size:14px;color:var(--muted);margin-bottom:8px}
+.quiz-rules{margin:16px 0 22px;display:flex;flex-direction:column;gap:8px}
+.quiz-rules div{display:flex;gap:10px;font-size:13.5px;align-items:baseline}
+.quiz-rules b{font-family:'DM Mono',monospace;color:var(--green);font-weight:500;min-width:38px}
+.q-progress{display:flex;gap:6px;margin-bottom:20px}
+.q-progress i{height:5px;flex:1;border-radius:99px;background:var(--green-tint2)}
+.q-progress i.done{background:var(--green)}
+.q-progress i.now{background:var(--gold)}
+.q-count{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted);margin-bottom:6px}
+.q-text{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:18.5px;margin-bottom:18px;line-height:1.4}
+.opt{display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;background:var(--cream);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:13px 15px;margin-bottom:9px;font-size:14px;transition:.14s;color:var(--ink)}
+.opt:hover{border-color:var(--green);background:var(--green-tint)}
+.opt.picked{border-color:var(--green);background:var(--green-tint);box-shadow:inset 0 0 0 1px var(--green)}
+.opt .o-key{font-family:'DM Mono',monospace;font-size:11px;background:var(--white);border:1px solid var(--border-dark);border-radius:5px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.opt.picked .o-key{background:var(--green);border-color:var(--green);color:#fff}
+.q-nav{display:flex;justify-content:space-between;margin-top:18px}
+.score-wrap{display:flex;align-items:center;gap:20px;margin:18px 0 20px;flex-wrap:wrap}
+.score-ring{width:96px;height:96px;position:relative;flex-shrink:0}
+.score-ring svg{transform:rotate(-90deg)}
+.score-ring .track{stroke:var(--green-tint2)}
+.score-ring .fill{stroke:var(--green);stroke-linecap:round;transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)}
+.score-ring.fail .fill{stroke:var(--red)}
+.score-ring .s-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:22px}
+.result-msg{flex:1;min-width:200px;font-size:14px;color:var(--muted)}
+.result-msg b{color:var(--ink)}
+.review-list{margin:14px 0 4px;display:flex;flex-direction:column;gap:6px}
+.review-list div{font-size:12.5px;display:flex;gap:8px;align-items:baseline}
+.rv-ok{color:var(--green);font-weight:700}
+.rv-no{color:var(--red);font-weight:700}
+
+/* ══ Celebration ══ */
+.celebrate{position:relative;background:linear-gradient(140deg,var(--green-night) 0%,var(--green-deep) 55%,var(--green-dark) 100%);border-radius:22px;padding:44px 30px;text-align:center;color:#fff;overflow:hidden;box-shadow:var(--shadow-lg)}
+.confetti{position:absolute;top:-12px;width:9px;height:14px;border-radius:2px;animation:fall linear forwards}
+@keyframes fall{to{transform:translateY(560px) rotate(560deg);opacity:0}}
+.cel-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);margin-bottom:10px}
+.cel-title{font-family:'Bricolage Grotesque',sans-serif;font-size:clamp(26px,4.5vw,36px);font-weight:800;letter-spacing:-.01em;margin-bottom:8px}
+.cel-sub{font-size:14px;opacity:.78;max-width:460px;margin:0 auto 26px}
+.cert-card{background:var(--cream);color:var(--ink);border-radius:14px;max-width:410px;margin:0 auto 26px;padding:24px 26px;text-align:center;box-shadow:0 14px 40px rgba(0,0,0,.35);border:1px solid var(--gold);position:relative;animation:rise .5s .2s cubic-bezier(.3,1.2,.4,1) both}
+.cert-card::before{content:'';position:absolute;inset:6px;border:1.5px solid var(--gold);border-radius:9px;pointer-events:none;opacity:.55}
+.cert-brand{font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;margin-bottom:10px}
+.cert-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:20px;color:var(--green-deep);margin-bottom:3px}
+.cert-lvl{font-size:12.5px;color:var(--muted);margin-bottom:14px}
+.cert-seal{width:52px;height:52px;border-radius:50%;background:var(--green);margin:0 auto 6px;display:flex;align-items:center;justify-content:center;color:var(--gold);font-size:22px;box-shadow:0 0 0 5px var(--gold-soft)}
+.cert-note{font-size:10.5px;color:var(--faint)}
+.cel-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.unlock-line{display:inline-flex;align-items:center;gap:9px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:99px;padding:8px 18px;font-size:13px;margin-bottom:24px}
+.unlock-line b{color:var(--gold)}
+
+footer.pv-foot{margin-top:56px;text-align:center;font-size:11.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+
+<div class="preview-banner"><strong>Preview v2</strong> — poster-driven pathways · continue-learning hero · up-next auto-flow · certificate celebration. Progress simulated at 7/15.</div>
+
+<div class="shell">
+  <div class="crumb" id="crumb"></div>
+  <div id="view"></div>
+  <footer class="pv-foot">Key Wellness · Learning Pathways preview v2 · posters shown are the templated SVG system; production uses ~40KB WebP equivalents, lazy-loaded</footer>
+</div>
+
+<!-- Player modal -->
+<div class="modal" id="player-modal" role="dialog" aria-modal="true">
+  <div class="modal-box">
+    <div class="modal-title" id="pm-title"></div>
+    <div class="modal-sub" id="pm-sub"></div>
+    <div class="complete-flash" id="pm-flash">✓ Lesson complete <span class="pts-chip">+25 pts · Learning</span></div>
+    <div class="player">
+      <span class="brand-mark">KEY WELLNESS</span>
+      <button class="big-play" id="pm-play" aria-label="Play video"><i></i></button>
+      <div class="play-track"><i id="pm-track"></i></div>
+      <div class="upnext" id="pm-upnext">
+        <div class="un-eyebrow">Up next</div>
+        <div class="un-title" id="un-title"></div>
+        <div class="un-meta" id="un-meta"></div>
+        <div class="un-count"><svg width="52" height="52"><circle class="track" cx="26" cy="26" r="21" fill="none" stroke-width="4"/><circle class="fill" id="un-ring" cx="26" cy="26" r="21" fill="none" stroke-width="4"/></svg><b id="un-num">5</b></div>
+        <div class="un-actions">
+          <button class="btn btn-ghost-dark btn-sm" onclick="cancelUpNext()">Not now</button>
+          <button class="btn btn-light btn-sm" onclick="playNextNow()">▶ Play now</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="sim-note">Simulated player — production streams the branded video from Supabase Storage.</span>
+      <button class="btn btn-outline btn-sm" onclick="closePlayer()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ══════════ DATA ══════════ */
+const SECTIONS = [
+  {key:'A', title:'Mindset & Psychology', hue:['#18351A','#2A5C2A'], videos:[
+    {n:1,t:'Introduction to Financial Literacy',d:'4 min',ic:'🧭'},
+    {n:2,t:'Understanding Your Relationship with Money',d:'4 min',ic:'🪞'},
+    {n:3,t:'Emotional Spending',d:'5 min',ic:'💭'},
+    {n:4,t:'Lifestyle Inflation',d:'4 min',ic:'📈'},
+    {n:5,t:'Qualifying vs Affording',d:'4 min',ic:'⚖️'},
+  ]},
+  {key:'B', title:'Diagnosis & Direction', hue:['#1C4430','#2F6B4A'], videos:[
+    {n:6,t:'The Three Money Problems',d:'5 min',ic:'🔍'},
+    {n:7,t:'Setting SMART Financial Goals',d:'4 min',ic:'🎯'},
+  ]},
+  {key:'C', title:'Practical Foundations', hue:['#2A5C2A','#3E8A3E'], videos:[
+    {n:8,t:'Understanding Your Payslip',d:'4 min',ic:'📄'},
+    {n:9,t:'Creating a Personal Budget',d:'4 min',ic:'📊'},
+    {n:10,t:'Managing Cash Flow',d:'4 min',ic:'🌊'},
+    {n:11,t:'Needs vs Wants',d:'4 min',ic:'🛒'},
+    {n:12,t:'Building Better Money Habits',d:'4 min',ic:'🔁'},
+  ]},
+  {key:'D', title:'Protection & Debt', hue:['#14301C','#295B38'], videos:[
+    {n:13,t:'Emergency Funds',d:'4 min',ic:'🆘'},
+    {n:14,t:'Understanding Debt',d:'4 min',ic:'⛓️'},
+  ]},
+  {key:'E', title:'Wealth Thinking', hue:['#2E5A18','#4C7F2E'], videos:[
+    {n:15,t:'Assets vs Liabilities',d:'4 min',ic:'🏛️'},
+  ]},
+];
+const ALL = SECTIONS.flatMap(s=>s.videos.map(v=>({...v, sec:s.key, secTitle:s.title, hue:s.hue})));
+const QUIZ = [
+  {sec:'A', q:'The five core pillars of financial literacy are:', opts:['Earning, spending, saving, borrowing, and investing','Budgeting, banking, insurance, tax, and retirement','Income, credit, property, shares, and pension','Planning, tracking, cutting, growing, and protecting'], a:0},
+  {sec:'A', q:'The most effective first tool against emotional spending is:', opts:['Cancelling your bank cards','A deliberate 24–48 hour pause before unplanned purchases','Avoiding shops and online stores entirely','Increasing your income'], a:1},
+  {sec:'A', q:'A bank approving you for a loan means:', opts:['You can comfortably afford the repayments','The repayment fits your budget and long-term goals','The bank believes you are likely to repay it, based on their risk model','The bank has assessed your full financial wellbeing'], a:2},
+  {sec:'B', q:'If your essential expenses exceed your take-home pay no matter how carefully you budget, you have:', opts:['An expense problem','A debt problem','An income problem','A budgeting problem'], a:2},
+  {sec:'C', q:'Which figure should your monthly budget be built around?', opts:['Your gross salary','Your net (take-home) salary','Your salary before voluntary deductions','Your salary plus expected overtime'], a:1},
+  {sec:'C', q:'Under the 50/30/20 budgeting rule, the 20% is allocated to:', opts:['Wants such as entertainment and dining out','Needs such as rent and transport','Savings and debt repayment above the minimums','Emergency spending only'], a:2},
+  {sec:'D', q:'The target size for a full emergency fund is:', opts:['One month of gross salary','Three to six months of essential living expenses','A fixed P1,000','Ten percent of your annual income'], a:1},
+  {sec:'E', q:'An asset is best defined as something that:', opts:['Is expensive and impressive to own','Was bought with cash rather than credit','Puts money into your pocket or grows in value over time','Includes any property, including the home you live in'], a:2},
+];
+const PASS_MARK = 6;
+const totalVideos = 15;
+
+/* ══════════ STATE ══════════ */
+const state = { completed:[1,2,3,4,5,6,7], quizPassed:false, quizBest:null, view:'landing' };
+function nextVideo(){ for(const v of ALL){ if(!state.completed.includes(v.n)) return v; } return null; }
+
+/* ══════════ POSTER SYSTEM (templated SVG — production: WebP renders of the same template) ══════════ */
+function poster(v, w){
+  w = w || 320;
+  const h = Math.round(w*9/16);
+  const c1 = v.hue[0], c2 = v.hue[1];
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${v.t}">
+    <defs><linearGradient id="g${v.n}w${w}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#g${v.n}w${w})"/>
+    <circle cx="${w-34}" cy="-14" r="58" fill="none" stroke="#E8C018" stroke-opacity=".18" stroke-width="14"/>
+    <circle cx="18" cy="${h+8}" r="40" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="10"/>
+    <text x="18" y="${h-46}" font-size="34">${v.ic}</text>
+    <text x="18" y="${h-18}" font-family="'DM Mono',monospace" font-size="12" fill="#E8C018" letter-spacing="2">${v.n?('LESSON '+String(v.n).padStart(2,'0')):'WELCOME'}</text>
+    <text x="${w-16}" y="30" text-anchor="end" font-family="'Bricolage Grotesque',sans-serif" font-weight="800" font-size="15" fill="#ffffff" fill-opacity=".55">KW</text>
+  </svg>`;
+}
+function pathwayArt(num, hue){
+  const w=340, h=142;
+  return `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="pg${num}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hue[0]}"/><stop offset="1" stop-color="${hue[1]}"/></linearGradient></defs>
+    <rect width="${w}" height="${h}" fill="url(#pg${num})"/>
+    <circle cx="${w-40}" cy="${h+22}" r="66" fill="none" stroke="#E8C018" stroke-opacity=".2" stroke-width="16"/>
+    <text x="20" y="${h-20}" font-family="'Bricolage Grotesque',sans-serif" font-weight="800" font-size="44" fill="#ffffff" fill-opacity=".16">0${num}</text>
+    <text x="${w-16}" y="28" text-anchor="end" font-family="'DM Mono',monospace" font-size="11" fill="#E8C018" letter-spacing="2">PATHWAY</text>
+  </svg>`;
+}
+
+/* ══════════ ROUTER ══════════ */
+const $view = document.getElementById('view');
+const $crumb = document.getElementById('crumb');
+function go(v){ state.view=v; render(); window.scrollTo({top:0}); }
+function render(){
+  ({landing:renderLanding, pathway:renderPathway, 'quiz-intro':renderQuizIntro, quiz:renderQuizQ, 'quiz-result':renderResult, celebrate:renderCelebrate})[state.view]();
+}
+function crumb(parts){
+  $crumb.innerHTML = parts.map((p,i)=> i<parts.length-1
+    ? `<button onclick="go('${p.v}')">${p.l}</button><span class="sep">›</span>`
+    : `<span>${p.l}</span>`).join('');
+}
+function ringSVG(pct, size, sw){
+  size = size||46; sw = sw||4.5;
+  const r=(size-sw)/2, c=2*Math.PI*r, off=c*(1-pct);
+  return `<svg width="${size}" height="${size}"><circle class="track" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}"/><circle class="fill" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;
+}
+
+/* ══════════ LANDING ══════════ */
+function renderLanding(){
+  crumb([{l:'Learn'}]);
+  const done = state.completed.length;
+  const pct = done/totalVideos;
+  const next = nextVideo();
+  const p1Done = done===totalVideos && state.quizPassed;
+
+  const hero = next ? `
+    <div class="hero">
+      <div class="hero-poster" role="button" tabindex="0" onclick="openPlayer(${next.n})" onkeydown="if(event.key==='Enter')openPlayer(${next.n})" style="cursor:pointer">
+        ${poster(next, 320)}
+        <div class="hp-play"><i></i></div>
+      </div>
+      <div class="hero-body">
+        <div class="hero-eyebrow">Continue learning · Pathway 1</div>
+        <div class="hero-title">Lesson ${next.n} — ${next.t}</div>
+        <div class="hero-meta">${next.d} · Section ${next.sec}: ${next.secTitle}</div>
+        <div class="hero-bar"><i style="width:${pct*100}%"></i></div>
+        <div class="hero-bar-lbl">${done} of ${totalVideos} lessons · ${totalVideos-done} to go before your quiz</div>
+        <div class="hero-actions">
+          <button class="btn btn-light" onclick="openPlayer(${next.n})">▶ Resume learning</button>
+          <button class="btn btn-ghost-dark" onclick="go('pathway')">View pathway</button>
+        </div>
+      </div>
+    </div>`
+  : `
+    <div class="hero">
+      <div class="hero-body">
+        <div class="hero-eyebrow">Pathway 1 complete</div>
+        <div class="hero-title">${state.quizPassed?'Foundation mastered — Pathway 2 awaits':'One step left: the Foundation quiz'}</div>
+        <div class="hero-meta">${state.quizPassed?'Your Prolearn Foundations certificate has been earned.':'Pass the quiz to earn your certificate and unlock Pathway 2.'}</div>
+        <div class="hero-actions" style="margin-top:14px">
+          ${state.quizPassed?'<button class="btn btn-light" onclick="go(\'celebrate\')">View your certificate</button>':'<button class="btn btn-light" onclick="startQuiz()">Start the quiz →</button>'}
+          <button class="btn btn-ghost-dark" onclick="go('pathway')">View pathway</button>
+        </div>
+      </div>
+    </div>`;
+
+  $view.innerHTML = `
+    <h1 class="page-title">Learning Pathways</h1>
+    <p class="page-sub">Three pathways, each building on the last. Finish every lesson, pass the pathway quiz, earn your certificate — then the next stage opens.</p>
+    ${hero}
+    <div class="row-title">Your pathways <small>quiz + certificate at the end of each</small></div>
+    <div class="pathway-grid">
+      <div class="pw-card clickable" tabindex="0" role="button" onclick="go('pathway')" onkeydown="if(event.key==='Enter')go('pathway')">
+        <div class="pw-art">${pathwayArt(1,['#18351A','#387838'])}</div>
+        <div class="pw-body">
+          <div class="pw-num">PATHWAY 01 · IN PROGRESS</div>
+          <div class="pw-title">Foundation</div>
+          <div class="pw-desc">Money mindset, budgeting, cash flow, debt and the shift to wealth thinking.</div>
+          <div class="pw-foot">
+            <span class="pw-count">15 lessons · 5 sections</span>
+            <div class="ring">${ringSVG(pct)}<span class="ring-label">${done}/${totalVideos}</span></div>
+          </div>
+          <div class="cert-strip">🎓 Earns: Prolearn Foundations certificate ${p1Done?'· ✓ earned':''}</div>
+        </div>
+      </div>
+      <div class="pw-card locked">
+        <div class="pw-art">${pathwayArt(2,['#1C4430','#2F6B4A'])}
+          <div class="lock-veil"><span class="lv-chip">🔒 Pass the Foundation quiz to unlock</span></div>
+        </div>
+        <div class="pw-body">
+          <div class="pw-num">PATHWAY 02</div>
+          <div class="pw-title">Financial Stability</div>
+          <div class="pw-desc">Strengthening your position — deeper protection, smarter borrowing, consistent saving. Lessons 16–25.</div>
+          <div class="pw-foot"><span class="pw-count">10 lessons · 1 quiz</span></div>
+          <div class="cert-strip">🎓 Earns: Prolearn Intermediate certificate</div>
+        </div>
+      </div>
+      <div class="pw-card locked">
+        <div class="pw-art">${pathwayArt(3,['#2E5A18','#4C7F2E'])}
+          <div class="lock-veil"><span class="lv-chip">◆ Coming soon</span></div>
+        </div>
+        <div class="pw-body">
+          <div class="pw-num">PATHWAY 03</div>
+          <div class="pw-title">Growth</div>
+          <div class="pw-desc">The next stage of the journey — being prepared by the Key Wellness coaching team. Lessons 26–35.</div>
+          <div class="pw-foot"><span class="pw-count">10 lessons · 1 quiz</span></div>
+          <div class="cert-strip">🎓 Earns: Prolearn Advanced certificate</div>
+        </div>
+      </div>
+    </div>
+    <div class="welcome-strip">
+      <div class="welcome-thumb">${poster({n:0,t:'Welcome to Key Wellness',ic:'👋',hue:['#18351A','#387838']},200)}</div>
+      <div class="w-body">
+        <div class="w-tag">Not part of a pathway</div>
+        <div class="w-title">Welcome to Key Wellness</div>
+        <div class="w-meta">3 min · watch any time</div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="openPlayer(0)">▶ Watch</button>
+    </div>`;
+}
+
+/* ══════════ PATHWAY DETAIL — chapter shelves ══════════ */
+function renderPathway(){
+  crumb([{l:'Learn', v:'landing'},{l:'Pathway 1 · Foundation'}]);
+  const done = state.completed.length;
+  const next = nextVideo();
+  const allDone = done===totalVideos;
+
+  let shelves = '';
+  SECTIONS.forEach(sec=>{
+    const secDone = sec.videos.filter(v=>state.completed.includes(v.n)).length;
+    const secLocked = next ? sec.videos.every(v=> v.n > next.n) : false;
+    shelves += `
+    <div class="chapter">
+      <div class="ch-head ${secLocked?'ch-locked':''}">
+        <span class="ch-letter">SECTION ${sec.key}</span>
+        <span class="ch-title">${sec.title}</span>
+        <span class="ch-meta">${secDone}/${sec.videos.length}</span>
+      </div>
+      <div class="shelf">
+        ${sec.videos.map(v=>{
+          const isDone = state.completed.includes(v.n);
+          const isCur = next && v.n===next.n;
+          const locked = !isDone && !isCur;
+          const cls = isDone?'playable':isCur?'playable current':'locked';
+          const vv = {...v, hue:sec.hue};
+          return `
+          <div class="lesson-card ${cls}" ${!locked?`role="button" tabindex="0" onclick="openPlayer(${v.n})" onkeydown="if(event.key==='Enter')openPlayer(${v.n})"`:''}>
+            <div class="lc-art">
+              ${poster(vv,320)}
+              ${isCur?'<span class="lc-upnext">UP NEXT</span>':''}
+              ${!locked?'<div class="lc-overlay"><span class="lc-play"></span></div>':''}
+              ${isDone?'<div class="lc-done-veil"></div><span class="lc-check">✓</span>':''}
+              ${locked?'<div class="lc-lock-veil"><span>🔒</span></div>':''}
+              <span class="lc-dur">${v.d}</span>
+            </div>
+            <div class="lc-body">
+              <div class="lc-num">LESSON ${String(v.n).padStart(2,'0')}</div>
+              <div class="lc-title">${v.t}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        ${sec.key==='E' ? `
+        <div class="quiz-shelf-card ${allDone?'ready':''}">
+          <div class="q-ttl">◆ Pathway Quiz</div>
+          <div class="q-sub">8 questions · 70% pass mark · earns your Prolearn Foundations certificate and unlocks Pathway 2</div>
+          ${state.quizPassed
+            ? '<span class="quiz-passed-pill">✓ Passed '+state.quizBest+'/8</span>'
+            : allDone
+              ? '<button class="btn btn-primary btn-sm" onclick="startQuiz()">Start quiz</button>'
+              : '<button class="btn btn-outline btn-sm" disabled>🔒 Finish all lessons first</button>'}
+        </div>`:''}
+      </div>
+    </div>`;
+  });
+
+  $view.innerHTML = `
+    <div class="pw-head">
+      <div class="h-body">
+        <h2>Pathway 1 · Foundation</h2>
+        <div class="h-sub">15 lessons across 5 sections. Each lesson unlocks the next — finish them all, pass the quiz, and your Prolearn Foundations certificate is yours.</div>
+        <div class="pw-bar"><i style="width:${(done/totalVideos)*100}%"></i></div>
+        <div class="pw-bar-lbl">${done} of ${totalVideos} lessons complete</div>
+      </div>
+      ${next?`<button class="btn btn-light" onclick="openPlayer(${next.n})">▶ Resume · Lesson ${next.n}</button>`:''}
+    </div>
+    ${shelves}
+    ${!allDone ? `<div style="text-align:center;margin-top:8px"><button class="btn btn-outline btn-sm" onclick="fastForward()">⏩ Preview shortcut: complete remaining lessons</button></div>`:''}`;
+}
+function fastForward(){ state.completed = Array.from({length:15},(_,i)=>i+1); renderPathway(); }
+
+/* ══════════ PLAYER + UP NEXT ══════════ */
+let playingVideo=null, playTimer=null, unTick=null;
+function findV(n){ return ALL.find(v=>v.n===n) || {n:0,t:'Welcome to Key Wellness',d:'3 min',sec:'—',secTitle:'Getting Started'}; }
+function openPlayer(n){
+  clearTimeout(playTimer); clearInterval(unTick);
+  playingVideo = n;
+  const v = findV(n);
+  document.getElementById('pm-title').textContent = (n?('Lesson '+n+' — '):'')+v.t;
+  document.getElementById('pm-sub').textContent = v.d + (n?(' · Section '+v.sec+': '+v.secTitle):'');
+  document.getElementById('pm-flash').classList.remove('on');
+  document.getElementById('pm-upnext').classList.remove('on');
+  document.getElementById('pm-play').style.display='flex';
+  const track=document.getElementById('pm-track');
+  track.style.transition='none'; track.style.width='0%';
+  document.getElementById('player-modal').classList.add('on');
+}
+function playCurrent(){
+  document.getElementById('pm-play').style.display='none';
+  const track = document.getElementById('pm-track');
+  track.style.transition='width 2.4s linear';
+  requestAnimationFrame(()=>{ track.style.width='100%'; });
+  playTimer = setTimeout(onVideoEnded, 2500);
+}
+document.getElementById('pm-play').addEventListener('click', playCurrent);
+function onVideoEnded(){
+  if(playingVideo>0 && !state.completed.includes(playingVideo)){
+    state.completed.push(playingVideo);
+    document.getElementById('pm-flash').classList.add('on');
+  }
+  const next = nextVideo();
+  if(playingVideo>0 && next){
+    document.getElementById('un-title').textContent = 'Lesson '+next.n+' — '+next.t;
+    document.getElementById('un-meta').textContent = next.d+' · Section '+next.sec+': '+next.secTitle;
+    const ring = document.getElementById('un-ring');
+    const c = 2*Math.PI*21; ring.setAttribute('stroke-dasharray',c); ring.setAttribute('stroke-dashoffset',0);
+    document.getElementById('pm-upnext').classList.add('on');
+    let left = 5; document.getElementById('un-num').textContent = left;
+    unTick = setInterval(()=>{
+      left--;
+      document.getElementById('un-num').textContent = Math.max(left,0);
+      ring.setAttribute('stroke-dashoffset', c*(1-(left/5)));
+      if(left<=0){ playNextNow(); }
+    },1000);
+  } else if(playingVideo>0 && !next){
+    setTimeout(()=>{ closePlayer(); if(!state.quizPassed) startQuiz(); },900);
+  }
+}
+function playNextNow(){
+  clearInterval(unTick);
+  const next = nextVideo();
+  if(next){ openPlayer(next.n); playCurrent(); }
+}
+function cancelUpNext(){ clearInterval(unTick); document.getElementById('pm-upnext').classList.remove('on'); }
+function closePlayer(){
+  clearTimeout(playTimer); clearInterval(unTick);
+  document.getElementById('player-modal').classList.remove('on');
+  if(state.view==='pathway' || state.view==='landing') render();
+}
+
+/* ══════════ QUIZ ══════════ */
+let qIdx=0, qAnswers=[];
+function startQuiz(){ go('quiz-intro'); }
+function renderQuizIntro(){
+  crumb([{l:'Learn',v:'landing'},{l:'Pathway 1',v:'pathway'},{l:'Quiz'}]);
+  $view.innerHTML = `
+  <div class="quiz-shell">
+    <div class="quiz-intro">
+      <div class="q-eyebrow">Pathway 1 · Foundation</div>
+      <h2>Pathway Quiz</h2>
+      <p>A short check on what you've learned across all five sections. Pass it to earn your <b>Prolearn Foundations certificate</b> and unlock Pathway 2.</p>
+      <div class="quiz-rules">
+        <div><b>8</b> multiple-choice questions, one at a time</div>
+        <div><b>70%</b> pass mark — that's 6 correct answers</div>
+        <div><b>∞</b> unlimited retakes; points awarded on your first pass</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="qIdx=0;qAnswers=[];go('quiz')">Start quiz →</button>
+        <button class="btn btn-outline" onclick="go('pathway')">Back to pathway</button>
+      </div>
+    </div>
+  </div>`;
+}
+function renderQuizQ(){
+  crumb([{l:'Learn',v:'landing'},{l:'Pathway 1',v:'pathway'},{l:'Quiz'}]);
+  const q = QUIZ[qIdx];
+  $view.innerHTML = `
+  <div class="quiz-shell">
+    <div class="quiz-q">
+      <div class="q-progress">${QUIZ.map((_,i)=>`<i class="${i<qIdx?'done':i===qIdx?'now':''}"></i>`).join('')}</div>
+      <div class="q-count">QUESTION ${qIdx+1} OF ${QUIZ.length} · SECTION ${q.sec}</div>
+      <div class="q-text">${q.q}</div>
+      ${q.opts.map((o,i)=>`
+        <button class="opt ${qAnswers[qIdx]===i?'picked':''}" onclick="pick(${i})">
+          <span class="o-key">${'ABCD'[i]}</span><span>${o}</span>
+        </button>`).join('')}
+      <div class="q-nav">
+        <button class="btn btn-outline btn-sm" onclick="qNav(-1)" ${qIdx===0?'disabled':''}>← Back</button>
+        <button class="btn btn-primary btn-sm" onclick="qNav(1)" ${qAnswers[qIdx]==null?'disabled':''}>${qIdx===QUIZ.length-1?'Submit answers':'Next →'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function pick(i){ qAnswers[qIdx]=i; renderQuizQ(); }
+function qNav(dir){
+  if(dir===1 && qIdx===QUIZ.length-1){ go('quiz-result'); return; }
+  qIdx+=dir; renderQuizQ();
+}
+function renderResult(){
+  crumb([{l:'Learn',v:'landing'},{l:'Pathway 1',v:'pathway'},{l:'Quiz result'}]);
+  const score = QUIZ.reduce((s,q,i)=> s + (qAnswers[i]===q.a?1:0), 0);
+  const passed = score>=PASS_MARK;
+  const firstPass = passed && !state.quizPassed;
+  if(passed){ state.quizPassed=true; state.quizBest=Math.max(state.quizBest||0,score); }
+  const size=96,sw=8,r=(size-sw)/2,c=2*Math.PI*r,off=c*(1-score/QUIZ.length);
+  $view.innerHTML = `
+  <div class="quiz-shell">
+    <div class="quiz-result">
+      <div class="q-eyebrow">Pathway 1 · Foundation</div>
+      <h2>${passed?'Quiz passed':'Not quite yet'}</h2>
+      <div class="score-wrap">
+        <div class="score-ring ${passed?'':'fail'}">
+          <svg width="${size}" height="${size}"><circle class="track" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}"/><circle class="fill" cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke-width="${sw}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
+          <span class="s-label">${score}/8</span>
+        </div>
+        <div class="result-msg">
+          ${passed
+            ? `You scored <b>${score} out of 8</b> — above the 70% pass mark. ${firstPass?'<b>+75 points</b> added to your Learning rewards.':'You had already passed, so no additional points this time.'}`
+            : `You scored <b>${score} out of 8</b>. You need <b>6 correct</b> to pass. Revisit the sections below and try again — retakes are unlimited.`}
+        </div>
+      </div>
+      <div class="review-list">
+        ${QUIZ.map((q,i)=>`<div><span class="${qAnswers[i]===q.a?'rv-ok':'rv-no'}">${qAnswers[i]===q.a?'✓':'✗'}</span><span>Q${i+1} · Section ${q.sec} — ${q.q}</span></div>`).join('')}
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        ${passed
+          ? `<button class="btn btn-primary" onclick="go('celebrate')">Claim your certificate →</button>`
+          : `<button class="btn btn-primary" onclick="qIdx=0;qAnswers=[];go('quiz')">Retake quiz</button>`}
+        <button class="btn btn-outline" onclick="go('pathway')">View pathway</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ══════════ CELEBRATION ══════════ */
+function renderCelebrate(){
+  crumb([{l:'Learn',v:'landing'},{l:'Pathway complete'}]);
+  const colors=['#E8C018','#387838','#FBF3D2','#2A5C2A','#ffffff'];
+  const confetti = Array.from({length:36},(_,i)=>{
+    const l=Math.random()*100, d=2.4+Math.random()*2.2, dl=Math.random()*1.4, c=colors[i%colors.length], r=Math.random()*360;
+    return `<span class="confetti" style="left:${l}%;background:${c};animation-duration:${d}s;animation-delay:${dl}s;transform:rotate(${r}deg)"></span>`;
+  }).join('');
+  $view.innerHTML = `
+  <div class="celebrate">
+    ${confetti}
+    <div class="cel-eyebrow">Pathway 1 complete</div>
+    <div class="cel-title">You've mastered the Foundation.</div>
+    <div class="cel-sub">15 lessons. 5 sections. One quiz, passed. That's a real change in how you understand money — and it's certified.</div>
+    <div class="cert-card">
+      <div class="cert-brand">Prolearn · Awarding Body · Botswana</div>
+      <div class="cert-seal">✦</div>
+      <div class="cert-title">Certificate of Completion</div>
+      <div class="cert-lvl">Financial Wellness — Foundations Level<br>Key Wellness Learning Pathway 1</div>
+      <div class="cert-note">Issued on completion · downloadable from your Rewards page</div>
+    </div>
+    <div class="unlock-line">🔓 <span><b>Pathway 2 — Financial Stability</b> is now unlocked</span></div>
+    <div class="cel-actions">
+      <button class="btn btn-light" onclick="go('landing')">Continue to Pathway 2 →</button>
+      <button class="btn btn-ghost-dark" onclick="go('pathway')">Review Pathway 1</button>
+    </div>
+  </div>`;
+}
+
+render();
+</script>
+</body>
+</html>
