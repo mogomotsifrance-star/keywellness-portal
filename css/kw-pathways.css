@@ -73,7 +73,7 @@
 .lp-pw-head{background:linear-gradient(112deg,var(--kw-green-deep),var(--kw-green));color:#fff;border-radius:var(--kw-r-lg);padding:24px 26px;margin-bottom:28px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:var(--kw-shadow-hover);position:relative;overflow:hidden}
 .lp-pw-head::after{content:'';position:absolute;right:-60px;bottom:-90px;width:230px;height:230px;border-radius:50%;border:38px solid rgba(240,201,10,.08)}
 .lp-pw-head .lp-h-body{flex:1;min-width:240px;z-index:1}
-.lp-pw-head h2{font-size:23px;font-weight:800;letter-spacing:-.01em;margin:0}
+.lp-pw-head h2{font-size:23px;font-weight:800;letter-spacing:-.01em;margin:0;color:#fff}
 .lp-pw-head .lp-h-sub{font-size:13px;opacity:.78;margin-top:3px;max-width:520px}
 
 .lp-chapter{margin-bottom:28px}
