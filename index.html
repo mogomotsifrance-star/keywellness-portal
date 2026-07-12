@@ -4639,12 +4639,14 @@ VIEWS['badges'] = function () {
     ${renderRewardsProgressCard()}
     <div class="card" style="margin-bottom:20px">
       <h4 style="margin-bottom:6px">🏆 Rewards Opt-In</h4>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Share my name, email, and reward points with my employer's HR team for rewards and recognition. HR sees your points and qualification status only — never your scores, answers, or any financial information. You can withdraw at any time.</p>
+      ${u.leaderboard_opt_in
+        ? `<div class="notice notice-green" style="margin-bottom:14px">✅ <strong>You're sharing your points with HR.</strong> Your name, email, and reward points are visible to your employer's HR team for rewards and recognition — never your scores, answers, or any financial information. Uncheck and save below to withdraw at any time.</div>`
+        : `<p style="font-size:13px;color:var(--muted);margin-bottom:14px">Share my name, email, and reward points with my employer's HR team for rewards and recognition. HR sees your points and qualification status only — never your scores, answers, or any financial information. You can withdraw at any time.</p>`}
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:14px">
         <input type="checkbox" id="lb-optin" ${u.leaderboard_opt_in ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0">
         <span style="font-size:13px;font-weight:500;color:var(--navy)">Share my points with HR</span>
       </label>
-      <button class="btn btn-primary btn-sm" onclick="saveRewardsOptIn()">Save</button>
+      <button class="btn btn-primary btn-sm" onclick="saveRewardsOptIn()">${u.leaderboard_opt_in ? 'Update' : 'Save'}</button>
     </div>
     <div class="badge-grid">
       ${renderBadgeCards()}
