@@ -3021,7 +3021,8 @@ function lpOpenPlayer(id) {
   document.getElementById('lp-pm-upnext').classList.remove('on');
   const video = document.getElementById('lp-pm-video');
   video.pause();
-  video._lpFired = false;
+  video._lpCompletionStarted = false;
+  video._lpCompletionData = null;
   video.src = lpStorageUrl(item.video_path);
   video.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(item, 640));
   video.currentTime = 0;
@@ -3029,60 +3030,88 @@ function lpOpenPlayer(id) {
 }
 function lpVideoTimeUpdate(e) {
   const v = e.target;
-  if (v.duration && v.currentTime / v.duration >= 0.9 && !v._lpFired) {
-    v._lpFired = true;
-    lpOnVideoEnded();
+  // ≥90% is a background safety net (records progress/points in case the
+  // browser never fires `ended`, e.g. a malformed file) — it must NOT
+  // interrupt playback. Only the real `ended` event is allowed to show the
+  // up-next overlay/advance the flow; important content can still be
+  // playing out at 90% and the popup would talk over it.
+  if (v.duration && v.currentTime / v.duration >= 0.9 && !v._lpCompletionStarted) {
+    v._lpCompletionStarted = true;
+    lpMarkComplete().then(data => { v._lpCompletionData = data; });
   }
 }
-function lpVideoEnded(e) {
-  if (e.target._lpFired) return; // already fired via the ≥90% fallback
-  e.target._lpFired = true;
-  lpOnVideoEnded();
+async function lpVideoEnded(e) {
+  const v = e.target;
+  let data = v._lpCompletionData;
+  if (!v._lpCompletionStarted) {
+    v._lpCompletionStarted = true;
+    data = await lpMarkComplete();
+  }
+  if (data) lpAdvanceAfterCompletion(data);
 }
-async function lpOnVideoEnded() {
+// Records the completion server-side and shows the "+pts" flash. Silent/
+// non-blocking — safe to call while the video is still playing (the ≥90%
+// fallback) or right as it truly ends.
+async function lpMarkComplete() {
   const id = state.lp.playingId;
   const item = lpFindItem(id);
-  if (!item) return;
+  if (!item) return null;
   try {
     const { data, error } = await sb.rpc('complete_video', { p_content_id: id });
-    if (error) { showToast('⚠️ ' + (error.message || 'Could not save your progress')); return; }
+    if (error) { showToast('⚠️ ' + (error.message || 'Could not save your progress')); return null; }
     if (!state.lp.progress.includes(id)) state.lp.progress.push(id);
     if (data && data.first_completion) document.getElementById('lp-pm-flash').classList.add('on');
     syncProgressBadges();
-    const nextId = data && data.next_content_id;
-    if (nextId) {
-      const nextItem = lpFindItem(nextId);
-      if (nextItem) {
-        state.lp.upNextId = nextId;
-        document.getElementById('lp-un-title').textContent = 'Lesson ' + nextItem.sort_order + ' — ' + nextItem.title;
-        document.getElementById('lp-un-meta').textContent = nextItem.section_label || '';
-        const ring = document.getElementById('lp-un-ring');
-        const c = 2*Math.PI*21;
-        ring.setAttribute('stroke-dasharray', c); ring.setAttribute('stroke-dashoffset', 0);
-        document.getElementById('lp-pm-upnext').classList.add('on');
-        let left = 5;
-        document.getElementById('lp-un-num').textContent = left;
-        _lpUnTimer = setInterval(() => {
-          left--;
-          document.getElementById('lp-un-num').textContent = Math.max(left,0);
-          ring.setAttribute('stroke-dashoffset', c*(1-(left/5)));
-          if (left<=0) lpPlayNextNow();
-        }, 1000);
-      }
-    } else if (item.pathway_id) {
-      setTimeout(() => {
-        lpClosePlayer();
-        const quiz = lpQuizFor(item.pathway_id);
-        state.lp.pathwayId = item.pathway_id;
-        if (quiz && !lpPassedAttempt(quiz.id)) lpStartQuiz(item.pathway_id);
-        else if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
-      }, 900);
-    } else if (state.lp.view==='pathway' || state.lp.view==='landing') {
-      VIEWS['learn']('videos');
-    }
+    return data;
   } catch (err) {
     showToast('⚠️ Could not save your progress — check your connection and try again.');
     console.error('[LP] complete_video failed:', err);
+    return null;
+  }
+}
+// Only ever called from the real `ended` event — shows the up-next
+// overlay / routes to the quiz. Exits native video fullscreen first: the
+// overlay is a DOM sibling of <video>, so it's invisible while the browser
+// has the video element itself in fullscreen (a native-fullscreen quirk,
+// not a z-index issue — the rest of the page, overlay included, simply
+// isn't part of the fullscreen element).
+async function lpAdvanceAfterCompletion(data) {
+  if (document.fullscreenElement) {
+    try { await document.exitFullscreen(); } catch (_) {}
+  }
+  const id = state.lp.playingId;
+  const item = lpFindItem(id);
+  if (!item) return;
+  const nextId = data && data.next_content_id;
+  if (nextId) {
+    const nextItem = lpFindItem(nextId);
+    if (nextItem) {
+      state.lp.upNextId = nextId;
+      document.getElementById('lp-un-title').textContent = 'Lesson ' + nextItem.sort_order + ' — ' + nextItem.title;
+      document.getElementById('lp-un-meta').textContent = nextItem.section_label || '';
+      const ring = document.getElementById('lp-un-ring');
+      const c = 2*Math.PI*21;
+      ring.setAttribute('stroke-dasharray', c); ring.setAttribute('stroke-dashoffset', 0);
+      document.getElementById('lp-pm-upnext').classList.add('on');
+      let left = 5;
+      document.getElementById('lp-un-num').textContent = left;
+      _lpUnTimer = setInterval(() => {
+        left--;
+        document.getElementById('lp-un-num').textContent = Math.max(left,0);
+        ring.setAttribute('stroke-dashoffset', c*(1-(left/5)));
+        if (left<=0) lpPlayNextNow();
+      }, 1000);
+    }
+  } else if (item.pathway_id) {
+    setTimeout(() => {
+      lpClosePlayer();
+      const quiz = lpQuizFor(item.pathway_id);
+      state.lp.pathwayId = item.pathway_id;
+      if (quiz && !lpPassedAttempt(quiz.id)) lpStartQuiz(item.pathway_id);
+      else if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
+    }, 900);
+  } else if (state.lp.view==='pathway' || state.lp.view==='landing') {
+    VIEWS['learn']('videos');
   }
 }
 function lpPlayNextNow() {

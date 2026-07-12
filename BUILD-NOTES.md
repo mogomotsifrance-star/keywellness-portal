@@ -2655,3 +2655,37 @@ Manual follow-ups only; no code/SQL in this section.
    RLS policies in `supabase_lms_schema.sql` (no HR/employer policy on
    any of the six new tables) and by inspection of every HR RPC touched
    or read during this build.
+
+## Post-launch fix — up-next overlay timing + fullscreen visibility
+
+Two real bugs found in live testing (Tshenolo):
+
+1. **Up-next popup interrupted playback before the video actually
+   finished** — the ≥90%-`timeupdate` fallback (added per the brief as a
+   safety net for browsers that never fire `ended`) was wired to trigger
+   the *entire* completion flow, including the intrusive up-next overlay,
+   the moment it crossed 90% — while the video was still actively playing
+   and the member could still be hearing important content.
+   **Fix**: split `lpOnVideoEnded()` into `lpMarkComplete()` (calls
+   `complete_video()`, awards points, shows the small "+pts" flash —
+   silent, non-blocking, safe to fire at 90% in the background) and
+   `lpAdvanceAfterCompletion()` (shows the up-next overlay / routes to the
+   quiz — now called ONLY from the real `ended` event). The ≥90% fallback
+   still guarantees progress/points are recorded even if `ended` never
+   fires; it just no longer talks over the video to do it. If `ended` fires
+   after the fallback already ran, the cached RPC response is reused
+   (`video._lpCompletionData`) instead of calling `complete_video()` twice.
+2. **Up-next popup never appeared in native fullscreen** — the overlay is
+   a DOM sibling of `<video>`, and native video fullscreen only fullscreens
+   the `<video>` element itself, not its parent — everything else,
+   overlay included, is simply outside the fullscreen element and isn't
+   rendered. **Fix**: `lpAdvanceAfterCompletion()` now calls
+   `document.exitFullscreen()` first (if the video is fullscreen) before
+   showing the overlay, so it's always visible regardless of how the
+   member was watching.
+
+Both verified via `javascript_tool` against a mocked `sb.rpc`: confirmed
+no overlay and no duplicate RPC call at 90%-during-playback, overlay shows
+correctly on real `ended` reusing the cached result, and
+`exitFullscreen()` is called and the overlay becomes visible when the
+video was in native fullscreen.
