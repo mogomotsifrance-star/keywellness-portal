@@ -2777,6 +2777,15 @@ function lpQuizFor(pathwayId) { return state.lp.quizzes.find(q => q.pathway_id =
 function lpPassedAttempt(quizId) { return state.lp.attempts.find(a => a.quiz_id === quizId && a.passed); }
 function lpBestAttempt(quizId) { return state.lp.attempts.filter(a => a.quiz_id === quizId).sort((a,b)=>b.score-a.score)[0]; }
 function lpCertFor(pathwayId) { return state.lp.certificates.find(c => c.pathway_id === pathwayId); }
+// Mirrors complete_video()'s reachability rule: the first pathway is always
+// reachable; any other needs the previous pathway's quiz passed by this user.
+function lpReachable(pathwayId) {
+  const ids = state.lp.pathways.map(p => p.id);
+  if (!ids.length || pathwayId === Math.min(...ids)) return true;
+  const prevQuiz = lpQuizFor(pathwayId - 1);
+  return !!(prevQuiz && lpPassedAttempt(prevQuiz.id));
+}
+function lpOpenPathway(id) { state.lp.pathwayId = id; lpGo('pathway'); }
 
 async function loadPathwaysData(force) {
   if (state.lp.loaded && !force) return;
@@ -2846,63 +2855,79 @@ function lpPathwayArt(pathway) {
 
 // ── Landing ──────────────────────────────────────────────
 function renderLpLanding(el) {
-  const p1 = lpPathway(1);
-  const items1 = lpItemsFor(1);
-  const done1 = items1.filter(i=>lpDone(i.id)).length;
-  const next = lpNextItem(1);
-  const quiz1 = lpQuizFor(1);
-  const passed1 = quiz1 && lpPassedAttempt(quiz1.id);
+  // Hero follows the user's current pathway: the first active + reachable one
+  // with lessons or a quiz still outstanding, else the last one they finished.
+  const reachableActive = state.lp.pathways
+    .filter(p => p.status === 'active' && lpReachable(p.id))
+    .sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
+  const hp = reachableActive.find(p => {
+    const its = lpItemsFor(p.id);
+    const q = lpQuizFor(p.id);
+    return its.some(i => !lpDone(i.id)) || (q && !lpPassedAttempt(q.id));
+  }) || reachableActive[reachableActive.length-1] || lpPathway(1);
+  const hpId = hp?.id || 1;
+  const itemsH = hp ? lpItemsFor(hpId) : [];
+  const doneH = itemsH.filter(i=>lpDone(i.id)).length;
+  const next = hp ? lpNextItem(hpId) : null;
+  const quizH = hp && lpQuizFor(hpId);
+  const passedH = quizH && lpPassedAttempt(quizH.id);
   const welcome = lpWelcome();
 
   let hero;
   if (next) {
-    const pct = items1.length ? done1/items1.length : 0;
+    const pct = itemsH.length ? doneH/itemsH.length : 0;
     hero = `<div class="lp-hero">
       <button class="lp-hero-poster" onclick="lpOpenPlayer('${next.id}')" aria-label="Play ${escHtml(next.title)}">
         ${lpPoster(next, 320)}
         <div class="lp-hp-play"><span class="lp-play-badge"></span></div>
       </button>
       <div class="lp-hero-body">
-        <div class="lp-eyebrow">Continue learning · ${escHtml(p1?.title||'Pathway 1')}</div>
+        <div class="lp-eyebrow">Continue learning · ${escHtml(hp?.title||'Pathway 1')}</div>
         <div class="lp-hero-title">Lesson ${next.sort_order} — ${escHtml(next.title)}</div>
         <div class="lp-hero-meta">${escHtml(next.section_label||'')}</div>
         <div class="lp-bar"><i style="width:${Math.round(pct*100)}%"></i></div>
-        <div class="lp-bar-lbl">${done1} of ${items1.length} lessons · ${items1.length-done1} to go before your quiz</div>
+        <div class="lp-bar-lbl">${doneH} of ${itemsH.length} lessons · ${itemsH.length-doneH} to go before your quiz</div>
         <div class="lp-hero-actions">
           <button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${next.id}')">▶ Resume learning</button>
-          <button class="lp-btn lp-btn-ghost" onclick="lpGo('pathway')">View pathway</button>
+          <button class="lp-btn lp-btn-ghost" onclick="lpOpenPathway(${hpId})">View pathway</button>
         </div>
       </div>
     </div>`;
   } else {
     hero = `<div class="lp-hero">
       <div class="lp-hero-body">
-        <div class="lp-eyebrow">${escHtml(p1?.title||'Pathway 1')} complete</div>
-        <div class="lp-hero-title">${passed1?'Foundation mastered':'One step left: the Foundation quiz'}</div>
-        <div class="lp-hero-meta">${passed1?'Your Prolearn certificate is ready.':'Pass the quiz to earn your certificate and unlock what comes next.'}</div>
+        <div class="lp-eyebrow">${escHtml(hp?.title||'Pathway 1')} complete</div>
+        <div class="lp-hero-title">${passedH?`${escHtml(hp?.title||'Pathway')} mastered`:quizH?`One step left: the ${escHtml(hp?.title||'pathway')} quiz`:`${escHtml(hp?.title||'Pathway')} lessons complete`}</div>
+        <div class="lp-hero-meta">${passedH?'Your Prolearn certificate is ready.':quizH?'Pass the quiz to earn your certificate and unlock what comes next.':'The quiz for this pathway is coming soon.'}</div>
         <div class="lp-hero-actions" style="margin-top:14px">
-          ${passed1
-            ? `<button class="lp-btn lp-btn-light" onclick="lpViewCertificate(1)">View your certificate</button>`
-            : `<button class="lp-btn lp-btn-light" onclick="lpStartQuiz(1)">Start the quiz →</button>`}
-          <button class="lp-btn lp-btn-ghost" onclick="lpGo('pathway')">View pathway</button>
+          ${passedH
+            ? `<button class="lp-btn lp-btn-light" onclick="lpViewCertificate(${hpId})">View your certificate</button>`
+            : quizH
+              ? `<button class="lp-btn lp-btn-light" onclick="lpStartQuiz(${hpId})">Start the quiz →</button>`
+              : ''}
+          <button class="lp-btn lp-btn-ghost" onclick="lpOpenPathway(${hpId})">View pathway</button>
         </div>
       </div>
     </div>`;
   }
 
   const cards = state.lp.pathways.map(p => {
-    const isActive = p.status === 'active';
+    const reachable = lpReachable(p.id);
+    const isActive = p.status === 'active' && reachable;
     const itemsP = lpItemsFor(p.id);
     const doneP = itemsP.filter(i=>lpDone(i.id)).length;
     const quizP = lpQuizFor(p.id);
     const passedP = quizP && lpPassedAttempt(quizP.id);
     const pctP = itemsP.length ? doneP/itemsP.length : 0;
+    const prevP = state.lp.pathways.find(x => x.id === p.id - 1);
     const veil = p.status==='coming_soon'
       ? `<div class="lp-lock-veil"><span class="lp-lv-chip">◆ Coming soon</span></div>`
       : p.status==='locked'
         ? `<div class="lp-lock-veil"><span class="lp-lv-chip">🔒 Locked</span></div>`
-        : '';
-    return `<div class="lp-pw-card ${isActive?'clickable':'locked'}" ${isActive?`tabindex="0" role="button" onclick="lpGo('pathway')" onkeydown="if(event.key==='Enter')lpGo('pathway')"`:''}>
+        : !reachable
+          ? `<div class="lp-lock-veil"><span class="lp-lv-chip">🔒 Pass the ${escHtml(prevP?.title||'previous pathway')} quiz</span></div>`
+          : '';
+    return `<div class="lp-pw-card ${isActive?'clickable':'locked'}" ${isActive?`tabindex="0" role="button" onclick="lpOpenPathway(${p.id})" onkeydown="if(event.key==='Enter')lpOpenPathway(${p.id})"`:''}>
       <div class="lp-pw-art">${lpPathwayArt(p)}${veil}</div>
       <div class="lp-pw-body">
         <div class="lp-pw-num">PATHWAY ${String(p.id).padStart(2,'0')}${isActive?' · IN PROGRESS':''}</div>
@@ -2935,6 +2960,11 @@ function renderLpLanding(el) {
 function renderLpPathway(el) {
   const pid = state.lp.pathwayId || 1;
   const pathway = lpPathway(pid);
+  if (!pathway || pathway.status !== 'active' || !lpReachable(pid)) {
+    state.lp.view = 'landing';
+    renderLpLanding(el);
+    return;
+  }
   const items = lpItemsFor(pid);
   const done = items.filter(i=>lpDone(i.id)).length;
   const total = items.length;
@@ -2981,7 +3011,9 @@ function renderLpPathway(el) {
         ${passed
           ? `<button class="lp-quiz-passed-pill" style="border:none;cursor:pointer" onclick="lpViewCertificate(${pid})">✓ Passed ${best?best.score:''}/${quiz?quiz.question_count:8}</button>`
           : allDone
-            ? `<button class="lp-btn lp-btn-primary lp-btn-sm" onclick="lpStartQuiz(${pid})">Start quiz</button>`
+            ? quiz
+              ? `<button class="lp-btn lp-btn-primary lp-btn-sm" onclick="lpStartQuiz(${pid})">Start quiz</button>`
+              : `<button class="lp-btn lp-btn-outline lp-btn-sm" disabled>◆ Quiz coming soon</button>`
             : `<button class="lp-btn lp-btn-outline lp-btn-sm" disabled>🔒 Finish all lessons first</button>`}
       </div>` : '';
     return `<div class="lp-chapter">
