@@ -594,9 +594,11 @@ function toggleSched() {
 let _toolSaveTimer;
 function _toolSave(){
   const sb = window._toolSb, u = window._toolUser;
-  if (!sb || !u) return;
   const inputs = {};
   document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  // Mirror to localStorage so inputs survive logged-out / offline / cloud-write failure.
+  try { localStorage.setItem('kw_tool_rent_vs_buy', JSON.stringify({ inputs })); } catch(_){}
+  if (!sb || !u) return;
   clearTimeout(_toolSaveTimer);
   _toolSaveTimer = setTimeout(async () => {
     const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'rent_vs_buy', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
@@ -621,11 +623,13 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } catch(e){ console.warn('Income prefill failed:', e); }
     // Restore saved inputs (source of truth — overrides income prefill), then persist on change
+    const _apply = (_inp) => { if (!_inp) return false; Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); return true; };
+    const _local = () => { try { const j = JSON.parse(localStorage.getItem('kw_tool_rent_vs_buy')||'null'); return j && j.inputs; } catch(_){ return null; } };
     try {
       const { data: row, error } = await window._toolSb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'rent_vs_buy').maybeSingle();
-      if (error) console.warn('Rent-vs-buy load from Supabase failed:', error);
-      else { const _inp = row && row.data && row.data.inputs; if (_inp) { Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); } }
-    } catch(e){ console.warn('Rent-vs-buy restore error:', e); }
+      if (error) { console.warn('Rent-vs-buy load from Supabase failed:', error); _apply(_local()); }
+      else { const _inp = row && row.data && row.data.inputs; if (!_apply(_inp)) _apply(_local()); }
+    } catch(e){ console.warn('Rent-vs-buy restore error:', e); _apply(_local()); }
     document.addEventListener('input', _toolSave);
     KW.reveal('.card');
   });

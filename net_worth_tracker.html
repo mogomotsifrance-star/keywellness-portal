@@ -171,7 +171,11 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 </div>
 
 <script>
-let data = JSON.parse(localStorage.getItem('kw_networth_v1') || '{"assets":[],"liabilities":[],"history":[]}');
+let data;
+try { data = JSON.parse(localStorage.getItem('kw_networth_v1') || '{"assets":[],"liabilities":[],"history":[]}'); }
+catch(_) { data = null; }
+if (!data || typeof data !== 'object') data = { assets:[], liabilities:[], history:[] };
+data.assets = data.assets || []; data.liabilities = data.liabilities || []; data.history = data.history || [];
 
 function save(){
   localStorage.setItem('kw_networth_v1', JSON.stringify(data));

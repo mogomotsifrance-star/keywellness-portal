@@ -67,6 +67,10 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 .sb-item{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:2px;border-radius:999px;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;transition:background-color .2s var(--kw-ease),color .2s var(--kw-ease)}
 .sb-item:hover{color:#fff;background:rgba(255,255,255,.08)}
 .sb-item.active{color:var(--kw-green);background:var(--white);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+/* Keyboard focus ring for interactive controls (a11y). */
+.sb-item:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.bn-item:focus-visible{outline:2px solid var(--kw-green);outline-offset:-2px}
+.btn:focus-visible,.hamburger-btn:focus-visible,[role="button"]:focus-visible,a:focus-visible{outline:2px solid var(--kw-green);outline-offset:2px}
 .sb-item .icon{font-size:16px;width:20px;text-align:center}
 .sb-footer{padding:12px 16px 16px}
 .sb-points-chip{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--white);border:1px solid var(--kw-line);border-radius:999px;padding:8px 12px;margin-bottom:10px;color:var(--kw-yellow-ink);font-size:12px;font-weight:800}
@@ -389,7 +393,7 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
   #sidebar-overlay.open{display:block}
   .hamburger-btn{display:flex}
   #main{margin-left:0}
-  .page-content{padding:14px 14px 20px}
+  .page-content{padding:14px 14px calc(var(--bottom-nav-h) + 20px)}
   .page-header{padding:12px 16px}
   .page-header h2{font-size:16px}
   .booking-grid,.choice-grid,.bk-services-grid{grid-template-columns:1fr}
@@ -400,9 +404,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
   .welcome-modal-box{padding:22px 18px}
   .auth-box{padding:28px 22px}
 }
-@media(min-width:769px){#bottom-nav{display:none}}
-#bottom-nav{display:none!important}
-.bn-item{display:flex;flex-direction:column;align-items:center;gap:2px;color:rgba(255,255,255,.45);font-size:10px;font-weight:600;cursor:pointer;padding:6px}
+/* Mobile bottom navigation bar — hidden on desktop, shown at ≤768px. */
+#bottom-nav{display:none;position:fixed;left:0;right:0;bottom:0;height:var(--bottom-nav-h);background:var(--kw-navy);z-index:108;align-items:stretch;justify-content:space-around;box-shadow:0 -2px 12px rgba(0,0,0,.18)}
+@media(max-width:768px){#bottom-nav{display:flex}}
+.bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:rgba(255,255,255,.55);font-size:10px;font-weight:600;cursor:pointer;padding:6px;min-height:44px}
 .bn-item.active{color:var(--kw-yellow)}
 .bn-icon{font-size:19px}
 /* ── Mobile "More" sheet ── */
@@ -480,8 +485,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <h2 id="welcome-heading">You're all set! 🎉</h2>
     <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
     <div id="welcome-video-area">
-      <div style="padding:56.25% 0 0 0;position:relative;border-radius:12px;overflow:hidden">
-        <iframe id="welcome-iframe" src="https://player.vimeo.com/video/1204871701?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share" referrerpolicy="strict-origin-when-cross-origin" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="Start Strong with Key Wellness"></iframe>
+      <div style="padding:56.25% 0 0 0;position:relative;border-radius:12px;overflow:hidden;background:#000">
+        <video id="welcome-video" controls playsinline preload="metadata" style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000" title="Welcome to Key Wellness"></video>
       </div>
     </div>
     <div id="welcome-start-wrap" style="display:none;margin-top:8px">
@@ -506,7 +511,7 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
       <label style="font-size:12px;font-weight:600;color:var(--muted);display:block;margin-bottom:6px">Enter your password to continue</label>
       <div class="pw-field">
         <input id="sc-pass" type="password" placeholder="Your password"
-          style="width:100%;padding:11px 14px;padding-right:44px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Inter',sans-serif;outline:none"
+          style="width:100%;padding:11px 14px;padding-right:44px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:'Nunito',sans-serif;outline:none"
           onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
           onkeydown="if(event.key==='Enter')confirmSession()">
         <button type="button" class="pw-toggle" aria-label="Show password" aria-pressed="false" onclick="togglePwVisibility(this,'sc-pass')"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -758,6 +763,17 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 // ══════════════════════════════════════════════════
 const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+// Guard against the Supabase CDN script failing to load (offline / CDN outage /
+// blocked): without this the next line throws at parse time and the whole page
+// renders blank with no explanation.
+if (!window.supabase || !window.supabase.createClient) {
+  document.body.innerHTML = '<div style="max-width:420px;margin:80px auto;padding:32px;font-family:sans-serif;text-align:center;color:#23261f">'
+    + '<h2 style="margin-bottom:10px">Couldn\'t load Key Wellness</h2>'
+    + '<p style="color:#4b4e48;margin-bottom:20px">We couldn\'t reach a required service. Please check your internet connection and try again.</p>'
+    + '<button onclick="location.reload()" style="background:#397e2b;color:#fff;border:none;border-radius:999px;padding:11px 22px;font-weight:700;cursor:pointer">Retry</button>'
+    + '</div>';
+  throw new Error('Supabase JS SDK failed to load');
+}
 const { createClient } = window.supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 window._kwSb = sb; // shared client — kw-badges.js and tool pages reuse this
@@ -780,6 +796,18 @@ let state = {
 // ══════════════════════════════════════════════════
 //  LOCALSTORAGE CACHE HELPERS
 // ══════════════════════════════════════════════════
+// Safe localStorage JSON read — never throws on a corrupted/partial value, so a
+// single bad key can't blank a view or (before the auth listener is registered)
+// brick login. Returns `fallback` on missing or malformed data.
+function safeParseLS(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return fallback;
+    const v = JSON.parse(raw);
+    return v == null ? fallback : v;
+  } catch (_) { return fallback; }
+}
+
 function clearLocalUserCache() {
   const keys = [];
   for (let i = 0; i < localStorage.length; i++) {
@@ -1404,7 +1432,16 @@ async function doSignup() {
 }
 
 async function doLogout() {
-  await sb.auth.signOut();
+  try { await sb.auth.signOut(); }
+  catch (e) { console.warn('signOut error — clearing local state anyway:', e); }
+  // Don't rely on the onAuthStateChange SIGNED_OUT handler firing — clear
+  // everything synchronously so logout always wipes the session and cached
+  // financial data, even for a returning user on a shared computer.
+  clearLocalUserCache();
+  clearSessionTrust();
+  currentUser = null;
+  // Hard reset to a clean auth screen (drops in-memory state and the hash view).
+  window.location.replace(location.pathname);
 }
 
 function toggleForgotPanel() {
@@ -1479,11 +1516,11 @@ function buildNav(current) {
   const navItems = [...NAV];
   if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
   document.getElementById('sb-nav').innerHTML = navItems.map(n => `
-    <div class="sb-item${current===n.id?' active':''}" onclick="closeSidebar();${n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="sb-item${current===n.id?' active':''}" role="button" tabindex="0" aria-current="${current===n.id?'page':'false'}" onclick="closeSidebar();${n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" aria-label="${n.label}">
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('bottom-nav').innerHTML = MOBILE_NAV.map(n => `
-    <div class="bn-item${current===n.id?' active':''}" onclick="${n.id==='more'?`openMoreMenu()`:`go('${n.id}')`}" aria-label="${n.label}">
+    <div class="bn-item${current===n.id?' active':''}" role="button" tabindex="0" aria-current="${current===n.id?'page':'false'}" onclick="${n.id==='more'?`openMoreMenu()`:`go('${n.id}')`}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" aria-label="${n.label}">
       <span class="bn-icon" aria-hidden="true">${n.icon}</span>${n.label}
     </div>`).join('');
   document.getElementById('sb-pts').textContent = (state.points && state.points.total) || 0;
@@ -1659,7 +1696,7 @@ VIEWS['onboarding'] = function () {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
               <div>
                 <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First Name <span style="color:var(--gold)">*</span></label>
-                <input type="text" id="onb-first" value="${profile.first_name}" placeholder="e.g. Kagiso"
+                <input type="text" id="onb-first" value="${escHtml(profile.first_name||'')}" placeholder="e.g. Kagiso" maxlength="60"
                   autocomplete="given-name"
                   style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
                   oninput="document.getElementById('onb-name-err').style.display='none'"
@@ -1667,7 +1704,7 @@ VIEWS['onboarding'] = function () {
               </div>
               <div>
                 <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last Name</label>
-                <input type="text" id="onb-last" value="${profile.last_name}" placeholder="e.g. Sithole"
+                <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
                   autocomplete="family-name"
                   style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
                   onkeydown="if(event.key==='Enter')wNext()">
@@ -1732,7 +1769,7 @@ VIEWS['onboarding'] = function () {
     await saveUser();
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
-      const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+      const _lp = safeParseLS('kw_profile', {});
       _lp.firstName   = profile.first_name;
       _lp.lastName    = profile.last_name || '';
       _lp.displayName = profile.last_name ? `${profile.first_name} ${profile.last_name}` : profile.first_name;
@@ -2049,7 +2086,7 @@ VIEWS['dashboard'] = async function () {
 
   // Budget surplus — prefer Supabase, fall back to localStorage
   try {
-    const bd = _toolMap['budget_planner'] || JSON.parse(localStorage.getItem('budget_planner_v2') || '{}');
+    const bd = _toolMap['budget_planner'] || safeParseLS('budget_planner_v2', {});
     const key = bd.currentKey;
     if (key && bd.budgets?.[key]) {
       const b = bd.budgets[key];
@@ -2062,7 +2099,7 @@ VIEWS['dashboard'] = async function () {
 
   // Net worth — prefer Supabase, fall back to localStorage
   try {
-    const nw = _toolMap['net_worth_tracker'] || JSON.parse(localStorage.getItem('kw_networth_v1') || '{}');
+    const nw = _toolMap['net_worth_tracker'] || safeParseLS('kw_networth_v1', {});
     const assets = (nw.assets || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
     const liabs  = (nw.liabilities || []).reduce((s, a) => s + Number(a.amt || a.value || 0), 0);
     if (assets || liabs) netWorth = assets - liabs;
@@ -2070,14 +2107,14 @@ VIEWS['dashboard'] = async function () {
 
   // Stress score — prefer Supabase, fall back to localStorage
   try {
-    const fs = _toolMap['financial_stress_tracker'] || JSON.parse(localStorage.getItem('financial_stress_v1') || '{}');
+    const fs = _toolMap['financial_stress_tracker'] || safeParseLS('financial_stress_v1', {});
     const entries = fs.entries || [];
     if (entries.length) stressScore = entries[entries.length - 1].score;
   } catch {}
 
   // Goals — prefer Supabase, fall back to localStorage
   try {
-    const gd = _toolMap['goal_planner'] || JSON.parse(localStorage.getItem('kw_goals') || '{}');
+    const gd = _toolMap['goal_planner'] || safeParseLS('kw_goals', {});
     let goals = gd.goals || [];
     // Fall back to onboarding goal selections (profiles.goals) if the planner isn't set up yet,
     // so the hub reflects what the user chose during onboarding.
@@ -2111,7 +2148,7 @@ VIEWS['dashboard'] = async function () {
   }
   if (wellScore == null) {  // nothing server-side yet — fall back to this browser's cache
     try {
-      const wr = JSON.parse(localStorage.getItem('kw_assessment_result') || '{}');
+      const wr = safeParseLS('kw_assessment_result', {});
       if (wr.score) { wellScore = wr.score; wellDate = wr.date; wellDims = wr.dims; }
     } catch {}
   }
@@ -2130,7 +2167,7 @@ VIEWS['dashboard'] = async function () {
   } catch {}
 
   // ── kw_snapshot: freshness labels + last-resort retirement fallback only (NOT a value source of truth) ──
-  const snap = JSON.parse(localStorage.getItem('kw_snapshot') || '{}');
+  const snap = safeParseLS('kw_snapshot', {});
 
   // ── Shared profile / assessment figures (Supabase) — fill cards the tools haven't covered ──
   const _prof      = state.user || {};
@@ -2304,7 +2341,7 @@ VIEWS['dashboard'] = async function () {
     const cls = efMonths >= 6 ? 'green' : efMonths >= 3 ? 'gold' : 'orange';
     hubCards.push({ cls, lbl:'Emergency Fund', val:`${efMonths.toFixed(1)} mo`, sub:`P${Math.round(efCurrent).toLocaleString()} saved`, click:`go('emergency')` });
   } else if (hasEF) {
-    hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved · add monthly expenses for months', click:`go('emergency')` });
+    hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved — add your monthly expenses to see months of cover', click:`go('emergency')` });
   } else {
     hubCards.push({ cls:'orange', lbl:'Emergency Fund', val:'—', sub:'Set up your fund', click:`go('emergency')` });
   }
@@ -2385,7 +2422,7 @@ VIEWS['dashboard'] = async function () {
   if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
 
   // ── Dashboard greeting ──
-  const _dProf = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const _dProf = safeParseLS('kw_profile', {});
   const _dFirst = state.user?.first_name || _dProf.firstName || _dProf.displayName?.split(' ')[0] || '';
   const _hr = new Date().getHours();
   const _greet = _hr < 12 ? 'Good morning' : _hr < 17 ? 'Good afternoon' : 'Good evening';
@@ -2598,7 +2635,9 @@ window.acceptConsent = async function () {
     state.user.consent_date = now;
     await saveUser();
   } else if (currentUser) {
-    await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
+    // Consent is a compliance record — surface (don't swallow) a write failure.
+    const { error: _consentErr } = await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
+    if (_consentErr) { console.error('consent save failed:', _consentErr); showToast('⚠️ We couldn\'t record your consent on the server — please check your connection.'); }
   }
   // Only show welcome video if user hasn't already seen it
   const welcomeSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
@@ -2625,7 +2664,7 @@ function _showStartButton() {
 }
 
 function showWelcomeVideo(){
-  const _wlp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const _wlp = safeParseLS('kw_profile', {});
   const _wn  = state.user?.first_name || _wlp.firstName || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
@@ -2637,31 +2676,46 @@ function showWelcomeVideo(){
   document.getElementById('welcome-modal').classList.add('visible');
 
   // Reveal the "Start My Assessment" button ONLY when the welcome video ends.
-  // The button stays hidden during playback so it never appears at the start.
-  // (The "Skip intro" link is always available for users who opt out.)
-  function _attachWelcomePlayer() {
-    if (!(window.Vimeo && window.Vimeo.Player)) return false;
-    const iframe = document.getElementById('welcome-iframe');
-    if (!iframe) return false;
-    if (iframe._vimeoAttached) return true;   // never double-attach
+  // The button stays hidden during playback so it never appears at the start
+  // (no skip control — watching the intro is intentionally required).
+  const vid = document.getElementById('welcome-video');
+  if (vid && !vid._kwWired) {
+    const reveal = () => _showStartButton();
+    vid.addEventListener('ended', reveal);
+    // Fallback for browsers/paths that don't fire 'ended' reliably: reveal once
+    // playback reaches the very end.
+    vid.addEventListener('timeupdate', () => {
+      if (vid.duration && vid.currentTime >= vid.duration - 0.5) reveal();
+    });
+    // If the video can't load (e.g. the welcome file isn't uploaded to the
+    // Storage bucket yet), don't trap the member — let them continue.
+    vid.addEventListener('error', reveal);
+    vid._kwWired = true;
+  }
+
+  // Source the welcome video from Supabase (the content_items row with no
+  // pathway — the same Storage bucket the Learning Pathways use), not a
+  // hardcoded third-party embed.
+  (async () => {
     try {
-      const player = new Vimeo.Player(iframe);
-      player.on('ended', _showStartButton);
-      iframe._vimeoAttached = true;
-      return true;
-    } catch (err) { console.warn('Welcome Vimeo attach failed:', err); return false; }
-  }
-  // Attach now if the API is already loaded; otherwise load it and retry on load.
-  if (!_attachWelcomePlayer()) {
-    _ensureVimeoApi(_attachWelcomePlayer);
-    // Poll briefly in case the API was already initialised by another player.
-    let _tries = 0;
-    const _poll = setInterval(function () {
-      if (_attachWelcomePlayer() || ++_tries > 20) clearInterval(_poll);
-    }, 500);
-  }
-  // Safety net: if the API never reports completion (e.g. blocked), reveal the
-  // button after ~6 minutes — well past the 3-minute video, so it can't show mid-play.
+      await loadPathwaysData();
+      const w = (typeof lpWelcome === 'function') ? lpWelcome() : null;
+      if (w && w.video_path && vid) {
+        vid.src = lpStorageUrl(w.video_path);
+        try { vid.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(w, 640)); } catch (_) {}
+        vid.load();
+      } else {
+        // No welcome video is configured — don't trap the user; let them proceed.
+        _showStartButton();
+      }
+    } catch (err) {
+      console.warn('Welcome video load failed:', err);
+      _showStartButton();
+    }
+  })();
+
+  // Safety net: if 'ended' never fires (e.g. the video can't load), reveal the
+  // button after ~6 minutes so a member is never permanently stuck.
   setTimeout(_showStartButton, 360000);
 }
 
@@ -2696,7 +2750,7 @@ window.saveNameModal = function () {
   document.getElementById('nm-err').style.display = 'none';
 
   // Save to kw_profile localStorage
-  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const prof = safeParseLS('kw_profile', {});
   prof.firstName   = first;
   prof.lastName    = last;
   prof.displayName = last ? `${first} ${last}` : first;
@@ -4141,6 +4195,13 @@ VIEWS['checkin'] = function () {
       return;
     }
     if (ciRes.data) state.checkins.unshift(ciRes.data);
+    // The stress_logs row feeds the (aggregated) HR stress summary. Don't let a
+    // failure there be silent — the check-in saved, but warn that the stress
+    // detail didn't sync so the member (and support) know.
+    if (slRes.error) {
+      console.error('stress_logs save failed:', slRes.error);
+      showToast('Check-in saved — but your stress detail didn\'t sync. Please log it again later.');
+    }
     state.stressLogs.push({ date: now, level: stressLevel, tags: selectedTags, notes: stressNotes });
     localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
@@ -4262,7 +4323,7 @@ const BK_TIMES = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00
 
 VIEWS['booking'] = function () {
   const el = document.getElementById('page-content');
-  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const prof = safeParseLS('kw_profile', {});
   // Prefer explicit first/last — avoids mis-splitting compound names
   const _bkFirst    = state.user?.first_name || prof.firstName  || '';
   const _bkLast     = state.user?.last_name  || prof.lastName   || '';
@@ -4502,7 +4563,7 @@ window.submitBooking = async function () {
   }
 
   // ── 2) Booking is saved. Cache, award badge, and show the success screen. ──
-  const bookings = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  const bookings = safeParseLS('kw_bookings', []);
   bookings.unshift({id:Date.now(),service,sessionType,date,time,first,last,email,created:new Date().toISOString()});
   localStorage.setItem('kw_bookings', JSON.stringify(bookings));
   awardBadge('booked_session');
@@ -4831,10 +4892,24 @@ VIEWS['my-bookings'] = async function () {
   // Supabase is the SOURCE OF TRUTH. localStorage is only a write cache and must
   // never be the reason a booking appears here — doing so would hide cross-device loss.
   let bookings = [];
+  let loadFailed = false;
   if (currentUser) {
     const { data, error } = await sb.from('bookings').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
-    if (error) console.error('My Bookings load failed:', error);
+    if (error) { console.error('My Bookings load failed:', error); loadFailed = true; }
     bookings = data || [];
+  }
+
+  // A load failure must NOT masquerade as "no bookings" — show a retry card so a
+  // member never wrongly believes a session request vanished.
+  if (loadFailed) {
+    el.innerHTML = `
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:48px;margin-bottom:14px">⚠️</div>
+        <h3 style="margin-bottom:8px">Couldn't load your bookings</h3>
+        <p style="color:var(--muted);margin-bottom:20px">Something went wrong reaching our servers. Your bookings are safe — please try again.</p>
+        <button class="btn btn-primary" onclick="go('my-bookings')">Retry →</button>
+      </div>`;
+    return;
   }
 
   const statusColor = { pending:'var(--gold)', confirmed:'var(--green)', cancelled:'var(--red)' };
@@ -4883,7 +4958,7 @@ VIEWS['my-bookings'] = async function () {
 // ══════════════════════════════════════════════════
 VIEWS['profile'] = function () {
   const el = document.getElementById('page-content');
-  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const prof = safeParseLS('kw_profile', {});
   // Derive first/last from parts or split displayName as fallback
   const _dn = (state.user?.first_name ? (state.user.last_name ? `${state.user.first_name} ${state.user.last_name}` : state.user.first_name) : '') || prof.displayName || currentUser?.user_metadata?.full_name || '';
   const _parts = _dn.split(' ');
@@ -4912,11 +4987,11 @@ VIEWS['profile'] = function () {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div class="field" style="margin-bottom:0">
           <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">First Name</label>
-          <input type="text" id="prof-fname" autocomplete="given-name" value="${firstName}" placeholder="e.g. Kagiso" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
+          <input type="text" id="prof-fname" autocomplete="given-name" maxlength="60" value="${escHtml(firstName||'')}" placeholder="e.g. Kagiso" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
         </div>
         <div class="field" style="margin-bottom:0">
           <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Last Name</label>
-          <input type="text" id="prof-lname" autocomplete="family-name" value="${lastName}" placeholder="e.g. Sithole" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
+          <input type="text" id="prof-lname" autocomplete="family-name" maxlength="60" value="${escHtml(lastName||'')}" placeholder="e.g. Sithole" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit">
         </div>
       </div>
 
@@ -4962,7 +5037,7 @@ window.handleAvatarUpload = function (input) {
   reader.onload = function (e) {
     const b64 = e.target.result;
     // Save immediately
-    const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+    const prof = safeParseLS('kw_profile', {});
     prof.avatarB64 = b64;
     localStorage.setItem('kw_profile', JSON.stringify(prof));
     updateAvatarUI(b64, prof.displayName || '');
@@ -4971,31 +5046,34 @@ window.handleAvatarUpload = function (input) {
   reader.readAsDataURL(file);
 };
 
-window.saveProfile = function () {
+window.saveProfile = async function () {
   const fname = (document.getElementById('prof-fname')?.value || '').trim();
   const lname = (document.getElementById('prof-lname')?.value || '').trim();
   const phone = document.getElementById('prof-phone').value.trim();
   const ageVal = parseInt(document.getElementById('prof-age')?.value || '');
-  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const prof = safeParseLS('kw_profile', {});
   prof.firstName   = fname;
   prof.lastName    = lname;
   prof.displayName = lname ? `${fname} ${lname}` : fname;
   prof.phone = phone;
   localStorage.setItem('kw_profile', JSON.stringify(prof));
-  // Sync to Supabase if profile exists
+  const name = prof.displayName;
+  updateAvatarUI(prof.avatarB64||'', name);
+  const msg = document.getElementById('prof-msg');
+  // Sync to Supabase if profile exists — and only claim success if it actually saved.
+  let cloudOk = true;
   if (state.user) {
     state.user.first_name = fname;
     state.user.last_name  = lname;
     state.user.phone      = phone;
     if (ageVal && ageVal >= 18 && ageVal <= 80) state.user.age = ageVal;
-    saveUser().catch(()=>{});
+    try { cloudOk = await saveUser(); } catch (_) { cloudOk = false; }
   }
-  const name = prof.displayName;
-  updateAvatarUI(prof.avatarB64||'', name);
-  const msg = document.getElementById('prof-msg');
-  msg.innerHTML = '<div class="notice notice-green">✓ Profile saved!</div>';
+  msg.innerHTML = cloudOk
+    ? '<div class="notice notice-green">✓ Profile saved!</div>'
+    : '<div class="notice notice-red">⚠️ Saved on this device, but couldn\'t sync to the cloud. Check your connection and try again.</div>';
   msg.style.display = '';
-  setTimeout(()=>{ msg.style.display='none'; }, 2500);
+  setTimeout(()=>{ msg.style.display='none'; }, cloudOk ? 2500 : 5000);
 };
 
 function updateAvatarUI(b64, name) {
@@ -5021,7 +5099,7 @@ function initProfileUI() {
   let displayName = last ? `${first} ${last}` : first;
 
   // Only read localStorage for the avatar (image is local-only); never for the name.
-  const prof = JSON.parse(localStorage.getItem('kw_profile')||'{}');
+  const prof = safeParseLS('kw_profile', {});
 
   // Keep localStorage in sync so standalone tool pages can read the name,
   // but only write when we actually have a Supabase name — never copy stale data.
@@ -5051,7 +5129,7 @@ function generateSmartNotifs() {
   const now = Date.now();
 
   // Assessment reminder
-  const ar = JSON.parse(localStorage.getItem('kw_assessment_result')||'null');
+  const ar = safeParseLS('kw_assessment_result', null);
   if (!ar) {
     notifs.push({id:'n_assess',title:'Complete Your Assessment',desc:'Take the 8-dimension wellness assessment to see your score.',time:'Now',link:'assessment'});
   } else {
@@ -5062,13 +5140,13 @@ function generateSmartNotifs() {
   }
 
   // Emergency fund reminder
-  const ef = JSON.parse(localStorage.getItem('kw_ef_cache')||'null');
+  const ef = safeParseLS('kw_ef_cache', null);
   if (ef && ef.months < 3) {
     notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${ef.months.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
   }
 
   // Goals reminder
-  const gd = JSON.parse(localStorage.getItem('kw_goals')||'{}');
+  const gd = safeParseLS('kw_goals', {});
   const goals = gd.goals || [];
   const behind = goals.filter(g => {
     if (!g.target || !g.saved) return false;
@@ -5079,13 +5157,13 @@ function generateSmartNotifs() {
   }
 
   // Stress check-in
-  const sc = JSON.parse(localStorage.getItem('financial_stress_v1')||'[]');
+  const sc = safeParseLS('financial_stress_v1', []);
   if (!sc.length) {
     notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'checkin'});
   }
 
   // Booking reminder
-  const bk = JSON.parse(localStorage.getItem('kw_bookings')||'[]');
+  const bk = safeParseLS('kw_bookings', []);
   if (!bk.length) {
     notifs.push({id:'n_book',title:'Book a Coaching Session',desc:'Work 1-on-1 with a Key Wellness coach to accelerate your goals.',time:'Now',link:'booking'});
   }
@@ -5104,8 +5182,8 @@ function loadNotifications() {
       desc: `Your ${b.service || 'coaching'} session${b.requested_date ? ' on ' + fmtDate(b.requested_date) : ''} is confirmed. We look forward to seeing you.`,
       link: 'my-bookings'
     }));
-  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]');
-  const dismissed = JSON.parse(localStorage.getItem('kw_notifs_dismissed')||'[]');
+  const custom = safeParseLS('kw_notifs', []);
+  const dismissed = safeParseLS('kw_notifs_dismissed', []);
   const all = [...bookingNotifs, ...custom, ...smart].filter(n => !dismissed.includes(n.id));
   const list = document.getElementById('notifList');
   const badge = document.getElementById('notifBadge');
@@ -5164,11 +5242,11 @@ window.dismissBookingBanner = async function (bookingId) {
 };
 
 window.dismissNotif = function (id) {
-  const dismissed = JSON.parse(localStorage.getItem('kw_notifs_dismissed')||'[]');
+  const dismissed = safeParseLS('kw_notifs_dismissed', []);
   if (!dismissed.includes(id)) dismissed.push(id);
   localStorage.setItem('kw_notifs_dismissed', JSON.stringify(dismissed));
   // Remove from custom too
-  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]').filter(n=>n.id!==id);
+  const custom = safeParseLS('kw_notifs', []).filter(n=>n.id!==id);
   localStorage.setItem('kw_notifs', JSON.stringify(custom));
   loadNotifications();
 };
@@ -5177,7 +5255,7 @@ window.addCustomReminder = function () {
   const input = document.getElementById('reminderText');
   const text = input.value.trim();
   if (!text) return;
-  const custom = JSON.parse(localStorage.getItem('kw_notifs')||'[]');
+  const custom = safeParseLS('kw_notifs', []);
   const id = 'c_' + Date.now();
   custom.unshift({id, title:'Reminder', desc:text, time:'Just now'});
   localStorage.setItem('kw_notifs', JSON.stringify(custom));
@@ -5188,7 +5266,71 @@ window.addCustomReminder = function () {
 // ══════════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════════
+// Register the Supabase auth-state listener exactly once. This MUST happen
+// unconditionally (not only on the no-session path) so that logout, mid-session
+// token expiry, and password-recovery events are handled for returning users
+// who arrive with a stored session too.
+function registerAuthListener() {
+  if (window._kwAuthListener) return;
+  window._kwAuthListener = true;
+  sb.auth.onAuthStateChange(async (event, session) => {
+    // INITIAL_SESSION fires once on registration; init() already handles the
+    // stored-session case synchronously, so ignore it here.
+    if (event === 'INITIAL_SESSION') return;
+    if (event === 'SIGNED_IN') {
+      // Ignore a duplicate SIGNED_IN for the already-active, already-loaded user
+      // (e.g. a token refresh) — only a genuine new sign-in reloads below.
+      if (currentUser && session?.user?.id === currentUser.id && state.user) return;
+      clearLocalUserCache();
+      currentUser = session?.user ?? null;
+      if (currentUser) { enforceUserScope(currentUser.id); touchSessionTrust(currentUser.id); }
+      await loadAllData();
+      // Admins skip onboarding, consent, the welcome video, assessment nags and all
+      // member surfaces — send them straight to the admin home.
+      if (window._isAdmin) { window.location.replace('admin.html'); return; }
+      // HR managers (employers) likewise skip the member journey — straight to org dashboard.
+      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+      initProfileUI();
+      loadNotifications();
+      route();
+      if (state.user) {
+        const _lp = safeParseLS('kw_profile', {});
+        // Show name-capture modal for existing users who have no name set yet
+        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+          setTimeout(showNameModal, 700);
+        }
+        // Consent check: localStorage is fast-path; Supabase is fallback
+        const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
+        if (_lsConsent || state.user.consent_accepted) {
+          if (!_lsConsent) localStorage.setItem('kw_consent_accepted', 'true');
+        } else {
+          setTimeout(showConsentModal, 800);
+        }
+      }
+    } else if (event === 'PASSWORD_RECOVERY') {
+      // User arrived via the reset-link email — show set-new-password form
+      showAuthScreen(true);
+      document.getElementById('auth-login-form').style.display = 'none';
+      document.getElementById('auth-signup-form').style.display = 'none';
+      document.getElementById('forgot-panel').style.display = 'none';
+      document.getElementById('auth-reset-form').style.display = '';
+      document.querySelector('.auth-tabs').style.display = 'none';
+      document.querySelector('.auth-box h2').textContent = 'Set New Password';
+      document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
+    } else if (event === 'SIGNED_OUT') {
+      clearLocalUserCache();
+      currentUser = null;
+      state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
+      window.location.hash = '';
+      showAuthScreen(true);
+    }
+  });
+}
+
 async function init() {
+  // Register the auth-state listener FIRST and unconditionally (see above).
+  registerAuthListener();
+
   // Handle Supabase password-recovery redirect (hash contains access_token + type=recovery)
   const _hash = window.location.hash;
   if (_hash.includes('type=recovery') && _hash.includes('access_token')) {
@@ -5232,57 +5374,6 @@ async function init() {
   showAuthScreen(true);
   initProfileUI();
   loadNotifications();
-
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN') {
-      clearLocalUserCache();
-      currentUser = session?.user ?? null;
-      if (currentUser) { enforceUserScope(currentUser.id); touchSessionTrust(currentUser.id); }
-      await loadAllData();
-      // Admins skip onboarding, consent, the welcome video, assessment nags and all
-      // member surfaces — send them straight to the admin home.
-      if (window._isAdmin) { window.location.replace('admin.html'); return; }
-      // HR managers (employers) likewise skip the member journey — straight to org dashboard.
-      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
-      initProfileUI();
-      loadNotifications();
-      route();
-      if (state.user) {
-        const _lp = JSON.parse(localStorage.getItem('kw_profile')||'{}');
-        // Show name-capture modal for existing users who have no name set yet
-        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
-          setTimeout(showNameModal, 700);
-        }
-        // Consent check: localStorage is fast-path; Supabase is fallback
-        const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
-        if (_lsConsent || state.user.consent_accepted) {
-          // Sync to localStorage if only Supabase had it
-          if (!_lsConsent) localStorage.setItem('kw_consent_accepted', 'true');
-          // Never show consent or welcome video again for returning users
-        } else {
-          // Only show consent if truly not accepted anywhere
-          setTimeout(showConsentModal, 800);
-        }
-      }
-    } else if (event === 'PASSWORD_RECOVERY') {
-      // User arrived via the reset-link email — show set-new-password form
-      showAuthScreen(true);
-      document.getElementById('auth-login-form').style.display = 'none';
-      document.getElementById('auth-signup-form').style.display = 'none';
-      document.getElementById('forgot-panel').style.display = 'none';
-      document.getElementById('auth-reset-form').style.display = '';
-      document.querySelector('.auth-tabs').style.display = 'none';
-      document.querySelector('.auth-box h2').textContent = 'Set New Password';
-      document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
-    } else if (event === 'SIGNED_OUT') {
-      clearLocalUserCache();
-      currentUser = null;
-      state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
-      window.location.hash = '';
-      showAuthScreen(true);
-    }
-  });
-
   route();
 }
 

@@ -227,7 +227,7 @@ tfoot td:first-child{text-align:left;font-family:'Nunito',sans-serif;}
         <div class="hint">All debt payments combined per month</div>
       </div>
       <div class="field">
-        <label>Extra Snowball Payment</label>
+        <label>Extra Monthly Payment</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
           <input type="text" id="extraPayment" value="0.00" inputmode="decimal" placeholder="0.00"
@@ -504,9 +504,11 @@ function saveData(){
   if (window._toolSb && window._toolUser) {
     window._toolSb.from('tool_data').upsert({
       user_id: window._toolUser.id, tool: 'debt_management_planner', data: payload, updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,tool' }).then(({ error }) => { if (error) console.error('Save failed:', error); });
-  }
-  showToast();
+    }, { onConflict: 'user_id,tool' }).then(({ error }) => {
+      if (error) { console.error('Save failed:', error); showToast('Saved on this device only — cloud sync failed'); }
+      else showToast();
+    });
+  } else { showToast(); }
 }
 function loadData(){
   try{

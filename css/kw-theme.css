@@ -9,7 +9,7 @@
   --kw-green-tint:#eef4ea;   /* fills, active nav pill, icon chips */
   --kw-green-wash:#f4f8f1;   /* sidebar, banners */
   --kw-yellow:#f0c90a;       /* accents ONLY: flags, points, badges */
-  --kw-yellow-ink:#93790a;   /* yellow-family TEXT colour */
+  --kw-yellow-ink:#6f5d08;   /* yellow-family TEXT colour — WCAG AA on white & on yellow-tint */
   --kw-yellow-tint:#fdf5cf;  /* yellow badge background */
   /* Chrome (structural definition only: sidebar, topbar, page/tool headers, auth backdrop —
      never for buttons/links/active-states, those stay green) */
@@ -18,7 +18,7 @@
   /* Neutrals */
   --kw-ink:#23261f;          /* headings */
   --kw-body:#4b4e48;         /* body text */
-  --kw-grey:#808185;         /* brand grey: labels, captions only */
+  --kw-grey:#6c6d70;         /* brand grey: labels, captions — darkened to meet WCAG AA on light bg */
   --kw-line:#e7e9e3;         /* hairline borders */
   --kw-surface:#f5f6f2;      /* tinted card / track background */
   --kw-canvas:#fbfcfa;       /* page background */

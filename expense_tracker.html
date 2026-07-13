@@ -341,7 +341,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
               <input type="text" id="txSearch" placeholder="Search transactions…" oninput="renderTxList()" style="padding-left:8px;">
             </div>
           </div>
-          <select id="txSortSel" onchange="renderTxList()" style="border:1.5px solid var(--border);border-radius:7px;background:var(--cream);padding:9px 10px;font-size:.8rem;font-family:'Inter',sans-serif;color:var(--navy);outline:none;cursor:pointer;">
+          <select id="txSortSel" onchange="renderTxList()" style="border:1.5px solid var(--border);border-radius:7px;background:var(--cream);padding:9px 10px;font-size:.8rem;font-family:'Nunito',sans-serif;color:var(--navy);outline:none;cursor:pointer;">
             <option value="date-desc">Newest first</option>
             <option value="date-asc">Oldest first</option>
             <option value="amount-desc">Highest amount</option>
@@ -426,11 +426,11 @@ function save(){
   const _d={transactions,budgets,nextId};
   localStorage.setItem(LS_KEY,JSON.stringify(_d));
   (async()=>{
-    if(!window._toolSb||!window._toolUser)return;
+    if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'expense_tracker',data:_d,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
-    if(error)console.error('expense_tracker save failed:',error);
+    if(error){ console.error('expense_tracker save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
+    else showToast();
   })();
-  showToast();
 }
 function load(){
   try{

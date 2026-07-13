@@ -683,9 +683,11 @@ let _retSaveTimer;
 window._retLastSnap = window._retLastSnap || null;
 window._retSave = function(){
   const sb = window._toolSb, u = window._toolUser;
-  if (!sb || !u) return;
   const inputs = {};
   document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  // Mirror to localStorage so inputs survive logged-out / offline / cloud-write failure.
+  try { localStorage.setItem('kw_tool_retirement', JSON.stringify({ inputs })); } catch(_){}
+  if (!sb || !u) return;
   clearTimeout(_retSaveTimer);
   const data = { inputs, snapshot: window._retLastSnap || null };
   _retSaveTimer = setTimeout(async () => {
@@ -720,15 +722,17 @@ window._retSave = function(){
     await KWProfile.load();
     KWProfile.prefill(_RET_MAPPINGS);
     // Cross-device: restore saved inputs (source of truth — overrides profile prefill), then persist on change
+    const _apply = (_inp) => { if (!_inp) return false; Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); return true; };
+    const _local = () => { try { const j = JSON.parse(localStorage.getItem('kw_tool_retirement')||'null'); return j && j.inputs; } catch(_){ return null; } };
     try {
       const { data, error } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'retirement').maybeSingle();
-      if (error) console.warn('Retirement load from Supabase failed:', error);
+      if (error) { console.warn('Retirement load from Supabase failed:', error); _apply(_local()); }
       else if (data && data.data) {
-        const _inp = data.data.inputs;
-        if (_inp) Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; });
+        if (!_apply(data.data.inputs)) _apply(_local());
         if (data.data.snapshot) window._retLastSnap = data.data.snapshot;
       }
-    } catch(e) { console.warn('Retirement load error:', e); }
+      else { _apply(_local()); }
+    } catch(e) { console.warn('Retirement load error:', e); _apply(_local()); }
     document.addEventListener('input', window._retSave);
     KW.reveal('.card');
   });

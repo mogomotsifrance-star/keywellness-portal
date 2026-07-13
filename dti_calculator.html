@@ -275,7 +275,7 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
       <div class="field" style="grid-column:span 2;">
         <label>Description</label>
         <div class="input-wrap">
-          <input type="text" id="debtName" placeholder="e.g. Standard Chartered home loan" style="font-family:'Inter',sans-serif;font-size:.88rem;" maxlength="60">
+          <input type="text" id="debtName" placeholder="e.g. Standard Chartered home loan" style="font-family:'Nunito',sans-serif;font-size:.88rem;" maxlength="60">
         </div>
       </div>
       <div class="field">
@@ -492,9 +492,10 @@ function saveData() {
   };
   localStorage.setItem(LS_DATA, JSON.stringify(data));
   (async()=>{
-    if(!window._toolSb||!window._toolUser)return;
+    if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'dti_calculator',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
-    if(error)console.error('dti_calculator save failed:',error);
+    if(error){ console.error('dti_calculator save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
+    else showToast();
     // Offer to write changed income fields + total debt back to shared profile
     const incomeChanges = KWProfile.detectChanges(_DTI_INCOME_MAPPINGS);
     const totalDebt = debts.reduce((s, d) => s + (d.amount || 0), 0);  // debts store the monthly payment as `amount`
@@ -505,7 +506,6 @@ function saveData() {
       if (ok) await KWProfile.writeBack(allChanges);
     }
   })();
-  showToast();
 }
 
 function loadData() {

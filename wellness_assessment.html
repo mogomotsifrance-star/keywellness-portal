@@ -142,6 +142,8 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 .input-wrap.error { border-color:var(--red); }
 .save-toast { position:fixed; bottom:24px; right:24px; background:var(--kw-ink); color:white; padding:10px 18px; border-radius:999px; font-size:.78rem; font-weight:600; box-shadow:var(--shadow); opacity:0; transition:opacity .3s; pointer-events:none; z-index:999; display:flex; align-items:center; gap:7px; }
 .save-toast.show { opacity:1; }
+.save-toast.is-warn { background:var(--kw-red, #c0392b); }
+.save-toast.is-warn svg { display:none; }
 .results-header { background:var(--kw-navy); border-radius:var(--radius); padding:28px 28px 24px; margin-bottom:22px; color:white; }
 .results-header h2 { font-size:1.1rem; font-weight:800; color:var(--kw-yellow); margin-bottom:4px; }
 .results-header p  { font-size:.8rem; color:rgba(255,255,255,.65); }
@@ -162,7 +164,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 <body>
 <div class="save-toast" id="saveToast">
   <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-  Progress saved
+  <span id="saveToastMsg">Progress saved</span>
 </div>
 <div class="app">
 <!-- ── Back + User ── -->
@@ -739,7 +741,17 @@ function validateStep(n) {
 }
 
 let toastTimer;
-function showToast(){const t=document.getElementById('saveToast');t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800);}
+function showToast(msg){
+  const t=document.getElementById('saveToast');
+  const m=document.getElementById('saveToastMsg');
+  if(m) m.textContent = msg || 'Progress saved';
+  // Error/warning messages linger longer and read as a warning, not a success.
+  const isWarn = msg && (msg.indexOf('⚠')>-1 || /could not|couldn't|failed|not save/i.test(msg));
+  t.classList.toggle('is-warn', !!isWarn);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), isWarn ? 5000 : 1800);
+}
 function saveDraft(){
   const fields=['grossSalary','netSalary','otherIncome','expenses','totalSavings','monthlySavings','emergencyFund','essentialExpenses','totalDebtPayments','totalDebtBalance','retirementBalance','monthlyPension','age','retireAge','totalAssets','totalLiabilities'];
   const vals={};
@@ -1048,15 +1060,20 @@ function sendReport(r){
 function exportPDF(){
   const r=window._wellnessResult;if(!r)return;
   const{jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],GREEN=[26,140,91],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
+  // Brand palette: navy chrome (#1a2744), green primary/accent (#397e2b). GOLD
+  // holds the brand green so former gold accents render on-brand and legibly
+  // (gold-on-white failed WCAG contrast and is off-brand).
+  const NAVY=[26,39,68],GOLD=[57,126,43],CREAM=[247,244,238],GREEN=[57,126,43],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
   doc.setFillColor(...NAVY);doc.rect(0,0,pageW,32,'F');
-  doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,11);
-  const _pdfName = window._toolFullName || '';
+  doc.setTextColor(...WHITE);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,11);
+  // Strip non-Latin1 chars (jsPDF fonts garble them) and clamp length so a long
+  // name can't overflow the header into the score badge.
+  const _pdfName = String(window._toolFullName || '').replace(/[^\x20-\x7E]/g,'').trim().slice(0,42);
   if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,210,220);doc.text('Client: '+_pdfName,14,18); }
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,_pdfName?24:18);
-  const scoreColor=r.totalScore>=70?[26,140,91]:r.totalScore>=50?[217,119,6]:[192,57,43];
+  const scoreColor=r.totalScore>=70?[57,126,43]:r.totalScore>=50?[217,119,6]:[192,57,43];
   doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,5,34,22,3,3,'F');
   doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
   doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});

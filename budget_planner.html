@@ -370,7 +370,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
           <div class="card-title">Month Notes</div>
           <div class="iw">
             <textarea id="monthNotes" placeholder="Any notes, goals or reminders for this month…" maxlength="500"
-              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Inter',sans-serif;color:var(--navy);"
+              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Nunito',sans-serif;color:var(--navy);"
               oninput="autoSave()"></textarea>
           </div>
         </div>
@@ -520,16 +520,16 @@ function save(){
   (async function() {
     const _sb = window._toolSb;
     const _user = window._toolUser;
-    if (!_sb || !_user) return;
+    if (!_sb || !_user) { showToast(); return; }
     const { error } = await _sb.from('tool_data').upsert({
       user_id: _user.id,
       tool: 'budget_planner',
       data: { budgets, currentKey },
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' });
-    if (error) console.error('Budget save to Supabase failed:', error);
+    if (error) { console.error('Budget save to Supabase failed:', error); showToast('Saved on this device only — cloud sync failed', 4000); }
+    else showToast();
   })();
-  showToast();
   // ── kw_snapshot ──
   try {
     if(currentKey && budgets[currentKey]) {
@@ -1197,7 +1197,7 @@ function renderYearCharts(rows){
       { label:'Surplus',  data:sur, borderColor:GOLD,  backgroundColor:GOLD,  tension:.3, spanGaps:false, pointRadius:3, borderDash:[5,4] },
     ]},
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
-      plugins:{ legend:{ labels:{ font:{family:'Inter'}, usePointStyle:true, boxWidth:8 } },
+      plugins:{ legend:{ labels:{ font:{family:'Nunito'}, usePointStyle:true, boxWidth:8 } },
         tooltip:{ callbacks:{ label:tip } } },
       scales: baseScales }
   });
