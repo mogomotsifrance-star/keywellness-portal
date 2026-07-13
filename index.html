@@ -613,7 +613,7 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div id="forgot-panel" style="display:none;margin-top:16px;background:var(--cream);border-radius:var(--radius-sm);padding:16px">
       <p style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your email to receive a reset link.</p>
       <div class="field" style="margin-bottom:10px"><label for="fp-email">Email</label><input type="email" id="fp-email" placeholder="you@example.com" aria-label="Email for password reset"></div>
-      <button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" onclick="doForgotPassword()">Send reset link</button>
+      <button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" onclick="doForgotPassword(this)">Send reset link</button>
     </div>
 
     <!-- Password reset form (shown when redirected back with recovery token) -->
@@ -1220,13 +1220,19 @@ async function confirmSession() {
 
   // Re-authenticate with the stored email + entered password.
   // This is the only way to prove the person knows the credentials.
-  const { error } = await sb.auth.signInWithPassword({
-    email: currentUser.email,
-    password: pass,
-  });
-
-  btn.disabled = false;
-  btn.textContent = 'Confirm & Continue';
+  let error;
+  try {
+    ({ error } = await sb.auth.signInWithPassword({
+      email: currentUser.email,
+      password: pass,
+    }));
+  } catch (e) {
+    console.error('confirmSession threw:', e);
+    error = { message: 'network' };
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm & Continue';
+  }
 
   if (error) {
     passEl.value = '';
@@ -1422,6 +1428,10 @@ async function doSignup() {
       }
       return;
     }
+    // Move the member to the Sign In tab and prefill their email so the next
+    // step (after they confirm) is obvious.
+    showAuthTab('login');
+    const _le = document.getElementById('a-email'); if (_le) _le.value = email;
     authOk('Account created! Check your email to confirm, then sign in.');
   } catch (e) {
     console.error('doSignup threw:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
@@ -1450,15 +1460,25 @@ function toggleForgotPanel() {
   clearAuthMsg();
 }
 
-async function doForgotPassword() {
+async function doForgotPassword(btn) {
   const email = document.getElementById('fp-email').value.trim();
   if (!email) { authErr('Please enter your email address.'); return; }
-  const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + window.location.pathname
-  });
-  if (error) { authErr(error.message); return; }
-  authOk('Check your email for a password reset link.');
-  document.getElementById('forgot-panel').style.display = 'none';
+  // Guard against double-submit spamming reset emails / hitting rate limits.
+  const _label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname
+    });
+    if (error) { authErr(error.message); return; }
+    authOk('Check your email for a password reset link.');
+    document.getElementById('forgot-panel').style.display = 'none';
+  } catch (e) {
+    console.error('doForgotPassword threw:', e);
+    authErr('Something went wrong. Please try again.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = _label || 'Send reset link'; }
+  }
 }
 
 async function doResetPassword() {
@@ -1468,11 +1488,22 @@ async function doResetPassword() {
   if (pass !== pass2)  { authErr('Passwords do not match.'); return; }
   const btn = document.getElementById('reset-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
-  const { error } = await sb.auth.updateUser({ password: pass });
-  btn.disabled = false; btn.textContent = 'Set New Password';
-  if (error) { authErr(error.message); return; }
-  authOk('Password updated! Signing you in…');
-  setTimeout(() => { window.location.hash = 'dashboard'; }, 1500);
+  try {
+    const { error } = await sb.auth.updateUser({ password: pass });
+    if (error) { authErr(error.message); return; }
+    // updateUser establishes a session. Adopt + trust it, then reload through
+    // the normal init path so the member lands on the dashboard instead of
+    // being bounced back to the login screen.
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user) touchSessionTrust(session.user.id);
+    authOk('Password updated! Signing you in…');
+    setTimeout(() => { window.location.hash = ''; window.location.reload(); }, 1200);
+  } catch (e) {
+    console.error('doResetPassword threw:', e);
+    authErr('Something went wrong. Please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Set New Password';
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -5347,6 +5378,13 @@ async function init() {
 
   const { data: { session } } = await sb.auth.getSession();
   currentUser = session?.user ?? null;
+
+  // Fresh email-confirmation arrival (type=signup): the member set this password
+  // seconds ago, so treat it as a trusted first entry rather than immediately
+  // demanding it again at the re-auth wall.
+  if (currentUser && _hash.includes('type=signup')) {
+    touchSessionTrust(currentUser.id);
+  }
 
   // If a session is stored, require password confirmation — but only when the
   // trust window has expired (SESSION_TRUST_MS of inactivity). Any tab that

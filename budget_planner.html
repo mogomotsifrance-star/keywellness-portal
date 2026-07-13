@@ -567,7 +567,7 @@ function load(){
 // ────────────────────────────────────────────
 function fmt(v){ return 'P '+Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtK(v){ const a=Math.abs(v); if(a>=1e6) return 'P '+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return 'P '+(a/1e3).toFixed(1)+'K'; return fmt(v); }
-function pf(v){ return parseFloat(String(v).replace(/,/g,''))||0; }
+function pf(v){ const n = parseFloat(String(v).replace(/[,-]/g,''))||0; return n < 0 ? 0 : n; }
 function pfEl(id){ return pf(document.getElementById(id)?.value||'0'); }
 function fmtInput(el){
   let raw=el.value.replace(/[^0-9.]/g,'');

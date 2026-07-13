@@ -11,9 +11,7 @@
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script><style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -547,7 +545,6 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 
   <!-- RESULTS -->
   <div class="step" id="stepResults">
-    <div id="emailBanner" style="display:none !important;border-radius:8px;padding:12px 16px;margin-bottom:16px;align-items:center;gap:10px;font-size:.8rem;font-weight:600;" aria-hidden="true"></div>
     <div class="results-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
         <div>
@@ -601,10 +598,6 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
   </div>
 </div>
 <script>
-const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
-const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
-const REPORT_RECIPIENT    = 'wellness@keywellness.co.bw';
 
 const fmt  = v => 'P ' + v.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtK = v => { if(v>=1e6) return 'P '+(v/1e6).toFixed(2)+'M'; if(v>=1e3) return 'P '+(v/1e3).toFixed(1)+'K'; return fmt(v); };
@@ -995,7 +988,6 @@ function calculateWellness(){
     </div>`).join('');
 
   window._wellnessResult={totalScore,grade,dims,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,insCount,totalDebtBalance,totalDebtPayments};
-  sendReport(window._wellnessResult);
 }
 
 function buildInsights(dims,d){
@@ -1031,31 +1023,6 @@ function buildActions(dims,d){
   return actions.slice(0,8);
 }
 
-function showEmailBanner(state,msg){
-  const b=document.getElementById('emailBanner');b.style.display='flex';
-  if(state==='sending'){b.style.background='#f0f4ff';b.style.border='1.5px solid #bfdbfe';b.style.color='#1e40af';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0;animation:spin 1s linear infinite"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span>${msg}</span>`;}
-  else if(state==='success'){b.style.background='#f0faf5';b.style.border='1.5px solid #a7f3d0';b.style.color='#065f46';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>${msg}</span>`;}
-  else{b.style.background='#fef2f2';b.style.border='1.5px solid #fecaca';b.style.color='#991b1b';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span>${msg}</span>`;}
-}
-
-function sendReport(r){
-  if(EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){return;}  // EmailJS not configured — silently skip; PDF export remains available (no user-facing warning)
-  showEmailBanner('sending',`Sending report to ${REPORT_RECIPIENT}…`);
-  emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
-  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
-  const dimensionsText=r.dims.map(d=>`${d.label}: ${d.score}/100`).join('\n');
-  const actionsArr=buildActions(r.dims,{...r,essentialExp:1});
-  const actionsText=actionsArr.slice(0,6).map((a,i)=>`${i+1}. [${a.priority}] ${a.title}\n   ${a.desc}`).join('\n\n');
-  emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
-    to_email:REPORT_RECIPIENT,report_date:today,score:String(r.totalScore),
-    grade:r.grade.label.replace(/[^\w\s]/g,'').trim(),tagline:r.grade.tagline,
-    savings_rate:r.savRate.toFixed(1)+'%',dti:r.dti_pct.toFixed(1)+'%',
-    emergency_months:r.emMonths.toFixed(1)+' months',
-    net_worth:fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (negative)':''),
-    insurance_count:r.insCount+' of 6',dimensions:dimensionsText,actions:actionsText,
-  }).then(()=>showEmailBanner('success',`Report sent to ${REPORT_RECIPIENT}`))
-    .catch(err=>{console.error(err);showEmailBanner('error',`Could not send report — ${err?.text||'check EmailJS credentials'}.`);});
-}
 
 function exportPDF(){
   const r=window._wellnessResult;if(!r)return;
@@ -1112,10 +1079,11 @@ function exportPDF(){
 
 function restartAssessment(){
   if(!confirm('Start a new assessment? Your current results will be cleared.'))return;
-  answers={};insuranceSet=new Set();localStorage.removeItem(LS_KEY);
-  document.querySelectorAll('input[type=text]').forEach(el=>el.value='');
-  document.querySelectorAll('.mcq-opt').forEach(el=>el.classList.remove('selected'));
-  currentStep=0;showStep(0);document.getElementById('progressWrap').style.display='block';
+  localStorage.removeItem(LS_KEY);
+  // Reload for a clean, consistent form. A prior reassessment mutates
+  // STEP_REQUIRED and hides the money grids; the old in-place reset left those
+  // in an inconsistent state (step 0 with money inputs hidden and validation off).
+  window.location.href = window.location.pathname;
 }
 
 // ── Figure resolver: tool data → profile → 0 ──────────────────────────────────
