@@ -6,7 +6,7 @@
    toggle) classes already in index.html. */
 
 .lp-hero{background:linear-gradient(112deg,var(--kw-green-deep) 0%,var(--kw-green) 100%);border-radius:var(--kw-r-lg);padding:26px;display:flex;gap:26px;align-items:center;color:#fff;margin-bottom:28px;box-shadow:var(--kw-shadow-hover);position:relative;overflow:hidden}
-.lp-hero::after{content:'';position:absolute;right:-70px;top:-70px;width:260px;height:260px;border-radius:50%;border:44px solid rgba(240,201,10,.10)}
+.lp-hero::after{content:'';position:absolute;right:-70px;top:-70px;width:260px;height:260px;border-radius:50%;border:44px solid rgba(240,201,10,.10);pointer-events:none}
 .lp-hero-poster{width:280px;min-width:200px;border-radius:var(--kw-r);overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.35);position:relative;flex-shrink:1;cursor:pointer;border:none;padding:0;background:none;display:block}
 .lp-hero-poster svg{width:100%;height:auto;display:block}
 .lp-hero-poster .lp-hp-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,36,16,.18);transition:.2s}
@@ -75,7 +75,7 @@
 .lp-w-meta{font-size:12px;color:var(--kw-grey)}
 
 .lp-pw-head{background:linear-gradient(112deg,var(--kw-green-deep),var(--kw-green));color:#fff;border-radius:var(--kw-r-lg);padding:24px 26px;margin-bottom:28px;display:flex;align-items:center;gap:24px;flex-wrap:wrap;box-shadow:var(--kw-shadow-hover);position:relative;overflow:hidden}
-.lp-pw-head::after{content:'';position:absolute;right:-60px;bottom:-90px;width:230px;height:230px;border-radius:50%;border:38px solid rgba(240,201,10,.08)}
+.lp-pw-head::after{content:'';position:absolute;right:-60px;bottom:-90px;width:230px;height:230px;border-radius:50%;border:38px solid rgba(240,201,10,.08);pointer-events:none}
 .lp-pw-head .lp-h-body{flex:1;min-width:240px;z-index:1}
 .lp-pw-head h2{font-size:23px;font-weight:800;letter-spacing:-.01em;margin:0;color:#fff}
 .lp-pw-head .lp-h-sub{font-size:13px;opacity:.78;margin-top:3px;max-width:520px}
