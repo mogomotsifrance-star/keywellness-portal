@@ -5054,7 +5054,7 @@ AAAAAAAAAADwtyLSNmu61hK2/1+AAQBCwh1LVL245gAAAABJRU5ErkJggg==" transform="matrix(
 									<stop  offset="0" style="stop-color:#FFFFFF"/>
 									<stop  offset="1" style="stop-color:#FFFFFF"/>
 								</radialGradient>
-								<path style="opacity:0.3;fill:url(#SVGID_00000098943920073564229160000012470950630307878796_);" d="M200.36,350.84
+								<path style="display:none" data-removed="white glow circle washed out the badge" d="M200.36,350.84
 									c0,41.87-33.95,75.82-75.82,75.82c-41.87,0-75.82-33.94-75.82-75.82c0-41.88,33.94-75.81,75.82-75.81
 									C166.41,275.03,200.36,308.97,200.36,350.84z"/>
 							</g>
