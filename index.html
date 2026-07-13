@@ -3403,7 +3403,7 @@ function lpViewCertificate(pathwayId) { state.lp.pathwayId = pathwayId; lpGo('ce
 function renderLpCelebrate(el) {
   const pid = state.lp.pathwayId;
   const pathway = lpPathway(pid);
-  const colors = ['var(--kw-yellow)','var(--kw-green)','var(--kw-yellow-tint)','var(--kw-green-deep)','#ffffff'];
+  const colors = ['var(--kw-yellow)','var(--kw-green)','#e8c018','var(--kw-green-deep)','#8fbf72'];
   const confetti = Array.from({length:36},(_,i)=>{
     const l=Math.random()*100, d=2.4+Math.random()*2.2, dl=Math.random()*1.4, c=colors[i%colors.length], rot=Math.random()*360;
     return `<span class="lp-confetti" style="left:${l}%;background:${c};animation-duration:${d}s;animation-delay:${dl}s;transform:rotate(${rot}deg)"></span>`;
