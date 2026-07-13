@@ -11,9 +11,7 @@
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-<style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script><style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -142,6 +140,8 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 .input-wrap.error { border-color:var(--red); }
 .save-toast { position:fixed; bottom:24px; right:24px; background:var(--kw-ink); color:white; padding:10px 18px; border-radius:999px; font-size:.78rem; font-weight:600; box-shadow:var(--shadow); opacity:0; transition:opacity .3s; pointer-events:none; z-index:999; display:flex; align-items:center; gap:7px; }
 .save-toast.show { opacity:1; }
+.save-toast.is-warn { background:var(--kw-red, #c0392b); }
+.save-toast.is-warn svg { display:none; }
 .results-header { background:var(--kw-navy); border-radius:var(--radius); padding:28px 28px 24px; margin-bottom:22px; color:white; }
 .results-header h2 { font-size:1.1rem; font-weight:800; color:var(--kw-yellow); margin-bottom:4px; }
 .results-header p  { font-size:.8rem; color:rgba(255,255,255,.65); }
@@ -162,7 +162,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 <body>
 <div class="save-toast" id="saveToast">
   <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-  Progress saved
+  <span id="saveToastMsg">Progress saved</span>
 </div>
 <div class="app">
 <!-- ── Back + User ── -->
@@ -545,7 +545,6 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 
   <!-- RESULTS -->
   <div class="step" id="stepResults">
-    <div id="emailBanner" style="display:none !important;border-radius:8px;padding:12px 16px;margin-bottom:16px;align-items:center;gap:10px;font-size:.8rem;font-weight:600;" aria-hidden="true"></div>
     <div class="results-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
         <div>
@@ -599,10 +598,6 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
   </div>
 </div>
 <script>
-const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
-const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
-const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
-const REPORT_RECIPIENT    = 'wellness@keywellness.co.bw';
 
 const fmt  = v => 'P ' + v.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtK = v => { if(v>=1e6) return 'P '+(v/1e6).toFixed(2)+'M'; if(v>=1e3) return 'P '+(v/1e3).toFixed(1)+'K'; return fmt(v); };
@@ -739,7 +734,17 @@ function validateStep(n) {
 }
 
 let toastTimer;
-function showToast(){const t=document.getElementById('saveToast');t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1800);}
+function showToast(msg){
+  const t=document.getElementById('saveToast');
+  const m=document.getElementById('saveToastMsg');
+  if(m) m.textContent = msg || 'Progress saved';
+  // Error/warning messages linger longer and read as a warning, not a success.
+  const isWarn = msg && (msg.indexOf('⚠')>-1 || /could not|couldn't|failed|not save/i.test(msg));
+  t.classList.toggle('is-warn', !!isWarn);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'), isWarn ? 5000 : 1800);
+}
 function saveDraft(){
   const fields=['grossSalary','netSalary','otherIncome','expenses','totalSavings','monthlySavings','emergencyFund','essentialExpenses','totalDebtPayments','totalDebtBalance','retirementBalance','monthlyPension','age','retireAge','totalAssets','totalLiabilities'];
   const vals={};
@@ -882,7 +887,13 @@ function calculateWellness(){
     }).select().single();
     if (insertErr) {
       console.error('Assessment insert failed:', insertErr);
-      showToast('Could not save to cloud: ' + insertErr.message);
+      // Queue the payload so it's retried on next load instead of being lost.
+      try {
+        const _q = JSON.parse(localStorage.getItem('kw_assessment_pending')||'[]');
+        _q.push({ user_id: _user.id, score: totalScore, cat_scores: catScores, answers: answers, created_at: _now });
+        localStorage.setItem('kw_assessment_pending', JSON.stringify(_q.slice(-5)));
+      } catch(_){}
+      showToast('Saved on this device — we\'ll sync it to the cloud automatically.');
     } else {
       console.log('Assessment saved to Supabase:', inserted);
       showToast('Assessment saved');
@@ -983,7 +994,6 @@ function calculateWellness(){
     </div>`).join('');
 
   window._wellnessResult={totalScore,grade,dims,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,insCount,totalDebtBalance,totalDebtPayments};
-  sendReport(window._wellnessResult);
 }
 
 function buildInsights(dims,d){
@@ -1019,44 +1029,24 @@ function buildActions(dims,d){
   return actions.slice(0,8);
 }
 
-function showEmailBanner(state,msg){
-  const b=document.getElementById('emailBanner');b.style.display='flex';
-  if(state==='sending'){b.style.background='#f0f4ff';b.style.border='1.5px solid #bfdbfe';b.style.color='#1e40af';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0;animation:spin 1s linear infinite"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg><span>${msg}</span>`;}
-  else if(state==='success'){b.style.background='#f0faf5';b.style.border='1.5px solid #a7f3d0';b.style.color='#065f46';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span>${msg}</span>`;}
-  else{b.style.background='#fef2f2';b.style.border='1.5px solid #fecaca';b.style.color='#991b1b';b.innerHTML=`<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><span>${msg}</span>`;}
-}
-
-function sendReport(r){
-  if(EMAILJS_PUBLIC_KEY==='YOUR_PUBLIC_KEY'){return;}  // EmailJS not configured — silently skip; PDF export remains available (no user-facing warning)
-  showEmailBanner('sending',`Sending report to ${REPORT_RECIPIENT}…`);
-  emailjs.init({publicKey:EMAILJS_PUBLIC_KEY});
-  const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
-  const dimensionsText=r.dims.map(d=>`${d.label}: ${d.score}/100`).join('\n');
-  const actionsArr=buildActions(r.dims,{...r,essentialExp:1});
-  const actionsText=actionsArr.slice(0,6).map((a,i)=>`${i+1}. [${a.priority}] ${a.title}\n   ${a.desc}`).join('\n\n');
-  emailjs.send(EMAILJS_SERVICE_ID,EMAILJS_TEMPLATE_ID,{
-    to_email:REPORT_RECIPIENT,report_date:today,score:String(r.totalScore),
-    grade:r.grade.label.replace(/[^\w\s]/g,'').trim(),tagline:r.grade.tagline,
-    savings_rate:r.savRate.toFixed(1)+'%',dti:r.dti_pct.toFixed(1)+'%',
-    emergency_months:r.emMonths.toFixed(1)+' months',
-    net_worth:fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (negative)':''),
-    insurance_count:r.insCount+' of 6',dimensions:dimensionsText,actions:actionsText,
-  }).then(()=>showEmailBanner('success',`Report sent to ${REPORT_RECIPIENT}`))
-    .catch(err=>{console.error(err);showEmailBanner('error',`Could not send report — ${err?.text||'check EmailJS credentials'}.`);});
-}
 
 function exportPDF(){
   const r=window._wellnessResult;if(!r)return;
   const{jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const NAVY=[13,37,69],GOLD=[200,153,26],CREAM=[247,244,238],GREEN=[26,140,91],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
+  // Brand palette: navy chrome (#1a2744), green primary/accent (#397e2b). GOLD
+  // holds the brand green so former gold accents render on-brand and legibly
+  // (gold-on-white failed WCAG contrast and is off-brand).
+  const NAVY=[26,39,68],GOLD=[57,126,43],CREAM=[247,244,238],GREEN=[57,126,43],RED=[192,57,43],ORANGE=[217,119,6],SLATE=[74,85,104],WHITE=[255,255,255];
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
   doc.setFillColor(...NAVY);doc.rect(0,0,pageW,32,'F');
-  doc.setTextColor(...GOLD);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,11);
-  const _pdfName = window._toolFullName || '';
+  doc.setTextColor(...WHITE);doc.setFontSize(16);doc.setFont('helvetica','bold');doc.text('Key Wellness — Financial Wellness Report',14,11);
+  // Strip non-Latin1 chars (jsPDF fonts garble them) and clamp length so a long
+  // name can't overflow the header into the score badge.
+  const _pdfName = String(window._toolFullName || '').replace(/[^\x20-\x7E]/g,'').trim().slice(0,42);
   if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,210,220);doc.text('Client: '+_pdfName,14,18); }
   doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,_pdfName?24:18);
-  const scoreColor=r.totalScore>=70?[26,140,91]:r.totalScore>=50?[217,119,6]:[192,57,43];
+  const scoreColor=r.totalScore>=70?[57,126,43]:r.totalScore>=50?[217,119,6]:[192,57,43];
   doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,5,34,22,3,3,'F');
   doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
   doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});
@@ -1095,10 +1085,11 @@ function exportPDF(){
 
 function restartAssessment(){
   if(!confirm('Start a new assessment? Your current results will be cleared.'))return;
-  answers={};insuranceSet=new Set();localStorage.removeItem(LS_KEY);
-  document.querySelectorAll('input[type=text]').forEach(el=>el.value='');
-  document.querySelectorAll('.mcq-opt').forEach(el=>el.classList.remove('selected'));
-  currentStep=0;showStep(0);document.getElementById('progressWrap').style.display='block';
+  localStorage.removeItem(LS_KEY);
+  // Reload for a clean, consistent form. A prior reassessment mutates
+  // STEP_REQUIRED and hides the money grids; the old in-place reset left those
+  // in an inconsistent state (step 0 with money inputs hidden and validation off).
+  window.location.href = window.location.pathname;
 }
 
 // ── Figure resolver: tool data → profile → 0 ──────────────────────────────────
@@ -1200,6 +1191,25 @@ function applyReassessmentMode() {
 updateProgress(0);
 loadDraft();
 
+// Retry assessment saves that failed on a previous visit and were queued to
+// localStorage. Runs once a live session is available again.
+async function _flushPendingAssessments(_sb, uid) {
+  let queue;
+  try { queue = JSON.parse(localStorage.getItem('kw_assessment_pending')||'[]'); } catch(_) { queue = []; }
+  if (!Array.isArray(queue) || !queue.length) return;
+  const remaining = [];
+  for (const row of queue) {
+    if (!row || row.user_id !== uid) continue; // never replay another user's row
+    const { error } = await _sb.from('assessments').insert(row);
+    if (error) { console.warn('Pending assessment retry failed, will keep for next time:', error); remaining.push(row); }
+  }
+  try {
+    if (remaining.length) localStorage.setItem('kw_assessment_pending', JSON.stringify(remaining));
+    else localStorage.removeItem('kw_assessment_pending');
+  } catch(_){}
+  if (remaining.length < queue.length) { try { showToast('Synced a saved assessment to the cloud.'); } catch(_){} }
+}
+
 // ── Auth init (extended: loads previous assessment + tool data for reassessment mode) ──
 (function() {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
@@ -1210,6 +1220,10 @@ loadDraft();
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     const uid = session.user.id;
+
+    // Retry any assessment saves that failed on a previous visit (queued in
+    // localStorage) now that we have a live session again.
+    _flushPendingAssessments(_sb, uid);
 
     // Load profile (extended columns for figure fallback)
     const { data: prof } = await _sb.from('profiles')

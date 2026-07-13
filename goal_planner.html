@@ -451,11 +451,11 @@ function saveGoals() {
   };
   localStorage.setItem(LS_KEY, JSON.stringify(data));
   (async()=>{
-    if(!window._toolSb||!window._toolUser)return;
+    if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'goal_planner',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
-    if(error)console.error('goal_planner save failed:',error);
+    if(error){ console.error('goal_planner save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
+    else showToast();
   })();
-  showToast();
 }
 
 function loadGoals() {

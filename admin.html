@@ -548,8 +548,8 @@ function renderUsers(filter = '', statusFilter = 'all') {
               const dates = [a?.created_at, latestCheckin[u.id]].filter(Boolean);
               const lastActive = dates.length ? dates.reduce((mx, d) => d > mx ? d : mx) : null;
               return `<tr>
-                <td style="font-weight:600">${name}</td>
-                <td style="color:var(--muted);font-size:12px">${u.id ? (u.email || '—') : '—'}</td>
+                <td style="font-weight:600">${escNar(name)}</td>
+                <td style="color:var(--muted);font-size:12px">${u.id ? escNar(u.email || '—') : '—'}</td>
                 <td>${score !== null ? `<span class="score-badge ${band.cls}">${score}</span>` : '<span style="color:var(--muted);font-size:12px">—</span>'}</td>
                 <td>${band ? `<span class="band-pill" style="background:${band.cls==='score-green'?'#f0faf4':band.cls==='score-gold'?'#fffbf2':band.cls==='score-orange'?'#fff8f0':'#fdf2f2'};color:${band.color}">${band.label}</span>` : '—'}</td>
                 <td style="font-size:12px;color:var(--muted)">${a ? fmtDate(a.created_at) : '—'}</td>
@@ -707,8 +707,8 @@ function renderBookings(filter = '', statusFilter = 'all') {
                   ${b.attendance_confirmed_at ? `<span style="font-size:10px;color:var(--muted)">Confirmed ${fmtDate(b.attendance_confirmed_at)}</span>` : `<span style="font-size:10px;color:var(--orange)">Unconfirmed</span>`}
                 </div>` : `<span style="font-size:12px;color:var(--muted)">—</span>`;
               return `<tr>
-                <td style="font-weight:600">${b.user_name||'—'}</td>
-                <td style="font-size:12px;color:var(--muted)">${b.user_email||'—'}</td>
+                <td style="font-weight:600">${escNar(b.user_name||'—')}</td>
+                <td style="font-size:12px;color:var(--muted)">${escNar(b.user_email||'—')}</td>
                 <td style="font-size:12px">${b.service||'—'}</td>
                 <td style="font-size:12px">${b.session_type||'—'}</td>
                 <td style="font-size:12px;color:var(--muted)">${fmtDate(b.requested_date||b.created_at)}</td>

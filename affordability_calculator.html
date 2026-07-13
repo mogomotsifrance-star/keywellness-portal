@@ -486,9 +486,11 @@ const _AFF_MAPPINGS = [
 let _toolSaveTimer;
 function _toolSave(){
   const sb = window._toolSb, u = window._toolUser;
-  if (!sb || !u) return;
   const inputs = {};
   document.querySelectorAll('input[id], select[id]').forEach(el => { inputs[el.id] = el.value; });
+  // Mirror to localStorage so inputs survive logged-out / offline / cloud-write failure.
+  try { localStorage.setItem('kw_tool_affordability', JSON.stringify({ inputs })); } catch(_){}
+  if (!sb || !u) return;
   clearTimeout(_toolSaveTimer);
   _toolSaveTimer = setTimeout(async () => {
     const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'affordability', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
@@ -496,12 +498,14 @@ function _toolSave(){
   }, 500);
 }
 async function _toolRestore(_sb, uid){
+  const _apply = (_inp) => { if (!_inp) return false; Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); return true; };
+  const _local = () => { try { const j = JSON.parse(localStorage.getItem('kw_tool_affordability')||'null'); return j && j.inputs; } catch(_){ return null; } };
   try {
     const { data, error } = await _sb.from('tool_data').select('data').eq('user_id', uid).eq('tool', 'affordability').maybeSingle();
-    if (error) { console.warn('Affordability load from Supabase failed:', error); return; }
+    if (error) { console.warn('Affordability load from Supabase failed:', error); _apply(_local()); return; }
     const _inp = data && data.data && data.data.inputs;
-    if (_inp) { Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); }
-  } catch(e){ console.warn('Affordability restore error:', e); }
+    if (!_apply(_inp)) _apply(_local());
+  } catch(e){ console.warn('Affordability restore error:', e); _apply(_local()); }
 }
 
 // ── Auth init ──

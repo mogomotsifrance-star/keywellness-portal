@@ -370,7 +370,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
           <div class="card-title">Month Notes</div>
           <div class="iw">
             <textarea id="monthNotes" placeholder="Any notes, goals or reminders for this month…" maxlength="500"
-              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Inter',sans-serif;color:var(--navy);"
+              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Nunito',sans-serif;color:var(--navy);"
               oninput="autoSave()"></textarea>
           </div>
         </div>
@@ -520,16 +520,16 @@ function save(){
   (async function() {
     const _sb = window._toolSb;
     const _user = window._toolUser;
-    if (!_sb || !_user) return;
+    if (!_sb || !_user) { showToast(); return; }
     const { error } = await _sb.from('tool_data').upsert({
       user_id: _user.id,
       tool: 'budget_planner',
       data: { budgets, currentKey },
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' });
-    if (error) console.error('Budget save to Supabase failed:', error);
+    if (error) { console.error('Budget save to Supabase failed:', error); showToast('Saved on this device only — cloud sync failed', 4000); }
+    else showToast();
   })();
-  showToast();
   // ── kw_snapshot ──
   try {
     if(currentKey && budgets[currentKey]) {
@@ -567,7 +567,7 @@ function load(){
 // ────────────────────────────────────────────
 function fmt(v){ return 'P '+Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function fmtK(v){ const a=Math.abs(v); if(a>=1e6) return 'P '+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return 'P '+(a/1e3).toFixed(1)+'K'; return fmt(v); }
-function pf(v){ return parseFloat(String(v).replace(/,/g,''))||0; }
+function pf(v){ const n = parseFloat(String(v).replace(/[,-]/g,''))||0; return n < 0 ? 0 : n; }
 function pfEl(id){ return pf(document.getElementById(id)?.value||'0'); }
 function fmtInput(el){
   let raw=el.value.replace(/[^0-9.]/g,'');
@@ -1197,7 +1197,7 @@ function renderYearCharts(rows){
       { label:'Surplus',  data:sur, borderColor:GOLD,  backgroundColor:GOLD,  tension:.3, spanGaps:false, pointRadius:3, borderDash:[5,4] },
     ]},
     options:{ responsive:true, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
-      plugins:{ legend:{ labels:{ font:{family:'Inter'}, usePointStyle:true, boxWidth:8 } },
+      plugins:{ legend:{ labels:{ font:{family:'Nunito'}, usePointStyle:true, boxWidth:8 } },
         tooltip:{ callbacks:{ label:tip } } },
       scales: baseScales }
   });

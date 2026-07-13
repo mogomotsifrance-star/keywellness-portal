@@ -673,7 +673,12 @@ function saveSnapshot(d) {
     };
     window._toolSb.from('tool_data').upsert({
       user_id: window._toolUser.id, tool: 'lifestyle_inflation', data: fullState, updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,tool' }).then(({ error }) => { if (error) console.error('Save failed:', error); });
+    }, { onConflict: 'user_id,tool' }).then(({ error }) => {
+      if (error) { console.error('Save failed:', error); showToast('Saved on this device only — cloud sync failed'); }
+      else showToast();
+    });
+  } else {
+    showToast();
   }
   try {
     const snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
@@ -686,12 +691,12 @@ function saveSnapshot(d) {
       lastUpdated:  new Date().toISOString()
     };
     localStorage.setItem('kw_snapshot', JSON.stringify(snap));
-    showToast();
   } catch(e){}
 }
 
-function showToast() {
+function showToast(msg) {
   const t = document.getElementById('toast');
+  t.textContent = msg || '✓ Saved to snapshot';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
 }

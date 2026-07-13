@@ -119,6 +119,8 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .heatmap-cell.empty{background:transparent;cursor:default;}
 .heatmap-cell.empty:hover{transform:none;}
 .heatmap-cell.no-data{background:var(--cream);border:1.5px dashed var(--border);}
+/* Numeric value inside each cell so intensity isn't conveyed by colour alone. */
+.heatmap-cell .hm-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:800;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.65);pointer-events:none;}
 
 /* Insights */
 .insight-list{display:flex;flex-direction:column;gap:9px;}
@@ -495,11 +497,11 @@ function save(){
   const _d={entries,nextId};
   localStorage.setItem(LS_KEY,JSON.stringify(_d));
   (async()=>{
-    if(!window._toolSb||!window._toolUser)return;
+    if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'financial_stress_tracker',data:_d,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
-    if(error)console.error('financial_stress_tracker save failed:',error);
+    if(error){ console.error('financial_stress_tracker save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
+    else showToast();
   })();
-  showToast();
 }
 function load(){try{const r=localStorage.getItem(LS_KEY);if(!r)return;const d=JSON.parse(r);entries=d.entries||[];nextId=d.nextId||1;}catch{}}
 
@@ -775,9 +777,9 @@ function renderHeatmap(){
     const e=entryMap[dateStr];
     if(e){
       const info=levelInfo(e.score);
-      html+=`<div class="heatmap-cell" style="background:${stressColor(e.score)};" title="${dateStr}: ${e.score}/10 — ${info.label}"
+      html+=`<div class="heatmap-cell" style="background:${stressColor(e.score)};" title="${dateStr}: ${e.score}/10 — ${info.label}" role="img" aria-label="${dateStr}: stress ${e.score} out of 10, ${info.label}"
         onmousemove="showTip(event,'${new Date(dateStr+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short'})}: ${e.score}/10 — ${info.label}')"
-        onmouseleave="hideTip()"></div>`;
+        onmouseleave="hideTip()"><span class="hm-num">${e.score}</span></div>`;
     } else {
       html+=`<div class="heatmap-cell no-data" onmousemove="showTip(event,'${new Date(dateStr+'T12:00:00').toLocaleDateString('en-BW',{day:'2-digit',month:'short'})}: No entry')" onmouseleave="hideTip()"></div>`;
     }

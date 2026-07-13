@@ -753,9 +753,8 @@ function saveSnapshot(d) {
       lastUpdated:  new Date().toISOString()
     };
     localStorage.setItem('kw_snapshot', JSON.stringify(snap));
-    showToast();
   } catch(e){}
-  // Save full state to Supabase
+  // Save full state to Supabase — the toast reflects the REAL cloud result.
   if (window._toolSb && window._toolUser) {
     saveCurrentChild();
     const fullState = {
@@ -769,12 +768,18 @@ function saveSnapshot(d) {
     };
     window._toolSb.from('tool_data').upsert({
       user_id: window._toolUser.id, tool: 'education_savings', data: fullState, updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,tool' }).then(({ error }) => { if (error) console.error('Save failed:', error); });
+    }, { onConflict: 'user_id,tool' }).then(({ error }) => {
+      if (error) { console.error('Save failed:', error); showToast('Saved on this device only — cloud sync failed'); }
+      else showToast();
+    });
+  } else {
+    showToast();
   }
 }
 
-function showToast() {
+function showToast(msg) {
   const t = document.getElementById('toast');
+  t.textContent = msg || '✓ Saved to snapshot';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
 }
