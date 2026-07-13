@@ -1,11 +1,28 @@
 /* Key Wellness — ProLearn certificate renderer (Learning Pathways).
    Fetches the official blank SVG template, substitutes tokens, and
    provides PNG download (3× resolution) with window.print() fallback.
-   Fonts: EB Garamond (labels) + Pinyon Script (name) via Google Fonts. */
+   Fonts: Shelley Script LT Std (name), Sitka Heading Bold (course),
+   Sitka Small (date) — self-hosted in assets/fonts/. Google Fonts
+   (Pinyon Script + EB Garamond) remain as fallbacks when a licensed
+   font file is missing. */
 (function (global) {
   'use strict';
 
   const TEMPLATE_PATH = 'assets/certificates/prolearn-certificate-template.svg';
+  const FONT_DIR = 'assets/fonts/';
+
+  // Licensed certificate fonts, self-hosted. Candidates are tried in
+  // order; the first file that exists is used. `weight` must match the
+  // font-weight the SVG template requests so browsers don't synthesize
+  // a faux bold on top of an already-bold face.
+  const LOCAL_FONTS = [
+    { family: 'Shelley Script LT Std', weight: '400', files: ['ShelleyScriptLTStd.woff2', 'ShelleyScriptLTStd.woff', 'ShelleyScriptLTStd.otf', 'ShelleyScriptLTStd.ttf'] },
+    { family: 'Sitka Heading Bold',    weight: '600', files: ['SitkaHeadingBold.woff2',   'SitkaHeadingBold.woff',   'SitkaHeadingBold.otf',   'SitkaHeadingBold.ttf'] },
+    { family: 'Sitka Small',           weight: '400', files: ['SitkaSmall.woff2',         'SitkaSmall.woff',         'SitkaSmall.otf',         'SitkaSmall.ttf'] },
+  ];
+
+  const FONT_FORMATS = { woff2: 'woff2', woff: 'woff', otf: 'opentype', ttf: 'truetype' };
+  function fontFormat(file) { return FONT_FORMATS[file.split('.').pop()] || 'opentype'; }
   const VIEWBOX_W = 841.89;
   const VIEWBOX_H = 595.28;
   const PNG_SCALE = 3; // ~2526 × 1786 px
@@ -61,6 +78,7 @@
   async function render(container, data, { onRetry } = {}) {
     container.innerHTML = '<p style="text-align:center;color:#6b7280;padding:24px">Loading certificate…</p>';
     try {
+      ensurePageFonts();
       const tmpl = await fetchTemplate();
       const svgStr = buildSvg(tmpl, data);
       container.innerHTML = svgStr;
@@ -101,19 +119,66 @@
     return css.replace(/url\(https:\/\/fonts\.gstatic\.com\/[^)]+\)/g, () => `url(${dataUris[i++]})`);
   }
 
+  // Inline one local licensed font as a base64 @font-face rule.
+  // Returns '' if none of the candidate files exist.
+  async function inlineLocalFont(font) {
+    for (const file of font.files) {
+      try {
+        const res = await fetch(FONT_DIR + file);
+        if (!res.ok) continue;
+        const buf = await res.arrayBuffer();
+        let bin = '';
+        const bytes = new Uint8Array(buf);
+        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+        const fmt = fontFormat(file);
+        const mime = fmt === 'woff2' ? 'font/woff2' : fmt === 'woff' ? 'font/woff' : 'font/otf';
+        return `@font-face{font-family:'${font.family}';font-weight:${font.weight};src:url(data:${mime};base64,${btoa(bin)}) format('${fmt}');font-display:swap;}`;
+      } catch (_) { /* try next candidate */ }
+    }
+    console.warn(`[Certificate] Font file for "${font.family}" not found in ${FONT_DIR} — using fallback font.`);
+    return '';
+  }
+
+  // Non-inlined @font-face rules (absolute URLs) for on-screen display
+  // and the print window. Each src lists every candidate file; the
+  // browser skips missing ones.
+  function localFontFaceCss() {
+    return LOCAL_FONTS.map(f => {
+      const srcs = f.files
+        .map(file => `url('${new URL(FONT_DIR + file, global.location.href).href}') format('${fontFormat(file)}')`)
+        .join(',');
+      return `@font-face{font-family:'${f.family}';font-weight:${f.weight};src:${srcs};font-display:swap;}`;
+    }).join('\n');
+  }
+
+  // Make the certificate fonts available to the current page (for the
+  // inline SVG preview). Safe to call repeatedly.
+  let _pageFontsInjected = false;
+  function ensurePageFonts() {
+    if (_pageFontsInjected) return;
+    _pageFontsInjected = true;
+    const style = document.createElement('style');
+    style.id = 'kw-cert-fonts';
+    style.textContent = localFontFaceCss();
+    document.head.appendChild(style);
+    if (!document.querySelector('link[href*="Pinyon+Script"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;700&family=Pinyon+Script&display=swap';
+      document.head.appendChild(link);
+    }
+  }
+
   let _fontCssCache = null;
   async function getInlinedFontCss() {
     if (_fontCssCache) return _fontCssCache;
-    try {
-      const [garamond, pinyon] = await Promise.all([
-        inlineGoogleFont('EB+Garamond', '400;700'),
-        inlineGoogleFont('Pinyon+Script'),
-      ]);
-      _fontCssCache = garamond + '\n' + pinyon;
-    } catch (e) {
-      console.warn('[Certificate] Font inlining failed; PNG may use fallback fonts:', e);
-      _fontCssCache = '';
-    }
+    const warn = e => { console.warn('[Certificate] Font inlining failed; PNG may use fallback fonts:', e); return ''; };
+    const parts = await Promise.all([
+      inlineGoogleFont('EB+Garamond', '400;700').catch(warn),
+      inlineGoogleFont('Pinyon+Script').catch(warn),
+      ...LOCAL_FONTS.map(inlineLocalFont),
+    ]);
+    _fontCssCache = parts.filter(Boolean).join('\n');
     return _fontCssCache;
   }
 
@@ -137,7 +202,14 @@
     );
 
     if (document.fonts?.ready) {
-      try { await document.fonts.load("46px 'Pinyon Script'"); } catch (_) {}
+      try {
+        await Promise.all([
+          document.fonts.load("46px 'Shelley Script LT Std'"),
+          document.fonts.load("600 16px 'Sitka Heading Bold'"),
+          document.fonts.load("14px 'Sitka Small'"),
+          document.fonts.load("46px 'Pinyon Script'"),
+        ]);
+      } catch (_) {}
       await document.fonts.ready;
     }
 
@@ -182,6 +254,7 @@
     if (!w) return false;
     w.document.write(`<!DOCTYPE html><html><head><title>Certificate</title>
       <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;700&family=Pinyon+Script&display=swap">
+      <style>${localFontFaceCss()}</style>
       <style>@page{size:landscape}body{margin:0;display:flex;align-items:center;justify-content:center;background:#fff}svg{width:100%;height:auto}</style>
       </head><body>${svgStr}</body></html>`);
     w.document.close();

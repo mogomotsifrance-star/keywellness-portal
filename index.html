@@ -3342,8 +3342,10 @@ function lpRenderCertClaim(container, pathwayId) {
           <button class="lp-btn lp-btn-outline" onclick="lpPrintCertificate(${pathwayId})">🖨 Print</button>
         </div>
       </div>`;
-    document.getElementById(`lp-cert-svg-${pathwayId}`).innerHTML =
-      KWCertificate.svgMarkup({ name: cert.certificate_name, date: fmtDate(cert.completed_on), level: pathway?.certificate_level });
+    KWCertificate.render(
+      document.getElementById(`lp-cert-svg-${pathwayId}`),
+      { name: cert.certificate_name, date: fmtDate(cert.completed_on), level: pathway?.certificate_level }
+    );
     return;
   }
   container.innerHTML = `
