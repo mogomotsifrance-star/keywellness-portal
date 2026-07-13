@@ -887,7 +887,13 @@ function calculateWellness(){
     }).select().single();
     if (insertErr) {
       console.error('Assessment insert failed:', insertErr);
-      showToast('Could not save to cloud: ' + insertErr.message);
+      // Queue the payload so it's retried on next load instead of being lost.
+      try {
+        const _q = JSON.parse(localStorage.getItem('kw_assessment_pending')||'[]');
+        _q.push({ user_id: _user.id, score: totalScore, cat_scores: catScores, answers: answers, created_at: _now });
+        localStorage.setItem('kw_assessment_pending', JSON.stringify(_q.slice(-5)));
+      } catch(_){}
+      showToast('Saved on this device — we\'ll sync it to the cloud automatically.');
     } else {
       console.log('Assessment saved to Supabase:', inserted);
       showToast('Assessment saved');
@@ -1185,6 +1191,25 @@ function applyReassessmentMode() {
 updateProgress(0);
 loadDraft();
 
+// Retry assessment saves that failed on a previous visit and were queued to
+// localStorage. Runs once a live session is available again.
+async function _flushPendingAssessments(_sb, uid) {
+  let queue;
+  try { queue = JSON.parse(localStorage.getItem('kw_assessment_pending')||'[]'); } catch(_) { queue = []; }
+  if (!Array.isArray(queue) || !queue.length) return;
+  const remaining = [];
+  for (const row of queue) {
+    if (!row || row.user_id !== uid) continue; // never replay another user's row
+    const { error } = await _sb.from('assessments').insert(row);
+    if (error) { console.warn('Pending assessment retry failed, will keep for next time:', error); remaining.push(row); }
+  }
+  try {
+    if (remaining.length) localStorage.setItem('kw_assessment_pending', JSON.stringify(remaining));
+    else localStorage.removeItem('kw_assessment_pending');
+  } catch(_){}
+  if (remaining.length < queue.length) { try { showToast('Synced a saved assessment to the cloud.'); } catch(_){} }
+}
+
 // ── Auth init (extended: loads previous assessment + tool data for reassessment mode) ──
 (function() {
   const _SB_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
@@ -1195,6 +1220,10 @@ loadDraft();
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     const uid = session.user.id;
+
+    // Retry any assessment saves that failed on a previous visit (queued in
+    // localStorage) now that we have a live session again.
+    _flushPendingAssessments(_sb, uid);
 
     // Load profile (extended columns for figure fallback)
     const { data: prof } = await _sb.from('profiles')

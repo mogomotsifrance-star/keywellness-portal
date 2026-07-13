@@ -4809,6 +4809,9 @@ VIEWS['badges'] = function () {
       </label>
       <button class="btn btn-primary btn-sm" onclick="saveRewardsOptIn()">${u.leaderboard_opt_in ? 'Update' : 'Save'}</button>
     </div>
+    ${stats.earnedCount === 0
+      ? `<div class="notice notice-gold" style="margin-bottom:16px">🏆 <strong>Earn your first badge.</strong> Badges fill up as you use the portal — take the assessment, log a check-in, build your emergency fund, or complete a learning pathway. Each one adds reward points.</div>`
+      : ''}
     <div class="badge-grid">
       ${renderBadgeCards()}
     </div>`;
