@@ -5095,9 +5095,9 @@ AAAAAAAAAADwtyLSNmu61hK2/1+AAQBCwh1LVL245gAAAABJRU5ErkJggg==" transform="matrix(
 </g>
 
 <g id="kw-overlays" font-family="'EB Garamond',serif">
-  <text id="ov-name" x="518.95" y="414.5" text-anchor="middle" font-family="'Pinyon Script',cursive" font-size="46" fill="#224568">{{NAME}}</text>
-  <text id="ov-course1" x="505.7" y="480" text-anchor="middle" font-size="15.5" font-weight="600" letter-spacing="1.5" fill="#939598">{{COURSE_LINE_1}}</text>
-  <text id="ov-course2" x="505.7" y="500" text-anchor="middle" font-size="15.5" font-weight="600" letter-spacing="1.5" fill="#939598">{{COURSE_LINE_2}}</text>
-  <text id="ov-date" x="350.07" y="538.8" text-anchor="middle" font-size="14" fill="#224568">{{DATE}}</text>
+  <text id="ov-name" x="518.95" y="414.5" text-anchor="middle" font-family="'Shelley Script LT Std','Pinyon Script',cursive" font-size="46" fill="#224568">{{NAME}}</text>
+  <text id="ov-course1" x="505.7" y="480" text-anchor="middle" font-family="'Sitka Heading Bold','EB Garamond',serif" font-size="15.5" font-weight="600" letter-spacing="1.5" fill="#939598">{{COURSE_LINE_1}}</text>
+  <text id="ov-course2" x="505.7" y="500" text-anchor="middle" font-family="'Sitka Heading Bold','EB Garamond',serif" font-size="15.5" font-weight="600" letter-spacing="1.5" fill="#939598">{{COURSE_LINE_2}}</text>
+  <text id="ov-date" x="350.07" y="538.8" text-anchor="middle" font-family="'Sitka Small','EB Garamond',serif" font-size="14" fill="#224568">{{DATE}}</text>
 </g>
 </svg>
