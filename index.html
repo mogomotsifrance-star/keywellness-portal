@@ -2937,7 +2937,9 @@ function renderLpLanding(el) {
           <span class="lp-pw-count">${itemsP.length} lesson${itemsP.length===1?'':'s'}</span>
           <div class="lp-ring">${lpRingSvg(pctP)}<span class="lp-ring-label">${doneP}/${itemsP.length}</span></div>
         </div>` : `<div class="lp-pw-foot"><span class="lp-pw-count">${itemsP.length||'—'} lessons</span></div>`}
-        <div class="lp-cert-strip">🎓 Earns: Prolearn ${escHtml(p.certificate_level||'')} certificate${passedP?' · ✓ earned':''}</div>
+        ${passedP
+          ? `<button class="lp-cert-strip lp-cert-strip-earned" onclick="event.stopPropagation();lpViewCertificate(${p.id})" onkeydown="event.stopPropagation()">🎓 Prolearn ${escHtml(p.certificate_level||'')} certificate · ✓ earned<span class="lp-cs-view">View →</span></button>`
+          : `<div class="lp-cert-strip">🎓 Earns: Prolearn ${escHtml(p.certificate_level||'')} certificate</div>`}
       </div>
     </div>`;
   }).join('');
@@ -3035,7 +3037,11 @@ function renderLpPathway(el) {
         <div class="lp-bar" style="max-width:380px"><i style="width:${total?Math.round(done/total*100):0}%"></i></div>
         <div class="lp-bar-lbl">${done} of ${total} lessons complete</div>
       </div>
-      ${next?`<button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${next.id}')">▶ Resume · Lesson ${next.sort_order}</button>`:''}
+      ${next
+        ? `<button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${next.id}')">▶ Resume · Lesson ${next.sort_order}</button>`
+        : passed
+          ? `<button class="lp-btn lp-btn-light" onclick="lpViewCertificate(${pid})">🎓 View certificate</button>`
+          : ''}
     </div>
     ${shelves}`;
 }
