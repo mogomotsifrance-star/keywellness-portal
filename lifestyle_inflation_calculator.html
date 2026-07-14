@@ -467,8 +467,10 @@ function renderResults(d) {
 
     ${d.savRateNow < d.savRateThen
       ? `<div class="notice notice-red">Your savings rate <strong>dropped from ${d.savRateThen.toFixed(1)}% to ${d.savRateNow.toFixed(1)}%</strong> even though your income increased. Lifestyle spending absorbed the raise.</div>`
-      : d.savRateNow > d.savRateThen
+      : d.savRateNow > d.savRateThen && d.savRateNow >= 0 && d.creepPctOfRaise < 100
       ? `<div class="notice notice-green">Your savings rate <strong>improved from ${d.savRateThen.toFixed(1)}% to ${d.savRateNow.toFixed(1)}%</strong>. You increased both your lifestyle AND your savings — well done!</div>`
+      : d.savRateNow > d.savRateThen
+      ? `<div class="notice notice-red">Your savings rate moved from <strong>${d.savRateThen.toFixed(1)}% to ${d.savRateNow.toFixed(1)}%</strong>, but ${d.savRateNow < 0 ? 'it is still negative — you are spending more than you earn each month' : 'your lifestyle absorbed your entire raise'}. Redirect part of the creep below into savings to turn this around.</div>`
       : `<div class="notice notice-gold">Your savings rate stayed flat at ${d.savRateNow.toFixed(1)}% despite the income increase — all the extra went to lifestyle.</div>`
     }
 
