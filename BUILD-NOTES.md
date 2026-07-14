@@ -2863,3 +2863,8 @@ chat image cannot be saved byte-for-byte from this environment. Before
 Debswana sees it, replace the file with the original export from the brand
 asset pack (same filename, transparent background, ~1000px wide) and eyeball
 the header — Debswana brand fidelity should be exact, not approximate.
+
+**RESOLVED (same day):** the interim recreation has been replaced with the
+ORIGINAL brand export Tshenolo supplied ("Sedimosa Logo.png" from Downloads,
+510x150). No further action needed on this asset; the replace-before-launch
+caveat above is closed.
