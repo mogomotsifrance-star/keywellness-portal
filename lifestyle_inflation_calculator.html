@@ -57,7 +57,7 @@ input,select{font-family:'Nunito',sans-serif}
 .cat-icon{font-size:15px;width:22px;text-align:center}
 .iw{position:relative}
 .iw .prefix{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:600;color:var(--muted);pointer-events:none}
-.iw input{padding-left:28px}
+.iw input[type]{padding-left:28px} /* [type] beats the later input[type=number]{padding:8px 9px} shorthand in the cascade */
 .iw.no-prefix input{padding-left:9px}
 input[type=number],input[type=text],select{
   width:100%;padding:8px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);
