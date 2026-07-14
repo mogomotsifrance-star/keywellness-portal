@@ -14,7 +14,8 @@
 --   • Org table is `organizations`; members link via profiles.org_id.
 --   • content_items already exists as the LMS lessons table — EXTENDED
 --     here (kind/org_id/description/published), not duplicated. The
---     existing `video_path` column doubles as the webinar storage path.
+--     existing `video_path` column doubles as the webinar's VIMEO
+--     reference ('<id>' or '<id>/<privacy-hash>') — see §8.
 --   • bookings already has status/attended/attendance_confirmed_* —
 --     nothing to add. checkins is already a server table — nothing to add.
 --   • Budgets live in tool_data(tool='budget_planner') as a
@@ -238,17 +239,15 @@ update public.points_catalog set active = false
   where event_type in ('monthly_checkin','tool_first_use');
 
 
--- ── 8. Private `webinars` storage bucket ─────────────────────────
--- INSERT into storage.buckets is allowed via SQL (only DELETE is blocked
--- by Supabase's protect_delete trigger). public=false: no anonymous or
--- authenticated direct reads; NO storage.objects SELECT policy is created
--- for this bucket, so the ONLY read path is a short-lived signed URL
--- minted by the webinar-url Edge Function (service role) after an
--- RLS-context org check.
-
-insert into storage.buckets (id, name, public)
-values ('webinars', 'webinars', false)
-on conflict (id) do nothing;
+-- ── 8. Webinar hosting ────────────────────────────────────────────
+-- REVISED (2026-07-14, MD decision): webinars are hosted on VIMEO, not
+-- Supabase Storage. No `webinars` bucket is created and no signed-URL
+-- Edge Function is used. For kind='webinar' rows, `video_path` holds the
+-- Vimeo reference ('<id>' or '<id>/<privacy-hash>' for unlisted videos).
+-- The org boundary is unchanged: RLS on content_items (above) is what
+-- keeps another org's Vimeo reference out of a member's hands, and the
+-- Vimeo account must be set to hide videos from vimeo.com and restrict
+-- embedding to the portal's domains (BUILD-NOTES manual step).
 
 
 -- ── VERIFICATION CHECKLIST (run after applying) ──────────────────
@@ -284,8 +283,9 @@ on conflict (id) do nothing;
 --    Expect: 5 new active utilisation rows; session_booked=10;
 --    monthly_checkin + tool_first_use active=false; video_watched untouched (25).
 --
--- 7. Bucket:
---      select id, public from storage.buckets where id = 'webinars';  -- public=false
---    Anonymous fetch must 400/404:
---      curl -sI "https://tarmpqxsabbehgjaonfz.supabase.co/storage/v1/object/public/webinars/anything.mp4"
+-- 7. Vimeo scoping: as a member of org A, `select video_path from
+--    content_items where kind='webinar'` returns only org A + NULL-org
+--    rows — org B's Vimeo references are unreachable. On vimeo.com,
+--    confirm a webinar link does NOT play when pasted into a browser
+--    directly (privacy set to embed-only on allowed domains).
 -- ─────────────────────────────────────────────────────────────────

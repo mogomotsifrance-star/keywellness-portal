@@ -96,9 +96,5 @@ alter table public.organizations
   drop column if exists program_logo_path,
   drop column if exists program_name;
 
--- A7. webinars bucket. Direct DELETE on storage.buckets is blocked by
--- Supabase's protect_delete() trigger (42501) — remove via the dashboard
--- (Storage → Buckets → webinars → Delete) or the Storage API with the
--- service-role key. Empty the bucket first; bucket deletion fails while
--- objects remain.
-drop policy if exists "webinars_no_direct_read" on storage.objects;  -- only if Batch 1 created one (it does not; listed defensively)
+-- A7. (removed) No storage changes to roll back — webinars are hosted on
+-- Vimeo (2026-07-14 revision); the forward migration touches no buckets.

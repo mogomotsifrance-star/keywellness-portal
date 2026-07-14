@@ -2797,3 +2797,55 @@ Africa/Gaborone. The `points_events.season` stamp keeps the existing UTC
 convention — a ±2h skew exists at quarter boundaries between points
 display and qualification windows. Accepted; do not "fix" one without the
 other.
+
+## REVISION (2026-07-14, later the same day — MD decision): webinars move to Vimeo
+
+Framework change agreed with the MD. Three points, two of which were
+already true in what shipped earlier today:
+
+1. **Sidebar/portal chrome stays Key Wellness for all users** — already
+   the case; no code change was needed. Org branding never touched the
+   sidebar or auth screen.
+2. **Org-specific logos appear in the webinars context** — already the
+   case; the "{program_name} Webinars" header + logo render only on the
+   Learn page's Webinars section.
+3. **Webinars are hosted on VIMEO, not Supabase Storage** — implemented
+   now. What changed:
+   - `supabase_webinars_thresholds_schema.sql` no longer creates a
+     `webinars` bucket (§8 is now a comment documenting the Vimeo model).
+     For kind='webinar' rows, `video_path` stores the Vimeo reference
+     ('<id>' or '<id>/<privacy-hash>').
+   - The `webinar-url` Edge Function is retired: deployment deleted from
+     the project, source removed from the repo.
+   - The member player embeds Vimeo via the Player API (already used by
+     the welcome modal); progress pings to `record_video_progress` are
+     unchanged (resume works, webinars still earn no Learning credit —
+     the RPC's kind guard is host-agnostic).
+   - admin.html → Webinars accepts a pasted Vimeo URL/ID and normalises it.
+   - Org privacy model: RLS on content_items still decides which members
+     ever receive a webinar's Vimeo reference. Vimeo-side settings are the
+     second wall (below).
+
+**Superseded/void items from the section above:** Storage upload-limit
+raise (not needed), `webinars` bucket creation/verification (no bucket),
+HandBrake transcode runbook (upload originals; Vimeo transcodes), and the
+Bunny/Cloudflare Stream egress migration trigger (Vimeo serves from its
+own CDN; no Supabase egress).
+
+**NEW manual steps (Vimeo dashboard — Claude Code has no access):**
+1. Use a Vimeo plan that supports privacy controls (Starter or higher;
+   embed-domain restriction requires it).
+2. Per webinar (or as account default): Privacy → "Hide from Vimeo"
+   (link-only), and Embed → restrict to the portal domains:
+   `mogomotsifrance-star.github.io`,
+   `keywellness-portal.mogomotsifrance.workers.dev`
+   (+ `localhost` while testing on dev previews).
+3. After upload, copy the video link (unlisted links include the privacy
+   hash — paste the full link into admin.html so the hash is captured).
+4. Lone's upload flow: record → upload straight to Vimeo → set privacy →
+   paste link in admin → Publish. No compression step required.
+
+**Verification addition:** paste a webinar's Vimeo URL directly into a
+logged-out browser — it must NOT play on vimeo.com; it should play only
+embedded in the portal. And a member of org A must never receive org B's
+reference (RLS check, unchanged).

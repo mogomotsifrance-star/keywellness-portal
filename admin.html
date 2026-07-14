@@ -445,9 +445,12 @@ function showTab(tab) {
 // ── Org Webinars View ─────────────────────────────────────────────
 // Manages content_items rows with kind='webinar' (created by the
 // webinars/thresholds migration). Admin writes go through the
-// content_items_admin_all RLS policy. The video FILE itself is uploaded
-// manually via the dashboard into the private `webinars` bucket for v1
-// (see BUILD-NOTES) — this surface manages the metadata row + publish flag.
+// content_items_admin_all RLS policy. Webinars are hosted on VIMEO
+// (MD decision, 2026-07-14): upload the recording to the Key Wellness
+// Vimeo account (privacy: hidden from Vimeo, embeds restricted to the
+// portal domains — see BUILD-NOTES), then register the link here.
+// video_path stores the canonical Vimeo reference ('<id>' or
+// '<id>/<privacy-hash>').
 async function renderWebinars() {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading webinars…</div>';
@@ -477,15 +480,16 @@ async function renderWebinars() {
     <div class="card" style="margin-bottom:18px">
       <h3 style="margin-bottom:4px">Add a webinar</h3>
       <p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">
-        Upload the video file to the private <strong>webinars</strong> bucket first (Supabase dashboard → Storage → webinars),
-        then register it here. Members watch via short-lived signed links; org scoping is enforced by the database, and
-        webinars never award Learning credit.
+        Upload the recording to the Key Wellness <strong>Vimeo</strong> account first (privacy: hidden from Vimeo,
+        embeds allowed on the portal domains only), then paste the Vimeo link or ID here. Org scoping is enforced
+        by the database — members only ever receive their own organisation's videos — and webinars never award
+        Learning credit.
       </p>
       <div id="wb-form-error" style="display:none;color:#c0392b;font-size:13px;font-weight:600;margin-bottom:10px"></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px">
         <label style="font-size:12px;font-weight:600">Title<input id="wb-title" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. Money & Wellbeing — July session"></label>
         <label style="font-size:12px;font-weight:600">Organisation<select id="wb-org" style="width:100%;padding:8px;margin-top:4px">${orgOptions}</select></label>
-        <label style="font-size:12px;font-weight:600">File path in webinars bucket<input id="wb-path" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. debswana/2026-07-money-wellbeing.mp4"></label>
+        <label style="font-size:12px;font-weight:600">Vimeo link or ID<input id="wb-path" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. https://vimeo.com/123456789/abcd1234 or 123456789"></label>
         <label style="font-size:12px;font-weight:600">Duration (minutes)<input id="wb-mins" type="number" min="1" style="width:100%;padding:8px;margin-top:4px" placeholder="64"></label>
       </div>
       <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Description (optional)<input id="wb-desc" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
@@ -494,10 +498,27 @@ async function renderWebinars() {
     <div class="card">
       <h3 style="margin-bottom:10px">Webinar library (${(rows || []).length})</h3>
       ${(rows || []).length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Title</th><th>Audience</th><th>File</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Title</th><th>Audience</th><th>Vimeo</th><th>Duration</th><th>Status</th><th></th></tr></thead>
         <tbody>${list}</tbody></table></div>`
       : '<p style="color:var(--muted);font-size:13px">No webinars yet — add the first one above.</p>'}
     </div>`;
+}
+
+// Same parsing rule as the member player (index.html lpParseVimeoRef):
+// accepts a bare ID, 'id/hash', or any vimeo.com / player.vimeo.com URL.
+function parseVimeoRef(ref) {
+  if (!ref) return null;
+  const s = String(ref).trim();
+  let m = s.match(/^(\d+)(?:\/([A-Za-z0-9]+))?$/);
+  if (m) return { id: m[1], hash: m[2] || null };
+  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/([A-Za-z0-9]+))?/);
+  if (m) {
+    let hash = m[2] || null;
+    const h = s.match(/[?&]h=([A-Za-z0-9]+)/);
+    if (!hash && h) hash = h[1];
+    return { id: m[1], hash };
+  }
+  return null;
 }
 
 async function createWebinar() {
@@ -505,14 +526,21 @@ async function createWebinar() {
   errEl.style.display = 'none';
   const title = (document.getElementById('wb-title').value || '').trim();
   const orgId = document.getElementById('wb-org').value || null;
-  const path  = (document.getElementById('wb-path').value || '').trim();
+  const rawRef = (document.getElementById('wb-path').value || '').trim();
   const mins  = parseInt(document.getElementById('wb-mins').value, 10);
   const desc  = (document.getElementById('wb-desc').value || '').trim();
-  if (!title || !path) {
-    errEl.textContent = 'Title and the file path in the webinars bucket are both required.';
+  if (!title || !rawRef) {
+    errEl.textContent = 'Title and the Vimeo link (or ID) are both required.';
     errEl.style.display = 'block';
     return;
   }
+  const ref = parseVimeoRef(rawRef);
+  if (!ref) {
+    errEl.textContent = 'That does not look like a Vimeo link or ID — paste the full vimeo.com URL or the numeric video ID.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const path = ref.hash ? ref.id + '/' + ref.hash : ref.id;
   const btn = document.getElementById('wb-create-btn');
   btn.disabled = true; btn.textContent = 'Adding…';
   const { error } = await sb.from('content_items').insert({

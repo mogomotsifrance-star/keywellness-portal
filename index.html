@@ -531,6 +531,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div class="lp-complete-flash" id="lp-pm-flash">✓ Lesson complete <span class="lp-pts-chip">+25 pts · Learning</span></div>
     <div class="lp-player">
       <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)" onpause="lpSendProgressPing(true)" onerror="lpVideoError(event)"></video>
+      <!-- Webinars play here via the Vimeo Player API (lessons keep the native <video> above) -->
+      <div id="lp-pm-vimeo" style="display:none;width:100%;aspect-ratio:16/9;background:#000"></div>
       <!-- Visible playback/URL-fetch error card — never a silent blank player -->
       <div id="lp-pm-error" style="display:none;position:absolute;inset:0;background:rgba(16,24,16,.92);color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;z-index:4">
         <div style="font-size:28px">⚠️</div>
@@ -3025,7 +3027,7 @@ state.lp = {
   upNextId: null,
   branding: null,        // { program_name, program_logo_path } from my_program_branding() — null = Key Wellness
   watch: {},             // content_id -> max_position_seconds (resume, from video_watch_progress)
-  webinarUrlError: null, // last webinar-url failure message (renders a visible error card)
+  webinarUrlError: null, // last webinar load failure {id,message} (renders a visible error card on the shelf)
 };
 
 function lpStorageUrl(path) { return LP_VIDEOS_BASE + String(path).split('/').map(encodeURIComponent).join('/'); }
@@ -3398,7 +3400,8 @@ function lpOpenPlayer(id) {
   // Pause the PREVIOUS video before switching playingId — the pause event
   // pings progress, and it must never attribute the old position to the
   // new video.
-  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); _v.style.display = ''; }
+  lpDestroyVimeo();
   state.lp.playingId = id;
   state.lp.playingKind = 'lesson';
   document.getElementById('lp-pm-title').textContent = (item.sort_order?`Lesson ${item.sort_order} — `:'') + item.title;
@@ -3417,7 +3420,36 @@ function lpOpenPlayer(id) {
   lpStartPings();
 }
 
-// ── Webinar playback — private bucket via the webinar-url Edge Function ──
+// ── Webinar playback — Vimeo (MD decision, 2026-07-14) ─────────────
+// Webinars are hosted on Vimeo, not Supabase Storage. content_items rows
+// (kind='webinar') carry the Vimeo reference in video_path — '<id>' or
+// '<id>/<privacy-hash>' for unlisted videos. Org scoping is unchanged:
+// RLS on content_items decides who can even receive the reference, and
+// the Vimeo account restricts embedding to the portal's domains.
+let _lpVimeoPlayer = null;
+// Accepts '123456789', '123456789/abcdef', or any vimeo.com /
+// player.vimeo.com URL (incl. ?h= privacy hash). Returns {id, hash}|null.
+function lpParseVimeoRef(ref) {
+  if (!ref) return null;
+  const s = String(ref).trim();
+  let m = s.match(/^(\d+)(?:\/([A-Za-z0-9]+))?$/);
+  if (m) return { id: m[1], hash: m[2] || null };
+  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/([A-Za-z0-9]+))?/);
+  if (m) {
+    let hash = m[2] || null;
+    const h = s.match(/[?&]h=([A-Za-z0-9]+)/);
+    if (!hash && h) hash = h[1];
+    return { id: m[1], hash };
+  }
+  return null;
+}
+function lpDestroyVimeo() {
+  if (_lpVimeoPlayer) { try { _lpVimeoPlayer.destroy(); } catch (_) {} _lpVimeoPlayer = null; }
+  const box = document.getElementById('lp-pm-vimeo');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  state.lp._vmPos = 0;
+  state.lp._vmDur = 0;
+}
 async function lpOpenWebinar(id) {
   clearInterval(_lpUnTimer);
   const item = lpFindItem(id);
@@ -3425,6 +3457,7 @@ async function lpOpenWebinar(id) {
   // Same ordering rule as lpOpenPlayer: pause (and ping) the previous
   // video BEFORE playingId switches.
   { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  lpDestroyVimeo();
   state.lp.playingId = id;
   state.lp.playingKind = 'webinar';
   state.lp.webinarUrlError = null;
@@ -3438,33 +3471,51 @@ async function lpOpenWebinar(id) {
   video._lpCompletionStarted = false;
   video._lpCompletionData = null;
   video.removeAttribute('src'); video.load();
-  video.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(item, 640));
+  video.style.display = 'none';
+  const box = document.getElementById('lp-pm-vimeo');
+  box.style.display = 'block';
   document.getElementById('lp-player-modal').classList.add('on');
-  try {
-    const { data, error } = await sb.functions.invoke('webinar-url', { body: { content_item_id: id } });
-    if (error || !data || !data.url) {
-      let msg = 'Could not load this webinar.';
-      if (error && error.context && typeof error.context.json === 'function') {
-        try { const body = await error.context.json(); if (body && body.error) msg = body.error; } catch (_) {}
-      } else if (data && data.error) { msg = data.error; }
-      lpShowPlayerError(msg + ' If this keeps happening, contact wellness@keywellness.co.bw.');
-      return;
-    }
-    video.src = data.url;
-    // Resume where they left off (long content) — unless effectively finished.
-    const saved = state.lp.watch[id] || 0;
-    const dur = item.duration_seconds || 0;
-    if (saved > 30 && (!dur || saved < dur * 0.95)) {
-      video.addEventListener('loadedmetadata', function once() {
-        video.removeEventListener('loadedmetadata', once);
-        try { video.currentTime = Math.max(0, saved - 5); } catch (_) {}
-      });
-    }
-    lpStartPings();
-  } catch (err) {
-    console.error('[LP] webinar-url failed:', err);
-    lpShowPlayerError('Could not load this webinar — check your connection and try again.');
+
+  const ref = lpParseVimeoRef(item.video_path);
+  if (!ref) {
+    lpShowPlayerError('This webinar has no video attached yet. If this keeps happening, contact wellness@keywellness.co.bw.');
+    return;
   }
+  _ensureVimeoApi(() => {
+    // The member may have closed the modal or switched videos while the API loaded.
+    if (state.lp.playingId !== id || state.lp.playingKind !== 'webinar') return;
+    try {
+      const opts = ref.hash
+        ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
+        : { id: Number(ref.id), responsive: true };
+      _lpVimeoPlayer = new Vimeo.Player(box, opts);
+      _lpVimeoPlayer.on('timeupdate', d => {
+        state.lp._vmPos = Math.floor(d.seconds || 0);
+        state.lp._vmDur = Math.round(d.duration || 0);
+      });
+      _lpVimeoPlayer.on('pause', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('ended', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('error', e => {
+        console.error('[LP] Vimeo player error:', e);
+        lpShowPlayerError('Playback failed — the video may be unavailable or restricted. Try again, and contact wellness@keywellness.co.bw if it persists.');
+      });
+      _lpVimeoPlayer.ready().then(() => {
+        // Resume where they left off (long content) — unless effectively finished.
+        const saved = state.lp.watch[id] || 0;
+        const dur = item.duration_seconds || 0;
+        if (saved > 30 && (!dur || saved < dur * 0.95)) {
+          _lpVimeoPlayer.setCurrentTime(Math.max(0, saved - 5)).catch(() => {});
+        }
+        lpStartPings();
+      }).catch(err => {
+        console.error('[LP] Vimeo ready() failed:', err);
+        lpShowPlayerError('Could not load this webinar — the video may be private or the link incorrect.');
+      });
+    } catch (err) {
+      console.error('[LP] Vimeo init failed:', err);
+      lpShowPlayerError('Could not load this webinar — check your connection and try again.');
+    }
+  });
 }
 function lpShowPlayerError(msg) {
   const e = document.getElementById('lp-pm-error');
@@ -3499,10 +3550,18 @@ function lpStartPings() {
 async function lpSendProgressPing(force) {
   const id = state.lp.playingId;
   if (!id) return;
-  const v = document.getElementById('lp-pm-video');
-  if (!v || !v.duration || isNaN(v.duration) || !isFinite(v.duration)) return;
-  const pos = Math.floor(v.currentTime || 0);
-  const dur = Math.round(v.duration);
+  let pos, dur;
+  if (state.lp.playingKind === 'webinar') {
+    // Vimeo playback — position comes from the player's timeupdate events.
+    pos = state.lp._vmPos || 0;
+    dur = state.lp._vmDur || 0;
+    if (!dur) return;
+  } else {
+    const v = document.getElementById('lp-pm-video');
+    if (!v || !v.duration || isNaN(v.duration) || !isFinite(v.duration)) return;
+    pos = Math.floor(v.currentTime || 0);
+    dur = Math.round(v.duration);
+  }
   if (pos <= 0) return;
   const last = (state.lp._lastPing || {})[id] || 0;
   if (!force && pos <= last) return; // paused — nothing new to report
@@ -3625,9 +3684,11 @@ function lpCancelUpNext() {
 function lpClosePlayer() {
   clearInterval(_lpUnTimer);
   clearInterval(_lpPingTimer);
-  lpSendProgressPing(true); // capture the position before the src is torn down
+  lpSendProgressPing(true); // capture the position before the player is torn down
   const video = document.getElementById('lp-pm-video');
   video.pause(); video.removeAttribute('src'); video.load();
+  video.style.display = '';
+  lpDestroyVimeo();
   document.getElementById('lp-pm-error').style.display = 'none';
   document.getElementById('lp-player-modal').classList.remove('on');
   state.lp.playingId = null;
