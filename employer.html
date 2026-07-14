@@ -1030,7 +1030,12 @@ function render(data) {
   }
   html += '</div>';
 
-  // 2. Engagement funnel
+  // 2. Financial Stress (org_stress_summary()) — corrected scale + top causes,
+  // replacing the old org_financial_indicators()-based stress card. Shown
+  // first, ahead of the engagement funnel, as the headline wellbeing signal.
+  html += renderStressCard(window._stressData, window._stressError);
+
+  // 3. Engagement funnel
   // completed_assessment/did_checkin are null (not 0) when the true count
   // is under 3 — funnelStep() renders "—" for a null count rather than a
   // misleading "0 employees · 0%".
@@ -1048,7 +1053,7 @@ function render(data) {
         + '<p class="funnel-note">Calculator usage is not yet tracked &mdash; that funnel step will appear in a future update.</p>'
         + '</div>';
 
-  // 3. Workforce distribution
+  // 4. Workforce distribution
   // d.suppressed (new) means the assessed sub-cohort is under 3 — every
   // band would be individually attributable, so the whole section is
   // withheld rather than rendering zeroed-out bands. assessed_count is
@@ -1079,7 +1084,7 @@ function render(data) {
           + '</div></div>';
   }
 
-  // 4. By dimension
+  // 5. By dimension
   // dims.items/focus_dimension are null (via the same assessed<3 gate as
   // Workforce Distribution above) rather than omitted, so this explicitly
   // notes why the card is hidden instead of just not appearing.
@@ -1112,7 +1117,7 @@ function render(data) {
     html += '</div></div>';
   }
 
-  // 5. Distress signal (only rendered when markers are present)
+  // 6. Distress signal (only rendered when markers are present)
   if (distress && distress.pct_low_emergency_fund != null) {
     html += '<div class="card">'
           + '<div class="card-title">Financial Resilience Signal</div>'
@@ -1125,14 +1130,11 @@ function render(data) {
           + '</div>';
   }
 
-  // 5.5 Debt Health & Retirement Readiness (org_financial_indicators)
+  // 6.5 Debt Health & Retirement Readiness (org_financial_indicators)
   html += renderDebtHealth(window._finData);
   html += renderRetirementReadiness(window._finData);
-  // Financial Stress (org_stress_summary()) — corrected scale + top causes,
-  // replacing the old org_financial_indicators()-based stress card.
-  html += renderStressCard(window._stressData, window._stressError);
 
-  // 6. Trend chart
+  // 7. Trend chart
   // Each quarter is suppressed independently (t.suppressed) when it had
   // fewer than 3 assessors — avg_score/participants are null for that
   // point, rendered as a gap in the line rather than a data point.
@@ -1145,7 +1147,7 @@ function render(data) {
         + (anyTrendSuppressed ? '<p class="suppression-note">Some quarters are not shown &mdash; fewer than 3 employees completed an assessment that quarter, to protect individual privacy.</p>' : '')
         + '</div>';
 
-  // 7. Recommended actions
+  // 8. Recommended actions
   var focusDimLabel = DIM_LABELS[focusDimKey] || focusDimKey;
   if (focusDimKey) {
     html += '<div class="action-strip">'

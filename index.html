@@ -867,7 +867,7 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR, bkR, ptR, thR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR, ptR, thR, tdR, efR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
@@ -876,10 +876,18 @@ async function loadAllData() {
     safe(sb.from('bookings').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('my_points').select('*').maybeSingle()),
     safe(sb.from('reward_thresholds').select('*')),
+    safe(sb.from('tool_data').select('tool, data').eq('user_id', uid).in('tool', ['budget_planner', 'net_worth_tracker', 'dti_calculator', 'retirement'])),
+    safe(sb.from('emergency_fund').select('*').eq('user_id', uid).maybeSingle()),
   ]);
 
   state.user        = pR.data  || null;
   state.assessments = aR.data  || [];
+  state.toolData    = {};
+  (tdR.data || []).forEach(r => { state.toolData[r.tool] = r.data; });
+  state.ef          = efR.data || null;
+  // Live wellness score — latest assessment behaviours + freshest tool figures.
+  // Must run after state.user/assessments/toolData/ef are set.
+  state.liveWellness = computeLiveWellness();
   state.checkins    = cR.data  || [];
   state.bookings    = bkR.data || [];
   state.stressLogs  = (sR.data || []).map(r => ({ date: r.created_at, level: r.level, tags: r.tags || [], notes: r.notes || '' }));
@@ -1008,7 +1016,15 @@ function saveEF(data) {
   return sb.from('emergency_fund').upsert({
     user_id: currentUser.id, ...data, updated_at: new Date().toISOString()
   }, { onConflict: 'user_id' })
-    .then(({ error }) => { if (error) console.error('saveEF failed:', error); return { error }; })
+    .then(({ error }) => {
+      if (error) console.error('saveEF failed:', error);
+      else {
+        // Keep the live wellness score in step — EF is edited inside this page
+        state.ef = { ...(state.ef || {}), ...data };
+        try { state.liveWellness = computeLiveWellness(); } catch {}
+      }
+      return { error };
+    })
     .catch(err => { console.error('saveEF failed:', err); return { error: err }; });
 }
 
@@ -1652,6 +1668,97 @@ async function openTool(filename) {
 // ══════════════════════════════════════════════════
 //  SCORE HELPERS
 // ══════════════════════════════════════════════════
+// ── Live wellness score ────────────────────────────
+// Recomputes the numeric half of each assessment dimension from the user's
+// freshest tool figures (budget, DTI, net worth, retirement, emergency fund),
+// keeping the behavioural answers from the latest assessment. The score
+// therefore moves as soon as a tool is updated, without waiting for the next
+// assessment. Formulas mirror calculateWellness() in wellness_assessment.html
+// — keep the two in sync. Returns null when there is no assessment to build
+// on (or it predates saved answers).
+function computeLiveWellness(toolMap, ef) {
+  const latest = state.assessments?.[0];
+  if (!latest || latest.score == null) return null;
+  const cats = latest.cat_scores || {};
+  const ans  = latest.answers;
+  if (!ans || typeof ans !== 'object' || !Object.keys(ans).length) return null;
+
+  const tools = toolMap || state.toolData || {};
+  if (ef === undefined) ef = state.ef;
+  const prof  = state.user || {};
+  const _n    = v => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(x) ? x : 0; };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const sources = new Set();
+
+  // ── Freshest figures: tools first, profile (seeded at last assessment) as fallback ──
+  let income = 0, expenses = 0, monthlySavings = 0, debtPayments = null;
+  const bp  = tools['budget_planner'];
+  const bpB = bp?.currentKey ? bp.budgets?.[bp.currentKey] : null;
+  if (bpB) {
+    income   = (bpB.income || []).reduce((s, i) => s + _n(i.amount), 0);
+    expenses = Object.values(bpB.expenses || {}).reduce((s, v) => s + _n(v), 0);
+    monthlySavings = ['emfund','retirement','invest','goals','debt_extra'].reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
+    if (_n((bpB.expenses || {}).debt_min) > 0) debtPayments = _n(bpB.expenses.debt_min) + _n(bpB.expenses.debt_extra);
+    if (income > 0 || expenses > 0) sources.add('Budget Planner');
+  }
+  const dc = tools['dti_calculator'];
+  if (dc && Array.isArray(dc.debts) && dc.debts.length) {
+    debtPayments = dc.debts.reduce((s, d) => s + _n(d.amount ?? d.monthly), 0);  // calc stores monthly payment as `amount`
+    if (income <= 0) income = _n(dc.grossSalary) + _n(dc.otherIncome);
+    sources.add('DTI Calculator');
+  }
+  if (income <= 0)           income   = (_n(prof.gross_income) + _n(prof.other_income)) || _n(prof.monthly_income);
+  if (expenses <= 0)         expenses = _n(prof.monthly_expenses);
+  if (monthlySavings <= 0)   monthlySavings = _n(prof.monthly_savings);
+  if (debtPayments === null) debtPayments = _n(prof.monthly_debt);
+
+  const nw  = tools['net_worth_tracker'];
+  const nwA = (nw?.assets || []).reduce((s, a) => s + _n(a.amt ?? a.value), 0);
+  const nwL = (nw?.liabilities || []).reduce((s, a) => s + _n(a.amt ?? a.value), 0);
+  let totalAssets = null, totalLiabilities = 0;
+  if (nwA || nwL) { totalAssets = nwA; totalLiabilities = nwL; sources.add('Net Worth Tracker'); }
+  else if (prof.total_assets != null || prof.total_liabilities != null) { totalAssets = _n(prof.total_assets); totalLiabilities = _n(prof.total_liabilities); }
+
+  // ── Recompute each dimension where fresh figures exist; keep the assessed score otherwise ──
+  const dims = { ...cats };
+  const pct100 = v => clamp(Math.round(v * 100), 0, 100);
+
+  if (income > 0) {
+    dims.income  = pct100(Math.max(0, income - expenses) / income * 0.6 + (ans.incomeStability ?? 0) / 3 * 0.4);
+    dims.savings = pct100(Math.min((monthlySavings / income) / 0.20, 1) * 0.6 + (ans.savingsHabit ?? 0) / 3 * 0.4);
+    dims.debt    = pct100(clamp(1 - (debtPayments / income) / 0.65, 0, 1) * 0.6 + (ans.debtMgmt ?? 0) / 3 * 0.4);
+  }
+
+  const essential = _n(ef?.monthly) || _n(prof.essential_expenses) || expenses * 0.6;
+  if (ef && essential > 0) {
+    dims.emergency = pct100(Math.min((_n(ef.current_savings) / essential) / 6, 1) * 0.5 + (ans.emergencyMonths ?? 0) / 4 * 0.5);
+    sources.add('Emergency Fund');
+  }
+
+  const retI = tools['retirement']?.inputs || {}, retS = tools['retirement']?.snapshot || {};
+  if ((_n(retI.currentSavings) > 0 || _n(retI.monthlyContrib) > 0) && income > 0) {
+    const age = _n(retS.currentAge) || _n(prof.age) || 30;
+    const retireAge = _n(retS.retireAge) || 60;
+    const nMo = Math.max(1, retireAge - age) * 12, r = 0.06 / 12;
+    const proj = _n(retI.currentSavings) * Math.pow(1 + r, nMo) + _n(retI.monthlyContrib) * (Math.pow(1 + r, nMo) - 1) / r;
+    dims.retirement = pct100(Math.min(proj / (income * 12 * 10), 1) * 0.5 + (ans.retirementEngagement ?? 0) / 3 * 0.5);
+    sources.add('Retirement Calculator');
+  }
+
+  if (totalAssets !== null) {
+    const netW = totalAssets - totalLiabilities;
+    const nwr  = totalAssets > 0 ? clamp(netW / totalAssets, 0, 1) : (netW > 0 ? 0.5 : 0);
+    dims.spending = pct100(nwr * 0.3 + (ans.spendingHabits ?? 0) / 3 * 0.5 + (ans.netWorthReview ?? 0) / 3 * 0.2);
+  }
+  // insurance + goals have no tool inputs — always the assessed scores
+
+  const DIM_IDS = ['income','savings','emergency','debt','retirement','insurance','goals','spending'];
+  const have = DIM_IDS.filter(id => typeof dims[id] === 'number');
+  if (!have.length) return null;
+  const score = Math.round(have.reduce((s, id) => s + dims[id], 0) / have.length);
+  return { score, dims, live: sources.size > 0, sources: [...sources], assessedScore: Math.round(latest.score) };
+}
+
 function scoreBand(s) {
   if (s >= 76) return { label:'Strong',     cls:'band-green',  color:'var(--green)'  };
   if (s >= 51) return { label:'Developing', cls:'band-yellow', color:'#d4ac0d'       };
@@ -1892,8 +1999,13 @@ VIEWS['assessment'] = function () {
     return;
   }
 
-  const score    = Math.round(latest.score || 0);
-  const cats     = latest.cat_scores || {};
+  // Live score (recomputed from the freshest tool figures) when it differs
+  // from the assessed one — the breakdown below uses the same live dimensions.
+  const _lw      = state.liveWellness;
+  const assessedScore = Math.round(latest.score || 0);
+  const isLive   = !!(_lw && _lw.live && _lw.score !== assessedScore);
+  const score    = isLive ? _lw.score : assessedScore;
+  const cats     = (isLive ? _lw.dims : latest.cat_scores) || {};
   const band     = scoreBand(score);
   const daysSince = Math.floor((Date.now() - new Date(latest.created_at).getTime()) / 86400000);
   const nextDate  = new Date(latest.created_at); nextDate.setDate(nextDate.getDate() + 30);
@@ -1999,6 +2111,7 @@ VIEWS['assessment'] = function () {
         ${svgGauge(score, band.color)}
         <div style="font-size:15px;font-weight:700;color:${band.color};margin-top:4px">${band.label}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Assessed ${fmtDate(latest.created_at)}</div>
+        ${isLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Figures from: ${_lw.sources.join(', ')}">⚡ Live — was ${assessedScore} at assessment, updated from your tools</div>` : ''}
       </div>
       <div class="card">
         <div class="card-title" style="margin-bottom:14px">Dimension Breakdown</div>
@@ -2185,9 +2298,10 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Emergency fund from Supabase ──
-  let efMonths = null, efTarget = null, efCurrent = null, hasEF = false;
+  let efMonths = null, efTarget = null, efCurrent = null, hasEF = false, _efRow = null;
   try {
     const ef = await loadEF();
+    _efRow = ef;
     if (ef) {
       efTarget  = (ef.monthly || 0) * (ef.target_months || 6);
       efCurrent = ef.current_savings || 0;
@@ -2196,6 +2310,21 @@ VIEWS['dashboard'] = async function () {
       hasEF = !!(ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0));
     }
   } catch {}
+
+  // ── Live wellness score — moves with the tools, no reassessment needed ──
+  // Recompute from the freshly fetched tool rows (EF is editable inside this
+  // page, so this render's data beats the login-time snapshot). Cache back to
+  // state so the Assessment view shows the same figure.
+  let wellIsLive = false;
+  try {
+    const _live = computeLiveWellness(Object.keys(_toolMap).length ? _toolMap : undefined, _efRow);
+    state.liveWellness = _live;
+    if (_live && wellScore !== null) {
+      wellIsLive = _live.live && _live.score !== Math.round(wellScore);
+      wellScore  = _live.score;
+      wellDims   = _live.dims;
+    }
+  } catch (e) { console.warn('[KW] live wellness skipped:', e); }
 
   // ── kw_snapshot: freshness labels + last-resort retirement fallback only (NOT a value source of truth) ──
   const snap = safeParseLS('kw_snapshot', {});
@@ -2345,7 +2474,7 @@ VIEWS['dashboard'] = async function () {
   if (wellScore !== null) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
-    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
+    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh: wellIsLive ? '⚡ Live — updates with your tools' : freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -2555,6 +2684,7 @@ VIEWS['dashboard'] = async function () {
         ${wellScore !== null
           ? `<div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
              <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+             ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
              <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-assess</button>`
           : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Take the assessment<br>to see your score</p>
              <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>`
