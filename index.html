@@ -530,7 +530,15 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div class="lp-modal-sub" id="lp-pm-sub"></div>
     <div class="lp-complete-flash" id="lp-pm-flash">✓ Lesson complete <span class="lp-pts-chip">+25 pts · Learning</span></div>
     <div class="lp-player">
-      <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)"></video>
+      <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)" onpause="lpSendProgressPing(true)" onerror="lpVideoError(event)"></video>
+      <!-- Webinars play here via the Vimeo Player API (lessons keep the native <video> above) -->
+      <div id="lp-pm-vimeo" style="display:none;width:100%;aspect-ratio:16/9;background:#000"></div>
+      <!-- Visible playback/URL-fetch error card — never a silent blank player -->
+      <div id="lp-pm-error" style="display:none;position:absolute;inset:0;background:rgba(16,24,16,.92);color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;z-index:4">
+        <div style="font-size:28px">⚠️</div>
+        <div id="lp-pm-error-msg" style="font-size:14px;max-width:420px;line-height:1.5"></div>
+        <button class="lp-btn lp-btn-light lp-btn-sm" onclick="lpRetryPlayback()">Try again</button>
+      </div>
       <div class="lp-upnext" id="lp-pm-upnext">
         <div class="lp-un-eyebrow">Up next</div>
         <div class="lp-un-title" id="lp-un-title"></div>
@@ -867,7 +875,7 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR, bkR, ptR, thR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR, ptR, thR, tdR, efR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
@@ -876,10 +884,19 @@ async function loadAllData() {
     safe(sb.from('bookings').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('my_points').select('*').maybeSingle()),
     safe(sb.from('reward_thresholds').select('*')),
+    safe(sb.from('tool_data').select('tool, data').eq('user_id', uid).in('tool', ['budget_planner', 'net_worth_tracker', 'dti_calculator', 'retirement'])),
+    safe(sb.from('emergency_fund').select('*').eq('user_id', uid).maybeSingle()),
   ]);
 
   state.user        = pR.data  || null;
   state.assessments = aR.data  || [];
+  state.toolData    = {};
+  (tdR.data || []).forEach(r => { state.toolData[r.tool] = r.data; });
+  state.ef          = efR.data || null;
+  // Live wellness score — latest assessment behaviours + freshest tool figures.
+  // Must run after state.user/assessments/toolData/ef are set.
+  state.liveWellness = computeLiveWellness();
+  persistLiveWellness();   // feeds employer/org aggregates; non-blocking
   state.checkins    = cR.data  || [];
   state.bookings    = bkR.data || [];
   state.stressLogs  = (sR.data || []).map(r => ({ date: r.created_at, level: r.level, tags: r.tags || [], notes: r.notes || '' }));
@@ -1008,7 +1025,15 @@ function saveEF(data) {
   return sb.from('emergency_fund').upsert({
     user_id: currentUser.id, ...data, updated_at: new Date().toISOString()
   }, { onConflict: 'user_id' })
-    .then(({ error }) => { if (error) console.error('saveEF failed:', error); return { error }; })
+    .then(({ error }) => {
+      if (error) console.error('saveEF failed:', error);
+      else {
+        // Keep the live wellness score in step — EF is edited inside this page
+        state.ef = { ...(state.ef || {}), ...data };
+        try { state.liveWellness = computeLiveWellness(); persistLiveWellness(); } catch {}
+      }
+      return { error };
+    })
     .catch(err => { console.error('saveEF failed:', err); return { error: err }; });
 }
 
@@ -1643,15 +1668,141 @@ function showToast(msg) {
 //  OPEN TOOL (standalone HTML files)
 // ══════════════════════════════════════════════════
 async function openTool(filename) {
-  // Awaited (not fire-and-forget) because the immediate navigation below would
-  // otherwise cancel the in-flight RPC before it reaches the server.
-  try { await KWBadges.recordPoints('tool_first_use', filename); } catch (e) {}
+  // 'tool_first_use' (points on page OPEN) is retired — deactivated in the
+  // webinars/thresholds migration. Utilisation points now come from
+  // meaningful-use events recorded when a tool actually SAVES
+  // (tool_usage_events + 'tool_used'/'ef_tool_used'), wired inside each
+  // tool's save path via kwRecordToolUse().
   window.location.href = filename;
+}
+
+// Records a meaningful tool-usage event (save / calculation complete —
+// never a page open) and awards the once-per-quarter utilisation points.
+// Thin alias over the shared KWBadges helper (kw-badges.js) used by every
+// standalone tool page — fire-and-forget, never blocks a save.
+function kwRecordToolUse(toolKey) {
+  if (!currentUser) return;
+  try { KWBadges.recordToolUse(toolKey); } catch (e) { console.warn('[tools] usage record error:', toolKey, e); }
 }
 
 // ══════════════════════════════════════════════════
 //  SCORE HELPERS
 // ══════════════════════════════════════════════════
+// ── Live wellness score ────────────────────────────
+// Recomputes the numeric half of each assessment dimension from the user's
+// freshest tool figures (budget, DTI, net worth, retirement, emergency fund),
+// keeping the behavioural answers from the latest assessment. The score
+// therefore moves as soon as a tool is updated, without waiting for the next
+// assessment. Formulas mirror calculateWellness() in wellness_assessment.html
+// — keep the two in sync. Returns null when there is no assessment to build
+// on (or it predates saved answers).
+function computeLiveWellness(toolMap, ef) {
+  const latest = state.assessments?.[0];
+  if (!latest || latest.score == null) return null;
+  const cats = latest.cat_scores || {};
+  const ans  = latest.answers;
+  if (!ans || typeof ans !== 'object' || !Object.keys(ans).length) return null;
+
+  const tools = toolMap || state.toolData || {};
+  if (ef === undefined) ef = state.ef;
+  const prof  = state.user || {};
+  const _n    = v => { const x = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(x) ? x : 0; };
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const sources = new Set();
+
+  // ── Freshest figures: tools first, profile (seeded at last assessment) as fallback ──
+  let income = 0, expenses = 0, monthlySavings = 0, debtPayments = null;
+  const bp  = tools['budget_planner'];
+  const bpB = bp?.currentKey ? bp.budgets?.[bp.currentKey] : null;
+  if (bpB) {
+    income   = (bpB.income || []).reduce((s, i) => s + _n(i.amount), 0);
+    expenses = Object.values(bpB.expenses || {}).reduce((s, v) => s + _n(v), 0);
+    monthlySavings = ['emfund','retirement','invest','goals','debt_extra'].reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
+    const _bpDebt = _n((bpB.expenses || {}).debt_min) + _n((bpB.expenses || {}).debt_extra);
+    if (_bpDebt > 0) debtPayments = _bpDebt;
+    if (income > 0 || expenses > 0) sources.add('Budget Planner');
+  }
+  const dc = tools['dti_calculator'];
+  if (dc && Array.isArray(dc.debts) && dc.debts.length) {
+    debtPayments = dc.debts.reduce((s, d) => s + _n(d.amount ?? d.monthly), 0);  // calc stores monthly payment as `amount`
+    if (income <= 0) income = _n(dc.grossSalary) + _n(dc.otherIncome);
+    sources.add('DTI Calculator');
+  }
+  if (income <= 0)           income   = (_n(prof.gross_income) + _n(prof.other_income)) || _n(prof.monthly_income);
+  if (expenses <= 0)         expenses = _n(prof.monthly_expenses);
+  if (monthlySavings <= 0)   monthlySavings = _n(prof.monthly_savings);
+  if (debtPayments === null) debtPayments = _n(prof.monthly_debt);
+
+  const nw  = tools['net_worth_tracker'];
+  const nwA = (nw?.assets || []).reduce((s, a) => s + _n(a.amt ?? a.value), 0);
+  const nwL = (nw?.liabilities || []).reduce((s, a) => s + _n(a.amt ?? a.value), 0);
+  let totalAssets = null, totalLiabilities = 0;
+  if (nwA || nwL) { totalAssets = nwA; totalLiabilities = nwL; sources.add('Net Worth Tracker'); }
+  else if (prof.total_assets != null || prof.total_liabilities != null) { totalAssets = _n(prof.total_assets); totalLiabilities = _n(prof.total_liabilities); }
+
+  // ── Recompute each dimension where fresh figures exist; keep the assessed score otherwise ──
+  const dims = { ...cats };
+  const pct100 = v => clamp(Math.round(v * 100), 0, 100);
+
+  if (income > 0) {
+    dims.income  = pct100(Math.max(0, income - expenses) / income * 0.6 + (ans.incomeStability ?? 0) / 3 * 0.4);
+    dims.savings = pct100(Math.min((monthlySavings / income) / 0.20, 1) * 0.6 + (ans.savingsHabit ?? 0) / 3 * 0.4);
+    dims.debt    = pct100(clamp(1 - (debtPayments / income) / 0.65, 0, 1) * 0.6 + (ans.debtMgmt ?? 0) / 3 * 0.4);
+  }
+
+  const essential = _n(ef?.monthly) || _n(prof.essential_expenses) || expenses * 0.6;
+  if (ef && essential > 0) {
+    dims.emergency = pct100(Math.min((_n(ef.current_savings) / essential) / 6, 1) * 0.5 + (ans.emergencyMonths ?? 0) / 4 * 0.5);
+    sources.add('Emergency Fund');
+  }
+
+  const retI = tools['retirement']?.inputs || {}, retS = tools['retirement']?.snapshot || {};
+  if ((_n(retI.currentSavings) > 0 || _n(retI.monthlyContrib) > 0) && income > 0) {
+    const age = _n(retS.currentAge) || _n(prof.age) || 30;
+    const retireAge = _n(retS.retireAge) || 60;
+    const nMo = Math.max(1, retireAge - age) * 12, r = 0.06 / 12;
+    const proj = _n(retI.currentSavings) * Math.pow(1 + r, nMo) + _n(retI.monthlyContrib) * (Math.pow(1 + r, nMo) - 1) / r;
+    dims.retirement = pct100(Math.min(proj / (income * 12 * 10), 1) * 0.5 + (ans.retirementEngagement ?? 0) / 3 * 0.5);
+    sources.add('Retirement Calculator');
+  }
+
+  if (totalAssets !== null) {
+    const netW = totalAssets - totalLiabilities;
+    const nwr  = totalAssets > 0 ? clamp(netW / totalAssets, 0, 1) : (netW > 0 ? 0.5 : 0);
+    dims.spending = pct100(nwr * 0.3 + (ans.spendingHabits ?? 0) / 3 * 0.5 + (ans.netWorthReview ?? 0) / 3 * 0.2);
+  }
+  // insurance + goals have no tool inputs — always the assessed scores
+
+  const DIM_IDS = ['income','savings','emergency','debt','retirement','insurance','goals','spending'];
+  const have = DIM_IDS.filter(id => typeof dims[id] === 'number');
+  if (!have.length) return null;
+  const score = Math.round(have.reduce((s, id) => s + dims[id], 0) / have.length);
+  return { score, dims, live: sources.size > 0, sources: [...sources], assessedScore: Math.round(latest.score) };
+}
+
+// Persist the live score to profiles so the employer/org aggregates
+// (org_overview / org_financial_indicators — see supabase_live_wellness.sql)
+// reflect tool updates without waiting for a reassessment. Fire-and-forget:
+// failures (e.g. the SQL migration not applied yet) only log a warning.
+function persistLiveWellness() {
+  const lw = state.liveWellness;
+  if (!lw || !currentUser || !state.user) return;
+  // Skip the write when nothing changed since the last persist (key-order-independent compare)
+  const _cmp = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+  if (Number(state.user.live_score) === lw.score && _cmp(state.user.live_cat_scores) === _cmp(lw.dims)) return;
+  const _at = new Date().toISOString();
+  sb.from('profiles')
+    .update({ live_score: lw.score, live_cat_scores: lw.dims, live_score_at: _at })
+    .eq('id', currentUser.id)
+    .then(({ error }) => {
+      if (error) { console.warn('[KW] live score persist failed (run supabase_live_wellness.sql?):', error.message); return; }
+      state.user.live_score = lw.score;
+      state.user.live_cat_scores = lw.dims;
+      state.user.live_score_at = _at;
+    })
+    .catch(e => console.warn('[KW] live score persist failed:', e));
+}
+
 function scoreBand(s) {
   if (s >= 76) return { label:'Strong',     cls:'band-green',  color:'var(--green)'  };
   if (s >= 51) return { label:'Developing', cls:'band-yellow', color:'#d4ac0d'       };
@@ -1892,8 +2043,13 @@ VIEWS['assessment'] = function () {
     return;
   }
 
-  const score    = Math.round(latest.score || 0);
-  const cats     = latest.cat_scores || {};
+  // Live score (recomputed from the freshest tool figures) when it differs
+  // from the assessed one — the breakdown below uses the same live dimensions.
+  const _lw      = state.liveWellness;
+  const assessedScore = Math.round(latest.score || 0);
+  const isLive   = !!(_lw && _lw.live && _lw.score !== assessedScore);
+  const score    = isLive ? _lw.score : assessedScore;
+  const cats     = (isLive ? _lw.dims : latest.cat_scores) || {};
   const band     = scoreBand(score);
   const daysSince = Math.floor((Date.now() - new Date(latest.created_at).getTime()) / 86400000);
   const nextDate  = new Date(latest.created_at); nextDate.setDate(nextDate.getDate() + 30);
@@ -1999,6 +2155,7 @@ VIEWS['assessment'] = function () {
         ${svgGauge(score, band.color)}
         <div style="font-size:15px;font-weight:700;color:${band.color};margin-top:4px">${band.label}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Assessed ${fmtDate(latest.created_at)}</div>
+        ${isLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Figures from: ${_lw.sources.join(', ')}">⚡ Live — was ${assessedScore} at assessment, updated from your tools</div>` : ''}
       </div>
       <div class="card">
         <div class="card-title" style="margin-bottom:14px">Dimension Breakdown</div>
@@ -2185,9 +2342,10 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Emergency fund from Supabase ──
-  let efMonths = null, efTarget = null, efCurrent = null, hasEF = false;
+  let efMonths = null, efTarget = null, efCurrent = null, hasEF = false, _efRow = null;
   try {
     const ef = await loadEF();
+    _efRow = ef;
     if (ef) {
       efTarget  = (ef.monthly || 0) * (ef.target_months || 6);
       efCurrent = ef.current_savings || 0;
@@ -2196,6 +2354,22 @@ VIEWS['dashboard'] = async function () {
       hasEF = !!(ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0));
     }
   } catch {}
+
+  // ── Live wellness score — moves with the tools, no reassessment needed ──
+  // Recompute from the freshly fetched tool rows (EF is editable inside this
+  // page, so this render's data beats the login-time snapshot). Cache back to
+  // state so the Assessment view shows the same figure.
+  let wellIsLive = false;
+  try {
+    const _live = computeLiveWellness(Object.keys(_toolMap).length ? _toolMap : undefined, _efRow);
+    state.liveWellness = _live;
+    persistLiveWellness();
+    if (_live && wellScore !== null) {
+      wellIsLive = _live.live && _live.score !== Math.round(wellScore);
+      wellScore  = _live.score;
+      wellDims   = _live.dims;
+    }
+  } catch (e) { console.warn('[KW] live wellness skipped:', e); }
 
   // ── kw_snapshot: freshness labels + last-resort retirement fallback only (NOT a value source of truth) ──
   const snap = safeParseLS('kw_snapshot', {});
@@ -2345,7 +2519,7 @@ VIEWS['dashboard'] = async function () {
   if (wellScore !== null) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
-    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
+    hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh: wellIsLive ? '⚡ Live — updates with your tools' : freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
   }
@@ -2555,6 +2729,7 @@ VIEWS['dashboard'] = async function () {
         ${wellScore !== null
           ? `<div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
              <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+             ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
              <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-assess</button>`
           : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Take the assessment<br>to see your score</p>
              <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>`
@@ -2848,12 +3023,26 @@ state.lp = {
   quizResult: null,
   certName: '',
   playingId: null,
+  playingKind: 'lesson', // 'lesson' | 'webinar' — drives completion vs ping-only behaviour
   upNextId: null,
+  branding: null,        // { program_name, program_logo_path } from my_program_branding() — null = Key Wellness
+  watch: {},             // content_id -> max_position_seconds (resume, from video_watch_progress)
+  webinarUrlError: null, // last webinar load failure {id,message} (renders a visible error card on the shelf)
 };
 
 function lpStorageUrl(path) { return LP_VIDEOS_BASE + String(path).split('/').map(encodeURIComponent).join('/'); }
-function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
-function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null); }
+// kind may be undefined until the webinars migration is applied — treat
+// anything that isn't explicitly 'webinar' as a lesson.
+function lpIsWebinar(i) { return i && i.kind === 'webinar'; }
+function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId && !lpIsWebinar(i)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
+function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i)); }
+function lpWebinars() { return state.lp.items.filter(lpIsWebinar).sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0)); }
+// "1h 04m" for long items, "12m" for short ones.
+function lpFmtDuration(sec) {
+  if (!sec || sec <= 0) return '';
+  const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60);
+  return h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`;
+}
 function lpFindItem(id) { return state.lp.items.find(i => i.id === id); }
 function lpDone(id) { return (state.lp.progress || []).includes(id); }
 function lpNextItem(pathwayId) { return lpItemsFor(pathwayId).find(i => !lpDone(i.id)) || null; }
@@ -2899,6 +3088,22 @@ async function loadPathwaysData(force) {
       state.videoProgress = (cp || []).map(r => r.content_id);
     }
     state.lp.progress = state.videoProgress; // shared array — a push from either system stays in sync
+
+    // Per-org programme branding (Webinars section header only) + saved
+    // watch positions for resume. Both are non-fatal enhancements: they
+    // depend on the webinars/thresholds migration and must never block the
+    // pathways from rendering if it hasn't been applied yet.
+    const [brandR, watchR] = await Promise.all([
+      sb.rpc('my_program_branding'),
+      sb.from('video_watch_progress').select('video_id,max_position_seconds'),
+    ]);
+    if (!brandR.error && brandR.data && brandR.data.program_name) state.lp.branding = brandR.data;
+    else state.lp.branding = null;
+    if (!watchR.error) {
+      state.lp.watch = {};
+      (watchR.data || []).forEach(r => { state.lp.watch[r.video_id] = r.max_position_seconds || 0; });
+    }
+
     state.lp.loaded = true;
   } catch (e) {
     showToast('⚠️ Could not load Learning Pathways — check your connection and try again.');
@@ -3049,7 +3254,52 @@ function renderLpLanding(el) {
         <div class="lp-w-title">${escHtml(welcome.title)}</div>
       </div>
       <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
-    </div>` : ''}`;
+    </div>` : ''}
+    ${renderWebinarsSection()}`;
+}
+
+// ── Webinars — org-scoped shelf, below the pathways ────────────
+// RLS is the security boundary (members receive only NULL-org rows plus
+// their own org's published rows); this renderer only presents what the
+// query returned. The section is ALWAYS visible — an org with no webinars
+// gets the empty state, never a hidden section.
+function renderWebinarsSection() {
+  const webinars = lpWebinars();
+  const b = state.lp.branding;
+  const heading = b && b.program_name ? `${escHtml(b.program_name)} Webinars` : 'Webinars';
+  const logo = b && b.program_logo_path
+    ? `<img src="${escHtml(b.program_logo_path)}" alt="${escHtml(b.program_name||'')} logo" style="height:26px;width:auto;vertical-align:middle;margin-right:8px" onerror="this.style.display='none'">`
+    : '';
+  const err = state.lp.webinarUrlError;
+  const errCard = err ? `
+    <div class="notice notice-red" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <span>⚠️ ${escHtml(err.message)}</span>
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="state.lp.webinarUrlError=null;lpOpenWebinar('${err.id}')">Try again</button>
+    </div>` : '';
+  const cards = webinars.map(w => `
+    <div class="lp-lesson-card playable" role="button" tabindex="0" onclick="lpOpenWebinar('${w.id}')" onkeydown="if(event.key==='Enter')lpOpenWebinar('${w.id}')">
+      <div class="lp-lc-art">
+        ${kwPoster(w, 320)}
+        <div class="lp-lc-overlay"><span class="lp-lc-play"></span></div>
+        ${w.duration_seconds ? `<span class="lp-lc-upnext" style="left:auto;right:8px">${lpFmtDuration(w.duration_seconds)}</span>` : ''}
+      </div>
+      <div class="lp-lc-body">
+        <div class="lp-lc-num">WEBINAR</div>
+        <div class="lp-lc-title">${escHtml(w.title)}</div>
+        ${w.description ? `<div style="font-size:11.5px;color:var(--muted);margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(w.description)}</div>` : ''}
+      </div>
+    </div>`).join('');
+  return `
+    <div class="lp-chapter" style="margin-top:26px">
+      <div class="lp-ch-head">
+        <span class="lp-ch-title" style="display:flex;align-items:center">${logo}${heading}</span>
+        <span class="lp-ch-meta">Hosted sessions · no Learning credit</span>
+      </div>
+      ${errCard}
+      ${webinars.length
+        ? `<div class="lp-shelf">${cards}</div>`
+        : `<div class="card" style="padding:22px;text-align:center;color:var(--muted);font-size:13.5px">Webinars hosted for your company will appear here.</div>`}
+    </div>`;
 }
 
 // ── Pathway detail — chapter shelves ──────────────────────
@@ -3142,15 +3392,23 @@ function renderLpPathway(el) {
 
 // ── Player + up-next ───────────────────────────────────────
 let _lpUnTimer = null;
+let _lpPingTimer = null;
 function lpOpenPlayer(id) {
   clearInterval(_lpUnTimer);
-  state.lp.playingId = id;
   const item = lpFindItem(id);
   if (!item) return;
+  // Pause the PREVIOUS video before switching playingId — the pause event
+  // pings progress, and it must never attribute the old position to the
+  // new video.
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); _v.style.display = ''; }
+  lpDestroyVimeo();
+  state.lp.playingId = id;
+  state.lp.playingKind = 'lesson';
   document.getElementById('lp-pm-title').textContent = (item.sort_order?`Lesson ${item.sort_order} — `:'') + item.title;
   document.getElementById('lp-pm-sub').textContent = item.section_label || (item.sort_order?'':'Not part of a pathway');
   document.getElementById('lp-pm-flash').classList.remove('on');
   document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
   const video = document.getElementById('lp-pm-video');
   video.pause();
   video._lpCompletionStarted = false;
@@ -3159,9 +3417,176 @@ function lpOpenPlayer(id) {
   video.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(item, 640));
   video.currentTime = 0;
   document.getElementById('lp-player-modal').classList.add('on');
+  lpStartPings();
+}
+
+// ── Webinar playback — Vimeo (MD decision, 2026-07-14) ─────────────
+// Webinars are hosted on Vimeo, not Supabase Storage. content_items rows
+// (kind='webinar') carry the Vimeo reference in video_path — '<id>' or
+// '<id>/<privacy-hash>' for unlisted videos. Org scoping is unchanged:
+// RLS on content_items decides who can even receive the reference, and
+// the Vimeo account restricts embedding to the portal's domains.
+let _lpVimeoPlayer = null;
+// Accepts '123456789', '123456789/abcdef', or any vimeo.com /
+// player.vimeo.com URL (incl. ?h= privacy hash). Returns {id, hash}|null.
+function lpParseVimeoRef(ref) {
+  if (!ref) return null;
+  const s = String(ref).trim();
+  let m = s.match(/^(\d+)(?:\/([A-Za-z0-9]+))?$/);
+  if (m) return { id: m[1], hash: m[2] || null };
+  m = s.match(/vimeo\.com\/(?:video\/)?(\d+)(?:\/([A-Za-z0-9]+))?/);
+  if (m) {
+    let hash = m[2] || null;
+    const h = s.match(/[?&]h=([A-Za-z0-9]+)/);
+    if (!hash && h) hash = h[1];
+    return { id: m[1], hash };
+  }
+  return null;
+}
+function lpDestroyVimeo() {
+  if (_lpVimeoPlayer) { try { _lpVimeoPlayer.destroy(); } catch (_) {} _lpVimeoPlayer = null; }
+  const box = document.getElementById('lp-pm-vimeo');
+  if (box) { box.innerHTML = ''; box.style.display = 'none'; }
+  state.lp._vmPos = 0;
+  state.lp._vmDur = 0;
+}
+async function lpOpenWebinar(id) {
+  clearInterval(_lpUnTimer);
+  const item = lpFindItem(id);
+  if (!item) return;
+  // Same ordering rule as lpOpenPlayer: pause (and ping) the previous
+  // video BEFORE playingId switches.
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  lpDestroyVimeo();
+  state.lp.playingId = id;
+  state.lp.playingKind = 'webinar';
+  state.lp.webinarUrlError = null;
+  document.getElementById('lp-pm-title').textContent = item.title;
+  document.getElementById('lp-pm-sub').textContent = 'Webinar' + (item.duration_seconds ? ' · ' + lpFmtDuration(item.duration_seconds) : '');
+  document.getElementById('lp-pm-flash').classList.remove('on');
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
+  const video = document.getElementById('lp-pm-video');
+  video.pause();
+  video._lpCompletionStarted = false;
+  video._lpCompletionData = null;
+  video.removeAttribute('src'); video.load();
+  video.style.display = 'none';
+  const box = document.getElementById('lp-pm-vimeo');
+  box.style.display = 'block';
+  document.getElementById('lp-player-modal').classList.add('on');
+
+  const ref = lpParseVimeoRef(item.video_path);
+  if (!ref) {
+    lpShowPlayerError('This webinar has no video attached yet. If this keeps happening, contact wellness@keywellness.co.bw.');
+    return;
+  }
+  _ensureVimeoApi(() => {
+    // The member may have closed the modal or switched videos while the API loaded.
+    if (state.lp.playingId !== id || state.lp.playingKind !== 'webinar') return;
+    try {
+      const opts = ref.hash
+        ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
+        : { id: Number(ref.id), responsive: true };
+      _lpVimeoPlayer = new Vimeo.Player(box, opts);
+      _lpVimeoPlayer.on('timeupdate', d => {
+        state.lp._vmPos = Math.floor(d.seconds || 0);
+        state.lp._vmDur = Math.round(d.duration || 0);
+      });
+      _lpVimeoPlayer.on('pause', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('ended', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('error', e => {
+        console.error('[LP] Vimeo player error:', e);
+        lpShowPlayerError('Playback failed — the video may be unavailable or restricted. Try again, and contact wellness@keywellness.co.bw if it persists.');
+      });
+      _lpVimeoPlayer.ready().then(() => {
+        // Resume where they left off (long content) — unless effectively finished.
+        const saved = state.lp.watch[id] || 0;
+        const dur = item.duration_seconds || 0;
+        if (saved > 30 && (!dur || saved < dur * 0.95)) {
+          _lpVimeoPlayer.setCurrentTime(Math.max(0, saved - 5)).catch(() => {});
+        }
+        lpStartPings();
+      }).catch(err => {
+        console.error('[LP] Vimeo ready() failed:', err);
+        lpShowPlayerError('Could not load this webinar — the video may be private or the link incorrect.');
+      });
+    } catch (err) {
+      console.error('[LP] Vimeo init failed:', err);
+      lpShowPlayerError('Could not load this webinar — check your connection and try again.');
+    }
+  });
+}
+function lpShowPlayerError(msg) {
+  const e = document.getElementById('lp-pm-error');
+  document.getElementById('lp-pm-error-msg').textContent = msg;
+  e.style.display = 'flex';
+}
+function lpRetryPlayback() {
+  const id = state.lp.playingId;
+  if (!id) return;
+  document.getElementById('lp-pm-error').style.display = 'none';
+  if (state.lp.playingKind === 'webinar') lpOpenWebinar(id);
+  else lpOpenPlayer(id);
+}
+function lpVideoError() {
+  // Only surface real playback failures (a cleared src also fires error).
+  const v = document.getElementById('lp-pm-video');
+  if (!v || !v.getAttribute('src')) return;
+  lpShowPlayerError(state.lp.playingKind === 'webinar'
+    ? 'Playback failed — the link may have expired. Try again to get a fresh one.'
+    : 'Playback failed — check your connection and try again.');
+}
+
+// ── Server-side watch progress (video_watch_progress via RPC) ─────
+// Lessons: powers the server-verified 80% Learning credit (Batch 4).
+// Webinars: resume position only — the RPC's kind guard means a webinar
+// can never earn Learning credit no matter what the client sends.
+function lpStartPings() {
+  clearInterval(_lpPingTimer);
+  state.lp._lastPing = state.lp._lastPing || {};
+  _lpPingTimer = setInterval(() => lpSendProgressPing(false), 15000);
+}
+async function lpSendProgressPing(force) {
+  const id = state.lp.playingId;
+  if (!id) return;
+  let pos, dur;
+  if (state.lp.playingKind === 'webinar') {
+    // Vimeo playback — position comes from the player's timeupdate events.
+    pos = state.lp._vmPos || 0;
+    dur = state.lp._vmDur || 0;
+    if (!dur) return;
+  } else {
+    const v = document.getElementById('lp-pm-video');
+    if (!v || !v.duration || isNaN(v.duration) || !isFinite(v.duration)) return;
+    pos = Math.floor(v.currentTime || 0);
+    dur = Math.round(v.duration);
+  }
+  if (pos <= 0) return;
+  const last = (state.lp._lastPing || {})[id] || 0;
+  if (!force && pos <= last) return; // paused — nothing new to report
+  try {
+    const { data, error } = await sb.rpc('record_video_progress', {
+      p_content_id: id, p_position_seconds: pos, p_duration_seconds: dur,
+    });
+    if (error) {
+      // Missing RPC (migration not applied yet) or transient failure —
+      // resume/credit is an enhancement; playback must not be interrupted.
+      if (!state.lp._pingWarned) { console.warn('[LP] record_video_progress unavailable:', error.message); state.lp._pingWarned = true; }
+      return;
+    }
+    (state.lp._lastPing = state.lp._lastPing || {})[id] = pos;
+    state.lp.watch[id] = Math.max(state.lp.watch[id] || 0, pos);
+    if (data && data.credited) {
+      showToast(`+${data.points_awarded} pts · Learning`);
+      const el = document.getElementById('sb-pts');
+      if (el) { const cur = parseInt(el.textContent, 10); if (!isNaN(cur)) el.textContent = cur + (data.points_awarded || 0); }
+    }
+  } catch (e) { /* never interrupt playback for a progress ping */ }
 }
 function lpVideoTimeUpdate(e) {
   const v = e.target;
+  if (state.lp.playingKind === 'webinar') return; // webinars: pings only, no lesson flow
   // ≥90% is a background safety net (records progress/points in case the
   // browser never fires `ended`, e.g. a malformed file) — it must NOT
   // interrupt playback. Only the real `ended` event is allowed to show the
@@ -3174,6 +3599,8 @@ function lpVideoTimeUpdate(e) {
 }
 async function lpVideoEnded(e) {
   const v = e.target;
+  lpSendProgressPing(true); // final position report (lessons AND webinars)
+  if (state.lp.playingKind === 'webinar') return; // no up-next/quiz flow for webinars
   let data = v._lpCompletionData;
   if (!v._lpCompletionStarted) {
     v._lpCompletionStarted = true;
@@ -3256,9 +3683,16 @@ function lpCancelUpNext() {
 }
 function lpClosePlayer() {
   clearInterval(_lpUnTimer);
+  clearInterval(_lpPingTimer);
+  lpSendProgressPing(true); // capture the position before the player is torn down
   const video = document.getElementById('lp-pm-video');
   video.pause(); video.removeAttribute('src'); video.load();
+  video.style.display = '';
+  lpDestroyVimeo();
+  document.getElementById('lp-pm-error').style.display = 'none';
   document.getElementById('lp-player-modal').classList.remove('on');
+  state.lp.playingId = null;
+  state.lp.playingKind = 'lesson';
   if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
 }
 
@@ -4110,6 +4544,9 @@ VIEWS['emergency'] = async function () {
       // Reflect the just-saved figures, then let the engine fill/award the Safety Net badge.
       state._efRow = { monthly, current_savings: current, contribution: contrib, target_months: tgt };
       syncProgressBadges();
+      // Server-recorded meaningful EF usage — the anchor criterion of the
+      // quarterly Utilisation threshold (a real save, never a page open).
+      kwRecordToolUse('emergency_fund');
     }
     showToast(error ? '⚠️ Save failed — please try again' : '✓ Saved');
   };
@@ -4249,8 +4686,12 @@ VIEWS['checkin'] = function () {
     // (≥13-day gaps), so it can't be farmed by logging several times in one day.
     syncProgressBadges();
 
-    // Points: once per calendar month, plus the quarterly streak bonus if earned.
-    KWBadges.recordPoints('monthly_checkin').then(res => {
+    // Points: once per fortnight window (server decides the window — six
+    // check-ins in one week collide on the same ref and award once), plus
+    // the quarterly streak bonus if earned. 'checkin_logged' supersedes the
+    // old once-per-calendar-month 'monthly_checkin' (deactivated in the
+    // webinars/thresholds migration); checkin_streak_3 (Progress) unchanged.
+    KWBadges.recordPoints('checkin_logged', 'checkin').then(res => {
       if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
       return KWBadges.recordPoints('checkin_streak_3');
     }).then(res => {
@@ -4734,12 +5175,14 @@ function renderRewardsProgressCard() {
   const th = state.rewardThresholds || {};
   const pts = state.points || {};
   const key = isFirstSeasonMember() ? 'first_season_points' : 'returning_points';
-  const utilT  = th.utilisation ? th.utilisation[key] : 300;
-  const learnT = th.learning    ? th.learning[key]    : 300;
+  // Progress is UNCHANGED: same tenure-aware points threshold as before.
+  // Utilisation and Learning switched to criteria-based qualification
+  // (quarterly thresholds build) — their pillar detail fills in async below.
   const progT  = th.progress    ? th.progress[key]    : 300;
 
-  const bars = rewardsProgressBar('Utilisation', pts.season_utilisation || 0, utilT)
-             + rewardsProgressBar('Learning',    pts.season_learning    || 0, learnT)
+  const bars = `<div id="rw-quali-pillars">
+      <div class="kw-skeleton" style="height:96px;border-radius:8px;margin-bottom:14px"></div>
+    </div>`
              + rewardsProgressBar('Progress',    pts.season_progress    || 0, progT);
 
   return `
@@ -4758,6 +5201,52 @@ function renderRewardsProgressCard() {
         <h5 style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Rewards received</h5>
         <div id="my-reward-fulfilments"><div class="kw-skeleton" style="height:44px"></div></div>
       </div>
+    </div>`;
+}
+
+// Fills #rw-quali-pillars with the member's own Utilisation pillars and
+// Learning fraction from my_rewards_qualification() (member-scoped RPC —
+// auth.uid() only; nothing here is HR-visible). Visible error state if the
+// RPC is unavailable, never a silent blank.
+async function loadRewardsQualification() {
+  const el = document.getElementById('rw-quali-pillars');
+  if (!el) return;
+  const { data, error } = await sb.rpc('my_rewards_qualification');
+  if (!document.getElementById('rw-quali-pillars')) return; // navigated away
+  if (error || !data) {
+    console.warn('my_rewards_qualification failed:', error?.message);
+    el.innerHTML = `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Utilisation and Learning progress is unavailable right now — check back shortly.</p>`;
+    return;
+  }
+  const u = data.utilisation || {};
+  const l = data.learning || {};
+  const pillar = (met, label, detail) => `
+    <li style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:13px">
+      <span style="flex-shrink:0;font-weight:700;color:${met ? 'var(--green)' : 'var(--muted)'}">${met ? '✓' : '○'}</span>
+      <span><strong style="color:var(--navy)">${label}</strong> <span style="color:var(--muted)">— ${detail}</span></span>
+    </li>`;
+  const utilQualified = !!u.qualified;
+  const learnQualified = !!l.qualified;
+  el.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:6px">
+        <span>Utilisation</span>
+        <span>${utilQualified ? '<span style="color:var(--green)">✓ Qualified</span>' : `${[u.budgets_met,u.checkins_met,u.sessions_met,u.tools_met].filter(Boolean).length}/4 pillars`}</span>
+      </div>
+      <ul style="list-style:none;margin:0;padding:0 0 0 2px">
+        ${pillar(u.budgets_met, 'Monthly budgets', `${u.budget_months || 0} of ${u.budget_months_required || 3} months saved`)}
+        ${pillar(u.checkins_met, 'Fortnightly check-ins', `${u.checkin_windows || 0} of ${u.checkin_windows_required || 6} fortnights covered`)}
+        ${pillar(u.sessions_met, 'Coaching session attended', `${u.sessions_attended || 0} of ${u.sessions_required || 1} verified`)}
+        ${pillar(u.tools_met, 'Tools used', u.ef_used ? (u.other_tool_used ? 'Emergency Fund + another tool ✓' : 'Emergency Fund done — use one more tool') : 'Start with the Emergency Fund tool')}
+      </ul>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:4px">
+        <span>Learning</span>
+        <span class="mono">${l.credited_videos || 0} / ${l.needed || 0} videos${learnQualified ? ' <span style="color:var(--green)">✓ Qualified</span>' : ''}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${l.needed ? Math.min(100, Math.round(100*(l.credited_videos||0)/l.needed)) : 0}%${learnQualified ? ';background:var(--green)' : ''}"></div></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Watch a third of the video library this quarter (${l.library_size || 0} videos available). Webinars don't count toward Learning.</p>
     </div>`;
 }
 
@@ -4825,6 +5314,7 @@ VIEWS['badges'] = function () {
       ${renderBadgeCards()}
     </div>`;
   loadMyRewardFulfilments();
+  loadRewardsQualification();
 };
 
 // Builds the badge grid: simple one-off badges + behaviour filling badges

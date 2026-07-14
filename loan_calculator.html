@@ -666,6 +666,7 @@ function _toolSave(){
   _toolSaveTimer = setTimeout(async () => {
     const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'loan_calc', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
     if (error) console.error('Loan save to Supabase failed:', error);
+    else KWBadges.recordToolUse('loan_calc');
   }, 500);
 }
 document.addEventListener('DOMContentLoaded', function() {

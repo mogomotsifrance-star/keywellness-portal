@@ -2689,3 +2689,182 @@ no overlay and no duplicate RPC call at 90%-during-playback, overlay shows
 correctly on real `ended` reusing the cached result, and
 `exitFullscreen()` is called and the overlay becomes visible when the
 video was in native fullscreen.
+
+---
+
+# Org Webinars, Quarterly Reward Thresholds & HR Rewards Explainer (2026-07-14)
+
+Full discovery + GO/NO-GO: `BATCH-0-WEBINARS-THRESHOLDS-FINDINGS.md`.
+Rollback (written before the forward files): `migrations/rollback-webinars-thresholds.sql`.
+
+## ⚠️ MANDATORY FIRST MANUAL STEP — apply the SQL
+
+This environment has no SQL execution path to the live project (CLI needs
+Docker/db password; the Management API token lives in the OS credential
+store and was not used). **Nothing in this build works until Tshenolo runs
+these files, in this exact order, in the Supabase SQL Editor:**
+
+1. `supabase_webinars_thresholds_schema.sql`  (tables, columns, RLS, bucket, catalog)
+2. `supabase_webinar_learning_rpcs.sql`       (record_video_progress, learning_qualified, complete_video reshape)
+3. `supabase_utilisation_rpcs.sql`            (award_points v3, attendance trigger, utilisation_qualified, my_rewards_qualification)
+4. `supabase_org_rewards_v2.sql`              (org_rewards qualification switch)
+
+Until step 1 runs, the frontend degrades gracefully: the Webinars section
+shows its empty state, progress pings log one console warning, the member
+Rewards card shows "unavailable right now" for Utilisation/Learning, and
+admin's Webinars tab shows an explicit "migration not applied" error card.
+**But note two behaviour changes that land with step 3:** check-ins award
+`checkin_logged` (15, per fortnight window) instead of `monthly_checkin`
+(75), and `session_booked` drops 100 → 10 with `session_attended` (40)
+added — brief members if mid-quarter comms are needed.
+
+The `webinar-url` Edge Function is ALREADY DEPLOYED (this run, via CLI) and
+returns explicit 401/400 today; it starts returning signed URLs once step 1
+creates the bucket/columns and a webinar row exists.
+
+## Dashboard-only manual steps
+
+1. **Storage per-file upload limit**: raise from the default to ~1GB
+   (Project Settings → Storage) to cover compressed webinars.
+2. **`webinars` bucket**: created by SQL step 1 (`insert into
+   storage.buckets`) — verify it shows PRIVATE in Storage → Buckets. If the
+   insert was blocked for any reason, create it by hand (private, no
+   public access).
+3. **Upload flow (v1)**: upload webinar files by hand into the `webinars`
+   bucket, then register them in admin.html → Webinars tab (file path +
+   title + org + duration), then Publish. In-app upload of 500MB+ files was
+   deliberately not built this run.
+4. **Auth → Users**: unrelated but still open from a prior batch — signup
+   "Error sending confirmation email" 500 (see that batch's notes).
+
+## Transcode runbook (Lone)
+
+Compress recordings to 720p H.264 ~1.5Mbps + AAC before upload
+(~650MB/hour). HandBrake preset: "Fast 720p30".
+
+## Sedimosa
+
+- `organizations` seed targets `name ilike '%debswana%'` — **confirm the
+  Debswana org row exists** before/after running step 1; if it doesn't yet,
+  set `program_name='Sedimosa'`, `program_logo_path='assets/img/sedimosa-logo.png'`
+  on the row once created.
+- **Logo asset is NOT in the repo.** Commit it at
+  `assets/img/sedimosa-logo.png` (the header hides the broken image and
+  shows text-only "Sedimosa Webinars" until then).
+- Written authorisation on file (same discipline as ProLearn).
+- Branding renders ONLY on the Learn page Webinars section header. Portal
+  chrome stays Key Wellness everywhere.
+
+## Migration trigger (decision pre-made)
+
+Move webinars to Bunny Stream / Cloudflare Stream when members report
+buffering OR monthly egress consistently exceeds the included 250GB.
+(Watch Storage egress in the dashboard; the private-bucket signed-URL
+pattern ports 1:1 to either CDN.)
+
+## Quarterly review items for Key Wellness staff
+
+- `threshold_config.sessions_attended_required` — seeded at 1, revisit.
+- Retroactive budget creation inside the quarter counts (accepted v1
+  gaming vector) — review after the first full quarter.
+- Library size vs the ⅓ Learning threshold as new videos publish
+  (`learning_library_fraction` in `threshold_config`; library size is
+  computed live). This supersedes the old "review the 150-pt returning
+  learning threshold" note — that threshold is retired; the
+  `reward_thresholds.learning` row remains but nothing reads it.
+
+## Admin process
+
+Lone marks session attendance in admin.html → Appointments. **Attendance
+is now a reward-affecting action** (the DB trigger writes 40 pts to the
+member's ledger, and the Sessions pillar of Utilisation counts only
+verified attendance). Un-marking attendance does NOT claw points back —
+correct mistakes promptly and flag persistent errors for manual ledger
+review.
+
+## Data migration note
+
+Historical localStorage bookings/check-ins/budgets are NOT migrated.
+Qualification starts clean from the quarter this ships (2026-Q3 if applied
+now). Check-ins/bookings already server-side keep their history and DO
+count for the current quarter's windows. Confirm member comms if shipping
+mid-quarter.
+
+## Timezone note
+
+Quarter/fortnight-window boundaries for the new qualification logic use
+Africa/Gaborone. The `points_events.season` stamp keeps the existing UTC
+convention — a ±2h skew exists at quarter boundaries between points
+display and qualification windows. Accepted; do not "fix" one without the
+other.
+
+## REVISION (2026-07-14, later the same day — MD decision): webinars move to Vimeo
+
+Framework change agreed with the MD. Three points, two of which were
+already true in what shipped earlier today:
+
+1. **Sidebar/portal chrome stays Key Wellness for all users** — already
+   the case; no code change was needed. Org branding never touched the
+   sidebar or auth screen.
+2. **Org-specific logos appear in the webinars context** — already the
+   case; the "{program_name} Webinars" header + logo render only on the
+   Learn page's Webinars section.
+3. **Webinars are hosted on VIMEO, not Supabase Storage** — implemented
+   now. What changed:
+   - `supabase_webinars_thresholds_schema.sql` no longer creates a
+     `webinars` bucket (§8 is now a comment documenting the Vimeo model).
+     For kind='webinar' rows, `video_path` stores the Vimeo reference
+     ('<id>' or '<id>/<privacy-hash>').
+   - The `webinar-url` Edge Function is retired: deployment deleted from
+     the project, source removed from the repo.
+   - The member player embeds Vimeo via the Player API (already used by
+     the welcome modal); progress pings to `record_video_progress` are
+     unchanged (resume works, webinars still earn no Learning credit —
+     the RPC's kind guard is host-agnostic).
+   - admin.html → Webinars accepts a pasted Vimeo URL/ID and normalises it.
+   - Org privacy model: RLS on content_items still decides which members
+     ever receive a webinar's Vimeo reference. Vimeo-side settings are the
+     second wall (below).
+
+**Superseded/void items from the section above:** Storage upload-limit
+raise (not needed), `webinars` bucket creation/verification (no bucket),
+HandBrake transcode runbook (upload originals; Vimeo transcodes), and the
+Bunny/Cloudflare Stream egress migration trigger (Vimeo serves from its
+own CDN; no Supabase egress).
+
+**NEW manual steps (Vimeo dashboard — Claude Code has no access):**
+1. Use a Vimeo plan that supports privacy controls (Starter or higher;
+   embed-domain restriction requires it).
+2. Per webinar (or as account default): Privacy → "Hide from Vimeo"
+   (link-only), and Embed → restrict to the portal domains:
+   `mogomotsifrance-star.github.io`,
+   `keywellness-portal.mogomotsifrance.workers.dev`
+   (+ `localhost` while testing on dev previews).
+3. After upload, copy the video link (unlisted links include the privacy
+   hash — paste the full link into admin.html so the hash is captured).
+4. Lone's upload flow: record → upload straight to Vimeo → set privacy →
+   paste link in admin → Publish. No compression step required.
+
+**Verification addition:** paste a webinar's Vimeo URL directly into a
+logged-out browser — it must NOT play on vimeo.com; it should play only
+embedded in the portal. And a member of org A must never receive org B's
+reference (RLS check, unchanged).
+
+## Sedimosa logo asset (2026-07-14, later)
+
+`assets/img/sedimosa-logo.png` is now committed at the path the
+`organizations.program_logo_path` seed expects — the Learn Webinars header
+will render it for Debswana members once the schema migration is applied.
+
+⚠️ NOTE: this file is a high-fidelity RECREATION of the logo Tshenolo
+supplied in chat (rendered from the wordmark: navy #1e3a6e, Candara
+letterforms approximating the original face, tracked tagline). A pasted
+chat image cannot be saved byte-for-byte from this environment. Before
+Debswana sees it, replace the file with the original export from the brand
+asset pack (same filename, transparent background, ~1000px wide) and eyeball
+the header — Debswana brand fidelity should be exact, not approximate.
+
+**RESOLVED (same day):** the interim recreation has been replaced with the
+ORIGINAL brand export Tshenolo supplied ("Sedimosa Logo.png" from Downloads,
+510x150). No further action needed on this asset; the replace-before-launch
+caveat above is closed.

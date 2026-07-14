@@ -1112,7 +1112,9 @@ function resolveAssessmentFigures() {
     const bpExpAll= Object.values(bpB.expenses||{}).reduce((s,v)=>s+_n(v),0);
     const SAV_CATS=['emfund','retirement','invest','goals','debt_extra'];
     const bpSav  = SAV_CATS.reduce((s,c)=>s+_n((bpB.expenses||{})[c]),0);
-    const bpDebt = _n((bpB.expenses||{}).debt)||_n((bpB.expenses||{}).loans)||_n((bpB.expenses||{}).credit_cards);
+    // Planner debt categories are debt_min (Minimum Debt Payments) + debt_extra
+    // (Extra Debt Repayment) — matches computeLiveWellness() in index.html.
+    const bpDebt = _n((bpB.expenses||{}).debt_min)+_n((bpB.expenses||{}).debt_extra);
     if(bpInc>0)  {f.gross=bpInc;              src.gross='Budget Planner';}
     if(bpExpAll>0){f.expenses=bpExpAll;         src.expenses='Budget Planner';}
     if(bpSav>0)  {f.monthlySavings=bpSav;      src.monthlySavings='Budget Planner';}

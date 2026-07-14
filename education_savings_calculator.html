@@ -770,7 +770,7 @@ function saveSnapshot(d) {
       user_id: window._toolUser.id, tool: 'education_savings', data: fullState, updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' }).then(({ error }) => {
       if (error) { console.error('Save failed:', error); showToast('Saved on this device only — cloud sync failed'); }
-      else showToast();
+      else { showToast(); KWBadges.recordToolUse('education_savings'); }
     });
   } else {
     showToast();

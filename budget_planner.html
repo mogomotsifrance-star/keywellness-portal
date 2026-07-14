@@ -528,7 +528,15 @@ function save(){
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' });
     if (error) { console.error('Budget save to Supabase failed:', error); showToast('Saved on this device only — cloud sync failed', 4000); }
-    else showToast();
+    else {
+      showToast();
+      // Quarterly Utilisation wiring: the cloud save is the evidence for
+      // both events (award_points re-verifies server-side against the
+      // tool_data blob). budget_saved is once per calendar month (unique
+      // ref = the month key); recordToolUse dedupes per page load.
+      KWBadges.recordToolUse('budget_planner');
+      if (currentKey) KWBadges.recordPoints('budget_saved', currentKey);
+    }
   })();
   // ── kw_snapshot ──
   try {
@@ -586,7 +594,7 @@ function profilePrimaryIncome(){
   return (isFinite(v) && v > 0) ? Math.round(v) : 0;
 }
 function newEmptyBudget(){
-  return { income:[{id:Date.now(),label:'Primary Salary',amount:profilePrimaryIncome()}], expenses:{}, notes:'', collapsed:{} };
+  return { income:[{id:Date.now(),label:'Primary Salary',amount:profilePrimaryIncome()}], expenses:{}, customCats:[], notes:'', collapsed:{} };
 }
 // Seed Primary Salary from the profile's net income on a freshly auto-created, untouched budget.
 // No-op once edited/seeded, on real budgets, or before the profile has loaded (handles the load race).
@@ -607,11 +615,15 @@ function sortedKeys(){ return Object.keys(budgets).sort(); }
 // ────────────────────────────────────────────
 // DERIVED TOTALS
 // ────────────────────────────────────────────
+// Categories for a group within a specific budget — the "Other" group also
+// carries that month's user-added custom expenses (b.customCats).
+function groupCats(b,g){ return g.id==='other' ? g.cats.concat(b.customCats||[]) : g.cats; }
+
 function calcTotals(b){
   const totalIncome = b.income.reduce((s,r)=>s+pf(r.amount),0);
   const expByGroup = {};
   EXPENSE_GROUPS.forEach(g=>{
-    expByGroup[g.id] = g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    expByGroup[g.id] = groupCats(b,g).reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
   });
   const totalExpenses = Object.values(expByGroup).reduce((s,v)=>s+v,0);
   const surplus = totalIncome - totalExpenses;
@@ -655,6 +667,7 @@ function confirmNewMonth(){
       budgets[key]={
         income: src.income.map(r=>({...r, id:Date.now()+Math.random()})),
         expenses:{...src.expenses},
+        customCats:(src.customCats||[]).map(c=>({...c})),   // keep custom "Other" expenses (amounts copied above use the same ids)
         notes:'',
         collapsed:{...src.collapsed},
       };
@@ -707,10 +720,15 @@ function flushToState(){
     r.label = document.getElementById('inc_lbl_'+r.id)?.value||r.label;
     r.amount = pf(document.getElementById('inc_amt_'+r.id)?.value||'0');
   });
-  // Expenses
-  ALL_CATS.forEach(c=>{
+  // Expenses (incl. this month's custom "Other" categories)
+  ALL_CATS.concat(b.customCats||[]).forEach(c=>{
     const v=pf(document.getElementById('exp_'+c.id)?.value||'0');
     if(v>0) b.expenses[c.id]=v; else delete b.expenses[c.id];
+  });
+  // Custom expense names are user-editable inline
+  (b.customCats||[]).forEach(c=>{
+    const el=document.getElementById('exp_lbl_'+c.id);
+    if(el) c.name=el.value.trim();
   });
   b.notes = document.getElementById('monthNotes')?.value||'';
 }
@@ -769,10 +787,33 @@ function toggleGroup(groupId){
   renderExpenseCats(b);
 }
 
+// ── Custom "Other" expenses ──
+function addCustomExpense(){
+  if(!currentKey) return;
+  flushToState();                       // keep any in-progress edits before re-rendering
+  const b=budgets[currentKey];
+  b.customCats=b.customCats||[];
+  b.customCats.push({id:'custom_'+Date.now(),name:''});
+  b.collapsed=b.collapsed||{};
+  b.collapsed['other']=false;           // make sure the group is open so the new row is visible
+  renderExpenseCats(b);
+  document.getElementById('exp_lbl_'+b.customCats[b.customCats.length-1].id)?.focus();
+  autoSave();
+}
+function removeCustomExpense(id){
+  if(!currentKey) return;
+  flushToState();
+  const b=budgets[currentKey];
+  b.customCats=(b.customCats||[]).filter(c=>c.id!==id);
+  delete b.expenses[id];
+  renderExpenseCats(b);
+  autoSave();
+}
+
 function renderExpenseCats(b){
   document.getElementById('expenseCats').innerHTML=EXPENSE_GROUPS.map(g=>{
     const isOpen=!b.collapsed?.[g.id];
-    const groupTotal=g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    const groupTotal=groupCats(b,g).reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
     return `<div class="cat-group">
       <div class="cat-group-header" style="background:${g.color}18;border:1.5px solid ${g.color}30;" onclick="toggleGroup('${g.id}')">
         <span class="cat-group-icon">${g.icon}</span>
@@ -787,21 +828,27 @@ function renderExpenseCats(b){
           <span class="col-label" style="text-align:right;">% of Income</span>
           <span></span>
         </div>
-        ${g.cats.map(c=>{
+        ${groupCats(b,g).map(c=>{
           const val=pf(b.expenses[c.id]||0);
           const tot=b.income.reduce((s,r)=>s+pf(r.amount),0);
           const pct=tot>0?((val/tot)*100).toFixed(1):'—';
+          const isCustom=String(c.id).startsWith('custom_');
           return `<div class="item-row" style="grid-template-columns:1fr 130px 130px 32px;">
-            <span style="font-size:.82rem;font-weight:500;">${c.name}</span>
+            ${isCustom
+              ?`<div class="iw"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"></div>`
+              :`<span style="font-size:.82rem;font-weight:500;">${c.name}</span>`}
             <div class="iw">
               <span class="iw-pre">P</span>
               <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
                 oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
             </div>
             <div style="display:flex;align-items:center;justify-content:flex-end;font-size:.75rem;font-family:'DM Mono',monospace;font-weight:700;color:var(--muted);padding-right:4px;">${pct}${pct!=='—'?'%':''}</div>
-            <div></div>
+            ${isCustom
+              ?`<button class="del-btn" onclick="removeCustomExpense('${c.id}')"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`
+              :'<div></div>'}
           </div>`;
         }).join('')}
+        ${g.id==='other'?`<button class="btn btn-ghost btn-xs" style="margin-top:6px;" onclick="addCustomExpense()">+ Add your own expense</button>`:''}
       </div>`:''}
     </div>`;
   }).join('');
@@ -1303,13 +1350,14 @@ function exportPDF(){
 
   const rows=[];
   EXPENSE_GROUPS.forEach(g=>{
-    const gTotal=g.cats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    const gCats=groupCats(b,g);
+    const gTotal=gCats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
     if(gTotal===0) return;
     rows.push([{content:pdfSafe(g.icon+' '+g.name),styles:{fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY}},{content:fmt(gTotal),styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}},{content:(totalIncome>0?(gTotal/totalIncome*100).toFixed(1):'—')+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}}]);
-    g.cats.forEach(c=>{
+    gCats.forEach(c=>{
       const v=pf(b.expenses[c.id]||0);
       if(v===0) return;
-      rows.push([c.name,fmt(v),totalIncome>0?(v/totalIncome*100).toFixed(1)+'%':'—']);
+      rows.push([c.name||'Custom expense',fmt(v),totalIncome>0?(v/totalIncome*100).toFixed(1)+'%':'—']);
     });
   });
   doc.autoTable({

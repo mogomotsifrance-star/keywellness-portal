@@ -500,7 +500,7 @@ function save(){
     if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'financial_stress_tracker',data:_d,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error){ console.error('financial_stress_tracker save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
-    else showToast();
+    else { showToast(); KWBadges.recordToolUse('financial_stress_tracker'); }
   })();
 }
 function load(){try{const r=localStorage.getItem(LS_KEY);if(!r)return;const d=JSON.parse(r);entries=d.entries||[];nextId=d.nextId||1;}catch{}}

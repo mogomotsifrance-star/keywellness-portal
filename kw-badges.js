@@ -368,8 +368,40 @@
     } catch (e) { console.warn('[KWBadges] recordPoints error:', eventType, e); return null; }
   }
 
+  // Records a meaningful tool-usage event (save / calculation complete —
+  // never a page open) into tool_usage_events, then awards the
+  // once-per-quarter utilisation points ('ef_tool_used' for the Emergency
+  // Fund anchor, 'tool_used' for every other tool — values from
+  // points_catalog, dedupe server-side). Fire-and-forget from save paths;
+  // failures are logged and never block the save itself.
+  const _toolUseSent = {};
+  async function recordToolUse(toolKey) {
+    if (global._isAdmin) return null;
+    if (_toolUseSent[toolKey]) return null; // one event per tool per page load is plenty
+    try {
+      const sb = await getClient();
+      let uid = global._toolUser && global._toolUser.id;
+      if (!uid) {
+        const { data } = await sb.auth.getUser();
+        uid = data && data.user && data.user.id;
+      }
+      if (!uid) return null;
+      _toolUseSent[toolKey] = true;
+      const { error } = await sb.from('tool_usage_events').insert({ user_id: uid, tool_key: toolKey });
+      if (error) {
+        _toolUseSent[toolKey] = false;
+        console.warn('[KWBadges] recordToolUse failed:', toolKey, error);
+        return null;
+      }
+      return recordPoints(toolKey === 'emergency_fund' ? 'ef_tool_used' : 'tool_used', toolKey);
+    } catch (e) {
+      console.warn('[KWBadges] recordToolUse error:', toolKey, e);
+      return null;
+    }
+  }
+
   global.KWBadges = {
-    BADGE_DEFS, DEF_MAP, pointsFor, award, recordPoints,
+    BADGE_DEFS, DEF_MAP, pointsFor, award, recordPoints, recordToolUse,
     SIMPLE_DEFS, TIER_GROUPS, TIER_DEFS, TIER_THRESHOLDS, TIER_PTS, TIER_LABELS,
     tierFor, migrateEarned, setEarned,
     // Progress-capable (filling) badge model — Part 0
