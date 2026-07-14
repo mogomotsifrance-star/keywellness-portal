@@ -2849,3 +2849,17 @@ own CDN; no Supabase egress).
 logged-out browser — it must NOT play on vimeo.com; it should play only
 embedded in the portal. And a member of org A must never receive org B's
 reference (RLS check, unchanged).
+
+## Sedimosa logo asset (2026-07-14, later)
+
+`assets/img/sedimosa-logo.png` is now committed at the path the
+`organizations.program_logo_path` seed expects — the Learn Webinars header
+will render it for Debswana members once the schema migration is applied.
+
+⚠️ NOTE: this file is a high-fidelity RECREATION of the logo Tshenolo
+supplied in chat (rendered from the wordmark: navy #1e3a6e, Candara
+letterforms approximating the original face, tracked tagline). A pasted
+chat image cannot be saved byte-for-byte from this environment. Before
+Debswana sees it, replace the file with the original export from the brand
+asset pack (same filename, transparent background, ~1000px wide) and eyeball
+the header — Debswana brand fidelity should be exact, not approximate.
