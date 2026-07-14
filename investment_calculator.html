@@ -423,6 +423,7 @@ function _toolSave(){
   _toolSaveTimer = setTimeout(async () => {
     const { error } = await sb.from('tool_data').upsert({ user_id: u.id, tool: 'investment_calc', data: { inputs }, updated_at: new Date().toISOString() }, { onConflict: 'user_id,tool' });
     if (error) console.error('Investment save to Supabase failed:', error);
+    else KWBadges.recordToolUse('investment_calc');
   }, 500);
 }
 async function _toolRestore(_sb, uid){

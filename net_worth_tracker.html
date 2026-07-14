@@ -183,6 +183,7 @@ function save(){
     if(!window._toolSb||!window._toolUser)return;
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'net_worth_tracker',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error)console.error('net_worth_tracker save failed:',error);
+    else KWBadges.recordToolUse('net_worth_tracker');
     // Offer to write computed asset/liability totals back to shared profile
     const totalAssets = data.assets.reduce((s,a)=>s+Number(a.amt||0),0);
     const totalLiabs  = data.liabilities.reduce((s,l)=>s+Number(l.amt||0),0);

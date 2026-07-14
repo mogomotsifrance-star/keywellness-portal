@@ -495,7 +495,7 @@ function saveData() {
     if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'dti_calculator',data,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error){ console.error('dti_calculator save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
-    else showToast();
+    else { showToast(); KWBadges.recordToolUse('dti_calculator'); }
     // Offer to write changed income fields + total debt back to shared profile
     const incomeChanges = KWProfile.detectChanges(_DTI_INCOME_MAPPINGS);
     const totalDebt = debts.reduce((s, d) => s + (d.amount || 0), 0);  // debts store the monthly payment as `amount`

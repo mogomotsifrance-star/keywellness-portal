@@ -429,7 +429,7 @@ function save(){
     if(!window._toolSb||!window._toolUser){ showToast(); return; }
     const{error}=await window._toolSb.from('tool_data').upsert({user_id:window._toolUser.id,tool:'expense_tracker',data:_d,updated_at:new Date().toISOString()},{onConflict:'user_id,tool'});
     if(error){ console.error('expense_tracker save failed:',error); showToast('Saved on this device only — cloud sync failed'); }
-    else showToast();
+    else { showToast(); KWBadges.recordToolUse('expense_tracker'); }
   })();
 }
 function load(){

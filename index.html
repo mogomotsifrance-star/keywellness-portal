@@ -530,7 +530,13 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div class="lp-modal-sub" id="lp-pm-sub"></div>
     <div class="lp-complete-flash" id="lp-pm-flash">✓ Lesson complete <span class="lp-pts-chip">+25 pts · Learning</span></div>
     <div class="lp-player">
-      <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)"></video>
+      <video id="lp-pm-video" controls preload="metadata" playsinline ontimeupdate="lpVideoTimeUpdate(event)" onended="lpVideoEnded(event)" onpause="lpSendProgressPing(true)" onerror="lpVideoError(event)"></video>
+      <!-- Visible playback/URL-fetch error card — never a silent blank player -->
+      <div id="lp-pm-error" style="display:none;position:absolute;inset:0;background:rgba(16,24,16,.92);color:#fff;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:24px;text-align:center;z-index:4">
+        <div style="font-size:28px">⚠️</div>
+        <div id="lp-pm-error-msg" style="font-size:14px;max-width:420px;line-height:1.5"></div>
+        <button class="lp-btn lp-btn-light lp-btn-sm" onclick="lpRetryPlayback()">Try again</button>
+      </div>
       <div class="lp-upnext" id="lp-pm-upnext">
         <div class="lp-un-eyebrow">Up next</div>
         <div class="lp-un-title" id="lp-un-title"></div>
@@ -1660,10 +1666,21 @@ function showToast(msg) {
 //  OPEN TOOL (standalone HTML files)
 // ══════════════════════════════════════════════════
 async function openTool(filename) {
-  // Awaited (not fire-and-forget) because the immediate navigation below would
-  // otherwise cancel the in-flight RPC before it reaches the server.
-  try { await KWBadges.recordPoints('tool_first_use', filename); } catch (e) {}
+  // 'tool_first_use' (points on page OPEN) is retired — deactivated in the
+  // webinars/thresholds migration. Utilisation points now come from
+  // meaningful-use events recorded when a tool actually SAVES
+  // (tool_usage_events + 'tool_used'/'ef_tool_used'), wired inside each
+  // tool's save path via kwRecordToolUse().
   window.location.href = filename;
+}
+
+// Records a meaningful tool-usage event (save / calculation complete —
+// never a page open) and awards the once-per-quarter utilisation points.
+// Thin alias over the shared KWBadges helper (kw-badges.js) used by every
+// standalone tool page — fire-and-forget, never blocks a save.
+function kwRecordToolUse(toolKey) {
+  if (!currentUser) return;
+  try { KWBadges.recordToolUse(toolKey); } catch (e) { console.warn('[tools] usage record error:', toolKey, e); }
 }
 
 // ══════════════════════════════════════════════════
@@ -3004,12 +3021,26 @@ state.lp = {
   quizResult: null,
   certName: '',
   playingId: null,
+  playingKind: 'lesson', // 'lesson' | 'webinar' — drives completion vs ping-only behaviour
   upNextId: null,
+  branding: null,        // { program_name, program_logo_path } from my_program_branding() — null = Key Wellness
+  watch: {},             // content_id -> max_position_seconds (resume, from video_watch_progress)
+  webinarUrlError: null, // last webinar-url failure message (renders a visible error card)
 };
 
 function lpStorageUrl(path) { return LP_VIDEOS_BASE + String(path).split('/').map(encodeURIComponent).join('/'); }
-function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
-function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null); }
+// kind may be undefined until the webinars migration is applied — treat
+// anything that isn't explicitly 'webinar' as a lesson.
+function lpIsWebinar(i) { return i && i.kind === 'webinar'; }
+function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId && !lpIsWebinar(i)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
+function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i)); }
+function lpWebinars() { return state.lp.items.filter(lpIsWebinar).sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0)); }
+// "1h 04m" for long items, "12m" for short ones.
+function lpFmtDuration(sec) {
+  if (!sec || sec <= 0) return '';
+  const h = Math.floor(sec/3600), m = Math.round((sec%3600)/60);
+  return h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`;
+}
 function lpFindItem(id) { return state.lp.items.find(i => i.id === id); }
 function lpDone(id) { return (state.lp.progress || []).includes(id); }
 function lpNextItem(pathwayId) { return lpItemsFor(pathwayId).find(i => !lpDone(i.id)) || null; }
@@ -3055,6 +3086,22 @@ async function loadPathwaysData(force) {
       state.videoProgress = (cp || []).map(r => r.content_id);
     }
     state.lp.progress = state.videoProgress; // shared array — a push from either system stays in sync
+
+    // Per-org programme branding (Webinars section header only) + saved
+    // watch positions for resume. Both are non-fatal enhancements: they
+    // depend on the webinars/thresholds migration and must never block the
+    // pathways from rendering if it hasn't been applied yet.
+    const [brandR, watchR] = await Promise.all([
+      sb.rpc('my_program_branding'),
+      sb.from('video_watch_progress').select('video_id,max_position_seconds'),
+    ]);
+    if (!brandR.error && brandR.data && brandR.data.program_name) state.lp.branding = brandR.data;
+    else state.lp.branding = null;
+    if (!watchR.error) {
+      state.lp.watch = {};
+      (watchR.data || []).forEach(r => { state.lp.watch[r.video_id] = r.max_position_seconds || 0; });
+    }
+
     state.lp.loaded = true;
   } catch (e) {
     showToast('⚠️ Could not load Learning Pathways — check your connection and try again.');
@@ -3205,7 +3252,52 @@ function renderLpLanding(el) {
         <div class="lp-w-title">${escHtml(welcome.title)}</div>
       </div>
       <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
-    </div>` : ''}`;
+    </div>` : ''}
+    ${renderWebinarsSection()}`;
+}
+
+// ── Webinars — org-scoped shelf, below the pathways ────────────
+// RLS is the security boundary (members receive only NULL-org rows plus
+// their own org's published rows); this renderer only presents what the
+// query returned. The section is ALWAYS visible — an org with no webinars
+// gets the empty state, never a hidden section.
+function renderWebinarsSection() {
+  const webinars = lpWebinars();
+  const b = state.lp.branding;
+  const heading = b && b.program_name ? `${escHtml(b.program_name)} Webinars` : 'Webinars';
+  const logo = b && b.program_logo_path
+    ? `<img src="${escHtml(b.program_logo_path)}" alt="${escHtml(b.program_name||'')} logo" style="height:26px;width:auto;vertical-align:middle;margin-right:8px" onerror="this.style.display='none'">`
+    : '';
+  const err = state.lp.webinarUrlError;
+  const errCard = err ? `
+    <div class="notice notice-red" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+      <span>⚠️ ${escHtml(err.message)}</span>
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="state.lp.webinarUrlError=null;lpOpenWebinar('${err.id}')">Try again</button>
+    </div>` : '';
+  const cards = webinars.map(w => `
+    <div class="lp-lesson-card playable" role="button" tabindex="0" onclick="lpOpenWebinar('${w.id}')" onkeydown="if(event.key==='Enter')lpOpenWebinar('${w.id}')">
+      <div class="lp-lc-art">
+        ${kwPoster(w, 320)}
+        <div class="lp-lc-overlay"><span class="lp-lc-play"></span></div>
+        ${w.duration_seconds ? `<span class="lp-lc-upnext" style="left:auto;right:8px">${lpFmtDuration(w.duration_seconds)}</span>` : ''}
+      </div>
+      <div class="lp-lc-body">
+        <div class="lp-lc-num">WEBINAR</div>
+        <div class="lp-lc-title">${escHtml(w.title)}</div>
+        ${w.description ? `<div style="font-size:11.5px;color:var(--muted);margin-top:4px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${escHtml(w.description)}</div>` : ''}
+      </div>
+    </div>`).join('');
+  return `
+    <div class="lp-chapter" style="margin-top:26px">
+      <div class="lp-ch-head">
+        <span class="lp-ch-title" style="display:flex;align-items:center">${logo}${heading}</span>
+        <span class="lp-ch-meta">Hosted sessions · no Learning credit</span>
+      </div>
+      ${errCard}
+      ${webinars.length
+        ? `<div class="lp-shelf">${cards}</div>`
+        : `<div class="card" style="padding:22px;text-align:center;color:var(--muted);font-size:13.5px">Webinars hosted for your company will appear here.</div>`}
+    </div>`;
 }
 
 // ── Pathway detail — chapter shelves ──────────────────────
@@ -3298,15 +3390,22 @@ function renderLpPathway(el) {
 
 // ── Player + up-next ───────────────────────────────────────
 let _lpUnTimer = null;
+let _lpPingTimer = null;
 function lpOpenPlayer(id) {
   clearInterval(_lpUnTimer);
-  state.lp.playingId = id;
   const item = lpFindItem(id);
   if (!item) return;
+  // Pause the PREVIOUS video before switching playingId — the pause event
+  // pings progress, and it must never attribute the old position to the
+  // new video.
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  state.lp.playingId = id;
+  state.lp.playingKind = 'lesson';
   document.getElementById('lp-pm-title').textContent = (item.sort_order?`Lesson ${item.sort_order} — `:'') + item.title;
   document.getElementById('lp-pm-sub').textContent = item.section_label || (item.sort_order?'':'Not part of a pathway');
   document.getElementById('lp-pm-flash').classList.remove('on');
   document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
   const video = document.getElementById('lp-pm-video');
   video.pause();
   video._lpCompletionStarted = false;
@@ -3315,9 +3414,120 @@ function lpOpenPlayer(id) {
   video.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(item, 640));
   video.currentTime = 0;
   document.getElementById('lp-player-modal').classList.add('on');
+  lpStartPings();
+}
+
+// ── Webinar playback — private bucket via the webinar-url Edge Function ──
+async function lpOpenWebinar(id) {
+  clearInterval(_lpUnTimer);
+  const item = lpFindItem(id);
+  if (!item) return;
+  // Same ordering rule as lpOpenPlayer: pause (and ping) the previous
+  // video BEFORE playingId switches.
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  state.lp.playingId = id;
+  state.lp.playingKind = 'webinar';
+  state.lp.webinarUrlError = null;
+  document.getElementById('lp-pm-title').textContent = item.title;
+  document.getElementById('lp-pm-sub').textContent = 'Webinar' + (item.duration_seconds ? ' · ' + lpFmtDuration(item.duration_seconds) : '');
+  document.getElementById('lp-pm-flash').classList.remove('on');
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
+  const video = document.getElementById('lp-pm-video');
+  video.pause();
+  video._lpCompletionStarted = false;
+  video._lpCompletionData = null;
+  video.removeAttribute('src'); video.load();
+  video.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(item, 640));
+  document.getElementById('lp-player-modal').classList.add('on');
+  try {
+    const { data, error } = await sb.functions.invoke('webinar-url', { body: { content_item_id: id } });
+    if (error || !data || !data.url) {
+      let msg = 'Could not load this webinar.';
+      if (error && error.context && typeof error.context.json === 'function') {
+        try { const body = await error.context.json(); if (body && body.error) msg = body.error; } catch (_) {}
+      } else if (data && data.error) { msg = data.error; }
+      lpShowPlayerError(msg + ' If this keeps happening, contact wellness@keywellness.co.bw.');
+      return;
+    }
+    video.src = data.url;
+    // Resume where they left off (long content) — unless effectively finished.
+    const saved = state.lp.watch[id] || 0;
+    const dur = item.duration_seconds || 0;
+    if (saved > 30 && (!dur || saved < dur * 0.95)) {
+      video.addEventListener('loadedmetadata', function once() {
+        video.removeEventListener('loadedmetadata', once);
+        try { video.currentTime = Math.max(0, saved - 5); } catch (_) {}
+      });
+    }
+    lpStartPings();
+  } catch (err) {
+    console.error('[LP] webinar-url failed:', err);
+    lpShowPlayerError('Could not load this webinar — check your connection and try again.');
+  }
+}
+function lpShowPlayerError(msg) {
+  const e = document.getElementById('lp-pm-error');
+  document.getElementById('lp-pm-error-msg').textContent = msg;
+  e.style.display = 'flex';
+}
+function lpRetryPlayback() {
+  const id = state.lp.playingId;
+  if (!id) return;
+  document.getElementById('lp-pm-error').style.display = 'none';
+  if (state.lp.playingKind === 'webinar') lpOpenWebinar(id);
+  else lpOpenPlayer(id);
+}
+function lpVideoError() {
+  // Only surface real playback failures (a cleared src also fires error).
+  const v = document.getElementById('lp-pm-video');
+  if (!v || !v.getAttribute('src')) return;
+  lpShowPlayerError(state.lp.playingKind === 'webinar'
+    ? 'Playback failed — the link may have expired. Try again to get a fresh one.'
+    : 'Playback failed — check your connection and try again.');
+}
+
+// ── Server-side watch progress (video_watch_progress via RPC) ─────
+// Lessons: powers the server-verified 80% Learning credit (Batch 4).
+// Webinars: resume position only — the RPC's kind guard means a webinar
+// can never earn Learning credit no matter what the client sends.
+function lpStartPings() {
+  clearInterval(_lpPingTimer);
+  state.lp._lastPing = state.lp._lastPing || {};
+  _lpPingTimer = setInterval(() => lpSendProgressPing(false), 15000);
+}
+async function lpSendProgressPing(force) {
+  const id = state.lp.playingId;
+  if (!id) return;
+  const v = document.getElementById('lp-pm-video');
+  if (!v || !v.duration || isNaN(v.duration) || !isFinite(v.duration)) return;
+  const pos = Math.floor(v.currentTime || 0);
+  const dur = Math.round(v.duration);
+  if (pos <= 0) return;
+  const last = (state.lp._lastPing || {})[id] || 0;
+  if (!force && pos <= last) return; // paused — nothing new to report
+  try {
+    const { data, error } = await sb.rpc('record_video_progress', {
+      p_content_id: id, p_position_seconds: pos, p_duration_seconds: dur,
+    });
+    if (error) {
+      // Missing RPC (migration not applied yet) or transient failure —
+      // resume/credit is an enhancement; playback must not be interrupted.
+      if (!state.lp._pingWarned) { console.warn('[LP] record_video_progress unavailable:', error.message); state.lp._pingWarned = true; }
+      return;
+    }
+    (state.lp._lastPing = state.lp._lastPing || {})[id] = pos;
+    state.lp.watch[id] = Math.max(state.lp.watch[id] || 0, pos);
+    if (data && data.credited) {
+      showToast(`+${data.points_awarded} pts · Learning`);
+      const el = document.getElementById('sb-pts');
+      if (el) { const cur = parseInt(el.textContent, 10); if (!isNaN(cur)) el.textContent = cur + (data.points_awarded || 0); }
+    }
+  } catch (e) { /* never interrupt playback for a progress ping */ }
 }
 function lpVideoTimeUpdate(e) {
   const v = e.target;
+  if (state.lp.playingKind === 'webinar') return; // webinars: pings only, no lesson flow
   // ≥90% is a background safety net (records progress/points in case the
   // browser never fires `ended`, e.g. a malformed file) — it must NOT
   // interrupt playback. Only the real `ended` event is allowed to show the
@@ -3330,6 +3540,8 @@ function lpVideoTimeUpdate(e) {
 }
 async function lpVideoEnded(e) {
   const v = e.target;
+  lpSendProgressPing(true); // final position report (lessons AND webinars)
+  if (state.lp.playingKind === 'webinar') return; // no up-next/quiz flow for webinars
   let data = v._lpCompletionData;
   if (!v._lpCompletionStarted) {
     v._lpCompletionStarted = true;
@@ -3412,9 +3624,14 @@ function lpCancelUpNext() {
 }
 function lpClosePlayer() {
   clearInterval(_lpUnTimer);
+  clearInterval(_lpPingTimer);
+  lpSendProgressPing(true); // capture the position before the src is torn down
   const video = document.getElementById('lp-pm-video');
   video.pause(); video.removeAttribute('src'); video.load();
+  document.getElementById('lp-pm-error').style.display = 'none';
   document.getElementById('lp-player-modal').classList.remove('on');
+  state.lp.playingId = null;
+  state.lp.playingKind = 'lesson';
   if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
 }
 
@@ -4266,6 +4483,9 @@ VIEWS['emergency'] = async function () {
       // Reflect the just-saved figures, then let the engine fill/award the Safety Net badge.
       state._efRow = { monthly, current_savings: current, contribution: contrib, target_months: tgt };
       syncProgressBadges();
+      // Server-recorded meaningful EF usage — the anchor criterion of the
+      // quarterly Utilisation threshold (a real save, never a page open).
+      kwRecordToolUse('emergency_fund');
     }
     showToast(error ? '⚠️ Save failed — please try again' : '✓ Saved');
   };
@@ -4405,8 +4625,12 @@ VIEWS['checkin'] = function () {
     // (≥13-day gaps), so it can't be farmed by logging several times in one day.
     syncProgressBadges();
 
-    // Points: once per calendar month, plus the quarterly streak bonus if earned.
-    KWBadges.recordPoints('monthly_checkin').then(res => {
+    // Points: once per fortnight window (server decides the window — six
+    // check-ins in one week collide on the same ref and award once), plus
+    // the quarterly streak bonus if earned. 'checkin_logged' supersedes the
+    // old once-per-calendar-month 'monthly_checkin' (deactivated in the
+    // webinars/thresholds migration); checkin_streak_3 (Progress) unchanged.
+    KWBadges.recordPoints('checkin_logged', 'checkin').then(res => {
       if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
       return KWBadges.recordPoints('checkin_streak_3');
     }).then(res => {
@@ -4890,12 +5114,14 @@ function renderRewardsProgressCard() {
   const th = state.rewardThresholds || {};
   const pts = state.points || {};
   const key = isFirstSeasonMember() ? 'first_season_points' : 'returning_points';
-  const utilT  = th.utilisation ? th.utilisation[key] : 300;
-  const learnT = th.learning    ? th.learning[key]    : 300;
+  // Progress is UNCHANGED: same tenure-aware points threshold as before.
+  // Utilisation and Learning switched to criteria-based qualification
+  // (quarterly thresholds build) — their pillar detail fills in async below.
   const progT  = th.progress    ? th.progress[key]    : 300;
 
-  const bars = rewardsProgressBar('Utilisation', pts.season_utilisation || 0, utilT)
-             + rewardsProgressBar('Learning',    pts.season_learning    || 0, learnT)
+  const bars = `<div id="rw-quali-pillars">
+      <div class="kw-skeleton" style="height:96px;border-radius:8px;margin-bottom:14px"></div>
+    </div>`
              + rewardsProgressBar('Progress',    pts.season_progress    || 0, progT);
 
   return `
@@ -4914,6 +5140,52 @@ function renderRewardsProgressCard() {
         <h5 style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px">Rewards received</h5>
         <div id="my-reward-fulfilments"><div class="kw-skeleton" style="height:44px"></div></div>
       </div>
+    </div>`;
+}
+
+// Fills #rw-quali-pillars with the member's own Utilisation pillars and
+// Learning fraction from my_rewards_qualification() (member-scoped RPC —
+// auth.uid() only; nothing here is HR-visible). Visible error state if the
+// RPC is unavailable, never a silent blank.
+async function loadRewardsQualification() {
+  const el = document.getElementById('rw-quali-pillars');
+  if (!el) return;
+  const { data, error } = await sb.rpc('my_rewards_qualification');
+  if (!document.getElementById('rw-quali-pillars')) return; // navigated away
+  if (error || !data) {
+    console.warn('my_rewards_qualification failed:', error?.message);
+    el.innerHTML = `<p style="font-size:12.5px;color:var(--muted);margin-bottom:14px">Utilisation and Learning progress is unavailable right now — check back shortly.</p>`;
+    return;
+  }
+  const u = data.utilisation || {};
+  const l = data.learning || {};
+  const pillar = (met, label, detail) => `
+    <li style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:13px">
+      <span style="flex-shrink:0;font-weight:700;color:${met ? 'var(--green)' : 'var(--muted)'}">${met ? '✓' : '○'}</span>
+      <span><strong style="color:var(--navy)">${label}</strong> <span style="color:var(--muted)">— ${detail}</span></span>
+    </li>`;
+  const utilQualified = !!u.qualified;
+  const learnQualified = !!l.qualified;
+  el.innerHTML = `
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:6px">
+        <span>Utilisation</span>
+        <span>${utilQualified ? '<span style="color:var(--green)">✓ Qualified</span>' : `${[u.budgets_met,u.checkins_met,u.sessions_met,u.tools_met].filter(Boolean).length}/4 pillars`}</span>
+      </div>
+      <ul style="list-style:none;margin:0;padding:0 0 0 2px">
+        ${pillar(u.budgets_met, 'Monthly budgets', `${u.budget_months || 0} of ${u.budget_months_required || 3} months saved`)}
+        ${pillar(u.checkins_met, 'Fortnightly check-ins', `${u.checkin_windows || 0} of ${u.checkin_windows_required || 6} fortnights covered`)}
+        ${pillar(u.sessions_met, 'Coaching session attended', `${u.sessions_attended || 0} of ${u.sessions_required || 1} verified`)}
+        ${pillar(u.tools_met, 'Tools used', u.ef_used ? (u.other_tool_used ? 'Emergency Fund + another tool ✓' : 'Emergency Fund done — use one more tool') : 'Start with the Emergency Fund tool')}
+      </ul>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:4px">
+        <span>Learning</span>
+        <span class="mono">${l.credited_videos || 0} / ${l.needed || 0} videos${learnQualified ? ' <span style="color:var(--green)">✓ Qualified</span>' : ''}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${l.needed ? Math.min(100, Math.round(100*(l.credited_videos||0)/l.needed)) : 0}%${learnQualified ? ';background:var(--green)' : ''}"></div></div>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:4px">Watch a third of the video library this quarter (${l.library_size || 0} videos available). Webinars don't count toward Learning.</p>
     </div>`;
 }
 
@@ -4981,6 +5253,7 @@ VIEWS['badges'] = function () {
       ${renderBadgeCards()}
     </div>`;
   loadMyRewardFulfilments();
+  loadRewardsQualification();
 };
 
 // Builds the badge grid: simple one-off badges + behaviour filling badges

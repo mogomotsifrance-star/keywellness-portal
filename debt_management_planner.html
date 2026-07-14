@@ -506,7 +506,7 @@ function saveData(){
       user_id: window._toolUser.id, tool: 'debt_management_planner', data: payload, updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' }).then(({ error }) => {
       if (error) { console.error('Save failed:', error); showToast('Saved on this device only — cloud sync failed'); }
-      else showToast();
+      else { showToast(); KWBadges.recordToolUse('debt_management_planner'); }
     });
   } else { showToast(); }
 }

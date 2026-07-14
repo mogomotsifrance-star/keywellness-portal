@@ -528,7 +528,15 @@ function save(){
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,tool' });
     if (error) { console.error('Budget save to Supabase failed:', error); showToast('Saved on this device only — cloud sync failed', 4000); }
-    else showToast();
+    else {
+      showToast();
+      // Quarterly Utilisation wiring: the cloud save is the evidence for
+      // both events (award_points re-verifies server-side against the
+      // tool_data blob). budget_saved is once per calendar month (unique
+      // ref = the month key); recordToolUse dedupes per page load.
+      KWBadges.recordToolUse('budget_planner');
+      if (currentKey) KWBadges.recordPoints('budget_saved', currentKey);
+    }
   })();
   // ── kw_snapshot ──
   try {

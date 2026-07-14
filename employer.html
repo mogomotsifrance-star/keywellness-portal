@@ -573,6 +573,20 @@ function renderOverallRanking() {
     + '</div>';
 }
 
+// Static explainer — concept-level description of what each category
+// measures. Contains no individual data, no score values, no deltas.
+// Copy is fixed (quarterly-thresholds build); do not edit without sign-off.
+function renderRewardsExplainer() {
+  return '<div class="card" style="margin-bottom:20px">'
+    + '<div class="card-title">How members qualify for quarterly rewards</div>'
+    + '<div style="font-size:13px;color:var(--text);line-height:1.7">'
+    + '<p style="margin-bottom:10px"><strong>Utilisation</strong> recognises consistent use of the wellbeing tools across the quarter: keeping a budget for every month, completing fortnightly check-ins, attending a coaching session, and actively using the planning tools, with the emergency fund tool as the anchor.</p>'
+    + '<p style="margin-bottom:10px"><strong>Learning</strong> recognises financial education: members qualify by watching a third of the video library during the quarter, verified by actual viewing rather than clicks.</p>'
+    + '<p style="margin-bottom:10px"><strong>Progress</strong> recognises members who are moving their own financial wellness forward over time. Individual results are private to each member; you see only how many members qualified.</p>'
+    + '<p style="margin-bottom:0">All figures shown here are aggregate counts. Key Wellness never shares any individual member&apos;s financial information with employers.</p>'
+    + '</div></div>';
+}
+
 function renderGuidancePanel() {
   return '<div class="card" style="margin-bottom:20px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="guidanceOpen=!guidanceOpen;renderRewards();">'
@@ -708,12 +722,14 @@ function renderRewards() {
   if (rewardsSubTab === 'history') {
     html += renderRewardHistory();
   } else if (!rewardsRows.length) {
+    html += renderRewardsExplainer();
     html += '<div class="empty-state">'
       + '<div class="empty-icon">&#127942;</div>'
       + '<h3>No one has opted in yet</h3>'
       + '<p>Encourage your team to opt in to Rewards from their Badges page in the member portal &mdash; once they do, they will appear here as they qualify in each category.</p>'
       + '</div>';
   } else {
+    html += renderRewardsExplainer();
     html += renderGuidancePanel();
     html += renderCategorySection('utilisation', 'Utilisation');
     html += renderCategorySection('learning', 'Learning');
