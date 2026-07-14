@@ -2347,9 +2347,10 @@ VIEWS['dashboard'] = async function () {
     const ef = await loadEF();
     _efRow = ef;
     if (ef) {
-      efTarget  = (ef.monthly || 0) * (ef.target_months || 6);
-      efCurrent = ef.current_savings || 0;
-      efMonths  = ef.monthly > 0 ? efCurrent / ef.monthly : null;
+      const _efM = _num(ef.monthly);   // coerce — legacy rows may hold formatted strings
+      efTarget  = _efM * (ef.target_months || 6);
+      efCurrent = _num(ef.current_savings);
+      efMonths  = _efM > 0 ? efCurrent / _efM : null;
       // "Set up" = a saved fund with a target and any real figure — not dependent on monthly being entered
       hasEF = !!(ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0));
     }
@@ -4394,17 +4395,30 @@ VIEWS['emergency'] = async function () {
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
 
   const efData = await loadEF();
+  // Coerce saved figures defensively — legacy rows/caches may hold formatted strings ("4,500.00")
+  const _efNum = (v, label) => {
+    if (v == null || v === '') return 0;
+    const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
+    if (!isFinite(n)) return 0;
+    if (typeof v !== 'number' && String(v) !== String(n)) console.warn(`[KW] EF: coerced ${label} "${v}" → ${n}`);
+    return n;
+  };
   const saved = efData
-    ? { monthly: efData.monthly, current: efData.current_savings, contribution: efData.contribution, target: efData.target_months }
+    ? { monthly: _efNum(efData.monthly, 'monthly'), current: _efNum(efData.current_savings, 'current_savings'), contribution: _efNum(efData.contribution, 'contribution'), target: efData.target_months }
     : { monthly: 0, current: 0, contribution: 0, target: 3 };
 
-  // Pull assessment figures from profile: monthly_expenses or essential_expenses → target, total_savings → current balance
-  const _efMonthlyExp = state.user?.monthly_expenses || state.user?.essential_expenses || 0;
+  // Assessment figures for prefill: local assessment result (exact figures) → profile essential_expenses.
+  // Never monthly_expenses — that is TOTAL spend (and budget saves overwrite it), which inflated targets.
+  let _asmtFig = null;
+  try { _asmtFig = JSON.parse(localStorage.getItem('kw_assessment_result') || 'null')?.figures || null; } catch {}
+  const _efMonthlyExp = _efNum(_asmtFig?.essentialExpenses, 'assessment essentialExpenses') || _efNum(state.user?.essential_expenses, 'profile essential_expenses') || 0;
   const _ef3mo = _efMonthlyExp * 3;
   const _ef6mo = _efMonthlyExp * 6;
   const _efSetUp   = !!(saved.monthly || saved.current || saved.contribution);
   const _efPrefill = _efMonthlyExp > 0 && !saved.monthly;
-  const _efSavings = Math.round(state.user?.total_savings || 0);  // assessment balance → current EF balance prefill
+  // Current-savings prefill: ONLY the assessment's own emergency-fund figure — never total_savings,
+  // which presented the member's whole savings balance as their emergency fund.
+  const _efSavings = Math.round(_efNum(_asmtFig?.emergencyFund, 'assessment emergencyFund'));
 
   el.innerHTML = `
     <div style="max-width:660px">
@@ -4412,7 +4426,7 @@ VIEWS['emergency'] = async function () {
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">💡 Recommended Targets (from your profile)</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> from your assessment:</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> from your assessment:</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--orange);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(3);efCalc()">
             <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px">Minimum (3 months)</div>
@@ -4443,7 +4457,7 @@ VIEWS['emergency'] = async function () {
         <div class="field">
           <label>Current Emergency Savings (BWP)</label>
           <input type="number" id="ef-c" value="${saved.current || (!_efSetUp && _efSavings>0 ? _efSavings : '')}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
-          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled from your assessment savings. Adjust to your emergency-only balance.</div>` : ''}
+          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled from your assessment — adjust if needed.</div>` : ''}
         </div>
         <div class="field">
           <label>Monthly Contribution (BWP)</label>
@@ -5672,10 +5686,12 @@ function generateSmartNotifs() {
     }
   }
 
-  // Emergency fund reminder
+  // Emergency fund reminder (legacy cache — coerce, may hold formatted strings)
   const ef = safeParseLS('kw_ef_cache', null);
-  if (ef && ef.months < 3) {
-    notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${ef.months.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+  const _efCacheMonths = ef ? _num(ef.months) : 0;
+  if (ef && ef.months != null && String(ef.months) !== String(_efCacheMonths)) console.warn(`[KW] kw_ef_cache: coerced months "${ef.months}" → ${_efCacheMonths}`);
+  if (ef && ef.months != null && _efCacheMonths < 3) {
+    notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${_efCacheMonths.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
   }
 
   // Goals reminder
