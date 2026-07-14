@@ -1029,6 +1029,10 @@ function render(data) {
     }
   }
   html += '</div>';
+  // Wellbeing aggregates blend live tool-fed scores with assessments
+  // (see supabase_live_wellness.sql) — tell HR why figures can move
+  // between assessment rounds.
+  html += '<p style="font-size:11px;color:var(--muted);margin:-8px 0 16px">Wellbeing figures update as employees keep their planning tools current &mdash; not only when they reassess.</p>';
 
   // 2. Financial Stress (org_stress_summary()) — corrected scale + top causes,
   // replacing the old org_financial_indicators()-based stress card. Shown

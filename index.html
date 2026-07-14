@@ -888,6 +888,7 @@ async function loadAllData() {
   // Live wellness score — latest assessment behaviours + freshest tool figures.
   // Must run after state.user/assessments/toolData/ef are set.
   state.liveWellness = computeLiveWellness();
+  persistLiveWellness();   // feeds employer/org aggregates; non-blocking
   state.checkins    = cR.data  || [];
   state.bookings    = bkR.data || [];
   state.stressLogs  = (sR.data || []).map(r => ({ date: r.created_at, level: r.level, tags: r.tags || [], notes: r.notes || '' }));
@@ -1021,7 +1022,7 @@ function saveEF(data) {
       else {
         // Keep the live wellness score in step — EF is edited inside this page
         state.ef = { ...(state.ef || {}), ...data };
-        try { state.liveWellness = computeLiveWellness(); } catch {}
+        try { state.liveWellness = computeLiveWellness(); persistLiveWellness(); } catch {}
       }
       return { error };
     })
@@ -1698,7 +1699,8 @@ function computeLiveWellness(toolMap, ef) {
     income   = (bpB.income || []).reduce((s, i) => s + _n(i.amount), 0);
     expenses = Object.values(bpB.expenses || {}).reduce((s, v) => s + _n(v), 0);
     monthlySavings = ['emfund','retirement','invest','goals','debt_extra'].reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
-    if (_n((bpB.expenses || {}).debt_min) > 0) debtPayments = _n(bpB.expenses.debt_min) + _n(bpB.expenses.debt_extra);
+    const _bpDebt = _n((bpB.expenses || {}).debt_min) + _n((bpB.expenses || {}).debt_extra);
+    if (_bpDebt > 0) debtPayments = _bpDebt;
     if (income > 0 || expenses > 0) sources.add('Budget Planner');
   }
   const dc = tools['dti_calculator'];
@@ -1757,6 +1759,29 @@ function computeLiveWellness(toolMap, ef) {
   if (!have.length) return null;
   const score = Math.round(have.reduce((s, id) => s + dims[id], 0) / have.length);
   return { score, dims, live: sources.size > 0, sources: [...sources], assessedScore: Math.round(latest.score) };
+}
+
+// Persist the live score to profiles so the employer/org aggregates
+// (org_overview / org_financial_indicators — see supabase_live_wellness.sql)
+// reflect tool updates without waiting for a reassessment. Fire-and-forget:
+// failures (e.g. the SQL migration not applied yet) only log a warning.
+function persistLiveWellness() {
+  const lw = state.liveWellness;
+  if (!lw || !currentUser || !state.user) return;
+  // Skip the write when nothing changed since the last persist (key-order-independent compare)
+  const _cmp = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+  if (Number(state.user.live_score) === lw.score && _cmp(state.user.live_cat_scores) === _cmp(lw.dims)) return;
+  const _at = new Date().toISOString();
+  sb.from('profiles')
+    .update({ live_score: lw.score, live_cat_scores: lw.dims, live_score_at: _at })
+    .eq('id', currentUser.id)
+    .then(({ error }) => {
+      if (error) { console.warn('[KW] live score persist failed (run supabase_live_wellness.sql?):', error.message); return; }
+      state.user.live_score = lw.score;
+      state.user.live_cat_scores = lw.dims;
+      state.user.live_score_at = _at;
+    })
+    .catch(e => console.warn('[KW] live score persist failed:', e));
 }
 
 function scoreBand(s) {
@@ -2319,6 +2344,7 @@ VIEWS['dashboard'] = async function () {
   try {
     const _live = computeLiveWellness(Object.keys(_toolMap).length ? _toolMap : undefined, _efRow);
     state.liveWellness = _live;
+    persistLiveWellness();
     if (_live && wellScore !== null) {
       wellIsLive = _live.live && _live.score !== Math.round(wellScore);
       wellScore  = _live.score;
