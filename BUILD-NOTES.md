@@ -2941,10 +2941,26 @@ done and verified. This setup is the *second* wall: it stops someone who
 has a Vimeo link (from the portal, a screenshot, a forwarded email) from
 playing it outside the portal, or finding it by browsing/searching Vimeo.
 
-### 1. Confirm the plan supports privacy controls
-Embed-domain restriction (step 3) requires **Vimeo Plus or higher**
-(Basic/free accounts can't restrict embedding). Check under Account
-Settings → Plan. Upgrade if needed before uploading anything sensitive.
+### 1. Plan — ON HOLD (2026-07-15: Tshenolo confirmed Vimeo Plus not yet
+paid for; proceeding on the free/Basic plan for now)
+Embed-domain restriction (step 3 below) requires **Vimeo Plus or higher**
+— Basic cannot restrict which sites are allowed to embed a video. Step 3
+is therefore **deferred**, not done, until the account is upgraded.
+
+**What this means in practice — read before uploading anything:**
+the database (`content_items` RLS) still fully controls *which members
+ever receive* a webinar's Vimeo link — that protection is complete and
+already verified, unchanged by plan tier. What's missing without step 3
+is the *second* wall: today, if a Vimeo link leaks outside the portal
+(a screenshot, a forwarded email, a member pasting it into WhatsApp),
+**Vimeo will not stop it from being embedded or played on some other
+site** — only "hide from Vimeo" (keeps it out of search/browse) and the
+unlisted link itself (keeps it out of casual discovery) apply. This is an
+accepted, deliberate gap for now, not an oversight — treat webinar
+content accordingly (e.g. avoid anything you'd be uncomfortable seeing
+re-shared) until the plan is upgraded. Revisit before publishing anything
+sensitive, or once budget allows the upgrade — re-run step 3 the day the
+plan changes; nothing else in this setup needs to change.
 
 ### 2. Set account-wide default privacy (Settings → Privacy)
 This applies to new uploads by default so nobody has to remember it per
@@ -2959,8 +2975,9 @@ video:
 - **Comments / Add to collections:** OFF (not needed for one-way
   webinar playback).
 
-### 3. Restrict embedding to the portal's own domains (Settings → Privacy → "Where can this be embedded?")
-Select **"Specific domains"** and add exactly these:
+### 3. Restrict embedding to the portal's own domains — DEFERRED (needs Vimeo Plus, see step 1)
+Once upgraded, come back here: Settings → Privacy → "Where can this be
+embedded?" → select **"Specific domains"** and add exactly these:
 ```
 portal.keywellness.co.bw
 mogomotsifrance-star.github.io
@@ -2979,6 +2996,10 @@ grabbed and played outside the portal.
 
 **Do not select "Wherever you want"** — that disables the domain
 restriction entirely and defeats this whole section.
+
+**On the Basic plan today**, the "Where can this be embedded?" control
+is unavailable — there is nothing to configure here yet. Skip straight
+to step 4 and rely on unlisted link + hide-from-Vimeo (step 2) alone.
 
 ### 4. Per webinar, at upload time
 1. Upload the recording file directly (no need to pre-compress — Vimeo
@@ -3000,6 +3021,7 @@ restriction entirely and defeats this whole section.
    when ready for members to see it.
 
 ### Verification (do this once, on the first real webinar)
+These all still apply on the Basic plan — none of them depend on step 3:
 - Paste the vimeo.com link into a private/incognito browser window,
   logged out of everything. It must **not** play — Vimeo should show a
   "this video is private" page, not the video.
@@ -3012,3 +3034,10 @@ restriction entirely and defeats this whole section.
 - Search for the video's title on vimeo.com while logged into the Key
   Wellness Vimeo account in a separate tab — it should not surface in
   search or on the public profile page (confirms "Hide from Vimeo" took).
+
+**Deferred until step 3 is done (post-upgrade):** paste the vimeo.com
+link into a bare `<iframe>` on some *other* domain (e.g. a scratch HTML
+file opened via `file://` or any non-allowlisted host) and confirm it
+refuses to play there. Until step 3 is configured this check will
+correctly show the video CAN be embedded elsewhere — that's the known,
+accepted gap above, not a bug to chase.
