@@ -3255,15 +3255,17 @@ function renderLpLanding(el) {
         <div class="lp-w-title">${escHtml(welcome.title)}</div>
       </div>
       <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
-    </div>` : ''}
-    ${renderWebinarsSection()}`;
+    </div>` : ''}`;
 }
 
-// ── Webinars — org-scoped shelf, below the pathways ────────────
-// RLS is the security boundary (members receive only NULL-org rows plus
-// their own org's published rows); this renderer only presents what the
-// query returned. The section is ALWAYS visible — an org with no webinars
-// gets the empty state, never a hidden section.
+// ── Webinars — own Learn page tab (a sibling of Articles/Videos, not
+// nested under Videos — deliberately, per Tshenolo, so members can see
+// at a glance that webinars exist rather than discovering them by
+// scrolling past the pathway cards). RLS is the security boundary
+// (members receive only NULL-org rows plus their own org's published
+// rows); this renderer only presents what the query returned. The tab
+// is ALWAYS visible — an org with no webinars gets the empty state,
+// never a hidden tab.
 function renderWebinarsSection() {
   const webinars = lpWebinars();
   const b = state.lp.branding;
@@ -3291,7 +3293,7 @@ function renderWebinarsSection() {
       </div>
     </div>`).join('');
   return `
-    <div class="lp-chapter" style="margin-top:26px">
+    <div class="lp-chapter">
       <div class="lp-ch-head">
         <span class="lp-ch-title" style="display:flex;align-items:center">${logo}${heading}</span>
         <span class="lp-ch-meta">Hosted sessions · no Learning credit</span>
@@ -3686,6 +3688,10 @@ function lpClosePlayer() {
   clearInterval(_lpUnTimer);
   clearInterval(_lpPingTimer);
   lpSendProgressPing(true); // capture the position before the player is torn down
+  // Captured before playingKind resets below — webinars live on their own
+  // tab now, so closing one must return there, not fall through to the
+  // lesson-only 'videos' branch beneath.
+  const wasWebinar = state.lp.playingKind === 'webinar';
   const video = document.getElementById('lp-pm-video');
   video.pause(); video.removeAttribute('src'); video.load();
   video.style.display = '';
@@ -3694,7 +3700,11 @@ function lpClosePlayer() {
   document.getElementById('lp-player-modal').classList.remove('on');
   state.lp.playingId = null;
   state.lp.playingKind = 'lesson';
-  if (state.lp.view==='pathway' || state.lp.view==='landing') VIEWS['learn']('videos');
+  if (wasWebinar) {
+    VIEWS['learn']('webinars');
+  } else if (state.lp.view==='pathway' || state.lp.view==='landing') {
+    VIEWS['learn']('videos');
+  }
 }
 
 // ── Quiz ─────────────────────────────────────────────────
@@ -3956,16 +3966,25 @@ const CONTENT = [
 VIEWS['learn'] = function (tab) {
   const el = document.getElementById('page-content');
   const activeTab = tab || 'articles';
+  // Remembered so lpClosePlayer() can return to whichever tab a webinar (or
+  // lesson) was opened from, rather than assuming 'videos'.
+  state.lp.activeTab = activeTab;
 
-  if (activeTab === 'videos') {
-    // Pathways/content/quiz/attempt/certificate data — lazy-load once per session.
+  if (activeTab === 'videos' || activeTab === 'webinars') {
+    // Pathways/content/quiz/attempt/certificate data — lazy-load once per
+    // session. Webinars share this same content_items-backed load (they're
+    // kind='webinar' rows in state.lp.items), so both tabs gate on it.
     if (!state.lp.loaded) {
       el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading…</div>';
-      loadPathwaysData().then(() => VIEWS['learn']('videos'));
+      loadPathwaysData().then(() => VIEWS['learn'](activeTab));
       return;
     }
+  }
+
+  if (activeTab === 'videos') {
     // Quiz questions for the active pathway — lazy-load once per quiz (never
     // fetched until the member actually opens the quiz intro/question screen).
+    // Webinars have no quiz flow, so this stays scoped to the videos tab.
     if (state.lp.view === 'quiz-intro' || state.lp.view === 'quiz') {
       const quiz = lpQuizFor(state.lp.pathwayId);
       if (quiz && !state.lp.questions[quiz.id]) {
@@ -3985,9 +4004,10 @@ VIEWS['learn'] = function (tab) {
   const _learnPct = _learnTotal ? Math.round((_learnVids + _learnArts) / _learnTotal * 100) : 0;
 
   el.innerHTML = `
-    <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:320px">
+    <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:460px">
       <button class="auth-tab${activeTab==='articles'?' active':''}" onclick="VIEWS['learn']('articles')" style="flex:1">📚 Articles</button>
       <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Videos</button>
+      <button class="auth-tab${activeTab==='webinars'?' active':''}" onclick="VIEWS['learn']('webinars')" style="flex:1">🎥 Webinars</button>
     </div>
 
     ${activeTab==='articles' ? `
@@ -4011,7 +4031,7 @@ VIEWS['learn'] = function (tab) {
               <div style="margin-top:12px"><button class="btn btn-outline btn-sm">Read More →</button></div>
             </div>
           </div>`).join('')}
-      </div>` : `<div id="lp-root"></div>`}`;
+      </div>` : activeTab==='webinars' ? `<div id="lp-webinars-root"></div>` : `<div id="lp-root"></div>`}`;
 
   if (activeTab === 'videos') {
     const root = document.getElementById('lp-root');
@@ -4022,6 +4042,8 @@ VIEWS['learn'] = function (tab) {
     else if (v==='quiz-result') renderLpQuizResult(root);
     else if (v==='celebrate') renderLpCelebrate(root);
     else renderLpLanding(root);
+  } else if (activeTab === 'webinars') {
+    document.getElementById('lp-webinars-root').innerHTML = renderWebinarsSection();
   }
 };
 
