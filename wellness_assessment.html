@@ -857,7 +857,15 @@ function calculateWellness(){
     dti: dti*100,
     emMonths,
     netWorth,
-    insCount
+    insCount,
+    // Raw pula figures (always numbers, never formatted strings) so tools can
+    // prefill without re-asking — EF planner and Budget Planner read these.
+    figures: {
+      netSalary: net,
+      otherIncome: other,
+      essentialExpenses: essentialExp,
+      emergencyFund: emergencyFund
+    }
   }));
   // ── kw_snapshot ──
   try {

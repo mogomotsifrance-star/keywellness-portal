@@ -588,26 +588,39 @@ function fmtInput(el){
 function finalizeInput(el){const n=pf(el.value);if(!isNaN(n)&&n>0)el.value=n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});else el.value='';}
 
 function getBudget(key){ return budgets[key] || newEmptyBudget(); }
-function profilePrimaryIncome(){
+// Income rows from the assessment: local result figures (this device, exact)
+// → profile columns (cross-device, seeded when the assessment saved). null when no usable source.
+function profileIncomeRows(){
+  let fig = null;
+  try { fig = JSON.parse(localStorage.getItem('kw_assessment_result')||'null')?.figures || null; } catch {}
   const p = window._toolProfile || {};
-  const v = Number(p.net_income ?? p.monthly_income ?? 0);   // ideally net (take-home) salary
-  return (isFinite(v) && v > 0) ? Math.round(v) : 0;
+  const net   = pf(fig?.netSalary)   || pf(p.net_income ?? p.monthly_income ?? 0);
+  const other = pf(fig?.otherIncome) || pf(p.other_income ?? 0);
+  if (net <= 0) return null;
+  const rows = [{ id: Date.now(), label: 'Salary (take-home)', amount: Math.round(net) }];
+  if (other > 0) rows.push({ id: Date.now()+1, label: 'Other Income', amount: Math.round(other) });
+  return rows;
 }
 function newEmptyBudget(){
-  return { income:[{id:Date.now(),label:'Primary Salary',amount:profilePrimaryIncome()}], expenses:{}, customCats:[], notes:'', collapsed:{} };
+  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, customCats:[], notes:'', collapsed:{} };
 }
-// Seed Primary Salary from the profile's net income on a freshly auto-created, untouched budget.
-// No-op once edited/seeded, on real budgets, or before the profile has loaded (handles the load race).
-function maybeSeedPrimaryIncome(){
-  const inc = profilePrimaryIncome();
-  if (!inc || !currentKey) return;
+// Seed income rows from the assessment on a FIRST-EVER, untouched budget only.
+// No-op once edited, when any other month exists, or before the profile has
+// loaded (handles the load race). Copy-from-month and later blank months are
+// never injected. User-editable; not saved until the user interacts.
+function maybeSeedIncomeFromAssessment(){
+  if (!currentKey || !budgets[currentKey]) return;
+  if (Object.keys(budgets).length !== 1) return;
   const b = budgets[currentKey];
-  if (!b || !b.income || b.income.length !== 1) return;
-  const row = b.income[0];
-  const untouched = row.label === 'Primary Salary' && (!row.amount || Number(row.amount) === 0)
+  const untouched = (b.income||[]).length === 1
+    && b.income[0].label === 'Primary Salary'
+    && !pf(b.income[0].amount)
     && (!b.expenses || Object.keys(b.expenses).length === 0);
   if (!untouched) return;
-  row.amount = inc;   // user-editable; not force-saved until the user interacts
+  const rows = profileIncomeRows();
+  if (!rows) return;
+  b.income = rows;
+  window._incomeSeeded = true;   // shows the "prefilled" hint on the income card
   renderAll();
 }
 function sortedKeys(){ return Object.keys(budgets).sort(); }
@@ -773,7 +786,8 @@ function renderIncomeRows(b){
       <button class="del-btn" onclick="removeIncomeRow(${r.id})" ${b.income.length<=1?'disabled style="opacity:.3;cursor:not-allowed;"':''}>
         <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
-    </div>`).join('');
+    </div>`).join('')
+    + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Prefilled from your assessment — adjust if needed.</div>` : '');
 }
 
 // ────────────────────────────────────────────
@@ -1441,7 +1455,7 @@ KW.reveal('.month-bar, #mainContent .card');
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     // Load profile for header
-    _sb.from('profiles').select('first_name, last_name, monthly_income, net_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income, net_income, other_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
       window._toolProfile = data;
       if (data) {
         const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
@@ -1451,7 +1465,7 @@ KW.reveal('.month-bar, #mainContent .card');
         if (nameEl) nameEl.textContent = window._toolFullName;
         if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
       }
-      maybeSeedPrimaryIncome();   // seed Primary Salary from profile net income on a fresh, untouched budget
+      maybeSeedIncomeFromAssessment();   // seed income rows from the assessment on a fresh, untouched budget
     });
     // Load budget data from Supabase (overrides localStorage if cloud data exists)
     const { data: toolRow, error: loadErr } = await _sb.from('tool_data')
@@ -1460,12 +1474,13 @@ KW.reveal('.month-bar, #mainContent .card');
     if (toolRow?.data?.budgets && Object.keys(toolRow.data.budgets).length) {
       budgets = toolRow.data.budgets;
       currentKey = toolRow.data.currentKey || null;
+      window._incomeSeeded = false;   // real saved budgets — never show the prefill hint
       localStorage.setItem(LS_KEY, JSON.stringify({ budgets, currentKey }));
       renderAll();
       KW.reveal('.month-bar, #mainContent .card');
     } else {
       console.log('budget_planner: no cloud data found, using local state');
-      maybeSeedPrimaryIncome();   // fresh user / no saved budget — seed Primary Salary from profile
+      maybeSeedIncomeFromAssessment();   // fresh user / no saved budget — seed income rows from the assessment
     }
   });
 })();

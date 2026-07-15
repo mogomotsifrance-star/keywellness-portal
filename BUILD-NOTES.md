@@ -1,3 +1,59 @@
+# Launch Bug-Fix Batch (currency prefix overlap, EF prefill, budget income prefill, lifestyle verdict)
+
+Frontend-only, zero Supabase writes/DDL, per the launch-week prompt. One commit
+per batch on `dev`; rollback = `git revert <sha>`:
+
+| Batch | Commit | Files |
+|---|---|---|
+| 1 — currency prefix overlap | `0e16d0d` | lifestyle_inflation_calculator.html, education_savings_calculator.html |
+| 2 — EF prefill + figure parsing | `8779598` | index.html, wellness_assessment.html |
+| 3 — budget income prefill | `40babb2` | budget_planner.html |
+| 4 — lifestyle verdict consistency | `8cd373e` | lifestyle_inflation_calculator.html |
+
+**Root causes (differ from the prompt's hypotheses — full evidence in the session
+report):** the prefix padding rule wasn't missing, it was *overridden* by a later
+equal-specificity `input[type=…]{padding:…}` shorthand (education_savings had the
+identical bug, fixed too); the EF "corrupted figures" were wrong-source prefill
+(`monthly_expenses` preferred over `essential_expenses`, and `total_savings`
+shown as the emergency balance — the assessment's own `emergencyFund` figure was
+never persisted anywhere), not a comma-parse bug.
+
+## Human action needed / post-launch follow-ups
+
+1. **Prefix-markup consolidation (post-launch)**: three different currency-prefix
+   systems coexist across the tools — flex `.input-wrap`/`.input-prefix` (7 files),
+   flex `.iw`/`.iw-prefix`/`.iw-pre` (loan, investment, budget), and
+   absolutely-positioned `.iw .prefix` (education, lifestyle, life_insurance — the
+   only fragile one, now specificity-hardened per file). Schedule a shared-CSS
+   consolidation to one pattern (the flex one is structurally overlap-proof) once
+   launch settles.
+2. **Post-launch data check (Key Wellness staff)**: assessments completed before
+   this fix parsed commas correctly in the current code, but *older* app versions
+   may have written formatted strings into `emergency_fund` rows or profile figure
+   columns. The frontend now self-heals such values at read time and logs a
+   `console.warn` (`[KW] EF: coerced …`) — if those warnings show up for real
+   members, run a one-off data cleanup on `emergency_fund` /
+   `profiles.{monthly_expenses,essential_expenses,total_savings,…}`.
+3. **Members assessed before this fix** have no `figures` in their local
+   `kw_assessment_result` until they reassess — EF/budget prefill falls back to
+   the profile columns (cross-device, seeded at their last assessment), and the
+   EF Current Savings field degrades to the honest empty state (the misleading
+   `total_savings` fallback was removed deliberately).
+4. **`kw_ef_cache` is a dead key**: index.html's EF notification reads it but
+   nothing writes it anymore — the "Emergency Fund Alert" notification can never
+   fire for new members. Read is now coercion-hardened; decide post-launch whether
+   to re-wire it to the live EF row or delete the notification.
+5. **Behaviour change (deliberate, per launch spec)**: creating a *blank* new
+   month when prior months exist no longer auto-seeds Primary Salary from the
+   profile — prefill now applies only to a member's first-ever budget.
+   Copy-from-month is unchanged.
+6. **Pre-existing bug spotted, not fixed (out of scope)**:
+   lifestyle_inflation_calculator.html saves/restores a non-existent
+   `horizonYears` element instead of `projYears`, so the projection-years slider
+   never persists to `tool_data`.
+
+---
+
 # Fixes & Diagnosis Batch (password toggle, email logo/links, signup errors, opt-in refresh, admin time column)
 
 Per `kw-fixes-diagnosis.md`'s batch plan. Full discovery in `BATCH-0-FINDINGS.md`
