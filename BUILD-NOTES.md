@@ -2924,3 +2924,120 @@ the header — Debswana brand fidelity should be exact, not approximate.
 ORIGINAL brand export Tshenolo supplied ("Sedimosa Logo.png" from Downloads,
 510x150). No further action needed on this asset; the replace-before-launch
 caveat above is closed.
+
+## Vimeo privacy setup — step by step (reference)
+
+All four SQL migration files have been run against the live project
+(confirmed 2026-07-15: new tables/columns/RPCs all present, permission
+boundaries on `learning_qualified`/`utilisation_qualified` verified —
+neither is callable directly, only from inside `org_rewards`/
+`my_rewards_qualification`). Nothing below is code — it's Vimeo dashboard
+configuration, which Claude Code cannot do (no account access). Do this
+once per Vimeo account (steps 1–3), then repeat step 4 for every webinar.
+
+**Why this matters:** the database (`content_items` RLS) already decides
+*which members ever receive* a webinar's Vimeo reference — that part is
+done and verified. This setup is the *second* wall: it stops someone who
+has a Vimeo link (from the portal, a screenshot, a forwarded email) from
+playing it outside the portal, or finding it by browsing/searching Vimeo.
+
+### 1. Plan — ON HOLD (2026-07-15: Tshenolo confirmed Vimeo Plus not yet
+paid for; proceeding on the free/Basic plan for now)
+Embed-domain restriction (step 3 below) requires **Vimeo Plus or higher**
+— Basic cannot restrict which sites are allowed to embed a video. Step 3
+is therefore **deferred**, not done, until the account is upgraded.
+
+**What this means in practice — read before uploading anything:**
+the database (`content_items` RLS) still fully controls *which members
+ever receive* a webinar's Vimeo link — that protection is complete and
+already verified, unchanged by plan tier. What's missing without step 3
+is the *second* wall: today, if a Vimeo link leaks outside the portal
+(a screenshot, a forwarded email, a member pasting it into WhatsApp),
+**Vimeo will not stop it from being embedded or played on some other
+site** — only "hide from Vimeo" (keeps it out of search/browse) and the
+unlisted link itself (keeps it out of casual discovery) apply. This is an
+accepted, deliberate gap for now, not an oversight — treat webinar
+content accordingly (e.g. avoid anything you'd be uncomfortable seeing
+re-shared) until the plan is upgraded. Revisit before publishing anything
+sensitive, or once budget allows the upgrade — re-run step 3 the day the
+plan changes; nothing else in this setup needs to change.
+
+### 2. Set account-wide default privacy (Settings → Privacy)
+This applies to new uploads by default so nobody has to remember it per
+video:
+- **Who can watch:** "Only people with the private link" (this is what
+  makes the link itself work — do NOT use "Only me," which blocks even
+  the portal's embed).
+- **Hide from Vimeo:** ON — removes the video from Vimeo's own search,
+  your public profile, and browse pages. It is reachable only via direct
+  link or embed.
+- **Downloads:** OFF.
+- **Comments / Add to collections:** OFF (not needed for one-way
+  webinar playback).
+
+### 3. Restrict embedding to the portal's own domains — DEFERRED (needs Vimeo Plus, see step 1)
+Once upgraded, come back here: Settings → Privacy → "Where can this be
+embedded?" → select **"Specific domains"** and add exactly these:
+```
+portal.keywellness.co.bw
+mogomotsifrance-star.github.io
+keywellness-portal.mogomotsifrance.workers.dev
+```
+`portal.keywellness.co.bw` is the custom domain now CNAME'd to GitHub
+Pages (see the `main` branch's `CNAME` file) — this is the one members
+will actually be on once DNS is fully live, so it must be on the list.
+Keep the `.github.io` and `.workers.dev` entries too: GitHub Pages serves
+`main` at the `.github.io` URL regardless of the custom domain, and
+`workers.dev` is the `dev`-branch Cloudflare test site — testing a new
+webinar there before it goes live needs to actually play.
+Add `localhost` (any port) only temporarily while testing locally, then
+remove it — a wildcard localhost entry is one more way a video could be
+grabbed and played outside the portal.
+
+**Do not select "Wherever you want"** — that disables the domain
+restriction entirely and defeats this whole section.
+
+**On the Basic plan today**, the "Where can this be embedded?" control
+is unavailable — there is nothing to configure here yet. Skip straight
+to step 4 and rely on unlisted link + hide-from-Vimeo (step 2) alone.
+
+### 4. Per webinar, at upload time
+1. Upload the recording file directly (no need to pre-compress — Vimeo
+   transcodes automatically; original quality in, adaptive streaming out).
+2. Once uploaded, open the video's own Privacy settings and confirm it
+   inherited "Only people with the private link" + hidden from Vimeo. If
+   the account default from step 2 was set correctly this needs no
+   change per video — but check the first few uploads to be sure the
+   default actually took.
+3. Copy the video's **share link** (Vimeo → Share → the vimeo.com URL).
+   For an unlisted video this looks like
+   `https://vimeo.com/123456789/abcdef1234` — the part after the second
+   slash is the privacy hash. **Copy the whole link, not just the numeric
+   ID** — admin.html's Webinars form parses either, but the hash is
+   required for the video to actually play; without it, Vimeo will
+   reject the embed even from an allowed domain.
+4. Paste that full link into admin.html → Webinars → "Vimeo link or ID",
+   fill in title / audience org / duration, save as draft, then Publish
+   when ready for members to see it.
+
+### Verification (do this once, on the first real webinar)
+These all still apply on the Basic plan — none of them depend on step 3:
+- Paste the vimeo.com link into a private/incognito browser window,
+  logged out of everything. It must **not** play — Vimeo should show a
+  "this video is private" page, not the video.
+- Open the portal, go to Learn → Webinars as a member of the assigned
+  org, and confirm it plays there.
+- As a member of a *different* org (or an org-less member, if the
+  webinar is org-restricted), confirm the webinar does not even appear
+  in their Webinars shelf — this is the RLS check, already verified at
+  the database level, but worth eyeballing once end-to-end.
+- Search for the video's title on vimeo.com while logged into the Key
+  Wellness Vimeo account in a separate tab — it should not surface in
+  search or on the public profile page (confirms "Hide from Vimeo" took).
+
+**Deferred until step 3 is done (post-upgrade):** paste the vimeo.com
+link into a bare `<iframe>` on some *other* domain (e.g. a scratch HTML
+file opened via `file://` or any non-allowlisted host) and confirm it
+refuses to play there. Until step 3 is configured this check will
+correctly show the video CAN be embedded elsewhere — that's the known,
+accepted gap above, not a bug to chase.
