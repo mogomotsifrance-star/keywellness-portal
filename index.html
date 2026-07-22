@@ -3041,9 +3041,14 @@ function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id 
 // video_path is the intro file. Kept separate from lpWelcome() (the onboarding
 // modal video) so the two never collide: the intro plays at the top of the
 // Learn landing, the welcome plays in the first-login modal.
-const LP_INTRO_PATH = 'Learn Welcome Video_video_4k.mp4';
-function lpIntro() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && i.video_path === LP_INTRO_PATH); }
-function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && i.video_path !== LP_INTRO_PATH); }
+// The Learn intro is identified by its video filename PREFIX, so swapping in a
+// new cut ("… (2).mp4", a renamed re-upload, etc.) only needs the intro row's
+// content_items.video_path updated — no code change. lpWelcome() is the OTHER
+// pathway-less video (the first-login onboarding modal clip).
+const LP_INTRO_PREFIX = 'Learn Welcome Video';
+function lpIsIntro(i) { return !!(i && i.video_path && i.video_path.indexOf(LP_INTRO_PREFIX) === 0); }
+function lpIntro() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && lpIsIntro(i)); }
+function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && !lpIsIntro(i)); }
 function lpWebinars() { return state.lp.items.filter(lpIsWebinar).sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0)); }
 // "1h 04m" for long items, "12m" for short ones.
 function lpFmtDuration(sec) {
