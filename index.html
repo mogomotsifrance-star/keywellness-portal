@@ -1537,7 +1537,7 @@ async function doResetPassword() {
 const NAV = [
   { id:'dashboard',   icon:'🏠', label:'Dashboard' },
   { id:'assessment',  icon:'📋', label:'Assessment' },
-  { id:'learn',       icon:'📚', label:'Learn' },
+  { id:'learn',       icon:'📚', label:'Knowledge Hub' },
   { id:'tools',       icon:'🛠️',  label:'Tools' },
   { id:'calculators', icon:'🧮', label:'Calculators' },
   { id:'emergency',   icon:'🆘', label:'Emergency Fund' },
@@ -3036,7 +3036,13 @@ function lpStorageUrl(path) { return LP_VIDEOS_BASE + String(path).split('/').ma
 // anything that isn't explicitly 'webinar' as a lesson.
 function lpIsWebinar(i) { return i && i.kind === 'webinar'; }
 function lpItemsFor(pathwayId) { return state.lp.items.filter(i => i.pathway_id === pathwayId && !lpIsWebinar(i)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)); }
-function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i)); }
+// The Learn-tab intro banner video — a pathway-less content_items row whose
+// video_path is the intro file. Kept separate from lpWelcome() (the onboarding
+// modal video) so the two never collide: the intro plays at the top of the
+// Learn landing, the welcome plays in the first-login modal.
+const LP_INTRO_PATH = 'Learn Welcome Video_video_4k.mp4';
+function lpIntro() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && i.video_path === LP_INTRO_PATH); }
+function lpWelcome() { return state.lp.items.find(i => i.pathway_id == null && !lpIsWebinar(i) && i.video_path !== LP_INTRO_PATH); }
 function lpWebinars() { return state.lp.items.filter(lpIsWebinar).sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0)); }
 // "1h 04m" for long items, "12m" for short ones.
 function lpFmtDuration(sec) {
@@ -3172,6 +3178,24 @@ function renderLpLanding(el) {
   const quizH = hp && lpQuizFor(hpId);
   const passedH = quizH && lpPassedAttempt(quizH.id);
   const welcome = lpWelcome();
+  const intro = lpIntro();
+
+  // Intro banner — sits above the "Continue learning" hero so it's the first
+  // video members see. Reuses the hero markup with a navy "Start here" accent.
+  const introBanner = intro ? `<div class="lp-hero lp-hero-intro">
+      <button class="lp-hero-poster" onclick="lpOpenPlayer('${intro.id}')" aria-label="Play ${escHtml(intro.title)}">
+        ${lpPoster(intro, 320)}
+        <div class="lp-hp-play"><span class="lp-play-badge"></span></div>
+      </button>
+      <div class="lp-hero-body">
+        <div class="lp-eyebrow">Start here · Welcome</div>
+        <div class="lp-hero-title">${escHtml(intro.title)}</div>
+        <div class="lp-hero-meta">A quick intro to your learning pathways — watch this first.</div>
+        <div class="lp-hero-actions">
+          <button class="lp-btn lp-btn-light" onclick="lpOpenPlayer('${intro.id}')">▶ Watch intro</button>
+        </div>
+      </div>
+    </div>` : '';
 
   let hero;
   if (next) {
@@ -3245,6 +3269,7 @@ function renderLpLanding(el) {
   }).join('');
 
   el.innerHTML = `
+    ${introBanner}
     ${hero}
     <div class="lp-row-title">Your pathways <small>quiz + certificate at the end of each</small></div>
     <div class="lp-pathway-grid">${cards}</div>
@@ -4006,7 +4031,7 @@ VIEWS['learn'] = function (tab) {
   el.innerHTML = `
     <div style="display:flex;gap:0;border:2px solid var(--border);border-radius:var(--radius-sm);margin-bottom:20px;overflow:hidden;max-width:460px">
       <button class="auth-tab${activeTab==='articles'?' active':''}" onclick="VIEWS['learn']('articles')" style="flex:1">📚 Articles</button>
-      <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Videos</button>
+      <button class="auth-tab${activeTab==='videos'?' active':''}" onclick="VIEWS['learn']('videos')" style="flex:1">🎬 Learn</button>
       <button class="auth-tab${activeTab==='webinars'?' active':''}" onclick="VIEWS['learn']('webinars')" style="flex:1">🎥 Webinars</button>
     </div>
 
