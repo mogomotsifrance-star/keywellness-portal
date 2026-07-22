@@ -92,9 +92,19 @@
     'the psychology of money': '<rect width="200" height="120" fill="#0d1a3a"/><path d="M115 22 Q138 15 150 32 Q168 38 162 60 Q168 78 150 86 Q138 98 120 90 Q108 100 94 90 Q75 98 64 86 Q46 78 52 60 Q46 38 66 32 Q78 15 115 22Z" fill="#e05a5a" opacity="0.15" stroke="#e05a5a" stroke-width="2.5"/><path d="M107 26 Q78 30 65 55 Q60 73 78 83 Q92 90 107 82Z" fill="#e05a5a" opacity="0.2"/><text x="86" y="60" font-size="7" fill="#e05a5a" text-anchor="middle" opacity="0.9" font-weight="bold">EMOTION</text><path d="M113 26 Q142 30 150 55 Q155 73 138 83 Q124 90 113 82Z" fill="#3aaa68" opacity="0.15"/><text x="135" y="60" font-size="7" fill="#3aaa68" text-anchor="middle" opacity="0.9" font-weight="bold">LOGIC</text><circle cx="110" cy="58" r="18" fill="#c8973a" opacity="0.85"/><circle cx="110" cy="58" r="13" fill="#1a2744"/><text x="110" y="63" font-size="16" fill="#c8973a" text-anchor="middle" font-weight="bold">P</text><polygon points="66,28 60,46 68,46 62,64" fill="#c8973a" opacity="0.6"/><polyline points="145,72 152,80 165,62" fill="none" stroke="#3aaa68" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/><text x="110" y="108" font-size="6.5" fill="#e05a5a" text-anchor="middle" opacity="0.8">WHY WE DO WHAT WE DO WITH MONEY</text>',
   };
 
+  var ALIASES = {
+    'understanding your relationship with money': 'your relationship with money',
+    'understanding credit reports and credit scores': 'credit reports and credit scores',
+  };
+
   function kwThumbArt(title) {
     var k = normTitle(title);
-    return Object.prototype.hasOwnProperty.call(ART, k) ? ART[k] : null;
+    if (Object.prototype.hasOwnProperty.call(ART, k)) return ART[k];
+    if (Object.prototype.hasOwnProperty.call(ALIASES, k)) {
+      var a = ALIASES[k];
+      if (Object.prototype.hasOwnProperty.call(ART, a)) return ART[a];
+    }
+    return null;
   }
 
   global.KW_THUMB_ART = ART;
