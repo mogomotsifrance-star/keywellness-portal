@@ -312,32 +312,48 @@
   }
 
   // ── darkThumbPoster ──────────────────────────────────────
-  // Renders a bespoke navy thumbnail (200×120 art scaled to cover 320×180)
-  // with the portal's lesson chip + play/duration pill on a bottom scrim so
-  // the chrome stays legible over the dark art.
-  function darkThumbPoster(item, width, h, artInner) {
-    var NAVY = '#0d1a3a';
-    var n    = item.sort_order;
-    var dur  = fmtDur(item.duration_seconds);
+  // Renders a bespoke navy thumbnail. entry = { vb, art }: the art is embedded
+  // in a nested <svg> at its native viewBox and cover-scaled to the 320×180
+  // poster. Full-bleed designs authored at 320×180 (e.g. the welcome art) are
+  // used as-is; smaller lesson illustrations (200×120) get the portal's lesson
+  // chip + play/duration pill on a bottom scrim so the chrome stays legible.
+  function darkThumbPoster(item, width, h, entry) {
+    var NAVY   = '#0d1a3a';
+    var vb     = (entry && entry.vb) || '0 0 200 120';
+    var art    = (entry && entry.art) || '';
+    var full   = vb === '0 0 320 180';   // authored at full poster size
+    var n      = item.sort_order;
+    var dur    = fmtDur(item.duration_seconds);
     var durStr = dur ? _esc(dur) : '';
+    var uid    = 'kwdk-' + (n == null ? 'x' : n) + '-' + width;
+
+    var head = '<svg viewBox="0 0 320 180" width="' + width + '" height="' + h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + _esc(item.title) + '">\n' +
+      '<rect width="320" height="180" fill="' + NAVY + '"/>\n' +
+      '<svg x="0" y="0" width="320" height="180" viewBox="' + vb + '" preserveAspectRatio="xMidYMid slice">' + art + '</svg>\n';
+
+    // Full-bleed art is a finished piece — no scrim/chip. Add a duration pill
+    // only when we actually know the length.
+    if (full) {
+      if (!dur) return head + '</svg>';
+      var pw = Math.round(durStr.length * 5.6 + 30), px = 308 - pw, tx = px + 9;
+      return head +
+        '<rect x="' + px + '" y="150" width="' + pw + '" height="18" rx="9" fill="#000" fill-opacity=".5"/>\n' +
+        '<polygon points="' + tx + ',155.5 ' + tx + ',165.5 ' + (tx + 6.5) + ',160.5" fill="' + G1 + '"/>\n' +
+        '<text x="' + (tx + 11) + '" y="163" font-family="\'DM Mono\',monospace" font-size="9" fill="#fff" letter-spacing=".4">' + durStr + '</text>\n' +
+        '</svg>';
+    }
+
     var label = n ? ('LESSON ' + String(n).padStart(2, '0'))
-                  : (item.section_label ? _esc(item.section_label).toUpperCase() : 'FEATURED');
-    var uid  = 'kwdk-' + (n == null ? 'x' : n) + '-' + width;
+                  : (item.section_label ? _esc(item.section_label).toUpperCase() : 'WELCOME');
     var chipW = Math.round(label.length * 6.2 + 12);
     var pillW = dur ? Math.round(durStr.length * 5.6 + 30) : 0;
     var pillX = dur ? (308 - pillW) : 0;
     var triX  = pillX + 9;
 
-    // Cover-scale: 200×120 → ×1.6 = 320×192, shifted up 6px and clipped to 180.
-    return '<svg viewBox="0 0 320 180" width="' + width + '" height="' + h + '" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + _esc(item.title) + '">\n' +
-'<defs>\n' +
-'<linearGradient id="' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
+    return head +
+'<defs><linearGradient id="' + uid + '" x1="0" y1="0" x2="0" y2="1">' +
 '<stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".55"/>' +
-'</linearGradient>\n' +
-'<clipPath id="' + uid + '-c"><rect width="320" height="180"/></clipPath>\n' +
-'</defs>\n' +
-'<rect width="320" height="180" fill="' + NAVY + '"/>\n' +
-'<g clip-path="url(#' + uid + '-c)"><g transform="translate(0,-6) scale(1.6)">' + artInner + '</g></g>\n' +
+'</linearGradient></defs>\n' +
 '<rect x="0" y="132" width="320" height="48" fill="url(#' + uid + ')"/>\n' +
 '<rect x="14" y="150" width="' + chipW + '" height="18" rx="9" fill="#000" fill-opacity=".5"/>\n' +
 '<text x="20" y="163" font-family="\'DM Mono\',monospace" font-size="9" fill="#fff" letter-spacing="1.6">' + label + '</text>\n' +
