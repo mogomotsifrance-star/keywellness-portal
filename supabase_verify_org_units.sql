@@ -84,6 +84,17 @@ from (
   union all select 17, 'org_financial_indicators is unit-scoped',
     (select case when pg_get_functiondef(to_regprocedure('org_financial_indicators(uuid)')) like '%hr_scoped_unit_ids%'
        then 'scoped' else 'NOT scoped' end), 'scoped'
+
+  -- ── Batch 3c: stress + rewards scoping ──
+  union all select 19, 'org_stress_summary is unit-scoped',
+    (select case when pg_get_functiondef(to_regprocedure('org_stress_summary(int)')) like '%hr_scoped_unit_ids%'
+       then 'scoped' else 'NOT scoped' end), 'scoped'
+  union all select 20, 'org_rewards is unit-scoped',
+    (select case when pg_get_functiondef(to_regprocedure('org_rewards(uuid,text)')) like '%hr_scoped_unit_ids%'
+       then 'scoped' else 'NOT scoped' end), 'scoped'
+  union all select 21, 'org_rewards_summary is unit-scoped',
+    (select case when pg_get_functiondef(to_regprocedure('org_rewards_summary(uuid,text)')) like '%hr_scoped_unit_ids%'
+       then 'scoped' else 'NOT scoped' end), 'scoped'
 ) checks
 order by seq;
 

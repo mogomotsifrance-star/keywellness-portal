@@ -1,0 +1,26 @@
+-- ============================================================
+-- ROLLBACK — Company Units, Batch 3c (unit-scoped stress + rewards)
+-- Reverses supabase_org_rewards_stress_scoped.sql.
+--
+-- These are CREATE OR REPLACE over pre-existing functions, so rollback =
+-- re-apply the confirmed-live base files (which restores the unscoped
+-- bodies). Run these three in the Supabase SQL Editor:
+--
+--   1. supabase_org_stress_summary.sql   -> org_stress_summary(int)
+--   2. supabase_org_rewards_v2.sql       -> org_rewards(uuid, text)
+--   3. supabase_rewards_reshape.sql      -> org_rewards_summary(uuid, text)
+--      (rewards_reshape also re-creates org_rewards; then re-apply
+--       supabase_org_rewards_v2.sql AGAIN so the v2 qualification flags win)
+--
+-- Correct order if fully reverting rewards: rewards_reshape.sql first, then
+-- supabase_org_rewards_v2.sql, so org_rewards ends on the v2 (live) body.
+--
+-- No new objects are created by Batch 3c, so there is nothing to DROP.
+-- ============================================================
+
+-- ── VERIFY (after re-applying the base files) ────────────────
+-- select proname, pg_get_functiondef(oid) like '%hr_scoped_unit_ids%' as scoped
+-- from pg_proc
+-- where proname in ('org_stress_summary','org_rewards','org_rewards_summary');
+--   -- all three -> scoped = false (unscoped bodies restored)
+-- ============================================================

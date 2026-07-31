@@ -3104,14 +3104,25 @@ distinct arity, so both coexist and v1 renderers are untouched.
   reports by design** (Botswana DPA re-identifiability). Small companies
   (Sesiro, Mmila) will legitimately show withheld data until they reach ≥5.
 
-### Known follow-on leak surfaces (NOT yet unit-scoped)
-`org_stress_summary`, `org_rewards`/`org_rewards_summary`/`org_reward_history`,
-and `set_org_headcount` still return **org-wide** data. **No leak today** —
-no unit-scoped manager exists yet, so these only matter once the first
-company-manager `hr_unit_scope` row is seeded. **Scope them (or gate company
-managers out of those panels) BEFORE creating any company-manager account.**
-Each needs its live source file confirmed first (several `org_overview`-style
-functions have multiple historical definitions).
+### Sibling scoping — Batch 3c (2026-07-31)
+`org_stress_summary`, `org_rewards`, and `org_rewards_summary` are now
+unit-scoped too (`supabase_org_rewards_stress_scoped.sql`; same per-caller
+`hr_scoped_unit_ids()` filter; rollback re-applies the base files). In the
+rewards summary, the org-level self-reported `reported_headcount` is withheld
+(null) for a unit-scoped caller since it has no unit attribution.
+
+### Still org-wide (remaining follow-on leak surfaces)
+`org_reward_history`, `record_reward_fulfilment`, and `set_org_headcount` are
+**not** unit-scoped. **No leak today** — no unit-scoped manager exists yet, so
+these only matter once the first company-manager `hr_unit_scope` row is
+seeded. Before creating any company-manager account, scope them (or gate
+company managers out of those actions):
+- `org_reward_history` (`supabase_reward_fulfilment.sql`) — historical
+  fulfilments list; add the `hr_scoped_unit_ids()` filter to its cohort.
+- `record_reward_fulfilment` — a **write**; add a check that the target
+  member's `org_unit_id` is within the caller's scope.
+- `set_org_headcount` — a **write** of an ORG-level figure; a company manager
+  should be blocked from it entirely (authz, not scoping).
 
 ### Data & scope notes
 - **Site granularity stored, not reported:** Jwaneng/Orapa/DCC live on
