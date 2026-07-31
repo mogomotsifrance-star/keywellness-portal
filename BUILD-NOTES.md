@@ -3041,3 +3041,88 @@ file opened via `file://` or any non-allowlisted host) and confirm it
 refuses to play there. Until step 3 is configured this check will
 correctly show the video CAN be embedded elsewhere — that's the known,
 accepted gap above, not a bug to chase.
+
+---
+
+## Company Units — Sedimosa sub-org structure (2026-07-30)
+
+Adds a company-unit layer **under** organisations so HR reporting is scoped
+per company inside a single-invite-code org (Debswana = the **Sedimosa**
+fund). Sedimosa keeps ONE invite code and ONE branded experience — no
+separate orgs per company. Batch 0 findings: `BATCH-0-COMPANY-UNITS-FINDINGS.md`.
+
+### What went to Supabase (author here → **applied by hand in the SQL Editor**)
+None of these are live until applied; they are behaviour-neutral to existing
+users/employers until an `hr_unit_scope` row with a non-null `unit_id` exists.
+Apply order:
+
+1. `supabase_org_units.sql` (Batch 1) — `org_units` + `hr_unit_scope` tables,
+   `profiles.org_unit_id`, RLS, `lock_org_unit_id` set-once trigger, the
+   11-unit Sedimosa seed, and the Tshenolo→Sedimosa/Mmila move. Rollback:
+   `migrations/rollback-org-units.sql` (written before apply).
+2. `supabase_org_units_hr_scope.sql` (Batch 3a) — `unit_descendants()`,
+   `hr_scoped_unit_ids()`, `hr_unit_in_scope()`, and `org_reports.unit_id`.
+3. `supabase_org_report_data_v4.sql` (Batch 3) — scope-aware
+   `_org_report_period_data` (4-arg; the 3-arg delegates to it with NULL →
+   org-wide unchanged), a **4-arg `org_report_data` overload** (scoped
+   report), `org_report_company_breakdown()` (fund-manager 8-company table),
+   and a unit-aware `publish_org_report()`.
+4. `supabase_org_overview_scoped.sql` (Batch 3b) — `org_overview()` +
+   `org_financial_indicators()` from `supabase_live_wellness.sql` with a
+   per-caller unit-scope filter.
+
+Rollback for 2–4: `migrations/rollback-org-units-batch3.sql`.
+
+### Frontend (all on `dev`)
+- `index.html` — onboarding company step (leaf-only drill-down; Debswana →
+  Jwaneng/Orapa/DCC), non-dismissable backfill modal (fires from all three
+  member-landing paths), read-only company on the profile. `org_unit_id` is
+  persisted with a **dedicated `profiles.update`** — NOT `saveUser()`, whose
+  column whitelist silently drops it (the #1 gotcha; see findings).
+- `admin.html` — report builder gains the per-company breakdown table
+  (suppressed rows shown as "Fewer than 5 enrolled members — data withheld
+  for privacy" + unassigned count) and passes `unit_id` through the
+  builder/publish flow.
+- `employer.html` — **no changes needed**: `org_overview()` & siblings scope
+  by the caller's identity, so a company manager auto-sees only their scope.
+
+### `org_report_data` versioning
+No v1 deprecation: the live 3-arg `org_report_data(uuid,date,date)` is kept
+byte-identical (org-wide). Unit scoping is an **additive 4-arg overload** —
+distinct arity, so both coexist and v1 renderers are untouched.
+
+### Manual follow-ups (deferred, by design)
+- **Seed `hr_unit_scope` via SQL** when the fund Wellness Manager / company
+  manager accounts are created (self-service HR invites remain deferred). A
+  company manager needs BOTH an `employers` row (email→Sedimosa, so they
+  route to `employer.html` and pass authz) AND an `hr_unit_scope` row with
+  their `unit_id`. Fund manager = `hr_unit_scope` row with `unit_id NULL`.
+- **Member company transfers are admin-only via SQL** until an admin UI
+  exists — the `lock_org_unit_id` trigger rejects end-user changes to a
+  non-null `org_unit_id`; `postgres`/`service_role` may transfer freely.
+- **Tell the client:** companies with **<5 enrolled members show suppressed
+  reports by design** (Botswana DPA re-identifiability). Small companies
+  (Sesiro, Mmila) will legitimately show withheld data until they reach ≥5.
+
+### Known follow-on leak surfaces (NOT yet unit-scoped)
+`org_stress_summary`, `org_rewards`/`org_rewards_summary`/`org_reward_history`,
+and `set_org_headcount` still return **org-wide** data. **No leak today** —
+no unit-scoped manager exists yet, so these only matter once the first
+company-manager `hr_unit_scope` row is seeded. **Scope them (or gate company
+managers out of those panels) BEFORE creating any company-manager account.**
+Each needs its live source file confirmed first (several `org_overview`-style
+functions have multiple historical definitions).
+
+### Data & scope notes
+- **Site granularity stored, not reported:** Jwaneng/Orapa/DCC live on
+  `profiles.org_unit_id`, but every HR report rolls Debswana up to ONE
+  combined figure. Revisit site-level reporting only if the client asks AND
+  cohort sizes support it.
+- **Programme activities** are org-level events (no unit attribution), so a
+  unit-scoped report returns them empty rather than mis-attributing/double-
+  counting them across company rows.
+- **HR-data invariant preserved:** still aggregates/band counts only — no
+  names, emails, or per-person financial direction in any HR-facing payload.
+- **Fund-manager per-company table currently lives in the admin report
+  builder.** Surfacing an equivalent table directly on `employer.html`'s
+  live dashboard (via `org_report_company_breakdown`) is a follow-on.
