@@ -1230,6 +1230,7 @@ async function createReport() {
 }
 
 let currentReportDataError = null; // distinguishes a real RPC failure from legitimate insufficient_cohort suppression
+let currentReportBreakdown = null; // org_report_company_breakdown() result (org-wide reports only)
 
 async function openReportBuilder(id) {
   reportsView = 'builder';
@@ -1248,16 +1249,28 @@ async function openReportBuilder(id) {
     return;
   }
   currentReportRow = row;
+  currentReportBreakdown = null;
   currentNarrative = Object.assign({ executive_summary:'', insights:'', progress_outcomes:'', challenges_risks:[], next_steps:'' }, row.narrative || {});
 
-  const { data: rpcData, error: rpcErr } = await sb.rpc('org_report_data', {
-    p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end,
-  });
+  // A report scoped to a unit (row.unit_id) uses the 4-arg overload; an
+  // org-wide report uses the 3-arg version and additionally pulls the
+  // per-company breakdown for the fund-manager table.
+  const rpcArgs = { p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end };
+  if (row.unit_id) rpcArgs.p_unit_id = row.unit_id;
+  const { data: rpcData, error: rpcErr } = await sb.rpc('org_report_data', rpcArgs);
   if (rpcErr) {
     console.error('org_report_data failed:', rpcErr);
     currentReportDataError = rpcErr;
   }
   currentReportData = rpcData || null;
+
+  if (!row.unit_id) {
+    const { data: bd, error: bdErr } = await sb.rpc('org_report_company_breakdown', {
+      p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end,
+    });
+    if (bdErr) console.warn('org_report_company_breakdown failed:', bdErr);
+    else currentReportBreakdown = bd || null;
+  }
 
   renderReportBuilder();
 }
@@ -1314,6 +1327,36 @@ function renderReportBuilder() {
   const coveragePct = sessions.attendance_confirmation_coverage_pct;
   const incomplete = coveragePct !== null && coveragePct !== undefined && coveragePct < 100;
 
+  // Per-company breakdown (fund-manager view). Org-wide reports only; each
+  // company is guarded independently, small ones withheld, unassigned noted.
+  const escC = s => String(s == null ? '' : s).replace(/[&<>"]/g, m => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+  const bd = currentReportBreakdown;
+  const companyBreakdownHtml = (bd && (bd.companies || []).length) ? `
+      <div class="chart-box">
+        <h4>Company Breakdown</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px">Company</th>
+            <th style="text-align:right;padding:6px 8px">Members</th>
+            <th style="text-align:right;padding:6px 8px">Participation</th>
+            <th style="text-align:right;padding:6px 8px">Attendance</th>
+            <th style="text-align:right;padding:6px 8px">Reach</th>
+          </tr></thead>
+          <tbody>
+            ${bd.companies.map(c => c.suppressed
+              ? `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px">${escC(c.name)}</td><td colspan="4" style="padding:6px 8px;color:var(--muted);font-style:italic">Fewer than 5 enrolled members — data withheld for privacy</td></tr>`
+              : `<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px 8px">${escC(c.name)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${c.n_employees ?? '—'}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${fmtRate(c.kpi_summary?.participation_rate)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${fmtRate(c.kpi_summary?.attendance_rate)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${c.kpi_summary?.total_reach ?? '—'}</td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="suppression-note">Each company is guarded independently — companies with fewer than 5 enrolled members show no figures.${bd.unassigned_members ? ` ${bd.unassigned_members} member(s) not yet assigned to a company are counted in the organisation totals above but in no company row.` : ''}</div>
+      </div>` : '';
+
   el.innerHTML = `
     <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button>
@@ -1340,6 +1383,8 @@ function renderReportBuilder() {
       ${prev ? `<div style="margin-top:-8px;margin-bottom:20px;font-size:12px">
         Sessions booked: ${RC.qoqBadge(RC.cellValue(sessions.total_booked), RC.cellValue(prev.sessions?.total_booked))}
       </div>` : ''}
+
+      ${companyBreakdownHtml}
 
       <div class="report-grid">
         <div class="chart-box"><h4>Engagement Funnel</h4><div class="chart-canvas-wrap"><canvas id="chart-funnel"></canvas></div></div>

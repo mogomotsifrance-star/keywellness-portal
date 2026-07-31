@@ -255,6 +255,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 /* ── Name Capture Modal ── */
 #name-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;align-items:center;justify-content:center;padding:20px}
 #name-modal.visible{display:flex}
+#company-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1002;align-items:center;justify-content:center;padding:20px}
+#company-modal.visible{display:flex}
 .welcome-modal-box{background:var(--white);border-radius:16px;padding:32px;max-width:640px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.4)}
 .welcome-modal-box h2{font-size:22px;font-weight:700;margin-bottom:6px}
 .welcome-modal-box p{font-size:14px;color:var(--muted);margin-bottom:20px}
@@ -449,6 +451,21 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     </div>
     <p id="nm-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none">⚠ Please enter your first name to continue.</p>
     <button class="btn btn-primary" style="width:100%;padding:12px" onclick="saveNameModal()">Save &amp; Continue →</button>
+  </div>
+</div>
+
+<!-- ══ COMPANY-SELECTION BACKFILL MODAL (non-dismissable) ══ -->
+<!-- Shown to pre-existing members of an org that has units but who have no
+     org_unit_id yet. New signups pick their company during onboarding, so
+     they never see this. Mandatory: no close control, no backdrop dismiss. -->
+<div id="company-modal">
+  <div class="welcome-modal-box" style="max-width:460px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
+    <h2 style="margin-bottom:6px">Which company are you with? 🏢</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Your company under the Sedimosa programme. This determines your wellness reports.</p>
+    <div id="cm-picker" style="margin-bottom:14px"></div>
+    <p id="cm-err" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></p>
+    <button id="cm-save" class="btn btn-primary" style="width:100%;padding:12px" disabled>Save &amp; Continue →</button>
   </div>
 </div>
 
@@ -1278,6 +1295,7 @@ async function confirmSession() {
   initProfileUI();
   loadNotifications();
   route();
+  maybePromptCompany();   // company backfill after password re-confirm
 }
 
 async function switchAccount() {
@@ -1845,9 +1863,9 @@ function escHtml(str) {
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[] };
+  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], org_unit_id:null };
 
-  const steps = [
+  let steps = [
     { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
     { q:'How old are you?', hint:'Your exact age helps us calculate accurate retirement projections and tailor advice to your life stage.', key:'age', type:'age' },
     { q:'What is your employment status?', hint:'We will personalise your plan.', key:'employment', type:'single',
@@ -1894,7 +1912,7 @@ VIEWS['onboarding'] = function () {
               </div>
             </div>
             <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ First name is required.</p>
-          ` : `<div class="choice-grid" id="cg"></div>`}
+          ` : s.type==='company' ? `<div id="cg-company"></div><p id="onb-company-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your company to continue.</p>` : `<div class="choice-grid" id="cg"></div>`}
           <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
             ${step>0?`<button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>`:'<span></span>'}
             <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${isNames?'':' disabled'}>
@@ -1906,6 +1924,17 @@ VIEWS['onboarding'] = function () {
     if (s.type === 'age') {
       document.getElementById('w-next').disabled = !profile.age;
       setTimeout(()=>document.getElementById('onb-age')?.focus(), 50);
+    } else if (s.type === 'company') {
+      kwRenderUnitPicker(document.getElementById('cg-company'), {
+        units: s.units,
+        selectedId: profile.org_unit_id,
+        onSelect: id => {
+          profile.org_unit_id = id;
+          document.getElementById('w-next').disabled = !id;
+          const e = document.getElementById('onb-company-err'); if (e) e.style.display = 'none';
+        }
+      });
+      document.getElementById('w-next').disabled = !profile.org_unit_id;
     } else if (!isNames) {
       const cg = document.getElementById('cg');
       const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
@@ -1941,15 +1970,44 @@ VIEWS['onboarding'] = function () {
       const ageVal = parseInt(document.getElementById('onb-age')?.value || '');
       if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; return; }
       profile.age = ageVal;
+    } else if (s.type === 'company') {
+      if (!profile.org_unit_id) { const e = document.getElementById('onb-company-err'); if (e) e.style.display = ''; return; }
     }
     if (step < steps.length-1) { step++; render(); }
     else { finishOnboarding(); }
   };
   window.wPrev = function () { if (step>0) { step--; render(); } };
 
+  // Insert the mandatory company step after "names" when the member's org has
+  // active units. Fetched before first paint; Test Co (no units) is untouched.
+  el.innerHTML = '<div class="wizard"><div class="card" style="padding:32px;text-align:center;color:var(--muted);font-size:14px">Loading…</div></div>';
+  (async () => {
+    const { units } = await kwFetchOrgUnits();
+    if (units && units.length) {
+      steps.splice(1, 0, {
+        q:'Which company are you with?',
+        hint:'Your company under the Sedimosa programme. This determines your wellness reports.',
+        key:'org_unit_id', type:'company', units
+      });
+    }
+    render();
+  })();
+
   async function finishOnboarding() {
     state.user = { ...profile, id: currentUser.id, onboarded: true, joined_at: new Date().toISOString() };
-    await saveUser();
+    const savedOk = await saveUser();
+    if (savedOk === false) { showToast('⚠️ Could not save your details. Please try again.'); return; }
+    // org_unit_id is NOT in saveUser()'s column whitelist — persist it with a
+    // dedicated update, and do NOT advance if it fails (no silent failure).
+    if (profile.org_unit_id) {
+      const { error: _unitErr } = await sb.from('profiles').update({ org_unit_id: profile.org_unit_id }).eq('id', currentUser.id);
+      if (_unitErr) {
+        console.error('onboarding org_unit_id save failed:', _unitErr);
+        showToast('⚠️ Could not save your company. Please try again.');
+        return;
+      }
+      state.user.org_unit_id = profile.org_unit_id;
+    }
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
       const _lp = safeParseLS('kw_profile', {});
@@ -1974,8 +2032,6 @@ VIEWS['onboarding'] = function () {
       go('dashboard');
     }
   }
-
-  render();
 };
 
 // ══════════════════════════════════════════════════
@@ -2978,6 +3034,128 @@ window.saveNameModal = function () {
   initProfileUI();
   document.getElementById('name-modal').classList.remove('visible');
 };
+
+// ══════════════════════════════════════════════════
+//  COMPANY UNITS — Sedimosa sub-org picker + backfill
+//  Members of an org that has active org_units must pick a LEAF company.
+//  Orgs without units (e.g. Test Co) return [] and every path below skips.
+//  Shared by the onboarding step and the backfill modal.
+// ══════════════════════════════════════════════════
+let _kwUnitsCache = null;   // array once fetched (RLS-scoped to the member's own org)
+
+// Returns { units:[...] } on success (units:[] = org has no units → skip the
+// whole feature), or { units:null, error } on a genuine fetch failure so
+// callers never mistake an error for "no units".
+async function kwFetchOrgUnits(force) {
+  if (_kwUnitsCache && !force) return { units: _kwUnitsCache };
+  try {
+    const { data, error } = await sb.from('org_units')
+      .select('id,name,parent_unit_id,sort_order')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (error) { console.warn('[KW] org_units fetch failed:', error); return { units: null, error }; }
+    _kwUnitsCache = data || [];
+    return { units: _kwUnitsCache };
+  } catch (e) { console.warn('[KW] org_units fetch threw:', e); return { units: null, error: e }; }
+}
+
+// Resolve a unit id to { company, site } for read-only display.
+// A leaf under a parent → company = parent name, site = leaf name.
+// A top-level leaf → company = leaf name, site = null.
+function kwUnitLabel(unitId, units) {
+  const list = units || _kwUnitsCache || [];
+  const u = list.find(x => x.id === unitId);
+  if (!u) return null;
+  if (u.parent_unit_id) {
+    const parent = list.find(x => x.id === u.parent_unit_id);
+    return { company: parent ? parent.name : u.name, site: u.name };
+  }
+  return { company: u.name, site: null };
+}
+
+// Stateful drill-down picker rendered into `container`.
+// opts: { units, selectedId, onSelect(unitId|null) }. onSelect fires with a
+// leaf id when a company/site is chosen, or null when the user drills into a
+// parent or steps back (so the caller can disable its Next/Save button).
+function kwRenderUnitPicker(container, opts) {
+  const units = opts.units || [];
+  const childrenOf  = id => units.filter(u => (u.parent_unit_id || null) === id);
+  const hasChildren = id => units.some(u => u.parent_unit_id === id);
+  let drill = null;   // the parent node we've drilled into, or null at top level
+
+  function paint() {
+    const nodes = drill ? childrenOf(drill.id) : childrenOf(null);
+    container.innerHTML = `
+      ${drill ? `<button type="button" class="btn btn-outline btn-sm" data-role="unit-back" style="margin-bottom:12px">← Back to companies</button>
+                 <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${escHtml(drill.name)} — choose your site</div>` : ''}
+      <div class="choice-grid">
+        ${nodes.map(n => {
+          const leaf = !hasChildren(n.id);
+          const sel  = opts.selectedId && opts.selectedId === n.id;
+          return `<button type="button" class="choice-btn${sel?' selected':''}" data-id="${n.id}" data-leaf="${leaf?1:0}">
+            <span class="ci">${leaf?'🏢':'📂'}</span>${escHtml(n.name)}${leaf?'':' <span style="color:var(--muted);font-weight:500">›</span>'}
+          </button>`;
+        }).join('')}
+      </div>`;
+    const back = container.querySelector('[data-role="unit-back"]');
+    if (back) back.onclick = () => { drill = null; opts.selectedId = null; paint(); opts.onSelect(null); };
+    container.querySelectorAll('.choice-btn').forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-id');
+        if (btn.getAttribute('data-leaf') === '1') {
+          opts.selectedId = id; paint(); opts.onSelect(id);
+        } else {
+          drill = units.find(u => u.id === id) || null;
+          opts.selectedId = null; paint(); opts.onSelect(null);
+        }
+      };
+    });
+  }
+  paint();
+}
+
+// Non-dismissable backfill modal for a pre-existing member with no unit yet.
+function showCompanyModal() {
+  const modal   = document.getElementById('company-modal');
+  const err     = document.getElementById('cm-err');
+  const saveBtn = document.getElementById('cm-save');
+  let chosen = null;
+  err.style.display = 'none';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Save & Continue →';
+  kwRenderUnitPicker(document.getElementById('cm-picker'), {
+    units: _kwUnitsCache || [],
+    onSelect: id => { chosen = id; saveBtn.disabled = !id; err.style.display = 'none'; }
+  });
+  saveBtn.onclick = async () => {
+    if (!chosen) return;
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    const { error } = await sb.from('profiles').update({ org_unit_id: chosen }).eq('id', currentUser.id);
+    if (error) {
+      // No silent failure — keep the modal open and surface the error.
+      console.error('company backfill save failed:', error);
+      err.textContent = '⚠ We could not save your company. Please check your connection and try again.';
+      err.style.display = '';
+      saveBtn.disabled = false; saveBtn.textContent = 'Save & Continue →';
+      return;
+    }
+    if (state.user) state.user.org_unit_id = chosen;
+    modal.classList.remove('visible');
+    showToast('✓ Company saved');
+  };
+  modal.classList.add('visible');
+}
+
+// Prompt the backfill modal only when the member's org actually has units and
+// they haven't chosen one. Idempotent and safe to call on every member landing.
+async function maybePromptCompany() {
+  if (!state.user) return;
+  if (state.user.org_unit_id) return;                 // already set (e.g. Tshenolo) → no modal
+  if (document.getElementById('company-modal').classList.contains('visible')) return;
+  const { units } = await kwFetchOrgUnits();
+  if (!units || !units.length) return;                // Test Co (no units) or transient fetch error → skip
+  showCompanyModal();
+}
 
 // Record a read article (by title), persist to Supabase, and refresh learning badge.
 async function markArticleRead(title) {
@@ -5567,6 +5745,12 @@ VIEWS['profile'] = function () {
   const displayName = _dn;
   const phone = state.user?.phone || prof.phone || '';
   const avatarB64 = prof.avatarB64 || '';
+  // Read-only company (Sedimosa sub-org). Hidden for members with no unit
+  // (e.g. Test Co). If units aren't cached yet, fetch and re-render.
+  const _unit = state.user?.org_unit_id ? kwUnitLabel(state.user.org_unit_id) : null;
+  if (state.user?.org_unit_id && !_kwUnitsCache) {
+    kwFetchOrgUnits().then(() => { if ((location.hash.replace('#','')||'') === 'profile') VIEWS['profile'](); });
+  }
 
   el.innerHTML = `
     <div class="card" style="max-width:480px;margin:0 auto">
@@ -5605,6 +5789,13 @@ VIEWS['profile'] = function () {
         <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Email</label>
         <input type="email" class="input" value="${currentUser?.email||''}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
       </div>
+
+      ${state.user?.org_unit_id ? `
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Company</label>
+        <input type="text" value="${_unit ? escHtml(_unit.site ? _unit.company+' — '+_unit.site : _unit.company) : 'Loading…'}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Contact your administrator to change your company.</div>
+      </div>` : ''}
 
       <div class="field" style="margin-bottom:24px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Phone Number</label>
@@ -5908,6 +6099,8 @@ function registerAuthListener() {
         } else {
           setTimeout(showConsentModal, 800);
         }
+        // Company backfill for pre-existing members of a unit-enabled org.
+        maybePromptCompany();
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       // User arrived via the reset-link email — show set-new-password form
@@ -5971,6 +6164,7 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
+      maybePromptCompany();   // company backfill for returning members with no unit yet
     } else {
       // External visit or new tab — require password to prove identity.
       document.getElementById('sc-email').textContent = currentUser.email || '';
