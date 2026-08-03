@@ -491,6 +491,54 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 .more-item:last-child{border-bottom:none}
 .more-item:active{background:var(--cream-dark)}
 .more-item .m-ic{font-size:20px}
+
+/* ── Ask Key (member AI chat) ─────────────────────────────────────
+   Locked Decision 13: green #387838 primary; yellow #E8C018 accent ONLY
+   (never text or button fill). Scoped vars so the global palette is
+   untouched. FAB below bottom-nav (108); panel below notif/modals. */
+#ak-root{--ak-green:#387838;--ak-green-dark:#2c5f2c;--ak-yellow:#E8C018}
+#ak-fab{display:none;position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;background:var(--ak-green);color:#fff;border:none;cursor:pointer;z-index:107;box-shadow:0 6px 20px rgba(56,120,56,.42);align-items:center;justify-content:center;font-size:26px;transition:transform .18s ease,box-shadow .18s ease}
+#ak-fab:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 10px 26px rgba(56,120,56,.5)}
+#ak-fab.show{display:flex}
+#ak-fab .ak-fab-dot{position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:var(--ak-yellow);border:2px solid #fff}
+#ak-panel{display:none;position:fixed;right:22px;bottom:22px;width:380px;max-width:calc(100vw - 32px);height:min(600px,calc(100vh - 44px));background:var(--white);border-radius:16px;box-shadow:0 18px 60px rgba(26,39,68,.28);z-index:112;flex-direction:column;overflow:hidden;border:1px solid var(--border)}
+#ak-panel.show{display:flex}
+.ak-head{background:var(--ak-green);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ak-head .ak-title{font-weight:800;font-size:16px;line-height:1.1}
+.ak-head .ak-sub{font-size:11px;opacity:.85;font-weight:500}
+.ak-head .ak-close{margin-left:auto;background:rgba(255,255,255,.16);border:none;color:#fff;width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:17px;line-height:1}
+.ak-head .ak-close:hover{background:rgba(255,255,255,.28)}
+.ak-disclaimer{background:#f2f7f0;border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;line-height:1.45;padding:9px 14px;flex-shrink:0}
+.ak-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;background:var(--cream)}
+.ak-row{display:flex;max-width:100%}
+.ak-row.user{justify-content:flex-end}
+.ak-bubble{max-width:82%;padding:10px 13px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word}
+.ak-row.user .ak-bubble{background:var(--ak-green);color:#fff;border-bottom-right-radius:4px}
+.ak-row.bot .ak-bubble{background:var(--white);color:var(--text);border:1px solid var(--border);border-bottom-left-radius:4px}
+.ak-empty{text-align:center;color:var(--muted);padding:14px 8px;margin:auto 0}
+.ak-empty .ak-hi{font-size:34px;margin-bottom:8px}
+.ak-empty h4{color:var(--navy);font-size:15px;margin:0 0 6px}
+.ak-empty p{font-size:12.5px;line-height:1.55;margin:0 0 14px}
+.ak-starter{display:block;width:100%;text-align:left;background:var(--white);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:13px;color:var(--navy);cursor:pointer;font-weight:600}
+.ak-starter:hover{border-color:var(--ak-green);background:#f2f7f0}
+.ak-note{font-size:11px;color:var(--muted);margin-top:10px}
+.ak-typing{display:flex;gap:4px;padding:12px 13px}
+.ak-typing span{width:7px;height:7px;border-radius:50%;background:var(--muted);opacity:.5;animation:ak-bounce 1.2s infinite}
+.ak-typing span:nth-child(2){animation-delay:.2s}.ak-typing span:nth-child(3){animation-delay:.4s}
+@keyframes ak-bounce{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-5px);opacity:.9}}
+.ak-alert{margin:2px 0;padding:11px 13px;border-radius:12px;font-size:13px;line-height:1.5}
+.ak-alert.cap{background:#fffbeb;border:1px solid #f2e2a8;color:#8a6d1a}
+.ak-alert.err{background:#fdecea;border:1px solid #f5c6c0;color:var(--red)}
+.ak-alert .ak-retry{margin-top:8px;background:var(--ak-green);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.ak-input{display:flex;gap:8px;padding:10px;border-top:1px solid var(--border);background:var(--white);flex-shrink:0}
+.ak-input textarea{flex:1;resize:none;border:1px solid var(--border);border-radius:10px;padding:9px 11px;font-family:inherit;font-size:14px;max-height:90px;line-height:1.4}
+.ak-input textarea:focus{outline:none;border-color:var(--ak-green)}
+.ak-send{width:40px;height:40px;flex-shrink:0;border-radius:10px;background:var(--ak-green);color:#fff;border:none;cursor:pointer;font-size:17px;align-self:flex-end}
+.ak-send:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:768px){
+  #ak-fab{right:16px;bottom:calc(var(--bottom-nav-h) + 16px)}
+  #ak-panel{right:0;left:0;bottom:0;top:0;width:100vw;max-width:100vw;height:100dvh;border-radius:0;border:none}
+}
 </style>
 </head>
 <body>
@@ -7115,6 +7163,275 @@ init();
 setInterval(() => {
   if (currentUser && document.visibilityState === 'visible') touchSessionTrust(currentUser.id);
 }, 60000);
+</script>
+
+<!-- ── Ask Key (member AI chat) ──────────────────────────────────── -->
+<div id="ak-root">
+  <button id="ak-fab" aria-label="Open Ask Key chat" title="Ask Key">💬<span class="ak-fab-dot"></span></button>
+  <section id="ak-panel" role="dialog" aria-label="Ask Key chat" aria-modal="false">
+    <div class="ak-head">
+      <div>
+        <div class="ak-title">Ask Key</div>
+        <div class="ak-sub">Financial wellness assistant</div>
+      </div>
+      <button class="ak-close" id="ak-close" aria-label="Close">✕</button>
+    </div>
+    <div class="ak-disclaimer">Ask Key is an AI assistant. It can make mistakes and does not give personal financial advice. For guidance on your own situation, book a Key Wellness coach.</div>
+    <div class="ak-msgs" id="ak-msgs"></div>
+    <div class="ak-input">
+      <textarea id="ak-text" rows="1" placeholder="Ask about budgeting, saving, debt…" maxlength="2000"></textarea>
+      <button class="ak-send" id="ak-send" aria-label="Send" disabled>➤</button>
+    </div>
+  </section>
+</div>
+<script>
+// ── Ask Key widget (frontend, dev only until launch gates clear) ────
+// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES): AI_CHAT_ENABLED must be
+// flipped to false before this merges to `main`, and stay false there until
+// (1) the privacy notice discloses AI chat processing + Anthropic as a
+// processor, and (2) Anthropic is on the DPA foreign-processor register.
+// The Edge Function may be deployed early; it is inert until called.
+(function () {
+  const AI_CHAT_ENABLED = true;   // true on dev; see launch gate above.
+
+  const FN_URL = SUPABASE_URL + '/functions/v1/ask-claude';
+  const STARTERS = [
+    'How do I start an emergency fund?',
+    'What does the 50/30/20 rule mean for my salary?',
+    'How do I deal with debt stress?',
+  ];
+
+  const $fab = document.getElementById('ak-fab');
+  const $panel = document.getElementById('ak-panel');
+  const $msgs = document.getElementById('ak-msgs');
+  const $text = document.getElementById('ak-text');
+  const $send = document.getElementById('ak-send');
+
+  let history = [];        // [{role:'user'|'assistant', content}] — session memory only
+  let pending = null;      // live assistant text while streaming (string) or null
+  let typing = false;      // true between send and first token
+  let alert = null;        // {kind:'cap'|'err', msg} or null
+  let busy = false;
+
+  // Dash sanitiser (Locked Decision 9, client half of the double enforcement):
+  // strip em dash, en dash, and double hyphen from anything rendered.
+  function dedash(s) {
+    return String(s)
+      .replace(/\s*—\s*/g, ', ')   // em dash (with any surrounding spaces)
+      .replace(/(\d)\s*–\s*(\d)/g, '$1-$2')  // en dash between numbers = range -> hyphen
+      .replace(/\s*–\s*/g, ', ')   // en dash elsewhere -> comma
+      .replace(/\s*--\s*/g, ', ')  // double hyphen
+      .replace(/ {2,}/g, ' ');     // tidy any doubled spaces left behind
+  }
+
+  function isMember() {
+    return !!currentUser && !window._isAdmin && !window._employerOrgId;
+  }
+
+  function syncFab() {
+    const show = AI_CHAT_ENABLED && isMember();
+    $fab.classList.toggle('show', show);
+    if (!show) closePanel();
+  }
+  window.kwAkSync = syncFab;
+
+  function bubble(role, content) {
+    const row = document.createElement('div');
+    row.className = 'ak-row ' + (role === 'user' ? 'user' : 'bot');
+    const b = document.createElement('div');
+    b.className = 'ak-bubble';
+    b.textContent = content;          // textContent = no HTML injection
+    row.appendChild(b);
+    return row;
+  }
+
+  function render() {
+    $msgs.innerHTML = '';
+    if (!history.length && !pending && !typing && !alert) {
+      const e = document.createElement('div');
+      e.className = 'ak-empty';
+      e.innerHTML = '<div class="ak-hi">👋</div><h4>Hi, I\'m Ask Key</h4>' +
+        '<p>Your financial wellness assistant. Ask me anything about money, saving, or wellbeing.</p>';
+      STARTERS.forEach(function (q) {
+        const s = document.createElement('button');
+        s.className = 'ak-starter';
+        s.textContent = q;
+        s.onclick = function () { if (!busy) { $text.value = q; send(); } };
+        e.appendChild(s);
+      });
+      const note = document.createElement('div');
+      note.className = 'ak-note';
+      note.textContent = 'Chats are not saved when you leave.';
+      e.appendChild(note);
+      $msgs.appendChild(e);
+      return;
+    }
+    history.forEach(function (m) { $msgs.appendChild(bubble(m.role, m.content)); });
+    if (typing) {
+      const row = document.createElement('div');
+      row.className = 'ak-row bot';
+      row.innerHTML = '<div class="ak-bubble"><div class="ak-typing"><span></span><span></span><span></span></div></div>';
+      $msgs.appendChild(row);
+    } else if (pending != null) {
+      $msgs.appendChild(bubble('assistant', pending));
+    }
+    if (alert) {
+      const a = document.createElement('div');
+      a.className = 'ak-alert ' + (alert.kind === 'cap' ? 'cap' : 'err');
+      a.textContent = alert.msg;
+      if (alert.kind === 'err') {
+        const r = document.createElement('button');
+        r.className = 'ak-retry';
+        r.textContent = 'Try again';
+        r.onclick = retry;
+        a.appendChild(document.createElement('br'));
+        a.appendChild(r);
+      }
+      $msgs.appendChild(a);
+    }
+    $msgs.scrollTop = $msgs.scrollHeight;
+  }
+
+  function openPanel() {
+    if (!isMember()) return;
+    $panel.classList.add('show');
+    render();
+    setTimeout(function () { $text.focus(); }, 60);
+  }
+  function closePanel() { $panel.classList.remove('show'); }
+
+  let lastUserMsg = null;
+  function retry() {
+    if (busy || !lastUserMsg) return;
+    alert = null;
+    // lastUserMsg is still the tail of history; just re-run the call.
+    stream();
+  }
+
+  async function send() {
+    const txt = $text.value.trim();
+    if (!txt || busy) return;
+    $text.value = '';
+    $text.style.height = 'auto';
+    $send.disabled = true;
+    alert = null;
+    history.push({ role: 'user', content: txt });
+    lastUserMsg = txt;
+    await stream();
+  }
+
+  async function stream() {
+    busy = true;
+    typing = true;
+    pending = null;
+    render();
+
+    let token = null;
+    try {
+      const { data } = await sb.auth.getSession();
+      token = data && data.session ? data.session.access_token : null;
+    } catch (_) {}
+    if (!token) {
+      typing = false; busy = false;
+      alert = { kind: 'err', msg: 'Please sign in again to use Ask Key.' };
+      render(); return;
+    }
+
+    let resp;
+    try {
+      resp = await fetch(FN_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'apikey': SUPABASE_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages: history.slice(-8) }),
+      });
+    } catch (_) {
+      typing = false; busy = false;
+      alert = { kind: 'err', msg: 'Network problem reaching Ask Key. Please try again.' };
+      render(); return;
+    }
+
+    // JSON responses = capped or honest error; event-stream = the answer.
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') >= 0) {
+      typing = false; busy = false;
+      let j = {};
+      try { j = await resp.json(); } catch (_) {}
+      if (j.capped) {
+        alert = { kind: 'cap', msg: "You have reached today's chat limit. It resets tomorrow. For anything urgent, book a coach." };
+      } else {
+        alert = { kind: 'err', msg: j.message || 'Ask Key is unavailable right now. Please try again shortly.' };
+      }
+      render(); return;
+    }
+
+    // Stream the Anthropic SSE, extracting text deltas.
+    let raw = '';
+    try {
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line.indexOf('data:') !== 0) continue;
+          const p = line.slice(5).trim();
+          if (!p || p === '[DONE]') continue;
+          let ev;
+          try { ev = JSON.parse(p); } catch (_) { continue; }
+          if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') {
+            raw += ev.delta.text;
+            typing = false;
+            pending = dedash(raw);   // sanitise the accumulated text each render
+            render();
+          } else if (ev.type === 'error') {
+            throw new Error('stream error');
+          }
+        }
+      }
+    } catch (_) {
+      typing = false; busy = false; pending = null;
+      alert = { kind: 'err', msg: 'The answer was interrupted. Please try again.' };
+      render(); return;
+    }
+
+    typing = false;
+    const finalText = dedash(raw).trim();
+    pending = null;
+    if (finalText) history.push({ role: 'assistant', content: finalText });
+    else alert = { kind: 'err', msg: 'Ask Key did not return an answer. Please try again.' };
+    busy = false;
+    render();
+  }
+
+  // ── wiring ──
+  $fab.addEventListener('click', function () {
+    if ($panel.classList.contains('show')) closePanel(); else openPanel();
+  });
+  document.getElementById('ak-close').addEventListener('click', closePanel);
+  $text.addEventListener('input', function () {
+    $send.disabled = !$text.value.trim() || busy;
+    $text.style.height = 'auto';
+    $text.style.height = Math.min($text.scrollHeight, 90) + 'px';
+  });
+  $text.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+  $send.addEventListener('click', send);
+
+  // Show/hide with auth. Admins are redirected to admin.html, but gate anyway.
+  try { sb.auth.onAuthStateChange(function () { setTimeout(syncFab, 0); }); } catch (_) {}
+  window.addEventListener('hashchange', syncFab);   // re-check once staff flags resolve
+  syncFab();
+})();
 </script>
 </body>
 </html>

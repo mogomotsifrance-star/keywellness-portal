@@ -3830,3 +3830,107 @@ treat the embedded figures as potentially stale and flag rather than silently ed
 - No yellow text or yellow-filled buttons in the new UI.
 - Grep of the three bodies + array: **zero** em dashes, en dashes, or double hyphens.
 - Confidence metric inputs and value unchanged.
+
+---
+
+# Ask Key — Member AI Chat (Claude via Edge Function)
+
+Member-facing financial-wellness assistant, powered by the Anthropic Messages API
+through the `ask-claude` Supabase Edge Function. Member surface only; the employer/HR
+query surface is a SEPARATE future workstream and must never be bolted onto this
+function. Built to the locked spec (Batches 0–4).
+
+## Files touched / added
+
+- `BATCH-0-ASK-CLAUDE-FINDINGS.md` — read-only discovery + GO decision.
+- `supabase_ai_chat_usage.sql` — Batch 1 forward migration (table + index + RLS).
+- `migrations/rollback-ask-claude-usage.sql` — rollback, written first.
+- `supabase/functions/ask-claude/index.ts` — the Edge Function.
+- `supabase/functions/ask-claude/corpus.ts` — AUTO-GENERATED article corpus (~8.7k tokens).
+- `supabase/functions/ask-claude/build-corpus.mjs` — re-runnable corpus generator.
+- `index.html` — FAB + chat panel markup, scoped CSS, and the Ask Key widget script
+  (Batch 3). `AI_CHAT_ENABLED = true` on `dev`.
+
+## Manual steps (NOT in git — do these in the dashboards)
+
+1. **Set the Anthropic secret** (Supabase → Project → Edge Functions → Secrets):
+   `ANTHROPIC_API_KEY = sk-ant-...`  — never commit it, never put it in frontend code.
+2. **Set a monthly spend cap** in the Anthropic console as the hard financial backstop
+   (the app-side caps are guardrails, not a billing limit).
+3. **Apply the migration** (Supabase SQL Editor): run `supabase_ai_chat_usage.sql`,
+   then its embedded verification checklist. PRODUCTION-LIVE on apply (shared project).
+4. **Deploy the function**: `supabase functions deploy ask-claude`
+   (PRODUCTION-LIVE on deploy, but inert until the frontend calls it). Record the deploy
+   timestamp + version here after deploying.
+
+Status at handoff: migration = NOT YET APPLIED; function = NOT YET DEPLOYED;
+`ANTHROPIC_API_KEY` = assumed NOT SET. All three are the operator's manual steps above.
+
+## LAUNCH BLOCKERS — do NOT enable on `main` until BOTH are done
+
+- [ ] **Privacy notice updated** to disclose: AI chat processing; **Anthropic as a
+      processor**; that an **identifier-stripped** wellness context is sent to generate
+      responses; and that **chat content is not stored** by Key Wellness in v1.
+- [ ] **Anthropic added to the DPA foreign-processor register.**
+
+Until both clear, `AI_CHAT_ENABLED` must be `false` on `main`. It is `true` on `dev`.
+(The Edge Function + migration may go live early; the feature stays invisible while the
+frontend flag is off.)
+
+## Privacy / safety properties (as built)
+
+- **No tools** in the Anthropic request: the model can only talk, it cannot query anything.
+- **Snapshot is server-built** and identifier-stripped: wellness band + dimension scores,
+  emergency-fund months, budgeted budget headline, will status, org display name. It
+  NEVER contains name, email, phone, user id, department, gender, or free text. The client
+  cannot inject it. (Budget line is BUDGETED figures only — "actual" spend is
+  localStorage-only in `expense_tracker`, so it is intentionally out of scope.)
+- **No transcript persistence (v1):** history lives in client memory for the session only;
+  the client sends the last ≤8 turns per request; the server stores COUNTS + token tallies
+  in `ai_chat_usage`, never content. `ai_chat_usage` has RLS on with zero client policies
+  (service-role only).
+- **Caps:** daily 20/user (Africa/Gaborone day boundary) and burst 5/user/rolling-minute,
+  both server-enforced; cap → friendly in-widget message, HTTP 200 `{capped:true}`.
+- **Double dash enforcement:** system prompt forbids em/en/double-hyphen AND the client
+  sanitiser strips them from every rendered chunk (verified end-to-end).
+- **Honest failure states:** distinct cap, error+retry, and network states; never a faked
+  answer.
+- **DEBUG_SNAPSHOT** in the function is `false` (the one-time snapshot-inspection aid must
+  stay off in production).
+
+## Tuning knobs (config constants at the top of index.ts)
+
+- `MODEL = "claude-haiku-4-5"` — upgrading is a one-line change.
+- `MAX_TOKENS = 1024`.
+- `DAILY_CAP = 20`, `BURST_CAP = 5` — STARTING values; review against `ai_chat_usage`
+  data after the first month.
+- `HISTORY_TOKEN_BUDGET = 4000` — history truncated oldest-first to this.
+
+## Known v1 limits / future items
+
+- No transcript persistence (opt-in history is a future decision with its own DPA
+  implications).
+- Corpus is a BUILD-TIME snapshot of the Learn articles: re-run
+  `node supabase/functions/ask-claude/build-corpus.mjs` and re-deploy when articles change
+  materially.
+- Setswana quality to be reviewed with real usage.
+- Admin usage/cost dashboard (no admin read policy on `ai_chat_usage` yet).
+- The employer/HR query surface is a SEPARATE future prompt requiring the RPC allow-list
+  governance design; it must never be added to `ask-claude`.
+
+## Verification (this build, `dev`, static server + stubbed transport)
+
+- `index.html` loads with **no console errors**; widget JS + generator pass `node --check`.
+- FAB gating: visible for member; **hidden** for admin, HR (`_employerOrgId`), and
+  logged-out.
+- Empty state renders the three starter questions + "Chats are not saved when you leave."
+- Streaming path (real SSE parser, stubbed fetch): multi-chunk `text_delta` accumulation
+  renders progressively; `message_stop` ends cleanly.
+- **Dash sanitiser** end-to-end: em → comma, en(range) → hyphen (`3-6`), en(other) → comma,
+  double-hyphen → comma; no doubled spaces; zero dash forms remain.
+- Cap state and error state render correct copy; **retry** re-sends, clears the error, and
+  streams a successful answer.
+- Still PENDING (needs deploy + secret + migration): live grounded answer, cache-read
+  metrics from the 2nd call, real 401 on forged JWT, real 21st/6th-in-a-minute cap trip,
+  usage-row inspection, and the DEBUG_SNAPSHOT identifier audit — run these from the
+  Tshenolo test account once the function is deployed.

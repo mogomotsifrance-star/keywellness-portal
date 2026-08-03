@@ -1,0 +1,21 @@
+-- ============================================================
+-- ROLLBACK — Ask Key (ai_chat_usage) — Batch 1
+-- Written BEFORE the forward migration, per project rule.
+--
+-- Forward file this reverses:
+--   supabase_ai_chat_usage.sql
+--
+-- Safe against a partially-applied or never-applied state
+-- (drop ... if exists). The index is owned by the table and is
+-- dropped with it. Dropping this table discards only per-request
+-- USAGE COUNTS (token tallies for cost monitoring) — there is NO
+-- message content anywhere in it, so the loss is harmless.
+--
+-- WARNING: dev and main share ONE Supabase project — applying this
+-- is production-live immediately. This rollback removes the daily-cap
+-- and burst-limit backing store, so the ask-claude function will no
+-- longer be able to enforce caps: only run it together with taking
+-- the function offline (or the function will error on its usage reads).
+-- ============================================================
+
+drop table if exists public.ai_chat_usage;
