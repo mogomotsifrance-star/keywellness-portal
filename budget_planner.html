@@ -82,6 +82,10 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .item-row.income-row{grid-template-columns:1fr 160px 32px;}
 .item-row-header{display:grid;grid-template-columns:1fr 130px 130px 32px;gap:8px;margin-bottom:6px;}
 .item-row-header.income-header{grid-template-columns:1fr 160px 32px;}
+/* Budget-vs-actual rows: Category | Budgeted | Actual | Variance | del */
+.item-row.bva-row{grid-template-columns:1fr 108px 108px 96px 32px;}
+.item-row-header.bva-header{grid-template-columns:1fr 108px 108px 96px 32px;}
+.bva-var{display:flex;align-items:center;justify-content:flex-end;padding-right:2px;}
 .col-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
 .del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
 .del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
@@ -189,6 +193,8 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 @media(max-width:560px){
   .item-row{grid-template-columns:1fr 110px 110px 28px;}
   .item-row.income-row{grid-template-columns:1fr 130px 28px;}
+  .item-row.bva-row{grid-template-columns:1fr 70px 70px 60px 24px;gap:6px;}
+  .item-row-header.bva-header{grid-template-columns:1fr 70px 70px 60px 24px;gap:6px;}
   .vt-btn{padding:8px 16px;}
 }
 </style>
@@ -441,6 +447,7 @@ const EXPENSE_GROUPS = [
       {id:'transport',  name:'Transport'},
       {id:'health',     name:'Health & Medical'},
       {id:'childcare',  name:'Child / Education'},
+      {id:'helper',     name:'Helper'},
       {id:'insurance',  name:'Insurance'},
       {id:'debt_min',   name:'Minimum Debt Payments'},
     ]
@@ -464,6 +471,8 @@ const EXPENSE_GROUPS = [
       {id:'retirement', name:'Retirement / Pension'},
       {id:'invest',     name:'Investments'},
       {id:'goals',      name:'Goal Savings'},
+      {id:'moraka',     name:'Moraka'},
+      {id:'motshelo',   name:'Motshelo'},
       {id:'debt_extra', name:'Extra Debt Repayment'},
     ]
   },
@@ -602,7 +611,7 @@ function profileIncomeRows(){
   return rows;
 }
 function newEmptyBudget(){
-  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, customCats:[], notes:'', collapsed:{} };
+  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, actuals:{}, customCats:[], notes:'', collapsed:{} };
 }
 // Seed income rows from the assessment on a FIRST-EVER, untouched budget only.
 // No-op once edited, when any other month exists, or before the profile has
@@ -633,17 +642,20 @@ function sortedKeys(){ return Object.keys(budgets).sort(); }
 function groupCats(b,g){ return g.id==='other' ? g.cats.concat(b.customCats||[]) : g.cats; }
 
 function calcTotals(b){
+  const acts = b.actuals||{};
   const totalIncome = b.income.reduce((s,r)=>s+pf(r.amount),0);
-  const expByGroup = {};
+  const expByGroup = {}, actByGroup = {};
   EXPENSE_GROUPS.forEach(g=>{
     expByGroup[g.id] = groupCats(b,g).reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
+    actByGroup[g.id] = groupCats(b,g).reduce((s,c)=>s+pf(acts[c.id]||0),0);
   });
   const totalExpenses = Object.values(expByGroup).reduce((s,v)=>s+v,0);
+  const totalActual   = Object.values(actByGroup).reduce((s,v)=>s+v,0);
   const surplus = totalIncome - totalExpenses;
   const savingsAmt = expByGroup['savings']||0;
   const needsAmt   = expByGroup['needs']||0;
   const wantsAmt   = expByGroup['wants']||0;
-  return { totalIncome, totalExpenses, surplus, savingsAmt, needsAmt, wantsAmt, expByGroup };
+  return { totalIncome, totalExpenses, totalActual, surplus, savingsAmt, needsAmt, wantsAmt, expByGroup, actByGroup };
 }
 
 // ────────────────────────────────────────────
@@ -680,6 +692,7 @@ function confirmNewMonth(){
       budgets[key]={
         income: src.income.map(r=>({...r, id:Date.now()+Math.random()})),
         expenses:{...src.expenses},
+        actuals:{},   // a new month starts with zero actuals (only the plan is copied)
         customCats:(src.customCats||[]).map(c=>({...c})),   // keep custom "Other" expenses (amounts copied above use the same ids)
         notes:'',
         collapsed:{...src.collapsed},
@@ -733,10 +746,13 @@ function flushToState(){
     r.label = document.getElementById('inc_lbl_'+r.id)?.value||r.label;
     r.amount = pf(document.getElementById('inc_amt_'+r.id)?.value||'0');
   });
-  // Expenses (incl. this month's custom "Other" categories)
+  // Expenses (incl. this month's custom "Other" categories) + actuals
+  b.actuals = b.actuals || {};
   ALL_CATS.concat(b.customCats||[]).forEach(c=>{
     const v=pf(document.getElementById('exp_'+c.id)?.value||'0');
     if(v>0) b.expenses[c.id]=v; else delete b.expenses[c.id];
+    const av=pf(document.getElementById('act_'+c.id)?.value||'0');
+    if(av>0) b.actuals[c.id]=av; else delete b.actuals[c.id];
   });
   // Custom expense names are user-editable inline
   (b.customCats||[]).forEach(c=>{
@@ -824,6 +840,27 @@ function removeCustomExpense(id){
   autoSave();
 }
 
+// Variance = budgeted − actual. Positive (spent less than planned) reads green;
+// negative (over budget) reads red. Brand rules: green primary, red for over.
+// Shown only once an actual is entered; otherwise a muted dash.
+function varianceHtml(bud, act){
+  if(act<=0) return '<span style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--muted)">—</span>';
+  const diff = bud - act;
+  const col  = diff>=0 ? 'var(--green)' : 'var(--red)';
+  const sign = diff>0 ? '+' : (diff<0 ? '-' : '');
+  const title= diff>=0 ? 'Under budget' : 'Over budget';
+  return `<span style="font-family:'DM Mono',monospace;font-size:.78rem;font-weight:700;color:${col}" title="${title}">${sign}${fmtK(Math.abs(diff))}</span>`;
+}
+// Live-update a single row's variance cell without a full re-render (which would
+// steal input focus). Called from both the Budgeted and Actual inputs.
+function updateRowVariance(catId){
+  const cell=document.getElementById('var_'+catId);
+  if(!cell) return;
+  const bud=pf(document.getElementById('exp_'+catId)?.value||'0');
+  const act=pf(document.getElementById('act_'+catId)?.value||'0');
+  cell.innerHTML=varianceHtml(bud,act);
+}
+
 function renderExpenseCats(b){
   document.getElementById('expenseCats').innerHTML=EXPENSE_GROUPS.map(g=>{
     const isOpen=!b.collapsed?.[g.id];
@@ -836,27 +873,32 @@ function renderExpenseCats(b){
         <svg class="cat-group-arrow ${isOpen?'open':''}" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="${g.color}" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
       </div>
       ${isOpen?`<div class="cat-group-body">
-        <div class="item-row-header" style="grid-template-columns:1fr 130px 130px 32px;margin-bottom:6px;">
+        <div class="item-row-header bva-header" style="margin-bottom:6px;">
           <span class="col-label">Category</span>
           <span class="col-label" style="text-align:right;">Budgeted</span>
-          <span class="col-label" style="text-align:right;">% of Income</span>
+          <span class="col-label" style="text-align:right;">Actual</span>
+          <span class="col-label" style="text-align:right;">Variance</span>
           <span></span>
         </div>
         ${groupCats(b,g).map(c=>{
           const val=pf(b.expenses[c.id]||0);
-          const tot=b.income.reduce((s,r)=>s+pf(r.amount),0);
-          const pct=tot>0?((val/tot)*100).toFixed(1):'—';
+          const act=pf((b.actuals||{})[c.id]||0);
           const isCustom=String(c.id).startsWith('custom_');
-          return `<div class="item-row" style="grid-template-columns:1fr 130px 130px 32px;">
+          return `<div class="item-row bva-row">
             ${isCustom
               ?`<div class="iw"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"></div>`
               :`<span style="font-size:.82rem;font-weight:500;">${c.name}</span>`}
             <div class="iw">
               <span class="iw-pre">P</span>
               <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
-                oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
+                oninput="fmtInput(this);updateRowVariance('${c.id}');autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
             </div>
-            <div style="display:flex;align-items:center;justify-content:flex-end;font-size:.75rem;font-family:'DM Mono',monospace;font-weight:700;color:var(--muted);padding-right:4px;">${pct}${pct!=='—'?'%':''}</div>
+            <div class="iw">
+              <span class="iw-pre">P</span>
+              <input class="mono" type="text" id="act_${c.id}" value="${act>0?act.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
+                oninput="fmtInput(this);updateRowVariance('${c.id}');autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
+            </div>
+            <div class="bva-var" id="var_${c.id}">${varianceHtml(val,act)}</div>
             ${isCustom
               ?`<button class="del-btn" onclick="removeCustomExpense('${c.id}')"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`
               :'<div></div>'}
@@ -874,7 +916,7 @@ function renderExpenseCats(b){
 function renderSummaryPanel(){
   if(!currentKey||!budgets[currentKey]) return;
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
 
   // Labels
   document.getElementById('incomeTotalLabel').textContent=fmtK(totalIncome);
@@ -903,7 +945,25 @@ function renderSummaryPanel(){
       <div class="stat-label">Total Budgeted</div>
       <div class="stat-value">${fmtK(totalExpenses)}</div>
       <div class="stat-sub">${totalIncome>0?(totalExpenses/totalIncome*100).toFixed(1)+'% of income':''}</div>
-    </div>`;
+    </div>
+    <div class="stat-box navy">
+      <div class="stat-label">Total Actual</div>
+      <div class="stat-value">${totalActual>0?fmtK(totalActual):'—'}</div>
+      <div class="stat-sub">${totalActual>0?'Actual spending logged':'Log actuals to compare'}</div>
+    </div>
+    ${(() => {
+      if(totalActual<=0) return `<div class="stat-box gold">
+        <div class="stat-label">Variance</div>
+        <div class="stat-value">—</div>
+        <div class="stat-sub">Budgeted vs actual</div>
+      </div>`;
+      const v=totalExpenses-totalActual; // + = under budget
+      return `<div class="stat-box ${v>=0?'green':'red'}">
+        <div class="stat-label">Variance</div>
+        <div class="stat-value">${v<0?'-':''}${fmtK(Math.abs(v))}</div>
+        <div class="stat-sub">${v>=0?'Under budget so far':'Over budget'}</div>
+      </div>`;
+    })()}`;
 
   // 50/30/20 rule
   const rules=[
@@ -1311,7 +1371,9 @@ function exportPDF(){
   const pageW=doc.internal.pageSize.getWidth();
   const pageH=doc.internal.pageSize.getHeight();
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup,actByGroup}=calcTotals(b);
+  const acts=b.actuals||{};
+  const varTxt=(bud,act)=>{ if(act<=0) return '—'; const d=bud-act; return (d>0?'+':(d<0?'-':''))+fmt(Math.abs(d)); };
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
 
   // Header
@@ -1366,23 +1428,37 @@ function exportPDF(){
   EXPENSE_GROUPS.forEach(g=>{
     const gCats=groupCats(b,g);
     const gTotal=gCats.reduce((s,c)=>s+pf(b.expenses[c.id]||0),0);
-    if(gTotal===0) return;
-    rows.push([{content:pdfSafe(g.icon+' '+g.name),styles:{fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY}},{content:fmt(gTotal),styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}},{content:(totalIncome>0?(gTotal/totalIncome*100).toFixed(1):'—')+'%',styles:{fontStyle:'bold',halign:'right',fillColor:[245,247,250],textColor:NAVY}}]);
+    const gAct=gCats.reduce((s,c)=>s+pf(acts[c.id]||0),0);
+    if(gTotal===0 && gAct===0) return;
+    const hdrStyle={fontStyle:'bold',fillColor:[245,247,250],textColor:NAVY};
+    rows.push([
+      {content:pdfSafe(g.icon+' '+g.name),styles:hdrStyle},
+      {content:fmt(gTotal),styles:{...hdrStyle,halign:'right'}},
+      {content:gAct>0?fmt(gAct):'—',styles:{...hdrStyle,halign:'right'}},
+      {content:varTxt(gTotal,gAct),styles:{...hdrStyle,halign:'right'}},
+    ]);
     gCats.forEach(c=>{
       const v=pf(b.expenses[c.id]||0);
-      if(v===0) return;
-      rows.push([c.name||'Custom expense',fmt(v),totalIncome>0?(v/totalIncome*100).toFixed(1)+'%':'—']);
+      const a=pf(acts[c.id]||0);
+      if(v===0 && a===0) return;
+      rows.push([c.name||'Custom expense',fmt(v),a>0?fmt(a):'—',varTxt(v,a)]);
     });
   });
   doc.autoTable({
     startY:y,
-    head:[['Category','Budgeted','% of Income']],
+    head:[['Category','Budgeted','Actual','Variance']],
     body:rows,
-    foot:[['TOTAL EXPENSES',fmt(totalExpenses),(totalIncome>0?(totalExpenses/totalIncome*100).toFixed(1):0)+'%']],
+    foot:[['TOTAL EXPENSES',fmt(totalExpenses),totalActual>0?fmt(totalActual):'—',varTxt(totalExpenses,totalActual)]],
     styles:{fontSize:7.5,cellPadding:2.8,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
     headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:6.5},
     footStyles:{fillColor:NAVY,textColor:WHITE,fontStyle:'bold'},
-    columnStyles:{1:{halign:'right'},2:{halign:'right'}},
+    columnStyles:{1:{halign:'right'},2:{halign:'right'},3:{halign:'right'}},
+    // Colour the Variance column: red when over budget (leading '-'), green otherwise.
+    didParseCell:function(d){
+      if(d.column.index===3 && d.cell.raw && typeof d.cell.raw==='string' && d.cell.raw!=='—'){
+        d.cell.styles.textColor = d.cell.raw.charAt(0)==='-' ? RED : GREEN;
+      }
+    },
     margin:{left:14,right:14},
   });
   y=doc.lastAutoTable.finalY+8;
