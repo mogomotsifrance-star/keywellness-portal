@@ -20,9 +20,9 @@ planning, webinars, change password, department HR reporting).
 |---|---|
 | `supabase_sedimosa_phase2_batch1.sql` (Batch 1: seed correction, unit_departments, gender/department_id/will_status, webinar_views, notifications, content_items.webinar_date) | Applied in SQL Editor (verified: 7 active units, 161 departments) |
 | `supabase_verify_invite_code.sql` (Batch 2: signup code validation) | Applied in SQL Editor |
-| `send-booking-email` Edge Function (Batch 4: writes notification rows) | Deployed — **but see Step 2, it must be REDEPLOYED for Batch 3** |
+| `send-booking-email` Edge Function (Batch 4 notifications + Batch 3 email-optional) | **Deployed** (redeployed 2026-08-03 with the Batch 3 email-optional change) |
 | Batch 2 onboarding (gender/dept, mandatory code, assessment lock) | Live + tested with Tshenolo |
-| **Batch 3 phone accounts (pseudo-email) — frontend** | **Shipped: merged to `dev` + `main`, live on both sites.** Making it *functional* still needs the two Edge Functions deployed — see Step 2. |
+| **Batch 3 phone accounts (pseudo-email)** | **Shipped + FUNCTIONAL:** frontend merged to `dev` + `main`; both Edge Functions (`phone-signup` NEW, `send-booking-email` redeploy) deployed 2026-08-03. |
 | Prerequisite org_units build (`supabase_org_units.sql`, `..._hr_scope.sql`, `org_report_data_v4`, scoped overview/rewards) | Applied before this phase (Batch 3c) |
 
 ---
@@ -41,34 +41,7 @@ Open a terminal or the folder, then Supabase → **SQL Editor**, paste and run:
   rows + Unassigned, small ones suppressed; Debswana parent → not available).
 - **Rollback:** `migrations/rollback-org-report-departments.sql`.
 
-### Step 2 — Deploy the two Edge Functions (Batch 3 phone accounts)
-The phone-accounts **frontend has shipped** (dev + main). These two deploys are all
-that remains to make phone signup/login actually work — until then the Phone toggle
-is visible but signup will fail. In a terminal at the project root
-(`cd "…/keywellness-portal"`; run `supabase login` once if needed):
-
-```bash
-supabase functions deploy phone-signup
-```
-```bash
-supabase functions deploy send-booking-email
-```
-
-- `phone-signup` is **NEW** — phone accounts cannot be created until it is deployed.
-- `send-booking-email` is a **REDEPLOY** (client email is now optional so phone-only
-  bookings don't email a non-routable address; team email + in-app notification
-  still fire).
-- `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_URL` are auto-injected — no secrets to set.
-- Leave the Supabase **Phone provider DISABLED** — the pseudo-email design does not
-  use it (see `memory/phone-accounts-pseudo-email.md` / BUILD-NOTES).
-- **Before deploying**, note each function's current version (Dashboard → Edge
-  Functions → function → Details) so you can roll back by re-deploying the prior
-  committed `index.ts`.
-- **Verify:** create a phone account through the portal signup (Phone toggle);
-  confirm it logs in with the phone number; make a booking as that phone-only user
-  and confirm the bell shows a "Booking received" notification (no email error).
-
-### Step 3 — Backfill webinar dates
+### Step 2 — Backfill webinar dates
 Admin dashboard → **Webinars** tab → set the date on each existing webinar with
 the inline date picker (rows without a date show a red "no date set" flag). New
 webinars capture the date at creation. This drives the newest-first ordering and
@@ -120,8 +93,8 @@ function (`git show <prev-sha>:supabase/functions/<fn>/index.ts`).
 
 ## One-line "am I done?" check
 
-Phase 2 is fully live once: **Step 1** SQL is applied, **Step 2** both functions
-are deployed, and **Step 3** webinar dates are set. Everything else (all frontend,
-Batches 1/2/4/5/6/7/8 backend) is already in place.
+Phase 2 is fully live once: **Step 1** SQL is applied and **Step 2** webinar dates
+are set. Everything else (all frontend, Batch 3 Edge Functions, and Batches
+1/2/4/5/6/7/8 backend) is already in place.
 
 _See BUILD-NOTES.md for the full per-batch record, verification queries, and design notes._
