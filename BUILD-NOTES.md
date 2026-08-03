@@ -3258,3 +3258,33 @@ in `index.html` + `wellness_assessment.html`.
 - NOT yet verified (needs a live Sedimosa login on dev): onboarding gender +
   department steps, the backfill chain, and the assessment lock. Test with
   Tshenolo after deploy to dev.
+
+## Batch 5 — Budget Planner: actual vs budgeted + local categories (authored 2026-08-03)
+
+**Status: frontend on `dev`. No migration** — actuals live in the existing
+`tool_data` JSON blob + localStorage `budget_planner_v2` (backward-compatible).
+All changes in `budget_planner.html`. VERIFIED in the browser (auth-stubbed copy).
+
+- **Actual vs budgeted:** each expense category gets an "Actual" input beside
+  "Budgeted", plus a per-row **Variance** cell (budgeted − actual; green when
+  under/on budget, red when over — brand rules, yellow untouched). Live-updates
+  without a full re-render (`updateRowVariance` on both inputs; `varianceHtml`).
+- **Data shape:** parallel `b.actuals = {catId: amount}` map (expenses is a flat
+  map, not item objects). Defensive `b.actuals||{}` everywhere; `newEmptyBudget`
+  seeds `actuals:{}`; copy-month starts actuals empty (only the plan is copied).
+  Old saved budgets load unchanged (Actual defaults empty).
+- **Summary strip:** added **Total Actual** and **Variance** stat boxes
+  (green/red, "Under budget"/"Over budget"; "—" until actuals entered).
+- **calcTotals** now returns `totalActual` + `actByGroup`; **flushToState** reads
+  `act_<id>` inputs; **PDF export** gains Actual + Variance columns (variance
+  coloured via didParseCell) and a Budgeted/Actual/Variance total row.
+- **Responsive:** rows moved off inline grid onto `.bva-row`/`.bva-header`
+  classes with a ≤560px breakpoint; row fits 375px (no new horizontal overflow —
+  the pre-existing card/month-pill overflow is unrelated).
+- **New categories (per request):** `Helper` → Needs; `Moraka` + `Motshelo` →
+  Savings & Investments. (Motshelo = informal savings club; Moraka =
+  cattle/farm savings — both common Botswana savings vehicles.)
+
+VERIFIED: no console errors; Helper/Moraka/Motshelo render; Budgeted/Actual/
+Variance columns + per-row and summary variance correct (over=red, under=green);
+totals reconcile; mobile layout holds; old-budget load path defensive.
