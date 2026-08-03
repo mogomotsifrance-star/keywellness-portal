@@ -1366,6 +1366,7 @@ async function createReport() {
 
 let currentReportDataError = null; // distinguishes a real RPC failure from legitimate insufficient_cohort suppression
 let currentReportBreakdown = null; // org_report_company_breakdown() result (org-wide reports only)
+let currentReportDeptBreakdown = null; // org_report_department_breakdown() result (unit-scoped reports only)
 
 async function openReportBuilder(id) {
   reportsView = 'builder';
@@ -1385,6 +1386,7 @@ async function openReportBuilder(id) {
   }
   currentReportRow = row;
   currentReportBreakdown = null;
+  currentReportDeptBreakdown = null;
   currentNarrative = Object.assign({ executive_summary:'', insights:'', progress_outcomes:'', challenges_risks:[], next_steps:'' }, row.narrative || {});
 
   // A report scoped to a unit (row.unit_id) uses the 4-arg overload; an
@@ -1405,6 +1407,14 @@ async function openReportBuilder(id) {
     });
     if (bdErr) console.warn('org_report_company_breakdown failed:', bdErr);
     else currentReportBreakdown = bd || null;
+  } else {
+    // Unit-scoped report → pull the per-department breakdown (the RPC returns
+    // {available:false} for a parent/combined unit like Debswana).
+    const { data: db, error: dbErr } = await sb.rpc('org_report_department_breakdown', {
+      p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end, p_unit_id: row.unit_id,
+    });
+    if (dbErr) console.warn('org_report_department_breakdown failed:', dbErr);
+    else currentReportDeptBreakdown = db || null;
   }
 
   renderReportBuilder();
@@ -1492,6 +1502,42 @@ function renderReportBuilder() {
         <div class="suppression-note">Each company is guarded independently — companies with fewer than 5 enrolled members show no figures.${bd.unassigned_members ? ` ${bd.unassigned_members} member(s) not yet assigned to a company are counted in the organisation totals above but in no company row.` : ''}</div>
       </div>` : '';
 
+  // Per-department breakdown (unit-scoped reports only). Each department (and the
+  // Unassigned group) is guarded independently; cells below 3 are withheld (·).
+  const dbd = currentReportDeptBreakdown;
+  const dcell = c => (!c ? '—' : (c.suppressed ? '·' : (c.value ?? '—')));
+  let departmentBreakdownHtml = '';
+  if (dbd && dbd.department_breakdown_available === false) {
+    departmentBreakdownHtml = `<div class="chart-box"><h4>Department Breakdown</h4>
+      <div style="font-size:13px;color:var(--muted)">${escC(dbd.reason || 'Not available for this unit.')}</div></div>`;
+  } else if (dbd && dbd.department_breakdown_available && (dbd.departments || []).length) {
+    departmentBreakdownHtml = `
+      <div class="chart-box">
+        <h4>Department Breakdown</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:6px 8px">Department</th>
+            <th style="text-align:right;padding:6px 8px">Members</th>
+            <th style="text-align:right;padding:6px 8px">Assessed</th>
+            <th style="text-align:right;padding:6px 8px">Booked</th>
+            <th style="text-align:right;padding:6px 8px">Attended</th>
+          </tr></thead>
+          <tbody>
+            ${dbd.departments.map(d => d.suppressed
+              ? `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px">${escC(d.name)}</td><td colspan="4" style="padding:6px 8px;color:var(--muted);font-style:italic">Fewer than 5 enrolled members — data withheld for privacy</td></tr>`
+              : `<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:6px 8px">${escC(d.name)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${d.n_employees ?? '—'}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${dcell(d.engagement_funnel?.completed_assessment)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${dcell(d.engagement_funnel?.booked_session)}</td>
+                  <td style="text-align:right;padding:6px 8px" class="mono">${dcell(d.engagement_funnel?.attended_session)}</td>
+                </tr>`).join('')}
+          </tbody>
+        </table>
+        <div class="suppression-note">Each department (and the Unassigned group) is guarded independently — those with fewer than 5 enrolled members show no figures; individual cells below 3 are withheld (·). Gender and wellness-band splits are captured in the report data under the same guards.</div>
+      </div>`;
+  }
+
   el.innerHTML = `
     <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button>
@@ -1520,6 +1566,7 @@ function renderReportBuilder() {
       </div>` : ''}
 
       ${companyBreakdownHtml}
+      ${departmentBreakdownHtml}
 
       <div class="report-grid">
         <div class="chart-box"><h4>Engagement Funnel</h4><div class="chart-canvas-wrap"><canvas id="chart-funnel"></canvas></div></div>

@@ -3457,3 +3457,48 @@ No estate data reaches any HR-facing output.
   (short / mismatch / no-current) fires, no console errors. The full re-auth →
   update path uses standard Supabase APIs — confirm live by changing a real
   password and re-logging in (incl. a phone-only account once Batch 3 lands).
+
+## Batch 9 — Department-level HR reporting (authored 2026-08-03)
+
+**Status: SQL authored (NOT applied); frontend on `dev`.** Files:
+`supabase_org_report_data_v5_departments.sql`, `admin.html`.
+
+### SQL (v5, ADDITIVE — production-live on apply)
+- **File:** `supabase_org_report_data_v5_departments.sql`
+  **Rollback:** `migrations/rollback-org-report-departments.sql`.
+- Two NEW functions; **v4 report is byte-identical** afterwards (does NOT touch
+  `_org_report_period_data` / `org_report_data` / company breakdown):
+  - `_dept_metrics(org,start,end,unit_id,dept_id)` (internal, revoked from
+    clients) — guarded metrics for one (unit, department) cohort; dept_id NULL =
+    the "Unassigned" cohort. <5 members → `{suppressed:true, reason:…}`. Returns
+    n_employees + engagement_funnel + wellness_bands + gender_split, every cell
+    `_suppress_count`-guarded (<3 withheld).
+  - `org_report_department_breakdown(org,start,end,unit_id)` — enumerates the
+    unit's departments SERVER-SIDE (no forgeable client department filter) +
+    an Unassigned row; each row independently guarded. Scope validated via
+    `hr_unit_in_scope()` (company mgr → own unit/descendant only; admin/whole-org
+    → any). Parent/combined unit (Debswana) → `{department_breakdown_available:false}`.
+- **HR invariant (grep-verified):** output is counts/aggregates only — no names,
+  emails, or per-person financial direction. Gender is a guarded aggregate split.
+- **Apply order:** after v4 + hr_scope + Batch-1 (unit_departments / department_id).
+  v-numbering: this is "v5" (departments) layered on the v4 report; rollback lever
+  above.
+
+### Frontend (admin.html report builder)
+- For a **unit-scoped** report (row.unit_id), the builder now also calls
+  `org_report_department_breakdown` and renders a "Department Breakdown" table
+  (Department · Members · Assessed · Booked · Attended); suppressed rows show the
+  withheld-for-privacy message, cells <3 render as "·", parent units show the
+  not-available reason. **Graceful:** if the v5 RPC isn't applied yet, the fetch
+  errors → no table (no breakage). VERIFIED: admin parses clean, state/render
+  wired, suppression display logic correct.
+
+### ⚠ MANUAL (Tshenolo)
+- **Apply `supabase_org_report_data_v5_departments.sql`** in the SQL Editor.
+- The department table appears on unit-scoped reports (create a report with a
+  `unit_id`, or drill a company from the fund view). Seed an `hr_unit_scope` row
+  for a company manager to test scoped access; forged units return "not authorised".
+- **Deferred (BUILD-NOTES):** Debswana combined-view department breakdown (out of
+  scope this iteration); a full per-department drill-down report (only the compact
+  breakdown table ships now); wellness-band/gender columns are in the RPC payload
+  but not all surfaced in the table yet.
