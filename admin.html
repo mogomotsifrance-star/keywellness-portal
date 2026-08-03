@@ -1040,6 +1040,7 @@ async function updateBookingStatus(id, status) {
           email: b.user_email,
           service: b.service || '',
           dateStr: b.requested_date || '',
+          user_id: b.user_id || null,
         }
       });
       if (emailErr) {

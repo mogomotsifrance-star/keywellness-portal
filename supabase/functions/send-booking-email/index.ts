@@ -1,5 +1,25 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { renderEmail, KW_FROM, KW_REPLY_TO, KW_PORTAL_URL } from "../_shared/kw-email.ts";
+
+// Write an in-app notification mirroring a transactional email, so phone-only
+// members (no email) still see everything email members receive. Best-effort:
+// the booking action + email are the gating operations; a notification failure
+// is logged, never fatal. Uses the auto-injected service-role env (bypasses RLS;
+// there is deliberately no client INSERT policy on notifications).
+async function writeNotification(userId: string | undefined, type: string, title: string, body: string) {
+  if (!userId) return;
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) { console.error("Supabase env missing; skipping notification insert"); return; }
+  try {
+    const admin = createClient(url, key);
+    const { error } = await admin.from("notifications").insert({ user_id: userId, type, title, body });
+    if (error) console.error("notification insert failed:", JSON.stringify(error));
+  } catch (e) {
+    console.error("notification insert threw:", String(e));
+  }
+}
 
 // To restrict to specific origins instead of *, replace "*" with the origin
 // from the incoming request if it matches one of these:
@@ -92,6 +112,13 @@ serve(async (req) => {
         { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
     }
+    // Mirror the confirmation as an in-app notification for the member.
+    await writeNotification(
+      body.user_id,
+      "booking_confirmed",
+      "Booking confirmed",
+      `Your ${svc} session${when} has been confirmed. We look forward to seeing you.`,
+    );
     return new Response(
       JSON.stringify({ ok: true, id: result.id }),
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
@@ -162,6 +189,14 @@ serve(async (req) => {
       { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );
   }
+
+  // Mirror the "booking received" confirmation as an in-app notification.
+  await writeNotification(
+    body.user_id,
+    "booking_received",
+    "Booking received",
+    `We've received your ${service} booking for ${dateStr} at ${time}. We'll confirm within 24 hours.`,
+  );
 
   // Send team notification — best-effort; failure is logged (above, inside sendEmail)
   // and reported back in the response, but never blocks or unwinds the client send.

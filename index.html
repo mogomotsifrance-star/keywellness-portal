@@ -288,7 +288,11 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 .notif-item{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);transition:.15s;align-items:flex-start}
 .notif-item:hover{background:var(--cream-dark)}
 .notif-item.unread{background:var(--kw-yellow-tint)}
-.notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.notif-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px;background:var(--green)}
+.notif-item.read{opacity:.72}
+.notif-item.read .notif-dot{background:var(--border)}
+.notif-item.clickable{cursor:pointer}
+.notif-sep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:14px 18px 6px}
 .notif-item-body{flex:1}
 .notif-item-title{font-size:13px;font-weight:700;color:var(--navy);margin-bottom:3px}
 .notif-item-desc{font-size:12px;color:var(--muted);line-height:1.4}
@@ -787,7 +791,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 <div class="notif-panel" id="notifPanel">
   <div class="notif-header">
     <h3>🔔 Notifications</h3>
-    <button class="notif-close" onclick="closeNotifPanel()">✕</button>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button id="notifMarkAll" onclick="markAllNotifsRead()" style="display:none;background:none;border:none;color:var(--green);font-size:12px;font-weight:600;cursor:pointer;padding:0">Mark all read</button>
+      <button class="notif-close" onclick="closeNotifPanel()">✕</button>
+    </div>
   </div>
   <div class="notif-list" id="notifList"></div>
   <div class="notif-add-reminder">
@@ -931,7 +938,7 @@ async function loadAllData() {
   const uid = currentUser.id;
 
   const safe = async q => { try { return await q; } catch (e) { console.warn('[KW] query error:', e); return { data: null, error: e }; } };
-  const [pR, aR, cR, bR, sR, bkR, ptR, thR, tdR, efR] = await Promise.all([
+  const [pR, aR, cR, bR, sR, bkR, ptR, thR, tdR, efR, nR] = await Promise.all([
     safe(sb.from('profiles').select('*').eq('id', uid).maybeSingle()),
     safe(sb.from('assessments').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
     safe(sb.from('checkins').select('*').eq('user_id', uid).order('created_at', { ascending: false })),
@@ -942,10 +949,12 @@ async function loadAllData() {
     safe(sb.from('reward_thresholds').select('*')),
     safe(sb.from('tool_data').select('tool, data').eq('user_id', uid).in('tool', ['budget_planner', 'net_worth_tracker', 'dti_calculator', 'retirement'])),
     safe(sb.from('emergency_fund').select('*').eq('user_id', uid).maybeSingle()),
+    safe(sb.from('notifications').select('*').eq('user_id', uid).order('created_at', { ascending: false }).limit(50)),
   ]);
 
-  state.user        = pR.data  || null;
-  state.assessments = aR.data  || [];
+  state.user          = pR.data  || null;
+  state.assessments   = aR.data  || [];
+  state.notifications = nR.data  || [];
   state.toolData    = {};
   (tdR.data || []).forEach(r => { state.toolData[r.tool] = r.data; });
   state.ef          = efR.data || null;
@@ -5622,7 +5631,7 @@ window.submitBooking = async function () {
   //     sb.functions.invoke() forwards the user's JWT automatically (verify_jwt is enabled).
   try {
     const { error: emailErr } = await sb.functions.invoke('send-booking-email', {
-      body: { firstName: first, lastName: last, email, phone, service, sessionType, dateStr, time, message: msg }
+      body: { firstName: first, lastName: last, email, phone, service, sessionType, dateStr, time, message: msg, user_id: currentUser?.id }
     });
     if (emailErr) {
       // Email failed — booking is already saved to DB so we warn rather than block.
@@ -6272,10 +6281,51 @@ function generateSmartNotifs() {
   return notifs;
 }
 
+// Relative time for a timestamp: "just now", "5m ago", "2h ago", "3d ago",
+// then an absolute date past a week.
+function fmtRelativeTime(iso) {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return days + 'd ago';
+  return new Date(iso).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
+
+// Re-fetch the persisted notifications feed, then re-render. Used when the panel
+// opens so it's always fresh (loadAllData seeds state.notifications at login).
+async function refreshNotifications() {
+  if (currentUser) {
+    try {
+      const { data, error } = await sb.from('notifications')
+        .select('*').eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false }).limit(50);
+      if (!error) state.notifications = data || [];
+    } catch (e) { console.warn('[KW] notifications fetch failed:', e); }
+  }
+  loadNotifications();
+}
+
 function loadNotifications() {
+  // Persisted transactional notifications (server-written mirror of every email
+  // — so phone-only members see everything email members receive).
+  const persisted = state.notifications || [];
+  // Behavioural nudges + user reminders (client-derived, not emails).
   const smart = generateSmartNotifs();
-  // Booking-confirmed notifications — derived from the member's own Supabase bookings (cross-user/device)
-  const bookingNotifs = (state.bookings || [])
+  const custom = safeParseLS('kw_notifs', []);
+  const dismissed = safeParseLS('kw_notifs_dismissed', []);
+  // Transitional fallback: derive booking-confirmed notifs from the member's own
+  // bookings ONLY while the Edge Function isn't yet writing persisted booking
+  // rows. This avoids a gap before the function is deployed and prevents
+  // duplicates after it is (once any persisted booking row exists, the derived
+  // ones are suppressed and the persisted feed is the single source).
+  const hasPersistedBooking = persisted.some(n => n.type === 'booking_confirmed' || n.type === 'booking_received');
+  const bookingNotifs = hasPersistedBooking ? [] : (state.bookings || [])
     .filter(b => b.status === 'confirmed')
     .map(b => ({
       id: 'bk_confirmed_' + b.id,
@@ -6283,20 +6333,38 @@ function loadNotifications() {
       desc: `Your ${b.service || 'coaching'} session${b.requested_date ? ' on ' + fmtDate(b.requested_date) : ''} is confirmed. We look forward to seeing you.`,
       link: 'my-bookings'
     }));
-  const custom = safeParseLS('kw_notifs', []);
-  const dismissed = safeParseLS('kw_notifs_dismissed', []);
-  const all = [...bookingNotifs, ...custom, ...smart].filter(n => !dismissed.includes(n.id));
+  const nudges = [...bookingNotifs, ...custom, ...smart].filter(n => !dismissed.includes(n.id));
+
   const list = document.getElementById('notifList');
   const badge = document.getElementById('notifBadge');
+  const markAllBtn = document.getElementById('notifMarkAll');
   if (!list) return;
-  if (!all.length) {
+
+  const unreadPersisted = persisted.filter(n => !n.read_at).length;
+  const unreadCount = unreadPersisted + nudges.length;
+  if (markAllBtn) markAllBtn.style.display = unreadPersisted > 0 ? '' : 'none';
+
+  if (!persisted.length && !nudges.length) {
     list.innerHTML = '<div class="notif-empty">You are all caught up! 🎉</div>';
     badge.classList.add('hidden');
     return;
   }
-  badge.textContent = all.length;
-  badge.classList.remove('hidden');
-  list.innerHTML = all.map(n=>`
+  if (unreadCount > 0) { badge.textContent = unreadCount; badge.classList.remove('hidden'); }
+  else badge.classList.add('hidden');
+
+  // Persisted rows: newest-first, read/unread styling, relative time, tap-to-read.
+  const persistedHtml = persisted.map(n => `
+    <div class="notif-item clickable ${n.read_at ? 'read' : 'unread'}" id="ni_${n.id}" onclick="markNotifRead('${n.id}')">
+      <div class="notif-dot"></div>
+      <div class="notif-item-body">
+        <div class="notif-item-title">${escHtml(n.title || '')}</div>
+        <div class="notif-item-desc">${escHtml(n.body || '')}</div>
+        <div class="notif-item-time">${fmtRelativeTime(n.created_at)}</div>
+      </div>
+    </div>`).join('');
+
+  // Nudges/reminders: keep the existing template (dismiss + optional Go link).
+  const nudgeHtml = nudges.map(n => `
     <div class="notif-item" id="ni_${n.id}">
       <div class="notif-dot"></div>
       <div class="notif-item-body">
@@ -6306,7 +6374,31 @@ function loadNotifications() {
       </div>
       <button class="notif-dismiss" onclick="dismissNotif('${n.id}')" title="Dismiss">✕</button>
     </div>`).join('');
+
+  const sep = (persistedHtml && nudgeHtml) ? '<div class="notif-sep">Reminders</div>' : '';
+  list.innerHTML = persistedHtml + sep + nudgeHtml;
 }
+
+// Mark a single persisted notification read (optimistic; persisted to Supabase).
+window.markNotifRead = async function (id) {
+  const n = (state.notifications || []).find(x => String(x.id) === String(id));
+  if (!n || n.read_at) return;         // already read or a nudge (not persisted)
+  n.read_at = new Date().toISOString();
+  loadNotifications();
+  const { error } = await sb.from('notifications').update({ read_at: n.read_at }).eq('id', id);
+  if (error) console.warn('[KW] mark notification read failed:', error);
+};
+
+window.markAllNotifsRead = async function () {
+  const unread = (state.notifications || []).filter(n => !n.read_at);
+  if (!unread.length) return;
+  const now = new Date().toISOString();
+  unread.forEach(n => n.read_at = now);
+  loadNotifications();
+  const { error } = await sb.from('notifications').update({ read_at: now })
+    .is('read_at', null).eq('user_id', currentUser.id);
+  if (error) console.warn('[KW] mark all notifications read failed:', error);
+};
 
 window.toggleNotifPanel = function () {
   const panel = document.getElementById('notifPanel');
@@ -6316,7 +6408,7 @@ window.toggleNotifPanel = function () {
     panel.classList.remove('open');
     overlay.classList.remove('open');
   } else {
-    loadNotifications();
+    refreshNotifications();   // fetch fresh persisted rows, then render
     panel.classList.add('open');
     overlay.classList.add('open');
   }
@@ -6426,7 +6518,7 @@ function registerAuthListener() {
     } else if (event === 'SIGNED_OUT') {
       clearLocalUserCache();
       currentUser = null;
-      state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0} };
+      state = { user:null, assessments:[], checkins:[], badges:{earned:[],points:0}, notifications:[] };
       window.location.hash = '';
       showAuthScreen(true);
     }
