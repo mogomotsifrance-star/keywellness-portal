@@ -36,11 +36,12 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 #auth-screen{
   display:none;position:fixed;inset:0;background:var(--kw-navy);
   align-items:center;justify-content:center;z-index:999;
+  overflow-y:auto;padding:24px 16px;
 }
 #auth-screen.visible{display:flex}
 .auth-box{
   background:var(--white);border-radius:var(--kw-r-lg);padding:40px;width:100%;max-width:420px;
-  box-shadow:0 24px 64px rgba(0,0,0,.3);
+  box-shadow:0 24px 64px rgba(0,0,0,.3);margin:auto;
 }
 .auth-logo{margin-bottom:20px;text-align:center}
 .auth-box h2{font-size:22px;font-weight:800;margin-bottom:4px}
@@ -152,8 +153,11 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 /* ── Webinar spotlight (Latest webinar) ── */
 .lp-webinar-spotlight{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;cursor:pointer;transition:box-shadow .3s var(--kw-ease),transform .3s var(--kw-ease)}
 .lp-webinar-spotlight:hover{box-shadow:var(--kw-shadow-hover);transform:translateY(-3px)}
-.lp-ws-art{position:relative;aspect-ratio:16/9;background:var(--cream-dark)}
+.lp-ws-art{position:relative;aspect-ratio:16/9;background:var(--cream-dark);overflow:hidden;min-width:0}
 .lp-ws-art img{width:100%;height:100%;object-fit:cover;display:block}
+/* kwPoster returns an <svg width="640">; without this it renders at its intrinsic
+   size and overflows the spotlight's art column onto the title/button. */
+.lp-ws-art svg{width:100%;height:100%;display:block}
 .lp-ws-body{padding:20px 22px;display:flex;flex-direction:column;justify-content:center}
 .lp-ws-title{font-size:19px;font-weight:800;color:var(--navy);margin:6px 0;line-height:1.25}
 .lp-ws-date{font-size:12.5px;font-weight:600;color:var(--gold)}
