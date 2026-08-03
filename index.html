@@ -7185,14 +7185,18 @@ setInterval(() => {
   </section>
 </div>
 <script>
-// ── Ask Key widget (frontend, dev only until launch gates clear) ────
-// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES): AI_CHAT_ENABLED must be
-// flipped to false before this merges to `main`, and stay false there until
-// (1) the privacy notice discloses AI chat processing + Anthropic as a
-// processor, and (2) Anthropic is on the DPA foreign-processor register.
+// ── Ask Key widget (frontend, test hosts only until launch gates clear) ────
+// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES): the AI chat must stay OFF on
+// the live domains until (1) the privacy notice discloses AI chat processing +
+// Anthropic as a processor, and (2) Anthropic is on the DPA foreign-processor
+// register. Rather than a manual boolean flipped per-branch (easy to merge to
+// `main` by accident), the gate is HOST-DERIVED: enabled only on the test/
+// preview hosts (*.workers.dev, localhost, 127.0.0.1) and always false on the
+// live hosts (portal.keywellness.co.bw and the github.io mirror). This is safe
+// on both branches — dev/test keeps the feature, `main`/live never shows it.
 // The Edge Function may be deployed early; it is inert until called.
 (function () {
-  const AI_CHAT_ENABLED = true;   // true on dev; see launch gate above.
+  const AI_CHAT_ENABLED = /(^|\.)workers\.dev$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
 
   const FN_URL = SUPABASE_URL + '/functions/v1/ask-claude';
   const STARTERS = [
