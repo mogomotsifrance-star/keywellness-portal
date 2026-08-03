@@ -257,6 +257,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 #name-modal.visible{display:flex}
 #company-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1002;align-items:center;justify-content:center;padding:20px}
 #company-modal.visible{display:flex}
+#department-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1002;align-items:center;justify-content:center;padding:20px}
+#department-modal.visible{display:flex}
+#gender-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1002;align-items:center;justify-content:center;padding:20px}
+#gender-modal.visible{display:flex}
 .welcome-modal-box{background:var(--white);border-radius:16px;padding:32px;max-width:640px;width:100%;box-shadow:0 24px 64px rgba(0,0,0,.4)}
 .welcome-modal-box h2{font-size:22px;font-weight:700;margin-bottom:6px}
 .welcome-modal-box p{font-size:14px;color:var(--muted);margin-bottom:20px}
@@ -466,6 +470,37 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div id="cm-picker" style="margin-bottom:14px"></div>
     <p id="cm-err" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></p>
     <button id="cm-save" class="btn btn-primary" style="width:100%;padding:12px" disabled>Save &amp; Continue →</button>
+  </div>
+</div>
+
+<!-- ══ DEPARTMENT-SELECTION BACKFILL MODAL (non-dismissable) ══ -->
+<!-- Shown to members who have a company but no department yet. New signups pick
+     their department during onboarding, so they never see this. -->
+<div id="department-modal">
+  <div class="welcome-modal-box" style="max-width:460px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
+    <h2 style="margin-bottom:6px">Which department are you in? 🗂️</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">This helps your HR team understand wellness across teams — always shown in aggregate, never individually.</p>
+    <div id="dm-picker" style="margin-bottom:14px"></div>
+    <p id="dm-err" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></p>
+    <button id="dm-save" class="btn btn-primary" style="width:100%;padding:12px" disabled>Save &amp; Continue →</button>
+  </div>
+</div>
+
+<!-- ══ GENDER BACKFILL MODAL (non-dismissable) ══ -->
+<!-- Shown to members with no gender set yet. New signups choose during onboarding. -->
+<div id="gender-modal">
+  <div class="welcome-modal-box" style="max-width:440px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
+    <h2 style="margin-bottom:6px">A quick detail 🙋</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Your gender helps us report wellness fairly across the programme — always shown in aggregate, never individually.</p>
+    <div id="gm-group" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <button type="button" class="choice-btn" data-g="male" style="flex:0 1 auto;padding:9px 16px">Male</button>
+      <button type="button" class="choice-btn" data-g="female" style="flex:0 1 auto;padding:9px 16px">Female</button>
+      <button type="button" class="choice-btn" data-g="prefer_not_to_say" style="flex:0 1 auto;padding:9px 16px">Prefer not to say</button>
+    </div>
+    <p id="gm-err" style="color:var(--red);font-size:12px;margin-bottom:12px;display:none"></p>
+    <button id="gm-save" class="btn btn-primary" style="width:100%;padding:12px" disabled>Save &amp; Continue →</button>
   </div>
 </div>
 
@@ -679,10 +714,13 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
         <div class="field-err" id="b-pass2-err"></div>
       </div>
       <div class="field">
-        <label for="b-code" style="color:var(--muted)">Company code <span style="font-weight:400;font-size:12px">(optional — leave blank if signing up personally)</span></label>
+        <label for="b-code">Company code <span style="color:var(--gold)">*</span></label>
         <input type="text" id="b-code" placeholder="e.g. ACME-7F3K2" aria-label="Company invite code"
           style="text-transform:uppercase" autocomplete="off"
+          oninput="document.getElementById('b-code-err').textContent=''"
           onkeydown="if(event.key==='Enter')doSignup()">
+        <div class="field-hint" style="font-size:12px;color:var(--muted);margin-top:4px">Key Wellness is currently available through participating employers.</div>
+        <div class="field-err" id="b-code-err"></div>
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:4px" id="signup-btn" onclick="doSignup()">Create Account</button>
     </div>
@@ -1295,7 +1333,7 @@ async function confirmSession() {
   initProfileUI();
   loadNotifications();
   route();
-  maybePromptCompany();   // company backfill after password re-confirm
+  maybePromptBackfill();  // company → department → gender backfill after password re-confirm
 }
 
 async function switchAccount() {
@@ -1447,9 +1485,26 @@ async function doSignup() {
   if (pass.length < 8) { authPassInput(); return; }
   if (!pass2) { setFieldErr('b-pass2','b-pass2-err','Please confirm your password.'); return; }
   if (pass !== pass2) { setFieldErr('b-pass2','b-pass2-err','Passwords do not match.'); return; }
+  // Company code is COMPULSORY — no personal/public signup path.
+  const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
+  if (!inviteCode) {
+    setFieldErr('b-code','b-code-err','A company code is required. Key Wellness is currently available through participating employers.');
+    return;
+  }
   const btn = document.getElementById('signup-btn');
   btn.disabled = true; btn.textContent = 'Creating account…';
-  const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
+  // Verify the code resolves to an active organisation before creating the
+  // account, so a typo can't silently create an orphaned public member. If the
+  // verify_invite_code RPC isn't deployed yet, fall back to the DB trigger's
+  // resolution at signup (graceful — never blocks a legitimate signup).
+  try {
+    const { data: _codeOk, error: _codeErr } = await sb.rpc('verify_invite_code', { p_code: inviteCode });
+    if (!_codeErr && _codeOk === false) {
+      setFieldErr('b-code','b-code-err','That company code was not recognised. Please check it with your HR focal point.');
+      btn.disabled = false; btn.textContent = 'Create Account';
+      return;
+    }
+  } catch (_e) { /* RPC absent → rely on server-side resolution */ }
   const GENERIC = 'Account creation failed — please try again or contact wellness@keywellness.co.bw.';
   try {
     const { error } = await sb.auth.signUp({
@@ -1641,6 +1696,20 @@ function route() {
   let view = window.location.hash.replace('#', '') || 'dashboard';
   const hasOnboarded = state.user?.onboarded === true || !!state.user?.first_name;
   if (!hasOnboarded && view !== 'onboarding') view = 'onboarding';
+  // Compulsory first assessment: once onboarded, the portal is locked until the
+  // member's first assessment is recorded in Supabase. Server-authoritative
+  // (state.assessments comes from loadAllData) so a cleared cache can neither
+  // bypass the lock nor falsely re-lock a completed member. Staff never hit this.
+  const _isStaff = window._isAdmin || window._employerOrgId;
+  const _firstAssessmentDone = Array.isArray(state.assessments) && state.assessments.length > 0;
+  if (!_isStaff && hasOnboarded && !_firstAssessmentDone && view !== 'onboarding') {
+    buildNav(view);
+    document.getElementById('page-title').textContent = 'Welcome';
+    document.getElementById('header-actions').innerHTML = '';
+    document.getElementById('page-content').innerHTML = '';
+    renderFirstAssessmentLock();
+    return;
+  }
   buildNav(view);
   const info = NAV.find(n => n.id === view) || { label: 'Dashboard' };
   document.getElementById('page-title').textContent = info.label;
@@ -1648,6 +1717,28 @@ function route() {
   document.getElementById('page-content').innerHTML = '';
   const fn = VIEWS[view] || VIEWS['dashboard'];
   fn();
+}
+
+// Portal-lock screen shown until the member completes their compulsory first
+// assessment. The only way forward is to start the assessment; there is no
+// "Back to Portal" link (that link is also hidden inside the assessment for the
+// first run). Draft auto-save in wellness_assessment.html lets them resume.
+function renderFirstAssessmentLock() {
+  const el = document.getElementById('page-content');
+  const _nm = state.user?.first_name ? `, ${escHtml(state.user.first_name)}` : '';
+  el.innerHTML = `
+    <div class="wizard">
+      <div class="card" style="padding:36px 32px;text-align:center;max-width:560px;margin:24px auto">
+        <div style="font-size:44px;margin-bottom:10px">📋</div>
+        <h2 style="margin-bottom:10px">One quick step first${_nm}</h2>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">
+          This quick assessment gives you your wellness score baseline and powers your Financial Hub on the dashboard.
+        </p>
+        <button class="btn btn-primary" style="padding:12px 28px;justify-content:center" onclick="openTool('wellness_assessment.html')">
+          Start my assessment →
+        </button>
+      </div>
+    </div>`;
 }
 
 // ══════════════════════════════════════════════════
@@ -1863,7 +1954,7 @@ function escHtml(str) {
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], org_unit_id:null };
+  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], org_unit_id:null, department_id:null, gender:'' };
 
   let steps = [
     { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
@@ -1912,7 +2003,15 @@ VIEWS['onboarding'] = function () {
               </div>
             </div>
             <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ First name is required.</p>
-          ` : s.type==='company' ? `<div id="cg-company"></div><p id="onb-company-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your company to continue.</p>` : `<div class="choice-grid" id="cg"></div>`}
+            <div style="margin-top:14px">
+              <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--gold)">*</span></label>
+              <div id="onb-gender" style="display:flex;flex-wrap:wrap;gap:8px">
+                ${[['male','Male'],['female','Female'],['prefer_not_to_say','Prefer not to say']].map(([v,l])=>`<button type="button" class="choice-btn${profile.gender===v?' selected':''}" data-g="${v}" onclick="wGender('${v}')" style="flex:0 1 auto;padding:9px 16px">${l}</button>`).join('')}
+              </div>
+              <p id="onb-gender-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please select an option to continue.</p>
+            </div>
+          ` : s.type==='company' ? `<div id="cg-company"></div><p id="onb-company-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your company to continue.</p>`
+            : s.type==='department' ? `<div id="cg-dept"></div><p id="onb-dept-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your department to continue.</p>` : `<div class="choice-grid" id="cg"></div>`}
           <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
             ${step>0?`<button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>`:'<span></span>'}
             <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${isNames?'':' disabled'}>
@@ -1929,12 +2028,47 @@ VIEWS['onboarding'] = function () {
         units: s.units,
         selectedId: profile.org_unit_id,
         onSelect: id => {
+          // Changing company invalidates any previously chosen department.
+          if (id !== profile.org_unit_id) profile.department_id = null;
           profile.org_unit_id = id;
           document.getElementById('w-next').disabled = !id;
           const e = document.getElementById('onb-company-err'); if (e) e.style.display = 'none';
         }
       });
       document.getElementById('w-next').disabled = !profile.org_unit_id;
+    } else if (s.type === 'department') {
+      const box = document.getElementById('cg-dept');
+      box.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading departments…</div>';
+      const nextBtn = document.getElementById('w-next');
+      nextBtn.disabled = true;
+      s.deptOptional = false;
+      (async () => {
+        const { departments, error } = await kwFetchDepartments(profile.org_unit_id);
+        // Guard against the user having navigated away before the fetch resolved.
+        if (steps[step] !== s) return;
+        if (error) {
+          box.innerHTML = '<div style="color:var(--red);font-size:13px">⚠ Could not load departments. Please check your connection and go Back, then try again.</div>';
+          return;
+        }
+        if (!departments || !departments.length) {
+          // Unit has no departments — allow proceeding (department stays null).
+          box.innerHTML = '<div style="color:var(--muted);font-size:13px">No departments are listed for your company — you can continue.</div>';
+          profile.department_id = null;
+          s.deptOptional = true;
+          nextBtn.disabled = false;
+          return;
+        }
+        kwRenderDeptPicker(box, {
+          departments,
+          selectedId: profile.department_id,
+          onSelect: id => {
+            profile.department_id = id;
+            nextBtn.disabled = !id;
+            const e = document.getElementById('onb-dept-err'); if (e) e.style.display = 'none';
+          }
+        });
+        nextBtn.disabled = !profile.department_id;
+      })();
     } else if (!isNames) {
       const cg = document.getElementById('cg');
       const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
@@ -1958,12 +2092,21 @@ VIEWS['onboarding'] = function () {
     } else { profile[s.key] = s.opts[i].l; }
     render();
   };
+  // Gender is picked without a full re-render (which would wipe the unsaved
+  // name inputs, since those are only committed to `profile` on wNext).
+  window.wGender = function (v) {
+    profile.gender = v;
+    document.querySelectorAll('#onb-gender .choice-btn').forEach(b =>
+      b.classList.toggle('selected', b.getAttribute('data-g') === v));
+    const e = document.getElementById('onb-gender-err'); if (e) e.style.display = 'none';
+  };
   window.wNext = function () {
     const s = steps[step];
     if (s.type === 'names') {
       const first = document.getElementById('onb-first')?.value.trim() || '';
       const last  = document.getElementById('onb-last')?.value.trim()  || '';
       if (!first) { document.getElementById('onb-name-err').style.display=''; return; }
+      if (!profile.gender) { document.getElementById('onb-gender-err').style.display=''; return; }
       profile.first_name = first;
       profile.last_name  = last;
     } else if (s.type === 'age') {
@@ -1972,6 +2115,9 @@ VIEWS['onboarding'] = function () {
       profile.age = ageVal;
     } else if (s.type === 'company') {
       if (!profile.org_unit_id) { const e = document.getElementById('onb-company-err'); if (e) e.style.display = ''; return; }
+    } else if (s.type === 'department') {
+      // department may legitimately be null only when the unit has no departments
+      if (!profile.department_id && !s.deptOptional) { const e = document.getElementById('onb-dept-err'); if (e) e.style.display = ''; return; }
     }
     if (step < steps.length-1) { step++; render(); }
     else { finishOnboarding(); }
@@ -1984,11 +2130,18 @@ VIEWS['onboarding'] = function () {
   (async () => {
     const { units } = await kwFetchOrgUnits();
     if (units && units.length) {
-      steps.splice(1, 0, {
-        q:'Which company are you with?',
-        hint:'Your company under the Sedimosa programme. This determines your wellness reports.',
-        key:'org_unit_id', type:'company', units
-      });
+      steps.splice(1, 0,
+        {
+          q:'Which company are you with?',
+          hint:'Your company under the Sedimosa programme. This determines your wellness reports.',
+          key:'org_unit_id', type:'company', units
+        },
+        {
+          q:'Which department are you in?',
+          hint:'This helps your HR team understand wellness across teams — always shown in aggregate, never individually.',
+          key:'department_id', type:'department'
+        }
+      );
     }
     render();
   })();
@@ -1997,16 +2150,21 @@ VIEWS['onboarding'] = function () {
     state.user = { ...profile, id: currentUser.id, onboarded: true, joined_at: new Date().toISOString() };
     const savedOk = await saveUser();
     if (savedOk === false) { showToast('⚠️ Could not save your details. Please try again.'); return; }
-    // org_unit_id is NOT in saveUser()'s column whitelist — persist it with a
-    // dedicated update, and do NOT advance if it fails (no silent failure).
-    if (profile.org_unit_id) {
-      const { error: _unitErr } = await sb.from('profiles').update({ org_unit_id: profile.org_unit_id }).eq('id', currentUser.id);
-      if (_unitErr) {
-        console.error('onboarding org_unit_id save failed:', _unitErr);
-        showToast('⚠️ Could not save your company. Please try again.');
+    // org_unit_id / department_id / gender are NOT in saveUser()'s whitelist
+    // (they are set-once, admin-mediated dims) — persist them with a dedicated
+    // update, and do NOT advance if it fails (no silent failure).
+    const _dims = {};
+    if (profile.org_unit_id)   _dims.org_unit_id   = profile.org_unit_id;
+    if (profile.department_id) _dims.department_id = profile.department_id;
+    if (profile.gender)        _dims.gender        = profile.gender;
+    if (Object.keys(_dims).length) {
+      const { error: _dimErr } = await sb.from('profiles').update(_dims).eq('id', currentUser.id);
+      if (_dimErr) {
+        console.error('onboarding dims save failed:', _dimErr);
+        showToast('⚠️ Could not save your details. Please try again.');
         return;
       }
-      state.user.org_unit_id = profile.org_unit_id;
+      Object.assign(state.user, _dims);
     }
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
@@ -3033,6 +3191,9 @@ window.saveNameModal = function () {
 
   initProfileUI();
   document.getElementById('name-modal').classList.remove('visible');
+  // Continue the backfill chain (company → department → gender) for anything
+  // still missing, now that the name modal has closed.
+  maybePromptBackfill();
 };
 
 // ══════════════════════════════════════════════════
@@ -3114,8 +3275,67 @@ function kwRenderUnitPicker(container, opts) {
   paint();
 }
 
-// Non-dismissable backfill modal for a pre-existing member with no unit yet.
-function showCompanyModal() {
+// ══════════════════════════════════════════════════
+//  DEPARTMENTS — unit_departments fetch + searchable picker
+//  Departments are a separate dimension on the profile (not org_units children).
+//  RLS scopes unit_departments to the member's own org.
+// ══════════════════════════════════════════════════
+let _kwDeptCache = {};   // unitId -> array (RLS-scoped)
+
+// Returns { departments:[...] } (departments:[] = unit has none → skip), or
+// { departments:null, error } on a genuine fetch failure so callers never
+// mistake an error for "no departments".
+async function kwFetchDepartments(unitId, force) {
+  if (!unitId) return { departments: [] };
+  if (_kwDeptCache[unitId] && !force) return { departments: _kwDeptCache[unitId] };
+  try {
+    const { data, error } = await sb.from('unit_departments')
+      .select('id,name,sort_order')
+      .eq('unit_id', unitId)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true });
+    if (error) { console.warn('[KW] departments fetch failed:', error); return { departments: null, error }; }
+    _kwDeptCache[unitId] = data || [];
+    return { departments: _kwDeptCache[unitId] };
+  } catch (e) { console.warn('[KW] departments fetch threw:', e); return { departments: null, error: e }; }
+}
+
+// Searchable, scrollable department picker rendered into `container`.
+// opts: { departments, selectedId, onSelect(deptId) }. No global ids, so it is
+// safe to use in both the onboarding step and the backfill modal.
+function kwRenderDeptPicker(container, opts) {
+  const depts = (opts.departments || []).slice();
+  let selectedId = opts.selectedId || null;
+  container.innerHTML = `
+    <input type="text" class="kw-dept-search" placeholder="Search departments…" autocomplete="off"
+      style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit;margin-bottom:10px">
+    <div class="kw-dept-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px"></div>`;
+  const search = container.querySelector('.kw-dept-search');
+  const list   = container.querySelector('.kw-dept-list');
+  function paint(filter) {
+    const f = (filter || '').trim().toLowerCase();
+    const rows = depts.filter(d => !f || d.name.toLowerCase().includes(f));
+    if (!rows.length) { list.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:8px">No matching department.</div>`; return; }
+    list.innerHTML = rows.map(d =>
+      `<button type="button" class="choice-btn${selectedId === d.id ? ' selected' : ''}" data-id="${d.id}" style="justify-content:flex-start;text-align:left">${escHtml(d.name)}</button>`
+    ).join('');
+    list.querySelectorAll('.choice-btn').forEach(b => b.onclick = () => {
+      selectedId = b.getAttribute('data-id');
+      paint(search.value);
+      opts.onSelect(selectedId);
+    });
+  }
+  search.oninput = () => paint(search.value);
+  paint('');
+}
+
+// ══════════════════════════════════════════════════
+//  PROFILE BACKFILL — company → department → gender, in order, for
+//  pre-existing members who are missing any of them. Each modal is
+//  non-dismissable; every save surfaces errors (no silent failure); a
+//  successful save advances to the next missing item via onDone().
+// ══════════════════════════════════════════════════
+function showCompanyBackfill(onDone) {
   const modal   = document.getElementById('company-modal');
   const err     = document.getElementById('cm-err');
   const saveBtn = document.getElementById('cm-save');
@@ -3132,7 +3352,6 @@ function showCompanyModal() {
     saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
     const { error } = await sb.from('profiles').update({ org_unit_id: chosen }).eq('id', currentUser.id);
     if (error) {
-      // No silent failure — keep the modal open and surface the error.
       console.error('company backfill save failed:', error);
       err.textContent = '⚠ We could not save your company. Please check your connection and try again.';
       err.style.display = '';
@@ -3142,19 +3361,108 @@ function showCompanyModal() {
     if (state.user) state.user.org_unit_id = chosen;
     modal.classList.remove('visible');
     showToast('✓ Company saved');
+    if (onDone) onDone();
   };
   modal.classList.add('visible');
 }
 
-// Prompt the backfill modal only when the member's org actually has units and
-// they haven't chosen one. Idempotent and safe to call on every member landing.
-async function maybePromptCompany() {
+async function showDepartmentBackfill(onDone) {
+  const unitId = state.user?.org_unit_id;
+  if (!unitId) { if (onDone) onDone(); return; }               // no company → nothing to pick against
+  const { departments, error } = await kwFetchDepartments(unitId);
+  if (error) { if (onDone) onDone(); return; }                 // transient — re-prompts next login
+  if (!departments || !departments.length) { if (onDone) onDone(); return; }  // unit has none → skip
+  const modal   = document.getElementById('department-modal');
+  const err_    = document.getElementById('dm-err');
+  const saveBtn = document.getElementById('dm-save');
+  let chosen = null;
+  err_.style.display = 'none';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Save & Continue →';
+  kwRenderDeptPicker(document.getElementById('dm-picker'), {
+    departments,
+    onSelect: id => { chosen = id; saveBtn.disabled = !id; err_.style.display = 'none'; }
+  });
+  saveBtn.onclick = async () => {
+    if (!chosen) return;
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    const { error } = await sb.from('profiles').update({ department_id: chosen }).eq('id', currentUser.id);
+    if (error) {
+      console.error('department backfill save failed:', error);
+      err_.textContent = '⚠ We could not save your department. Please check your connection and try again.';
+      err_.style.display = '';
+      saveBtn.disabled = false; saveBtn.textContent = 'Save & Continue →';
+      return;
+    }
+    if (state.user) state.user.department_id = chosen;
+    modal.classList.remove('visible');
+    showToast('✓ Department saved');
+    if (onDone) onDone();
+  };
+  modal.classList.add('visible');
+}
+
+function showGenderBackfill(onDone) {
+  const modal   = document.getElementById('gender-modal');
+  const err     = document.getElementById('gm-err');
+  const saveBtn = document.getElementById('gm-save');
+  const group   = document.getElementById('gm-group');
+  let chosen = null;
+  err.style.display = 'none';
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Save & Continue →';
+  group.querySelectorAll('.choice-btn').forEach(b => {
+    b.classList.remove('selected');
+    b.onclick = () => {
+      chosen = b.getAttribute('data-g');
+      group.querySelectorAll('.choice-btn').forEach(x => x.classList.toggle('selected', x === b));
+      saveBtn.disabled = false; err.style.display = 'none';
+    };
+  });
+  saveBtn.onclick = async () => {
+    if (!chosen) return;
+    saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+    const { error } = await sb.from('profiles').update({ gender: chosen }).eq('id', currentUser.id);
+    if (error) {
+      console.error('gender backfill save failed:', error);
+      err.textContent = '⚠ We could not save this. Please check your connection and try again.';
+      err.style.display = '';
+      saveBtn.disabled = false; saveBtn.textContent = 'Save & Continue →';
+      return;
+    }
+    if (state.user) state.user.gender = chosen;
+    modal.classList.remove('visible');
+    showToast('✓ Saved');
+    if (onDone) onDone();
+  };
+  modal.classList.add('visible');
+}
+
+function _processBackfillQueue(queue, i) {
+  if (!queue || i >= queue.length) return;
+  const next = () => _processBackfillQueue(queue, i + 1);
+  switch (queue[i]) {
+    case 'company':    return showCompanyBackfill(next);
+    case 'department': return showDepartmentBackfill(next);
+    case 'gender':     return showGenderBackfill(next);
+    default:           return next();
+  }
+}
+
+// Prompt the backfill chain for whichever of company → department → gender is
+// missing. Idempotent and safe to call on every member landing. Company &
+// department only apply to unit-enabled orgs; gender applies to everyone.
+async function maybePromptBackfill() {
   if (!state.user) return;
-  if (state.user.org_unit_id) return;                 // already set (e.g. Tshenolo) → no modal
-  if (document.getElementById('company-modal').classList.contains('visible')) return;
+  if (document.querySelector('#name-modal.visible, #company-modal.visible, #department-modal.visible, #gender-modal.visible')) return;
   const { units } = await kwFetchOrgUnits();
-  if (!units || !units.length) return;                // Test Co (no units) or transient fetch error → skip
-  showCompanyModal();
+  const orgHasUnits = !!(units && units.length);
+  const queue = [];
+  if (orgHasUnits && !state.user.org_unit_id)   queue.push('company');
+  if (orgHasUnits && !state.user.department_id) queue.push('department');
+  if (!state.user.gender)                        queue.push('gender');
+  if (!queue.length) return;
+  _processBackfillQueue(queue, 0);
 }
 
 // Record a read article (by title), persist to Supabase, and refresh learning badge.
@@ -6088,8 +6396,10 @@ function registerAuthListener() {
       route();
       if (state.user) {
         const _lp = safeParseLS('kw_profile', {});
-        // Show name-capture modal for existing users who have no name set yet
-        if (!_lp.firstName && !_lp.displayName && !state.user.first_name) {
+        const _hasName = !!(_lp.firstName || _lp.displayName || state.user.first_name);
+        // Show name-capture modal for existing users who have no name set yet.
+        // Its save() chains into maybePromptBackfill() for the remaining dims.
+        if (!_hasName) {
           setTimeout(showNameModal, 700);
         }
         // Consent check: localStorage is fast-path; Supabase is fallback
@@ -6099,8 +6409,9 @@ function registerAuthListener() {
         } else {
           setTimeout(showConsentModal, 800);
         }
-        // Company backfill for pre-existing members of a unit-enabled org.
-        maybePromptCompany();
+        // Backfill company → department → gender for pre-existing members.
+        // Skipped here when the name modal is showing; it chains from there.
+        if (_hasName) maybePromptBackfill();
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       // User arrived via the reset-link email — show set-new-password form
@@ -6164,7 +6475,7 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
-      maybePromptCompany();   // company backfill for returning members with no unit yet
+      maybePromptBackfill();  // company → department → gender backfill for returning members
     } else {
       // External visit or new tab — require password to prove identity.
       document.getElementById('sc-email').textContent = currentUser.email || '';

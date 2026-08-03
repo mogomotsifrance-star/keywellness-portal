@@ -3137,3 +3137,124 @@ company managers out of those actions):
 - **Fund-manager per-company table currently lives in the admin report
   builder.** Surfacing an equivalent table directly on `employer.html`'s
   live dashboard (via `org_report_company_breakdown`) is a follow-on.
+
+---
+
+# Sedimosa Phase 2 (Departments · Gender · Phone · Notifications · Compulsory
+# assessment · Budget actuals · Estate planning · Webinars · Password change)
+
+Discovery: `BATCH-0-SEDIMOSA-PHASE2-FINDINGS.md` (2026-07-31, GO). Prerequisite
+`supabase_org_units.sql` confirmed applied. No live DB access here — all SQL
+hand-applied by Tshenolo in the Supabase SQL Editor.
+
+## Batch 1 — migrations + seed corrections (authored 2026-07-31)
+
+**Status: SQL authored, NOT yet applied.** Apply order: run the §12 discovery
+SELECTs in the findings doc first (esp. the DeBeers-members check), then apply
+`supabase_sedimosa_phase2_batch1.sql`. PRODUCTION-LIVE on apply (shared project).
+
+- **File:** `supabase_sedimosa_phase2_batch1.sql`
+- **Rollback lever:** `migrations/rollback-sedimosa-phase2-batch1.sql` (written
+  BEFORE the migration; drop-based — see its caveats re: data loss + the
+  non-auto-reversed DeBeers→DBGSS member move).
+- **Seed corrections (non-destructive, idempotent):** rename `Morupule` →
+  `Morupule Coal Mine (MCM)`; reassign any profiles on the mis-seeded `DeBeers`
+  unit → `DBGSS`, then `DeBeers.is_active=false` (never deleted). Result: 7
+  active top-level (Debswana parent + MCM, DBGSS, DTCB, DPF, Mmila, Sesiro) + 3
+  Debswana children = 10 active, 1 inactive.
+- **New schema:** `unit_departments`; `profiles.gender` (male/female/
+  prefer_not_to_say), `.department_id`, `.will_status` (has_will/no_will/
+  in_progress) — `.phone` was already present (no-op); `webinar_views`;
+  `notifications`; `content_items.webinar_date`.
+- **Department seed:** 161 rows verified (6×22 shared + DTCB 7 + DBGSS 10 +
+  MCM 12). MCM departments resolve by the NEW name (rename runs first).
+- **RLS:** `unit_departments` read = own-org active units; `webinar_views` =
+  member INSERT own / SELECT **admin-only** (HR & employers get nothing);
+  `notifications` = member SELECT + UPDATE(read_at) own, **no client INSERT
+  policy** (see decision below). Set-once guards: `trg_lock_profile_dims`
+  (gender + department_id, admin-mediated changes; will_status intentionally
+  NOT locked — it updates on assessment retakes).
+
+### Decision — notification inserts are SERVER-SIDE only
+Both our email sends run inside the `send-booking-email` Edge Function
+(triggered client-side at index.html:5316 and admin.html:1036, but the send is
+server-side). Batch 4 will co-write `notifications` rows there using the service
+role, so **no client INSERT policy** is needed — this keeps email↔notification
+parity automatic and prevents a client forging notifications for other users
+(esp. the admin→member "booking confirmed" case, which a member-scoped INSERT
+policy could not do anyway). The Edge Function will need `SUPABASE_SERVICE_ROLE_KEY`
+in its env; record the function version hash before that deploy.
+
+### Client confirmations needed (department spellings normalised)
+- "Project Mangement" → **Project Management**; "Safety and Suitability" →
+  **Safety and Sustainability** (appears in both shared list and MCM list).
+- Unit display labels: **Morupule Coal Mine (MCM)** and **DBGSS** (= DeBeers).
+- Suppressed small-cohort company AND department rows are BY DESIGN (privacy).
+
+### Botswana DPA / privacy-notice items (accumulating for launch)
+- `gender` collected (with "prefer not to say"); surfaces to HR only via guarded
+  aggregates, never per-person.
+- `will_status` (estate planning) collected.
+- Notification content retained in `notifications`.
+- (Batch 3 will add: unverified phone numbers as personal data.)
+- (Batch 7 will add: Key Wellness staff can see individual webinar viewing
+  activity via `webinar_views` — must be disclosed.)
+
+### Deferred
+- **Batch 3 (phone-number accounts) — DEFERRED** by decision (2026-07-31). Needs
+  a manual Supabase Auth dashboard toggle (enable Phone provider, DISABLE phone
+  confirmations, no SMS provider) + a live test signup, PLUS a new server-side
+  Edge Function for admin-mediated password resets (anon key can't call
+  `sb.auth.admin`). To be tackled as a focused unit after Batches 1–2, 4–9.
+- Admin-mediated password-reset PROCESS (who verifies identity, how) must be
+  defined before real phone users exist.
+
+## Batch 2 — onboarding: gender, departments, mandatory code, assessment lock (authored 2026-08-03)
+
+**Status: frontend on `dev` (not merged to main). Requires Batch 1 applied (done)
+PLUS one small RPC (`verify_invite_code`) applied for full effect.** All changes
+in `index.html` + `wellness_assessment.html`.
+
+### 2.4 Mandatory company code (index.html)
+- Signup label now `Company code *` with hint; the optional path is gone.
+- `doSignup()` rejects an empty code ("A company code is required…"), and calls
+  the new `verify_invite_code(p_code)` RPC to reject codes that don't resolve to
+  an active org ("That company code was not recognised…"). **Graceful fallback:**
+  the RPC call is wrapped in try/catch — if it isn't deployed yet, signup falls
+  back to the DB trigger's own resolution and is never blocked. VERIFIED in the
+  browser: empty-code signup is blocked with the exact copy; no account created.
+- **NEW SQL to apply:** `supabase_verify_invite_code.sql` (rollback:
+  `migrations/rollback-verify-invite-code.sql`). Grants EXECUTE to anon (needed
+  pre-auth at signup) + authenticated; discloses only a boolean.
+
+### 2.1 Gender + 2.2 Department (index.html onboarding + backfill)
+- **Onboarding:** gender (Male/Female/Prefer not to say, required) added to the
+  names step; a mandatory department step spliced right after the company step
+  (searchable list via new `kwFetchDepartments` + `kwRenderDeptPicker`).
+  Switching company resets the chosen department. A unit with no departments
+  makes the step optional (auto-allows continue). `gender`/`department_id`/
+  `org_unit_id` persist via a single dedicated `profiles.update` (NOT saveUser's
+  whitelist — they are set-once dims; matches the org_unit_id precedent).
+- **Backfill:** `maybePromptCompany()` → `maybePromptBackfill()` — a queue that
+  prompts company → department → gender for whatever a pre-existing member is
+  missing, each a non-dismissable modal chaining to the next on save. New DOM:
+  `#department-modal`, `#gender-modal` (+ CSS). Name-capture modal chains into it.
+  **Tshenolo is the live test case** (has company; will be asked department + gender).
+
+### 2.5 Compulsory first-assessment lock
+- **index.html `route()`:** once onboarded, if `state.assessments.length === 0`
+  the portal renders a lock screen (`renderFirstAssessmentLock()`) with the
+  required baseline note + a single "Start my assessment" CTA; every nav
+  destination re-locks. Server-authoritative (assessments come from Supabase) so
+  a cleared cache can neither bypass nor falsely re-lock. Staff exempt.
+- **wellness_assessment.html:** on a member's first run (`!_isReassessment`), the
+  top "Back to Portal" link (`#backToPortalTop`) is hidden and the baseline note
+  (`#firstAssessmentNote`) shown. Results-screen portal links stay (they've
+  finished by then). Existing draft auto-save (`kw_assessment_v2`) gives resume.
+
+### Verified / not-yet-verified
+- VERIFIED in browser (static preview, no auth): no JS parse errors; signup
+  mandatory-code gate works end-to-end.
+- NOT yet verified (needs a live Sedimosa login on dev): onboarding gender +
+  department steps, the backfill chain, and the assessment lock. Test with
+  Tshenolo after deploy to dev.
