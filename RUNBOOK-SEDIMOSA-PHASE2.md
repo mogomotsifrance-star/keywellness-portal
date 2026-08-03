@@ -22,6 +22,7 @@ planning, webinars, change password, department HR reporting).
 | `supabase_verify_invite_code.sql` (Batch 2: signup code validation) | Applied in SQL Editor |
 | `send-booking-email` Edge Function (Batch 4: writes notification rows) | Deployed — **but see Step 2, it must be REDEPLOYED for Batch 3** |
 | Batch 2 onboarding (gender/dept, mandatory code, assessment lock) | Live + tested with Tshenolo |
+| **Batch 3 phone accounts (pseudo-email) — frontend** | **Shipped: merged to `dev` + `main`, live on both sites.** Making it *functional* still needs the two Edge Functions deployed — see Step 2. |
 | Prerequisite org_units build (`supabase_org_units.sql`, `..._hr_scope.sql`, `org_report_data_v4`, scoped overview/rewards) | Applied before this phase (Batch 3c) |
 
 ---
@@ -41,7 +42,10 @@ Open a terminal or the folder, then Supabase → **SQL Editor**, paste and run:
 - **Rollback:** `migrations/rollback-org-report-departments.sql`.
 
 ### Step 2 — Deploy the two Edge Functions (Batch 3 phone accounts)
-In a terminal at the project root (`cd "…/keywellness-portal"`; run `supabase login` once if needed):
+The phone-accounts **frontend has shipped** (dev + main). These two deploys are all
+that remains to make phone signup/login actually work — until then the Phone toggle
+is visible but signup will fail. In a terminal at the project root
+(`cd "…/keywellness-portal"`; run `supabase login` once if needed):
 
 ```bash
 supabase functions deploy phone-signup
