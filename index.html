@@ -3949,6 +3949,15 @@ function renderLpLanding(el) {
 // rows); this renderer only presents what the query returned. The tab
 // is ALWAYS visible — an org with no webinars gets the empty state,
 // never a hidden tab.
+// Batch 4: render the stored Vimeo thumbnail (thumbnail_url) as the webinar
+// poster, layered over the generated kwPoster SVG. If the image fails to load
+// (or the row has none) the SVG placeholder shows through — never a broken
+// image. object-fit:cover + the art box's fixed 16:9 ratio = no layout shift.
+function lpWebinarPosterImg(w) {
+  if (!w || !w.thumbnail_url) return '';
+  return `<img class="lp-poster-img" src="${escHtml(w.thumbnail_url)}" alt="${escHtml(w.title || '')}" loading="lazy" onerror="this.style.display='none'">`;
+}
+
 function renderWebinarsSection() {
   const webinars = lpWebinars();
   const b = state.lp.branding;
@@ -3969,6 +3978,7 @@ function renderWebinarsSection() {
     <div class="lp-lesson-card playable" role="button" tabindex="0" onclick="lpOpenWebinar('${w.id}')" onkeydown="if(event.key==='Enter')lpOpenWebinar('${w.id}')">
       <div class="lp-lc-art">
         ${kwPoster(w, 320)}
+        ${lpWebinarPosterImg(w)}
         <div class="lp-lc-overlay"><span class="lp-lc-play"></span></div>
         ${w.duration_seconds ? `<span class="lp-lc-upnext" style="left:auto;right:8px">${lpFmtDuration(w.duration_seconds)}</span>` : ''}
       </div>
@@ -3991,6 +4001,7 @@ function renderWebinarsSection() {
       <div class="lp-webinar-spotlight" role="button" tabindex="0" onclick="lpOpenWebinar('${s.id}')" onkeydown="if(event.key==='Enter')lpOpenWebinar('${s.id}')">
         <div class="lp-ws-art">
           ${kwPoster(s, 640)}
+          ${lpWebinarPosterImg(s)}
           <div class="lp-lc-overlay"><span class="lp-lc-play"></span></div>
           ${s.duration_seconds ? `<span class="lp-lc-upnext" style="left:auto;right:10px">${lpFmtDuration(s.duration_seconds)}</span>` : ''}
         </div>
