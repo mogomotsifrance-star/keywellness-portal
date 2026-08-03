@@ -7186,18 +7186,19 @@ setInterval(() => {
   </section>
 </div>
 <script>
-// ── Ask Key widget (frontend, test hosts only until launch gates clear) ────
-// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES): the AI chat must stay OFF on
-// the live domains until (1) the privacy notice discloses AI chat processing +
-// Anthropic as a processor, and (2) Anthropic is on the DPA foreign-processor
-// register. Rather than a manual boolean flipped per-branch (easy to merge to
-// `main` by accident), the gate is HOST-DERIVED: enabled only on the test/
-// preview hosts (*.workers.dev, localhost, 127.0.0.1) and always false on the
-// live hosts (portal.keywellness.co.bw and the github.io mirror). This is safe
-// on both branches — dev/test keeps the feature, `main`/live never shows it.
-// The Edge Function may be deployed early; it is inert until called.
+// ── Ask Key widget (frontend) ────
+// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES) — CLEARED 2026-08-03:
+//   (1) the privacy notice discloses AI chat processing + Anthropic as a
+//       processor (see the consent-modal in this file); and
+//   (2) Anthropic's DPA is signed and recorded on the Botswana foreign-processor
+//       register (operator attestation, 2026-08-03).
+// The gate stays HOST-DERIVED rather than a per-branch boolean, so which hosts
+// run the chat is explicit and auditable in one place: the test/preview hosts
+// (*.workers.dev, localhost) AND, now that the gate is cleared, the live hosts
+// (keywellness.co.bw + subdomains, and the github.io mirror). To take the chat
+// OFFLINE again, drop the live-host alternations from the regex below.
 (function () {
-  const AI_CHAT_ENABLED = /(^|\.)workers\.dev$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
+  const AI_CHAT_ENABLED = /(^|\.)workers\.dev$|(^|\.)keywellness\.co\.bw$|(^|\.)github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
 
   const FN_URL = SUPABASE_URL + '/functions/v1/ask-claude';
   const STARTERS = [
