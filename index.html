@@ -161,9 +161,49 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 @media(max-width:640px){.lp-webinar-spotlight{grid-template-columns:1fr}}
 /* ── Articles-tab top row: confidence progress + infographics placeholder ── */
 .learn-top-row{display:grid;grid-template-columns:72% 1fr;gap:14px;margin-bottom:18px;align-items:stretch}
-.infographics-card{cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transition:transform .3s var(--kw-ease),box-shadow .3s var(--kw-ease)}
-.infographics-card:hover{box-shadow:var(--kw-shadow-hover);transform:translateY(-3px)}
 @media(max-width:640px){.learn-top-row{grid-template-columns:1fr}}
+/* ── Newsletters ── */
+.nl-layout{display:flex;gap:18px;align-items:flex-start}
+.nl-sidebar{width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.nl-side-item{border:2px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;background:#fff;transition:.15s}
+.nl-side-item:hover{border-color:#387838}
+.nl-side-item.active{border-color:#387838;background:#f0faf4}
+.nl-side-tag{font-size:10px;font-weight:800;color:#387838;text-transform:uppercase;letter-spacing:.06em}
+.nl-side-title{font-size:13px;font-weight:700;margin:3px 0 2px;line-height:1.35}
+.nl-side-date{font-size:11px;color:var(--muted)}
+.nl-content{flex:1;min-width:0}
+.nl-hero{background:#224568;border-radius:14px;padding:26px 28px;color:#fff;margin-bottom:18px}
+.nl-hero .nl-edition{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75)}
+.nl-hero h1{font-size:24px;font-weight:800;line-height:1.25;margin:8px 0 6px}
+.nl-hero .nl-standfirst{font-size:14px;line-height:1.6;color:rgba(255,255,255,.85)}
+.nl-statband{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:18px 0}
+.nl-stat{background:#fff;border:2px solid var(--border);border-radius:12px;padding:14px;text-align:center}
+.nl-stat .v{font-size:24px;font-weight:800;color:#387838;line-height:1.1}
+.nl-stat .l{font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4}
+.nl-section{margin:22px 0}
+.nl-section h2{font-size:17px;font-weight:800;color:#224568;margin-bottom:8px}
+.nl-section p{font-size:14px;line-height:1.75;color:#374151;margin-bottom:10px}
+.nl-bars{margin:14px 0}
+.nl-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.nl-bar-label{width:150px;font-size:12px;font-weight:600;flex-shrink:0}
+.nl-bar-track{flex:1;background:#eef1ee;border-radius:99px;height:16px;overflow:hidden}
+.nl-bar-fill{height:100%;background:#387838;border-radius:99px}
+.nl-bar-val{width:52px;font-size:12px;font-weight:700;color:#387838;text-align:right;flex-shrink:0}
+.nl-timeline{border-left:3px solid #387838;margin:14px 0 14px 6px;padding-left:16px}
+.nl-tl-item{margin-bottom:12px}
+.nl-tl-date{font-size:11px;font-weight:800;color:#387838;text-transform:uppercase}
+.nl-tl-text{font-size:13px;line-height:1.6;color:#374151}
+.nl-actions{background:#f0faf4;border:2px solid #387838;border-radius:12px;padding:16px 18px;margin:20px 0}
+.nl-actions h3{font-size:14px;font-weight:800;color:#224568;margin-bottom:8px}
+.nl-actions li{font-size:13px;line-height:1.7;color:#374151;margin-left:18px;margin-bottom:4px}
+.nl-note{background:var(--cream,#faf7f0);border-radius:10px;padding:12px 14px;font-size:12px;line-height:1.6;color:var(--muted);margin-top:22px}
+.nl-card{cursor:pointer;display:flex;flex-direction:column;justify-content:center;transition:transform .3s var(--kw-ease),box-shadow .3s var(--kw-ease)}
+.nl-card:hover{box-shadow:var(--kw-shadow-hover);transform:translateY(-3px)}
+@media(max-width:768px){
+  .nl-layout{flex-direction:column}
+  .nl-sidebar{width:100%;flex-direction:row;overflow-x:auto;padding-bottom:6px}
+  .nl-side-item{min-width:200px;flex-shrink:0}
+}
 /* ── Next actions ── */
 .next-action{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:var(--cream-dark);border-radius:var(--radius-sm);margin-bottom:9px;border:1px solid var(--border)}
 .na-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:4px}
@@ -4756,11 +4796,17 @@ VIEWS['learn'] = function (tab) {
           <div class="progress-bar"><div class="progress-fill" style="width:${_learnPct}%"></div></div>
           <div style="font-size:11px;color:var(--muted);margin-top:7px">${_learnArts + _learnVids} of ${_learnTotal} Learn items engaged — the more you learn, the more confident your money decisions become.</div>
         </div>
-        <div class="card infographics-card" role="button" tabindex="0" onclick="showInfographics()" onkeydown="if(event.key==='Enter')showInfographics()" style="margin:0">
-          <div style="font-size:26px;margin-bottom:6px">📊</div>
-          <div style="font-size:13px;font-weight:700;color:var(--navy)">Infographics</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">Coming soon</div>
-        </div>
+        ${(() => {
+          const _latest = [...NEWSLETTERS].sort((a,b)=>b.date.localeCompare(a.date))[0];
+          return `<div class="card nl-card" role="button" tabindex="0" onclick="showNewsletters()" onkeydown="if(event.key==='Enter')showNewsletters()" style="margin:0">
+          <div style="font-size:10px;font-weight:800;color:#387838;text-transform:uppercase;letter-spacing:.06em">Newsletter</div>
+          <div style="font-size:13px;font-weight:700;color:var(--navy);margin:5px 0 4px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${_latest.title}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span style="font-size:11px;color:var(--muted)">${fmtDate(_latest.date)}</span>
+            <span style="font-size:15px;color:#387838">→</span>
+          </div>
+        </div>`;
+        })()}
       </div>
       <div class="notice notice-gold" style="margin-bottom:18px">📚 <strong>Learn, then apply.</strong> Each article connects to tools and real-world actions.</div>
       <div class="learn-grid">
@@ -4790,19 +4836,196 @@ VIEWS['learn'] = function (tab) {
   }
 };
 
-// Infographics placeholder — no backend, no tracking, no effect on the Learn
-// engagement metric (the confidence denominator is unchanged). Reached from the
-// Articles-tab card.
-window.showInfographics = function () {
+// ══════════════════════════════════════════════════
+//  NEWSLETTERS — Botswana Financial Trends
+//  Frontend-baked (mirrors the CONTENT/ARTICLE_BODIES pattern). New editions
+//  ship by appending to NEWSLETTERS + NEWSLETTER_BODIES and pushing to git.
+//  No backend, no tracking, no effect on the Learn engagement metric (the
+//  confidence denominator is unchanged). "Latest" everywhere is derived by
+//  sorting on `date` (newest first), never by array position.
+// ══════════════════════════════════════════════════
+const NEWSLETTERS = [
+  { id:'nl-2026-08', date:'2026-08-03', tag:'Healthcare & Tax',
+    title:'VAT Arrives in Private Healthcare: What It Means for Your Medical Costs',
+    summary:'From 1 August 2026, private medical services in Botswana carry 14% VAT. What changes, what does not, and how to prepare.' },
+  { id:'nl-2026-07', date:'2026-07-06', tag:'Tax Changes',
+    title:'Botswana\'s New Tax Landscape: The 1 July Changes Explained',
+    summary:'New tax laws took effect on 1 July 2026. Who pays more, what stays the same, and what to watch on your payslip and receipts.' },
+  { id:'nl-2026-06', date:'2026-06-08', tag:'Cost of Living',
+    title:'Living With 10% Inflation: Protecting Your Household Budget',
+    summary:'Inflation has surged past 10%, driven by transport and fuel. Practical steps to defend your budget without panic.' },
+];
+
+const NEWSLETTER_BODIES = {};
+
+NEWSLETTER_BODIES['nl-2026-08'] = `
+<div class="nl-hero">
+  <div class="nl-edition">Key Wellness Newsletter · Edition 3 · August 2026</div>
+  <h1>VAT Arrives in Private Healthcare: What It Means for Your Medical Costs</h1>
+  <div class="nl-standfirst">From 1 August 2026, private medical services in Botswana carry VAT for the first time. If you or your family use private doctors, dentists or clinics, your bills and possibly your medical aid contributions are changing. Here is what you need to know.</div>
+</div>
+
+<div class="nl-statband">
+  <div class="nl-stat"><div class="v">14%</div><div class="l">VAT now added to private medical services</div></div>
+  <div class="nl-stat"><div class="v">1 Aug</div><div class="l">Date private providers began charging VAT</div></div>
+  <div class="nl-stat"><div class="v">0%</div><div class="l">VAT on prescription medicines, now zero-rated</div></div>
+</div>
+
+<div class="nl-section">
+  <h2>What changed</h2>
+  <p>Under Botswana's new VAT Act, which took effect on 1 July 2026, private medical services lost their long-standing VAT exemption. The Botswana Unified Revenue Service required private healthcare providers to register for VAT by 31 July, and from 1 August 2026 consultations, procedures and other private medical services attract VAT at the standard rate of 14%.</p>
+  <p>There is one important piece of good news inside the change: prescription medicines moved from exempt to zero-rated. Zero-rating means no VAT is charged on your prescription, and pharmacies can claim back their own input costs, which helps keep medicine prices stable.</p>
+</div>
+
+<div class="nl-section">
+  <h2>What it means for your pocket</h2>
+  <p>A private consultation that cost P600 before August now costs P684 with VAT. A P5,000 procedure becomes P5,700. If you pay cash for private care, you will feel this immediately. If you are on a medical aid scheme, the effect arrives in two ways: your scheme pays more for every claim, and over time schemes may adjust contributions or benefits to absorb the higher costs. Several medical and dental associations have publicly raised this concern.</p>
+  <div class="nl-bars">
+    <div class="nl-bar-row"><div class="nl-bar-label">GP visit P600</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:60%"></div></div><div class="nl-bar-val">P684</div></div>
+    <div class="nl-bar-row"><div class="nl-bar-label">Dental work P2,500</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:75%"></div></div><div class="nl-bar-val">P2,850</div></div>
+    <div class="nl-bar-row"><div class="nl-bar-label">Procedure P5,000</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:90%"></div></div><div class="nl-bar-val">P5,700</div></div>
+  </div>
+  <p style="font-size:12px;color:#6b7280">Illustrative examples: pre-VAT price compared with the new VAT-inclusive price at 14%.</p>
+</div>
+
+<div class="nl-section">
+  <h2>What is not changing</h2>
+  <p>Public healthcare through government facilities is not affected by this change. Prescription medicines carry no VAT. And your right to choose between public and private care remains exactly as it was. The change is about how private services are taxed, not about access to public health services.</p>
+</div>
+
+<div class="nl-actions">
+  <h3>What you can do this month</h3>
+  <ul>
+    <li>Review your medical aid benefits and check how much of your typical claims your scheme covers, so a VAT-driven cost increase does not surprise you.</li>
+    <li>Update the medical line in your Budget Planner to reflect roughly 14% higher out-of-pocket private care costs.</li>
+    <li>If your scheme announces a contribution increase, factor it into your monthly plan early rather than absorbing it unplanned.</li>
+    <li>Keep using preventive care. Delaying treatment to avoid cost usually leads to bigger bills later.</li>
+    <li>Ask providers for itemised invoices so you can see the VAT component clearly.</li>
+  </ul>
+</div>
+
+<div class="nl-note">This newsletter is educational information prepared by Key Wellness, based on public announcements by BURS and the Ministry of Finance current as at 3 August 2026. It is not tax, medical or financial advice. For decisions about your own situation, verify details with BURS, your medical aid scheme, or a qualified professional. Speak to a Key Wellness coach if you would like help working these changes into your plan.</div>
+`;
+
+NEWSLETTER_BODIES['nl-2026-07'] = `
+<div class="nl-hero">
+  <div class="nl-edition">Key Wellness Newsletter · Edition 2 · July 2026</div>
+  <h1>Botswana's New Tax Landscape: The 1 July Changes Explained</h1>
+  <div class="nl-standfirst">On 1 July 2026 a new Income Tax Act, VAT Act and Tax Administration Act came into force, the biggest overhaul of Botswana's tax system in years. Most employees will see little or no change on their payslip. Here is who is affected and what to watch.</div>
+</div>
+
+<div class="nl-statband">
+  <div class="nl-stat"><div class="v">27.5%</div><div class="l">New top personal tax band on income above P400,001 per year</div></div>
+  <div class="nl-stat"><div class="v">24.5%</div><div class="l">New corporate tax rate, up from 22%</div></div>
+  <div class="nl-stat"><div class="v">14%</div><div class="l">Standard VAT rate, unchanged, but applied to more items</div></div>
+</div>
+
+<div class="nl-section">
+  <h2>Your payslip: who pays more</h2>
+  <p>The headline personal change is a new top tax band of 27.5% on annual taxable income above P400,001. If you earn below that threshold, your PAYE bands are unchanged by this measure. If you earn above it, only the portion above the threshold is taxed at the new rate, not your whole salary. An earlier proposal from the 2025 budget to raise rates across the board was paused after public feedback, so this targeted top band is what was finally enacted.</p>
+</div>
+
+<div class="nl-section">
+  <h2>Your receipts: VAT reaches further</h2>
+  <p>The VAT rate itself stays at 14%, but the net is wider. The list of zero-rated items has been reduced, meaning some goods that previously carried no VAT are now standard-rated. Private medical services became taxable from 1 August. And foreign digital services are being brought into the VAT system: overseas providers of streaming, apps and online subscriptions had to register from June and must charge Botswana VAT from 1 October 2026. If your streaming subscription price rises late this year, this is why.</p>
+  <div class="nl-timeline">
+    <div class="nl-tl-item"><div class="nl-tl-date">1 July 2026</div><div class="nl-tl-text">New Income Tax, VAT and Tax Administration Acts take effect. Corporate rate rises to 24.5%. New 27.5% top personal band.</div></div>
+    <div class="nl-tl-item"><div class="nl-tl-date">1 August 2026</div><div class="nl-tl-text">Private medical services begin carrying 14% VAT. Prescription medicines become zero-rated.</div></div>
+    <div class="nl-tl-item"><div class="nl-tl-date">1 October 2026</div><div class="nl-tl-text">Foreign digital service providers must charge Botswana VAT on subscriptions and online services.</div></div>
+  </div>
+</div>
+
+<div class="nl-section">
+  <h2>Why government is doing this</h2>
+  <p>Botswana is running a large budget deficit after difficult years in the diamond market, and these reforms aim to broaden the tax base rather than rely on one sector. For households the practical effect is modest for most earners but real at the margins: slightly wider VAT coverage, and higher tax for top earners and companies.</p>
+</div>
+
+<div class="nl-actions">
+  <h3>What you can do</h3>
+  <ul>
+    <li>Check your first payslips after July. If you earn above P400,001 a year, confirm the new band has been applied correctly.</li>
+    <li>Watch your regular receipts for items that now carry VAT and adjust your budget lines to match reality.</li>
+    <li>List your digital subscriptions now, so you can spot VAT-driven price changes from October and cancel anything you no longer use.</li>
+    <li>If you run a side business, note the corporate rate change and the new tax administration rules, and speak to an accountant.</li>
+  </ul>
+</div>
+
+<div class="nl-note">This newsletter is educational information prepared by Key Wellness, based on the enacted legislation and public BURS announcements current as at 3 August 2026. It is not tax or financial advice. Verify details for your own situation with BURS or a qualified tax professional.</div>
+`;
+
+NEWSLETTER_BODIES['nl-2026-06'] = `
+<div class="nl-hero">
+  <div class="nl-edition">Key Wellness Newsletter · Edition 1 · June 2026</div>
+  <h1>Living With 10% Inflation: Protecting Your Household Budget</h1>
+  <div class="nl-standfirst">After starting the year around 4%, inflation surged past 10% in April and May 2026, the highest in over three years. The biggest driver is transport, where fuel price increases pushed costs up sharply. Here is what is happening and how to respond without panic.</div>
+</div>
+
+<div class="nl-statband">
+  <div class="nl-stat"><div class="v">10.7%</div><div class="l">Annual inflation in May 2026, highest since December 2022</div></div>
+  <div class="nl-stat"><div class="v">+28.5%</div><div class="l">Rise in transport costs in April after fuel price increases</div></div>
+  <div class="nl-stat"><div class="v">~4%</div><div class="l">Where inflation stood as recently as February 2026</div></div>
+</div>
+
+<div class="nl-section">
+  <h2>What is driving prices up</h2>
+  <p>The jump is not evenly spread. Transport is the standout, up 28.5% in April alone after the energy regulator raised petrol, diesel and paraffin prices, with global oil markets unsettled. Food and drink prices are climbing more steadily, and categories like insurance and personal care have been rising for months. Housing and utilities have actually been falling slightly, which softens the blow for some households.</p>
+  <div class="nl-bars">
+    <div class="nl-bar-row"><div class="nl-bar-label">Transport</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:95%"></div></div><div class="nl-bar-val">+28.5%</div></div>
+    <div class="nl-bar-row"><div class="nl-bar-label">Alcohol and tobacco</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:36%"></div></div><div class="nl-bar-val">+10.3%</div></div>
+    <div class="nl-bar-row"><div class="nl-bar-label">Food and drinks</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:21%"></div></div><div class="nl-bar-val">+5.8%</div></div>
+    <div class="nl-bar-row"><div class="nl-bar-label">Housing and utilities</div><div class="nl-bar-track"><div class="nl-bar-fill" style="width:6%"></div></div><div class="nl-bar-val">-1.7%</div></div>
+  </div>
+  <p style="font-size:12px;color:#6b7280">Annual change by category, Statistics Botswana CPI, April 2026.</p>
+</div>
+
+<div class="nl-section">
+  <h2>What high inflation does to a budget</h2>
+  <p>Inflation is a quiet pay cut. If prices rise 10% and your salary does not, your money buys roughly a tenth less than it did a year ago. Surveys of Batswana households show most people already feel this: incomes are stagnant for the majority, and many families are cutting back on eating out, travel and subscriptions while prioritising essentials. That instinct is correct. The goal is to cut deliberately rather than randomly.</p>
+</div>
+
+<div class="nl-section">
+  <h2>The transport squeeze specifically</h2>
+  <p>Because transport is the biggest driver, commuting is where many households are bleeding money. Combi and taxi fares follow fuel prices upward, and running a car has become sharply more expensive. Small structural changes beat daily willpower: lift clubs, combining trips, and renegotiating work travel arrangements where possible all attack the largest line item directly.</p>
+</div>
+
+<div class="nl-actions">
+  <h3>What you can do</h3>
+  <ul>
+    <li>Rebuild your budget at today's prices, not January's. Use the Budget Planner and update every line honestly, starting with transport and food.</li>
+    <li>Protect your emergency fund contribution first. High inflation periods are exactly when unexpected costs hit hardest.</li>
+    <li>Cut deliberately: choose the two or three discretionary items you will reduce, rather than trimming everything vaguely.</li>
+    <li>Be very cautious with new borrowing to cover monthly gaps. Short-term credit at high rates makes an inflation squeeze permanent.</li>
+    <li>If your budget no longer balances at all, book a session with a Key Wellness coach before the gap becomes debt.</li>
+  </ul>
+</div>
+
+<div class="nl-note">This newsletter is educational information prepared by Key Wellness using Statistics Botswana CPI releases and public reporting current as at 3 August 2026. It is not financial advice. Your situation is unique; a Key Wellness coach can help you apply these ideas to your own numbers.</div>
+`;
+
+// Newsletters view — sidebar (editions newest-first) + content pane. No backend,
+// no tracking, no effect on the Learn engagement metric. Reached from the
+// Articles-tab card. Opening with no id selects the newest edition.
+window.showNewsletters = function (id) {
   const el = document.getElementById('page-content');
   if (!el) return;
+  const sorted = [...NEWSLETTERS].sort((a,b)=>b.date.localeCompare(a.date));
+  const active = sorted.find(n => n.id === id) || sorted[0];
+
+  const sidebar = sorted.map(n => `
+    <div class="nl-side-item${n.id===active.id?' active':''}" role="button" tabindex="0"
+         onclick="showNewsletters('${n.id}')" onkeydown="if(event.key==='Enter')showNewsletters('${n.id}')">
+      <div class="nl-side-tag">${n.tag}</div>
+      <div class="nl-side-title">${n.title}</div>
+      <div class="nl-side-date">${fmtDate(n.date)}</div>
+    </div>`).join('');
+
   el.innerHTML = `
     <button class="btn btn-outline btn-sm" style="margin-bottom:16px" onclick="VIEWS['learn']('articles')">← Back to Articles</button>
-    <div class="card" style="text-align:center;padding:48px 24px">
-      <div style="font-size:48px;margin-bottom:14px">📊</div>
-      <h2 style="margin-bottom:8px">Infographics</h2>
-      <p style="color:var(--muted);font-size:14px;max-width:420px;margin:0 auto">Infographics are coming soon. Check back here for visual money guides.</p>
+    <div class="nl-layout">
+      <div class="nl-sidebar">${sidebar}</div>
+      <div class="nl-content">${NEWSLETTER_BODIES[active.id] || ''}</div>
     </div>`;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
 // ── Article renderer helper ──────────────────────────────────────
