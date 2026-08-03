@@ -75,6 +75,13 @@ privacy notice:
 - **Key Wellness staff can see individual webinar-viewing activity** (admin-only
   `webinar_views`).
 - **Notification content** is retained in the `notifications` table.
+- **AI Assistant (Ask Key):** identifier-stripped wellness context + the member's
+  message are sent to **Anthropic (Anthropic PBC, USA)** as a data processor to
+  generate replies; this is a **cross-border transfer** (processing outside Botswana);
+  chat content is **not stored** by Key Wellness in v1. Privacy-notice clause added to
+  the `consent-modal` in `index.html` (dev). BLOCKER before live: Anthropic on the
+  Botswana DPA foreign-processor register (signed DPA + recorded cross-border transfer)
+  — a compliance action, not a code change.
 
 ---
 

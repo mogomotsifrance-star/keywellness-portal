@@ -627,7 +627,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
       <ul style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
         <li><strong>Secure Storage:</strong> Your data is stored securely on encrypted servers (Supabase / PostgreSQL) and is accessible only by you and authorised Key Wellness advisors.</li>
         <li><strong>Purpose Limitation:</strong> Your information is used exclusively for financial wellness coaching, assessments, and personalised recommendations. It will not be used for any other purpose.</li>
-        <li><strong>No Third-Party Sharing:</strong> Your personal and financial data will not be sold, rented, or shared with any third parties outside of Key Wellness without your explicit written consent.</li>
+        <li><strong>No Selling of Data:</strong> Your personal and financial data is never sold or rented. We share it only with trusted service providers who process it strictly on our behalf under confidentiality obligations (such as our secure hosting provider, and, if you choose to use Ask Key, our AI provider described below), or where you give explicit consent.</li>
+        <li><strong>AI Assistant (Ask Key):</strong> Ask Key is an optional in-portal assistant powered by Anthropic (Anthropic PBC, United States), acting as our data processor. When you send a message, we share your message together with an <em>identifier-stripped</em> summary of your wellness context (for example your wellness score band, emergency-fund months, and budget totals) so the answer can be relevant. We do <strong>not</strong> send your name, email, phone number, ID number, or account numbers. This means some data is processed outside Botswana. Your Ask Key conversations are <strong>not stored</strong> by Key Wellness. Ask Key provides general financial education, not personal financial advice.</li>
         <li><strong>Advisor Access:</strong> Your assigned Key Wellness coach may view your wellness scores, goals, and assessment results to provide coaching support. This is limited to service delivery only.</li>
         <li><strong>Your Rights:</strong> You have the right to request access to your data, correction of inaccuracies, and deletion of your account and all associated data at any time by contacting wellness@keywellness.co.bw.</li>
         <li><strong>Botswana Data Protection:</strong> This portal operates in accordance with the data protection principles of the Republic of Botswana and applicable privacy legislation.</li>
@@ -7185,18 +7186,19 @@ setInterval(() => {
   </section>
 </div>
 <script>
-// ── Ask Key widget (frontend, test hosts only until launch gates clear) ────
-// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES): the AI chat must stay OFF on
-// the live domains until (1) the privacy notice discloses AI chat processing +
-// Anthropic as a processor, and (2) Anthropic is on the DPA foreign-processor
-// register. Rather than a manual boolean flipped per-branch (easy to merge to
-// `main` by accident), the gate is HOST-DERIVED: enabled only on the test/
-// preview hosts (*.workers.dev, localhost, 127.0.0.1) and always false on the
-// live hosts (portal.keywellness.co.bw and the github.io mirror). This is safe
-// on both branches — dev/test keeps the feature, `main`/live never shows it.
-// The Edge Function may be deployed early; it is inert until called.
+// ── Ask Key widget (frontend) ────
+// LAUNCH GATE (Locked Decision 10 / BUILD-NOTES) — CLEARED 2026-08-03:
+//   (1) the privacy notice discloses AI chat processing + Anthropic as a
+//       processor (see the consent-modal in this file); and
+//   (2) Anthropic's DPA is signed and recorded on the Botswana foreign-processor
+//       register (operator attestation, 2026-08-03).
+// The gate stays HOST-DERIVED rather than a per-branch boolean, so which hosts
+// run the chat is explicit and auditable in one place: the test/preview hosts
+// (*.workers.dev, localhost) AND, now that the gate is cleared, the live hosts
+// (keywellness.co.bw + subdomains, and the github.io mirror). To take the chat
+// OFFLINE again, drop the live-host alternations from the regex below.
 (function () {
-  const AI_CHAT_ENABLED = /(^|\.)workers\.dev$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
+  const AI_CHAT_ENABLED = /(^|\.)workers\.dev$|(^|\.)keywellness\.co\.bw$|(^|\.)github\.io$|^localhost$|^127\.0\.0\.1$/.test(location.hostname);
 
   const FN_URL = SUPABASE_URL + '/functions/v1/ask-claude';
   const STARTERS = [
