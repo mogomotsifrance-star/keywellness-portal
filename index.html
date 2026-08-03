@@ -2837,6 +2837,17 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'—', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
   }
 
+  // Estate Planning — driven by profiles.will_status (set in the assessment's
+  // estate section; informational, never part of the wellness score).
+  const _will = state.user?.will_status || null;
+  if (_will === 'has_will') {
+    hubCards.push({ cls:'green', lbl:'Estate Planning', val:'In place', sub:'Review your will each year & after big life changes', click:`go('learn')` });
+  } else if (_will === 'in_progress') {
+    hubCards.push({ cls:'gold', lbl:'Estate Planning', val:'In progress', sub:'Great start — a coach can help you finish it', click:`go('booking')` });
+  } else {
+    hubCards.push({ cls:'navy', lbl:'Estate Planning', val:'Not set', sub:'A will protects your family — talk to a coach', click:`go('booking')` });
+  }
+
   // ── Build "What to do next" actions ──
   const actions = [];
   if (!hasAssessment) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });

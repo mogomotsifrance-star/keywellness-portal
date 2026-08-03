@@ -3344,3 +3344,40 @@ Supabase Auth SYSTEM emails (signup/reset/etc.) remain the known un-mirrored gap
 For phone-only members (no email), the confirmed-booking invoke in admin.html is
 currently gated by `b.user_email`; when phone accounts land, route the notif
 insert independent of email presence (graceful email-skip).
+
+## Batch 6 — Estate planning (authored 2026-08-03)
+
+**Status: frontend on `dev`.** No migration (uses `profiles.will_status` from
+Batch 1). Files: `wellness_assessment.html`, `index.html`.
+
+### Assessment (wellness_assessment.html) — non-scored estate section
+- New `#stepEstate` screen shown BETWEEN step 7 and the results. It is
+  deliberately NOT a `.step` element, so it doesn't renumber the "Section N of 8"
+  progression (avoids touching every hardcoded header). Step 7's button now says
+  "Continue" → `showEstate()` (validates step 7 first); the estate screen's
+  button is "View My Wellness Score" → `calculateWellness()`; Back → `showStep(7)`.
+  `showStep()` hides the estate screen on any step nav / results.
+- Clearly labelled "This section does not affect your wellness score. Answering
+  is optional." 4 questions: valid will? (Yes/In progress/No) · documents known? ·
+  beneficiaries nominated? (Yes/No/Not sure) · who'd manage your finances?
+- `selectEstate()` stores string answers (`estate_will`, `estate_docs`,
+  `estate_beneficiaries`, `estate_finmgr`) in the same `answers` payload — they
+  ride into the `assessments.answers` insert and the draft, but are NEVER added
+  to the `dims` scoring array.
+- **Score untouched:** verified in browser — identical score (50 == 50) with vs
+  without estate answers. Scoring code was not modified.
+- `profiles.will_status` written from `estate_will` (values already match the DB
+  check: has_will / in_progress / no_will), and ONLY when answered — a retake
+  that skips estate never clobbers an existing will_status.
+
+### Financial Hub card (index.html)
+- New "Estate Planning" hub card driven by `state.user.will_status`:
+  has_will → green "In place" + annual-review nudge (→ Learn);
+  in_progress → gold "In progress" + coach CTA (→ booking);
+  no_will/null → navy "Not set" + why-it-matters + coach CTA (→ booking).
+- `will_status` arrives via the existing `profiles.select('*')` in loadAllData.
+
+### HR privacy — grep-verified
+`will_status` appears ONLY in member-facing files + the Batch-1 migration; no HR
+RPC (`org_report_data*`, `org_overview*`, etc.) or `employer.html` references it.
+No estate data reaches any HR-facing output.

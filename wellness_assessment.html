@@ -540,6 +540,59 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
     </div>
     <div class="nav-row">
       <button class="btn-primary btn-back" onclick="prevStep(7)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
+      <button class="btn-primary" onclick="showEstate()" style="gap:8px;">
+        Continue
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ESTATE PLANNING (informational — does NOT affect the wellness score) -->
+  <div id="stepEstate" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#eef5ee;">📜</div>
+        <div class="card-title-wrap">
+          <div class="card-title">Before your results <span class="section-num">Estate Planning</span></div>
+          <h2>Estate &amp; Legacy Planning</h2>
+        </div>
+      </div>
+      <div style="background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:.82rem;color:#065f46;line-height:1.6;">
+        ℹ️ <strong>This section does not affect your wellness score.</strong> It helps us point you to the right guidance and coaching. Answering is optional.
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Do you have a valid will?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="estate_will" data-val="has_will" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes</div></div></div>
+          <div class="mcq-opt" data-q="estate_will" data-val="in_progress" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">In progress</div></div></div>
+          <div class="mcq-opt" data-q="estate_will" data-val="no_will" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No</div></div></div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Does someone you trust know where your important documents are?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="estate_docs" data-val="yes" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes</div></div></div>
+          <div class="mcq-opt" data-q="estate_docs" data-val="no" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No</div></div></div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Do you have beneficiaries nominated on your pension and life policies?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="estate_beneficiaries" data-val="yes" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes</div></div></div>
+          <div class="mcq-opt" data-q="estate_beneficiaries" data-val="no" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No</div></div></div>
+          <div class="mcq-opt" data-q="estate_beneficiaries" data-val="not_sure" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Not sure</div></div></div>
+        </div>
+      </div>
+      <div class="sub-question">
+        <div class="sub-q-label">Have you considered who would manage your finances if you were unable to?</div>
+        <div class="mcq-grid-2">
+          <div class="mcq-opt" data-q="estate_finmgr" data-val="yes" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">Yes</div></div></div>
+          <div class="mcq-opt" data-q="estate_finmgr" data-val="no" onclick="selectEstate(this)"><div class="mcq-radio"></div><div class="mcq-text"><div class="mcq-label">No</div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="nav-row">
+      <button class="btn-primary btn-back" onclick="showStep(7)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
       <button class="btn-primary" onclick="calculateWellness()" style="gap:8px;">
         <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
         View My Wellness Score
@@ -687,9 +740,30 @@ function toggleIns(el) {
   else { insuranceSet.add(ins); el.classList.add('selected'); }
   saveDraft();
 }
+// Estate-planning answers are stored as strings (categorical, NOT scored) in the
+// same `answers` payload — they never enter the `dims` scoring array, so the
+// wellness score is unchanged. estate_will drives profiles.will_status.
+function selectEstate(el) {
+  const q = el.dataset.q, val = el.dataset.val;
+  document.querySelectorAll(`.mcq-opt[data-q="${q}"]`).forEach(o=>o.classList.remove('selected'));
+  el.classList.add('selected');
+  answers[q] = val;
+  saveDraft();
+}
+// The estate screen sits between step 7 and the results (it is NOT a numbered
+// `.step`, so it doesn't shift the "Section N of 8" progression).
+function showEstate() {
+  if(!validateStep(7)) return;
+  saveDraft();
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  document.getElementById('progressWrap').style.display='none';
+  const est=document.getElementById('stepEstate'); if(est) est.style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
 
 let currentStep = 0;
 function showStep(n) {
+  const est=document.getElementById('stepEstate'); if(est) est.style.display='none';
   document.querySelectorAll('.step').forEach((s,i)=>{
     s.classList.toggle('active', i===n || (n===TOTAL_STEPS && s.id==='stepResults'));
   });
@@ -940,6 +1014,9 @@ function calculateWellness(){
         monthly_savings:      monthlySavings         || null,
         net_is_manual:        _netIsManual,
         fin_updated_at:       _now,
+        // Estate planning (informational): only write when answered, so a retake
+        // that skips the estate section never clobbers an existing will_status.
+        ...(answers.estate_will ? { will_status: answers.estate_will } : {}),
       })
       .eq('id', _user.id);
     if (profileErr) {
