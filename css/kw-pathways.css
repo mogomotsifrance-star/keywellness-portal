@@ -119,6 +119,9 @@
 .lp-lesson-card:focus-visible{outline:3px solid var(--kw-yellow);outline-offset:2px}
 .lp-lc-art{position:relative}
 .lp-lc-art svg{width:100%;height:auto;display:block}
+/* Stored Vimeo webinar thumbnail, layered over the kwPoster SVG fallback.
+   Covers the art box; on load-failure it hides (onerror) and the SVG shows. */
+.lp-lc-art .lp-poster-img,.lp-ws-art .lp-poster-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .lp-lc-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:.18s}
 .lp-lc-play{width:40px;height:40px;border-radius:50%;background:var(--kw-yellow);display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.3);opacity:0;transform:scale(.85);transition:.18s}
 .lp-lesson-card.playable:hover .lp-lc-play{opacity:1;transform:scale(1)}

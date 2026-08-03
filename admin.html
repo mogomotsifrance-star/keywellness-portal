@@ -289,6 +289,43 @@ tbody td{padding:12px 14px;vertical-align:middle}
   </div>
 </div>
 
+<!-- Batch 3: full-metadata webinar editor (admin-only; writes via content_items_admin_all RLS) -->
+<div class="modal-overlay" id="webinarEditModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Edit webinar</h3>
+      <button class="modal-close" onclick="closeWebinarEditModal()">✕</button>
+    </div>
+    <div id="we-error" style="display:none;color:#c0392b;font-size:13px;font-weight:600;margin-bottom:12px"></div>
+    <input type="hidden" id="we-id">
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Title *
+      <input id="we-title" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Description
+      <input id="we-desc" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600">Vimeo link or ID *
+        <input id="we-path" type="text" style="width:100%;padding:8px;margin-top:4px" onblur="wbThumbFetch('we')"></label>
+      <label style="font-size:12px;font-weight:600">Webinar date *
+        <input id="we-date" type="date" style="width:100%;padding:8px;margin-top:4px"></label>
+    </div>
+    <div style="padding:12px;border:1px dashed var(--border);border-radius:8px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+        <strong style="font-size:12.5px">Thumbnail</strong>
+        <button type="button" class="btn btn-outline btn-sm" onclick="wbThumbFetch('we')">Re-fetch from Vimeo</button>
+      </div>
+      <div id="we-thumb-note" style="display:none;font-size:12px;margin-bottom:8px"></div>
+      <div id="we-thumb-cand"></div>
+      <label style="font-size:12px;font-weight:600;display:block">Thumbnail image URL (blank = standard placeholder)
+        <input id="we-thumb" type="text" style="width:100%;padding:8px;margin-top:4px" oninput="renderThumbPreview('we')"></label>
+      <div id="we-thumb-preview" style="margin-top:8px"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary btn-sm" id="we-save-btn" onclick="saveWebinarEdit()">Save changes</button>
+      <button class="btn btn-outline btn-sm" onclick="closeWebinarEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
@@ -459,7 +496,7 @@ async function renderWebinars() {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading webinars…</div>';
   const { data: rows, error } = await sb.from('content_items')
-    .select('id,title,description,org_id,video_path,duration_seconds,published,webinar_date,created_at')
+    .select('id,title,description,org_id,video_path,duration_seconds,published,webinar_date,thumbnail_url,created_at')
     .eq('kind', 'webinar')
     .order('webinar_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
@@ -468,20 +505,28 @@ async function renderWebinars() {
       <span style="font-size:12px;color:var(--muted)">If the webinars migration has not been applied yet, run supabase_webinars_thresholds_schema.sql first.</span></div>`;
     return;
   }
+  _webinarRows = rows || [];   // cache for the edit modal + backfill
   const orgName = id => (allOrgs.find(o => o.id === id) || {}).name || (id ? 'Unknown org' : 'All members');
   const orgOptions = ['<option value="">All members (every organisation)</option>']
     .concat(allOrgs.map(o => `<option value="${o.id}">${escNar(o.name)}</option>`)).join('');
   const fmtDur = s => { if (!s) return '—'; const h = Math.floor(s/3600), m = Math.round((s%3600)/60); return h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`; };
   const fmtWDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '<span style="color:var(--kw-red,#c0392b)">— set date</span>';
+  const thumbCell = w => w.thumbnail_url
+    ? `<img src="${escAttr(w.thumbnail_url)}" alt="" style="width:64px;aspect-ratio:16/9;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:block" onerror="this.replaceWith(document.createTextNode('⚠️ broken'))">`
+    : '<span style="font-size:11px;color:var(--muted)">placeholder</span>';
   const list = (rows || []).map(w => `
     <tr>
       <td><strong>${escNar(w.title)}</strong>${w.description ? `<br><span style="font-size:11.5px;color:var(--muted)">${escNar(w.description)}</span>` : ''}</td>
       <td>${escNar(orgName(w.org_id))}</td>
       <td><input type="date" value="${w.webinar_date || ''}" onchange="updateWebinarDate('${w.id}', this.value)" style="padding:5px;font-size:12px" title="Set or edit this webinar's date">${!w.webinar_date ? '<div style="font-size:10px;color:var(--kw-red,#c0392b);margin-top:2px">no date set</div>' : ''}</td>
       <td style="font-size:11.5px" class="mono">${escNar(w.video_path || '—')}</td>
+      <td>${thumbCell(w)}</td>
       <td class="mono">${fmtDur(w.duration_seconds)}</td>
       <td>${w.published ? '<span style="color:var(--kw-green,#387838);font-weight:700">● Published</span>' : '<span style="color:var(--muted)">○ Draft</span>'}</td>
-      <td><button class="btn btn-outline btn-sm" onclick="toggleWebinarPublished('${w.id}', ${!w.published})">${w.published ? 'Unpublish' : 'Publish'}</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="openWebinarEdit('${w.id}')">Edit</button>
+        <button class="btn btn-outline btn-sm" onclick="toggleWebinarPublished('${w.id}', ${!w.published})">${w.published ? 'Unpublish' : 'Publish'}</button>
+      </td>
     </tr>`).join('');
   el.innerHTML = `
     <div class="card" style="margin-bottom:18px">
@@ -496,17 +541,32 @@ async function renderWebinars() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px">
         <label style="font-size:12px;font-weight:600">Title<input id="wb-title" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. Money & Wellbeing — July session"></label>
         <label style="font-size:12px;font-weight:600">Organisation<select id="wb-org" style="width:100%;padding:8px;margin-top:4px">${orgOptions}</select></label>
-        <label style="font-size:12px;font-weight:600">Vimeo link or ID<input id="wb-path" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. https://vimeo.com/123456789/abcd1234 or 123456789"></label>
+        <label style="font-size:12px;font-weight:600">Vimeo link or ID<input id="wb-path" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. https://vimeo.com/123456789/abcd1234 or 123456789" onblur="wbThumbFetch('wb')"></label>
         <label style="font-size:12px;font-weight:600">Duration (minutes)<input id="wb-mins" type="number" min="1" style="width:100%;padding:8px;margin-top:4px" placeholder="64"></label>
         <label style="font-size:12px;font-weight:600">Webinar date<input id="wb-date" type="date" style="width:100%;padding:8px;margin-top:4px"></label>
       </div>
       <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Description (optional)<input id="wb-desc" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+      <div style="padding:12px;border:1px dashed var(--border);border-radius:8px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+          <strong style="font-size:12.5px">Thumbnail</strong>
+          <button type="button" class="btn btn-outline btn-sm" onclick="wbThumbFetch('wb')">Fetch from Vimeo</button>
+        </div>
+        <div id="wb-thumb-note" style="display:none;font-size:12px;margin-bottom:8px"></div>
+        <div id="wb-thumb-cand"></div>
+        <label style="font-size:12px;font-weight:600;display:block">Thumbnail image URL (optional — blank = standard placeholder)
+          <input id="wb-thumb" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="Auto-filled from Vimeo, or paste an image URL" oninput="renderThumbPreview('wb')"></label>
+        <div id="wb-thumb-preview" style="margin-top:8px"></div>
+      </div>
       <button class="btn btn-primary btn-sm" id="wb-create-btn" onclick="createWebinar()">Add webinar (as draft)</button>
     </div>
     <div class="card">
-      <h3 style="margin-bottom:10px">Webinar library (${(rows || []).length})</h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+        <h3 style="margin:0">Webinar library (${(rows || []).length})</h3>
+        <button class="btn btn-outline btn-sm" onclick="backfillWebinarThumbs()" title="Fetch a Vimeo thumbnail for every webinar that has none yet">Backfill thumbnails from Vimeo</button>
+      </div>
+      <div id="wb-backfill-out" style="margin-bottom:12px"></div>
       ${(rows || []).length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Title</th><th>Audience</th><th>Date</th><th>Vimeo</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Title</th><th>Audience</th><th>Date</th><th>Vimeo</th><th>Thumb</th><th>Duration</th><th>Status</th><th></th></tr></thead>
         <tbody>${list}</tbody></table></div>`
       : '<p style="color:var(--muted);font-size:13px">No webinars yet — add the first one above.</p>'}
     </div>`;
@@ -538,6 +598,7 @@ async function createWebinar() {
   const mins  = parseInt(document.getElementById('wb-mins').value, 10);
   const desc  = (document.getElementById('wb-desc').value || '').trim();
   const wdate = document.getElementById('wb-date').value || null;   // 'YYYY-MM-DD'
+  const thumb = (document.getElementById('wb-thumb').value || '').trim();
   if (!title || !rawRef) {
     errEl.textContent = 'Title and the Vimeo link (or ID) are both required.';
     errEl.style.display = 'block';
@@ -561,6 +622,7 @@ async function createWebinar() {
     title, kind: 'webinar', org_id: orgId, video_path: path,
     duration_seconds: (mins && mins > 0) ? mins * 60 : null,
     description: desc || null, published: false, webinar_date: wdate,
+    thumbnail_url: thumb || null,
     pathway_id: null, section_label: null, sort_order: null,
   });
   btn.disabled = false; btn.textContent = 'Add webinar (as draft)';
@@ -596,9 +658,143 @@ async function updateWebinarDate(id, val) {
   renderWebinars();   // re-sort + refresh the "no date set" flags
 }
 
+// ── Webinar thumbnails (Vimeo oEmbed + manual fallback) ─────────────
+// Attribute-safe escape (escNar handles & < > but not quotes).
+function escAttr(s) { return escNar(s).replace(/"/g, '&quot;'); }
+
+// Fetch a Vimeo oEmbed thumbnail for a raw ref (URL or id[/hash]). Runs
+// client-side — oEmbed sends access-control-allow-origin:* (Batch 0). Returns
+// { ok:true, thumbnail_url } or { ok:false, reason }. Requests a 640px variant;
+// only ever uses the URL Vimeo actually returns (no fabricated CDN patterns).
+async function fetchVimeoThumb(rawRef) {
+  const ref = parseVimeoRef(rawRef);
+  if (!ref) return { ok: false, reason: 'not a Vimeo link or ID' };
+  const vurl = 'https://vimeo.com/' + ref.id + (ref.hash ? '/' + ref.hash : '');
+  const api  = 'https://vimeo.com/api/oembed.json?url=' + encodeURIComponent(vurl) + '&width=640';
+  try {
+    const res = await fetch(api, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return { ok: false, reason: 'Vimeo returned ' + res.status + (res.status === 404 ? ' (not found, or embed-only privacy blocks oEmbed)' : '') };
+    const data = await res.json();
+    if (!data || !data.thumbnail_url) return { ok: false, reason: 'no thumbnail in Vimeo response' };
+    return { ok: true, thumbnail_url: data.thumbnail_url };
+  } catch (err) {
+    return { ok: false, reason: 'network/CORS error — ' + (err && err.message || 'fetch failed') };
+  }
+}
+
+// Shared thumbnail picker, keyed by a prefix ('wb' create form | 'we' edit modal).
+function _thumbEls(p) {
+  return {
+    path: document.getElementById(p + '-path'),
+    url:  document.getElementById(p + '-thumb'),
+    note: document.getElementById(p + '-thumb-note'),
+    prev: document.getElementById(p + '-thumb-preview'),
+    cand: document.getElementById(p + '-thumb-cand'),
+  };
+}
+function renderThumbPreview(p) {
+  const e = _thumbEls(p); const url = (e.url.value || '').trim();
+  if (!url) { e.prev.innerHTML = '<span style="font-size:11px;color:var(--muted)">No thumbnail — the standard placeholder will show.</span>'; return; }
+  e.prev.innerHTML = '<img src="' + escAttr(url) + '" alt="thumbnail preview" style="width:180px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block" onerror="this.replaceWith(document.createTextNode(\'⚠️ That image URL did not load.\'))">';
+}
+async function wbThumbFetch(p) {
+  const e = _thumbEls(p);
+  const raw = (e.path.value || '').trim();
+  e.note.style.display = 'block';
+  e.cand.innerHTML = '';
+  if (!raw) { e.note.textContent = 'Enter the Vimeo link or ID first, then fetch.'; e.note.style.color = 'var(--muted)'; return; }
+  e.note.textContent = 'Checking Vimeo…'; e.note.style.color = 'var(--muted)';
+  const r = await fetchVimeoThumb(raw);
+  if (r.ok) {
+    e.note.textContent = '✓ Thumbnail found from Vimeo.'; e.note.style.color = 'var(--kw-green,#387838)';
+    e.cand.dataset.url = r.thumbnail_url;
+    e.cand.innerHTML = '<div style="display:flex;gap:10px;align-items:center;margin:8px 0">'
+      + '<img src="' + escAttr(r.thumbnail_url) + '" alt="" style="width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:6px;border:1px solid var(--border)">'
+      + '<button type="button" class="btn btn-outline btn-sm" onclick="wbUseThumb(\'' + p + '\')">Use this thumbnail</button></div>';
+  } else {
+    e.note.innerHTML = 'Couldn’t fetch a thumbnail from Vimeo (' + escNar(r.reason) + ') — paste a thumbnail image URL below, or leave blank for the standard placeholder.';
+    e.note.style.color = 'var(--kw-orange,#e67e22)';
+  }
+}
+function wbUseThumb(p) {
+  const e = _thumbEls(p); const u = e.cand.dataset.url;
+  if (u) { e.url.value = u; renderThumbPreview(p); }
+}
+
+// ── Admin edit modal (full metadata; category dropped — no such column) ──
+function openWebinarEdit(id) {
+  const w = _webinarRows.find(x => x.id === id);
+  if (!w) { alert('Could not find that webinar — try reloading the view.'); return; }
+  document.getElementById('we-id').value    = w.id;
+  document.getElementById('we-title').value = w.title || '';
+  document.getElementById('we-desc').value  = w.description || '';
+  document.getElementById('we-path').value  = w.video_path || '';
+  document.getElementById('we-date').value  = w.webinar_date || '';
+  document.getElementById('we-thumb').value = w.thumbnail_url || '';
+  document.getElementById('we-error').style.display = 'none';
+  const note = document.getElementById('we-thumb-note'); note.style.display = 'none'; note.textContent = '';
+  document.getElementById('we-thumb-cand').innerHTML = '';
+  renderThumbPreview('we');
+  document.getElementById('webinarEditModal').classList.add('open');
+}
+function closeWebinarEditModal() {
+  document.getElementById('webinarEditModal').classList.remove('open');
+}
+async function saveWebinarEdit() {
+  const err = document.getElementById('we-error'); err.style.display = 'none';
+  const id     = document.getElementById('we-id').value;
+  const title  = (document.getElementById('we-title').value || '').trim();
+  const desc   = (document.getElementById('we-desc').value || '').trim();
+  const rawRef = (document.getElementById('we-path').value || '').trim();
+  const wdate  = document.getElementById('we-date').value || null;
+  const thumb  = (document.getElementById('we-thumb').value || '').trim();
+  const fail = m => { err.textContent = m; err.style.display = 'block'; };
+  if (!title || !rawRef) return fail('Title and the Vimeo link (or ID) are both required.');
+  if (!wdate) return fail('The webinar date is required — it drives the ordering and the "Latest webinar" spotlight.');
+  const ref = parseVimeoRef(rawRef);
+  if (!ref) return fail('That does not look like a Vimeo link or ID — paste the full vimeo.com URL or the numeric video ID.');
+  const path = ref.hash ? ref.id + '/' + ref.hash : ref.id;
+  const btn = document.getElementById('we-save-btn'); btn.disabled = true; btn.textContent = 'Saving…';
+  const { error } = await sb.from('content_items').update({
+    title, description: desc || null, video_path: path, webinar_date: wdate, thumbnail_url: thumb || null,
+  }).eq('id', id).eq('kind', 'webinar');
+  btn.disabled = false; btn.textContent = 'Save changes';
+  if (error) { console.error('saveWebinarEdit failed:', error); return fail('Could not save: ' + (error.message || 'unknown error')); }
+  closeWebinarEditModal();
+  renderWebinars();
+}
+
+// ── One-off backfill: fetch a Vimeo thumbnail per null-thumbnail webinar,
+// store successes via individual recorded UPDATEs, report failures. Sequential;
+// no retry loops, no bulk blind updates (Batch 2.2).
+async function backfillWebinarThumbs() {
+  const out = document.getElementById('wb-backfill-out');
+  const targets = _webinarRows.filter(w => !w.thumbnail_url && w.video_path);
+  if (!targets.length) { out.innerHTML = '<p style="font-size:12.5px;color:var(--muted)">Nothing to backfill — every webinar with a Vimeo reference already has a thumbnail.</p>'; return; }
+  out.innerHTML = '<p style="font-size:12.5px;color:var(--muted)">Backfilling ' + targets.length + ' webinar(s) — fetching from Vimeo one at a time…</p>';
+  const results = [];
+  for (const w of targets) {
+    const r = await fetchVimeoThumb(w.video_path);
+    if (r.ok) {
+      const { error } = await sb.from('content_items').update({ thumbnail_url: r.thumbnail_url }).eq('id', w.id).eq('kind', 'webinar');
+      if (error) { results.push({ title: w.title, status: 'update failed: ' + (error.message || '?'), ok: false }); }
+      else { w.thumbnail_url = r.thumbnail_url; results.push({ title: w.title, status: '✓ stored', ok: true }); }
+    } else {
+      results.push({ title: w.title, status: 'no thumbnail (' + r.reason + ') — add one via Edit', ok: false });
+    }
+  }
+  const okN = results.filter(x => x.ok).length;
+  const rowsHtml = results.map(x => '<tr><td>' + escNar(x.title) + '</td><td style="color:' + (x.ok ? 'var(--kw-green,#387838)' : 'var(--kw-orange,#e67e22)') + '">' + escNar(x.status) + '</td></tr>').join('');
+  out.innerHTML = '<p style="font-size:12.5px;margin:8px 0"><strong>' + okN + '</strong> of ' + results.length + ' stored'
+    + (okN < results.length ? '. Failures need a manual thumbnail via <strong>Edit</strong>.' : '.')
+    + ' <span style="color:var(--muted)">Reload the view to see the new thumbnails in the table.</span></p>'
+    + '<div class="table-wrap"><table><thead><tr><th>Webinar</th><th>Result</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+}
+
 // ── Webinar Views (admin-only per webinar_views RLS — HR/employers get zero) ──
 // Individual webinar viewing is member-level personal data: this surface is
 // visible to Key Wellness ADMINS ONLY. Disclosed in the privacy notice (DPA).
+let _webinarRows = [];   // last-loaded kind='webinar' rows (edit modal + backfill)
 let _wvRows = null, _wvWebinars = null, _wvFilter = 'all';
 async function renderWebinarViews() {
   const el = document.getElementById('page-content');
