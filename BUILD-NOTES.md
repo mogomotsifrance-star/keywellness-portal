@@ -3502,3 +3502,94 @@ No estate data reaches any HR-facing output.
   scope this iteration); a full per-department drill-down report (only the compact
   breakdown table ships now); wellness-band/gender columns are in the RPC payload
   but not all surfaced in the table yet.
+
+## Batch 3 — Phone-number accounts (no OTP) — STARTED 2026-08-03
+
+### 3.1 Supabase Auth dashboard prerequisite (MANUAL — do this FIRST, then confirm)
+The phone-account path is password-only with NO SMS/OTP (cost avoided). This
+requires a Supabase dashboard configuration that Claude Code cannot perform or
+verify. **Frontend build (3.2+) is gated on confirming this works** — there is a
+real STOP condition: if this Supabase project refuses phone signup without an SMS
+provider, Batch 3 is blocked (the rest of Phase 2 is unaffected — it's all shipped).
+
+Steps (Supabase Dashboard → project `tarmpqxsabbehgjaonfz`):
+1. **Authentication → Sign In / Providers → Phone** → **Enable** the Phone provider.
+2. In the Phone provider settings, turn **"Confirm phone" / "Enable phone
+   confirmations" OFF** (this is what makes signups auto-confirm with no SMS).
+3. **Do NOT configure any SMS provider** (Twilio/MessageBird/Vonage/etc.) — leave it unset.
+4. Ensure **"Allow new users to sign up"** is ON (Authentication → Sign In / Settings).
+5. **Save.**
+
+Verify (GO/NO-GO) — one of:
+- The settings **save successfully** with Phone ON + confirmations OFF + no SMS
+  provider (if the dashboard allows this combination, phone+password signup works); OR
+- A quick console test on the live/test site (then delete the test user in
+  Authentication → Users):
+  ```js
+  await sb.auth.signUp({ phone: '+26770000001', password: 'test1234' })
+  ```
+  **GO** = returns a user with no error, no SMS sent (user is auto-confirmed).
+  **NO-GO** = error like "Unsupported phone provider" / "Error sending confirmation
+  SMS" / "phone provider not configured" → Supabase requires an SMS provider even
+  with confirmations off → STOP and report; Batch 3 stays blocked.
+
+Once confirmed GO, the frontend (3.2 signup toggle, 3.3 login detection, 3.4
+phone-only graceful degradation + admin-mediated password reset) will be built.
+
+### RESOLUTION (2026-08-03): Supabase Phone provider BLOCKED → pseudo-email path chosen
+The Supabase dashboard refuses to enable the Phone provider without valid SMS
+provider credentials (Messagebird Access Key + Originator flagged "required"),
+even with "Enable phone confirmations" already OFF. So the spec's "no SMS
+provider" path is not achievable on this project. **Decision (Tshenolo): use the
+pseudo-email approach** — phone number as identifier behind a deterministic,
+non-routable synthetic email; NO Supabase phone provider, NO SMS, NO OTP, zero cost.
+
+### Implementation (frontend on `dev`; two Edge Functions authored)
+- **Synthetic email:** `p<E164digits>@phone.keywellness.co.bw` — deterministic, so
+  login recomputes it from the phone number without a lookup. Helpers in
+  index.html: `kwNormalizePhone` (E.164, default +267), `kwPhoneToEmail`,
+  `kwLooksLikePhone`, `kwIsPhoneAccountEmail`, `kwContactEmail`, `kwAccountIdentifier`.
+- **3.2 Signup:** Email/Phone toggle (`setSignupMode`). Phone path collects phone
+  + password + mandatory company code + OPTIONAL email; calls the new
+  `phone-signup` Edge Function, then signs in. Email path unchanged.
+- **NEW Edge Function `supabase/functions/phone-signup/index.ts`:** service-role
+  `admin.createUser({ email:synthEmail, password, email_confirm:true,
+  user_metadata:{ invite_code, is_phone_account, phone, contact_email } })` — created
+  pre-confirmed, no email sent. Validates the invite code (reuses
+  verify_invite_code); returns {ok} / {ok:false, code}. handle_new_user() stamps
+  org_id from invite_code metadata exactly as for email signups; the function then
+  stamps profiles.phone. Callable by anon (anon key is a valid JWT → passes
+  verify_jwt; if it 401s, redeploy `--no-verify-jwt`).
+- **3.3 Login:** `doLogin` detects phone vs email; phone → synthEmail →
+  signInWithPassword. Login field relabelled "Email or phone".
+- **3.4 Graceful degradation:**
+  - Booking recipient email = `kwContactEmail()` (phone-only → '' → client email
+    skipped). `send-booking-email` MODIFIED: client email is now OPTIONAL in both
+    "new" and "confirmed" — skips the client send silently, STILL sends the team
+    email and STILL writes the in-app notification (booking always books).
+  - Forgot-password: a phone identifier shows the admin-mediated message (no reset).
+  - Profile: phone accounts show the phone as the account identifier + an optional
+    "Contact email" field (saved to auth metadata `contact_email`, never the login
+    identifier) to enable email confirmations later. Sidebar shows the phone id.
+- **VERIFIED in browser:** phone normalisation (local/0-prefixed/+267/+ forms),
+  synthEmail derivation, signup toggle, login phone→synthEmail mapping,
+  forgot-password phone message; no console errors. Signup-through-function and the
+  Edge Functions need deploy to exercise end-to-end.
+
+### ⚠ MANUAL (Tshenolo) — deploy BOTH Edge Functions
+```
+supabase functions deploy phone-signup
+supabase functions deploy send-booking-email
+```
+- `phone-signup` is NEW (phone accounts won't work until deployed).
+- `send-booking-email` is MODIFIED (client email now optional) — redeploy so
+  phone-only bookings don't try to email a non-routable address. Record the
+  current deployed version before redeploying (rollback = redeploy prior git ver).
+- The Supabase Phone provider can be left DISABLED (we don't use it).
+- **Admin-mediated phone password reset** still needs a defined procedure + a
+  server-side reset action (Batch 3.4 note) — a phone user who forgets their
+  password currently must be handled by an admin manually (e.g. set a temp
+  password via the dashboard / a future admin reset function). Frontend shows the
+  contact-admin message.
+- DPA: phone numbers collected (unverified) as personal data — disclose in the
+  privacy notice.

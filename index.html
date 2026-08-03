@@ -669,10 +669,9 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <!-- Login -->
     <div id="auth-login-form">
       <div class="field">
-        <label for="a-email">Email</label>
-        <input type="email" id="a-email" placeholder="you@example.com" aria-label="Email address"
-          oninput="authFieldInput('a-email','a-email-err')"
-          onblur="authEmailBlur('a-email','a-email-err')">
+        <label for="a-email">Email or phone</label>
+        <input type="text" id="a-email" placeholder="you@example.com or 71234567" aria-label="Email address or phone number"
+          oninput="authFieldInput('a-email','a-email-err')">
         <div class="field-err" id="a-email-err"></div>
       </div>
       <div class="field">
@@ -692,8 +691,9 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <!-- Forgot password panel -->
     <div id="forgot-panel" style="display:none;margin-top:16px;background:var(--cream);border-radius:var(--radius-sm);padding:16px">
       <p style="font-size:13px;font-weight:600;margin-bottom:10px">Enter your email to receive a reset link.</p>
-      <div class="field" style="margin-bottom:10px"><label for="fp-email">Email</label><input type="email" id="fp-email" placeholder="you@example.com" aria-label="Email for password reset"></div>
+      <div class="field" style="margin-bottom:10px"><label for="fp-email">Email or phone</label><input type="text" id="fp-email" placeholder="you@example.com or 71234567" aria-label="Email or phone for password reset"></div>
       <button class="btn btn-navy btn-sm" style="width:100%;justify-content:center" onclick="doForgotPassword(this)">Send reset link</button>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px">Phone accounts: resets are handled by your Key Wellness administrator.</p>
     </div>
 
     <!-- Password reset form (shown when redirected back with recovery token) -->
@@ -707,7 +707,20 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <!-- Signup -->
     <div id="auth-signup-form" style="display:none">
       <div class="field">
-        <label for="b-email">Email</label>
+        <div style="display:flex;border:2px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+          <button type="button" id="su-mode-email" class="auth-tab active" style="flex:1" onclick="setSignupMode('email')">✉️ Email</button>
+          <button type="button" id="su-mode-phone" class="auth-tab" style="flex:1" onclick="setSignupMode('phone')">📱 Phone</button>
+        </div>
+      </div>
+      <div class="field" id="su-phone-field" style="display:none">
+        <label for="b-phone">Phone number</label>
+        <input type="tel" id="b-phone" placeholder="e.g. 71234567" aria-label="Phone number" autocomplete="tel"
+          oninput="document.getElementById('b-phone-err').textContent=''">
+        <div class="field-hint" style="font-size:12px;color:var(--muted);margin-top:4px">We'll use this to sign you in — no SMS needed. Default country is Botswana (+267).</div>
+        <div class="field-err" id="b-phone-err"></div>
+      </div>
+      <div class="field">
+        <label for="b-email" id="b-email-label">Email</label>
         <input type="email" id="b-email" placeholder="you@example.com" aria-label="Email address"
           oninput="authFieldInput('b-email','b-email-err')"
           onblur="authEmailBlur('b-email','b-email-err')">
@@ -1466,18 +1479,64 @@ function resolveAuthErrorMessage(error, fallback) {
   return fallback;
 }
 
+// ══════════════════════════════════════════════════
+//  PHONE-NUMBER ACCOUNTS (pseudo-email; NO SMS/OTP)
+//  A phone account logs in with phone + password behind a deterministic,
+//  non-routable synthetic email — so no SMS provider or OTP is ever needed.
+//  The synthetic email is derived from the E.164 number, so login can recompute
+//  it without a lookup.
+// ══════════════════════════════════════════════════
+const KW_PHONE_DOMAIN = 'phone.keywellness.co.bw';
+// Normalise to E.164, defaulting to Botswana (+267) for 7–8 digit local numbers.
+function kwNormalizePhone(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim().replace(/[\s\-()]/g, '');
+  if (s[0] === '+') { s = '+' + s.slice(1).replace(/\D/g, ''); }
+  else {
+    s = s.replace(/\D/g, '');
+    if (s.startsWith('00')) s = '+' + s.slice(2);
+    else if (s.startsWith('267')) s = '+' + s;
+    else { s = s.replace(/^0+/, ''); s = (s.length === 7 || s.length === 8) ? '+267' + s : '+' + s; }
+  }
+  return /^\+\d{8,15}$/.test(s) ? s : null;
+}
+function kwPhoneToEmail(e164) { return 'p' + e164.replace(/\D/g, '') + '@' + KW_PHONE_DOMAIN; }
+function kwLooksLikePhone(input) { return !!input && !input.includes('@') && /\d/.test(input) && /^[+0-9\s\-()]+$/.test(input); }
+function kwIsPhoneAccountEmail(email) { return !!email && email.endsWith('@' + KW_PHONE_DOMAIN); }
+// Routable contact email for sends: the auth email for email accounts, or the
+// optional saved contact email for phone accounts (null if they have none).
+function kwContactEmail() {
+  const u = currentUser; if (!u) return null;
+  if (kwIsPhoneAccountEmail(u.email)) return u.user_metadata?.contact_email || null;
+  return u.email || null;
+}
+// Human-facing account identifier (phone for phone accounts, else email).
+function kwAccountIdentifier() {
+  const u = currentUser; if (!u) return '';
+  if (kwIsPhoneAccountEmail(u.email)) return u.user_metadata?.phone || 'Phone account';
+  return u.email || '';
+}
+
 async function doLogin() {
-  const email = document.getElementById('a-email').value.trim();
+  const idRaw = document.getElementById('a-email').value.trim();
   const pass  = document.getElementById('a-pass').value;
   clearAuthMsg();
-  if (!email) { setFieldErr('a-email','a-email-err','Please enter your email address.'); return; }
-  if (!isValidEmail(email)) { setFieldErr('a-email','a-email-err','Please enter a valid email address.'); return; }
+  if (!idRaw) { setFieldErr('a-email','a-email-err','Please enter your email or phone number.'); return; }
+  let loginEmail;
+  if (kwLooksLikePhone(idRaw)) {
+    const e164 = kwNormalizePhone(idRaw);
+    if (!e164) { setFieldErr('a-email','a-email-err','Please enter a valid phone number.'); return; }
+    loginEmail = kwPhoneToEmail(e164);
+  } else {
+    if (!isValidEmail(idRaw)) { setFieldErr('a-email','a-email-err','Please enter a valid email address or phone number.'); return; }
+    loginEmail = idRaw;
+  }
   if (!pass) { setFieldErr('a-pass','a-pass-err','Please enter your password.'); return; }
   const btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Signing in…';
   const GENERIC = 'Could not sign in — please try again or contact wellness@keywellness.co.bw.';
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+    const { error } = await sb.auth.signInWithPassword({ email: loginEmail, password: pass });
     if (error) {
       console.error('doLogin failed:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       const msg = resolveAuthErrorMessage(error, GENERIC);
@@ -1485,7 +1544,7 @@ async function doLogin() {
       if (error.code === 'email_not_confirmed' || m.includes('not confirmed')) {
         setFieldErr('a-email','a-email-err','Email not confirmed — check your inbox (and spam) for the confirmation link.');
       } else if (m.includes('invalid login credentials') || m.includes('invalid')) {
-        setFieldErr('a-pass','a-pass-err','Incorrect email or password. Please try again.');
+        setFieldErr('a-pass','a-pass-err','Incorrect email/phone or password. Please try again.');
       } else {
         authErr(msg);
       }
@@ -1498,38 +1557,99 @@ async function doLogin() {
   }
 }
 
-async function doSignup() {
-  const email = document.getElementById('b-email').value.trim();
+window._signupMode = 'email';
+function setSignupMode(mode) {
+  window._signupMode = mode;
+  document.getElementById('su-mode-email').classList.toggle('active', mode === 'email');
+  document.getElementById('su-mode-phone').classList.toggle('active', mode === 'phone');
+  document.getElementById('su-phone-field').style.display = mode === 'phone' ? '' : 'none';
+  const lbl = document.getElementById('b-email-label');
+  if (lbl) lbl.innerHTML = mode === 'phone'
+    ? 'Email <span style="color:var(--muted);font-weight:400;font-size:12px">(optional)</span>'
+    : 'Email';
+  clearAuthMsg();
+}
+
+// Shared password + mandatory-company-code validation. Returns the upper-cased
+// code, or null if validation failed (a field error is shown).
+async function _validateSignupCommon() {
   const pass  = document.getElementById('b-pass').value;
   const pass2 = document.getElementById('b-pass2').value;
-  clearAuthMsg();
-  if (!email) { setFieldErr('b-email','b-email-err','Please enter your email address.'); return; }
-  if (!isValidEmail(email)) { setFieldErr('b-email','b-email-err','Please enter a valid email address.'); return; }
-  if (!pass) { authPassInput(); return; }
-  if (pass.length < 8) { authPassInput(); return; }
-  if (!pass2) { setFieldErr('b-pass2','b-pass2-err','Please confirm your password.'); return; }
-  if (pass !== pass2) { setFieldErr('b-pass2','b-pass2-err','Passwords do not match.'); return; }
-  // Company code is COMPULSORY — no personal/public signup path.
+  if (!pass || pass.length < 8) { authPassInput(); return null; }
+  if (!pass2) { setFieldErr('b-pass2','b-pass2-err','Please confirm your password.'); return null; }
+  if (pass !== pass2) { setFieldErr('b-pass2','b-pass2-err','Passwords do not match.'); return null; }
   const inviteCode = (document.getElementById('b-code')?.value || '').trim().toUpperCase();
   if (!inviteCode) {
     setFieldErr('b-code','b-code-err','A company code is required. Key Wellness is currently available through participating employers.');
-    return;
+    return null;
   }
-  const btn = document.getElementById('signup-btn');
-  btn.disabled = true; btn.textContent = 'Creating account…';
-  // Verify the code resolves to an active organisation before creating the
-  // account, so a typo can't silently create an orphaned public member. If the
-  // verify_invite_code RPC isn't deployed yet, fall back to the DB trigger's
-  // resolution at signup (graceful — never blocks a legitimate signup).
   try {
     const { data: _codeOk, error: _codeErr } = await sb.rpc('verify_invite_code', { p_code: inviteCode });
     if (!_codeErr && _codeOk === false) {
       setFieldErr('b-code','b-code-err','That company code was not recognised. Please check it with your HR focal point.');
-      btn.disabled = false; btn.textContent = 'Create Account';
-      return;
+      return null;
     }
   } catch (_e) { /* RPC absent → rely on server-side resolution */ }
+  return inviteCode;
+}
+
+async function doSignup() {
+  clearAuthMsg();
+  const mode = window._signupMode || 'email';
+  const btn = document.getElementById('signup-btn');
   const GENERIC = 'Account creation failed — please try again or contact wellness@keywellness.co.bw.';
+
+  if (mode === 'phone') {
+    const e164 = kwNormalizePhone(document.getElementById('b-phone').value);
+    if (!e164) { setFieldErr('b-phone','b-phone-err','Please enter a valid phone number.'); return; }
+    const optEmail = document.getElementById('b-email').value.trim();
+    if (optEmail && !isValidEmail(optEmail)) { setFieldErr('b-email','b-email-err','Please enter a valid email address, or leave it blank.'); return; }
+    const pass = document.getElementById('b-pass').value;
+    const inviteCode = await _validateSignupCommon();
+    if (inviteCode === null) return;
+    btn.disabled = true; btn.textContent = 'Creating account…';
+    try {
+      // Phone accounts are created server-side (service role) so they are
+      // confirmed immediately — no SMS/OTP, no confirmation email.
+      const { data, error } = await sb.functions.invoke('phone-signup', {
+        body: { phone: e164, password: pass, invite_code: inviteCode, email: optEmail || null }
+      });
+      const res = data || {};
+      if (error && !res.code) { console.error('phone-signup invoke failed:', error); authErr(GENERIC); return; }
+      if (!res.ok) {
+        if (res.code === 'phone_taken')        setFieldErr('b-phone','b-phone-err','An account with this phone number already exists — try signing in instead.');
+        else if (res.code === 'invalid_invite') setFieldErr('b-code','b-code-err','That company code was not recognised. Please check it with your HR focal point.');
+        else if (res.code === 'bad_phone')      setFieldErr('b-phone','b-phone-err','Please enter a valid phone number.');
+        else                                    authErr(res.message || GENERIC);
+        return;
+      }
+      // Account created + confirmed server-side → sign in with the phone identity.
+      const { error: siErr } = await sb.auth.signInWithPassword({ email: kwPhoneToEmail(e164), password: pass });
+      if (siErr) {
+        console.error('phone signup sign-in failed:', siErr);
+        showAuthTab('login');
+        const _lp = document.getElementById('a-email'); if (_lp) _lp.value = e164;
+        authOk('Account created! Please sign in with your phone number.');
+        return;
+      }
+      // Signed in → onAuthStateChange takes over (onboarding).
+    } catch (e) {
+      console.error('doSignup(phone) threw:', e);
+      authErr(GENERIC);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Create Account';
+    }
+    return;
+  }
+
+  // ── Email mode (unchanged flow) ──
+  const email = document.getElementById('b-email').value.trim();
+  if (!email) { setFieldErr('b-email','b-email-err','Please enter your email address.'); return; }
+  if (!isValidEmail(email)) { setFieldErr('b-email','b-email-err','Please enter a valid email address.'); return; }
+  const inviteCode = await _validateSignupCommon();
+  if (inviteCode === null) return;
+  const pass = document.getElementById('b-pass').value;
+  btn.disabled = true; btn.textContent = 'Creating account…';
   try {
     const { error } = await sb.auth.signUp({
       email, password: pass,
@@ -1551,8 +1671,6 @@ async function doSignup() {
       }
       return;
     }
-    // Move the member to the Sign In tab and prefill their email so the next
-    // step (after they confirm) is obvious.
     showAuthTab('login');
     const _le = document.getElementById('a-email'); if (_le) _le.value = email;
     authOk('Account created! Check your email to confirm, then sign in.');
@@ -1585,7 +1703,13 @@ function toggleForgotPanel() {
 
 async function doForgotPassword(btn) {
   const email = document.getElementById('fp-email').value.trim();
-  if (!email) { authErr('Please enter your email address.'); return; }
+  if (!email) { authErr('Please enter your email or phone number.'); return; }
+  // Phone accounts can't self-reset (no SMS) — resets are admin-mediated.
+  if (kwLooksLikePhone(email)) {
+    document.getElementById('forgot-panel').style.display = 'none';
+    authOk('Password resets for phone accounts are handled by your Key Wellness administrator. Please contact wellness@keywellness.co.bw or your HR focal point.');
+    return;
+  }
   // Guard against double-submit spamming reset emails / hitting rate limits.
   const _label = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
@@ -5470,7 +5594,7 @@ VIEWS['booking'] = function () {
   const _bkFullName = (_bkFirst || _bkLast)
     ? `${_bkFirst} ${_bkLast}`.trim()
     : prof.displayName || currentUser?.user_metadata?.full_name || '';
-  const _bkEmail    = currentUser?.email || '';
+  const _bkEmail    = kwContactEmail() || '';   // '' for phone-only accounts → client email skipped, in-app notif covers it
   const _bkPhone    = state.user?.phone || prof.phone || '';
   // Store on window so submitBooking can read them
   window._bkPrefFirst = _bkFirst;
@@ -6199,10 +6323,21 @@ VIEWS['profile'] = function () {
         <div style="font-size:11px;color:var(--muted);margin-top:4px">Used for retirement projections</div>
       </div>
 
+      ${kwIsPhoneAccountEmail(currentUser?.email) ? `
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Account</label>
+        <input type="text" class="input" value="${escHtml(kwAccountIdentifier())}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">You sign in with your phone number.</div>
+      </div>
+      <div class="field" style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Contact email <span style="text-transform:none;font-weight:400">(optional)</span></label>
+        <input type="email" id="prof-contact-email" class="input" value="${escHtml(currentUser?.user_metadata?.contact_email||'')}" placeholder="you@example.com" style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream)">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Add an email to receive booking confirmations by email too.</div>
+      </div>` : `
       <div class="field" style="margin-bottom:14px">
         <label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Email</label>
         <input type="email" class="input" value="${currentUser?.email||''}" disabled style="margin-top:6px;width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);color:var(--muted)">
-      </div>
+      </div>`}
 
       ${state.user?.org_unit_id ? `
       <div class="field" style="margin-bottom:14px">
@@ -6313,6 +6448,22 @@ window.saveProfile = async function () {
     if (ageVal && ageVal >= 18 && ageVal <= 80) state.user.age = ageVal;
     try { cloudOk = await saveUser(); } catch (_) { cloudOk = false; }
   }
+  // Phone accounts can add an optional contact email (stored in auth metadata,
+  // never as the login identifier) to enable email confirmations/reminders.
+  const ceEl = document.getElementById('prof-contact-email');
+  if (ceEl) {
+    const ce = ceEl.value.trim();
+    if (ce && !isValidEmail(ce)) {
+      msg.innerHTML = '<div class="notice notice-red">⚠️ That contact email doesn\'t look valid. Please check it, or leave it blank.</div>';
+      msg.style.display = ''; setTimeout(()=>{ msg.style.display='none'; }, 5000);
+      return;
+    }
+    if (ce !== (currentUser?.user_metadata?.contact_email || '')) {
+      const { error: _ceErr } = await sb.auth.updateUser({ data: { contact_email: ce || null } });
+      if (_ceErr) { console.error('contact email save failed:', _ceErr); cloudOk = false; }
+      else if (currentUser) { currentUser.user_metadata = { ...(currentUser.user_metadata||{}), contact_email: ce || null }; }
+    }
+  }
   msg.innerHTML = cloudOk
     ? '<div class="notice notice-green">✓ Profile saved!</div>'
     : '<div class="notice notice-red">⚠️ Saved on this device, but couldn\'t sync to the cloud. Check your connection and try again.</div>';
@@ -6362,7 +6513,7 @@ function initProfileUI() {
 
   updateAvatarUI(prof.avatarB64||'', displayName);
   const emailEl = document.getElementById('sb-email');
-  if (emailEl && currentUser?.email) emailEl.textContent = currentUser.email;
+  if (emailEl && currentUser) emailEl.textContent = kwAccountIdentifier();
 }
 
 // ══════════════════════════════════════════════════
