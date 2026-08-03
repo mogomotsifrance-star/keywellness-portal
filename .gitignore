@@ -4,3 +4,7 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# local-only tooling state (never commit)
+supabase/.temp/
+.claude/settings.local.json

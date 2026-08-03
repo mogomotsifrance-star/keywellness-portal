@@ -167,7 +167,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
 <div class="app">
 <!-- ── Back + User ── -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-  <button onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
+  <button id="backToPortalTop" onclick="window.location.href='index.html#dashboard'" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;border:1px solid var(--kw-line);background:transparent;color:var(--kw-ink);font-size:.82rem;font-weight:600;cursor:pointer;font-family:inherit" onmouseover="this.style.borderColor='#397e2b';this.style.color='#397e2b'" onmouseout="this.style.borderColor='#e7e9e3';this.style.color='#23261f'">← Back to Portal</button>
   <div style="display:flex;align-items:center;gap:10px">
     <div id="tool-user-initial" style="width:32px;height:32px;background:#397e2b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.82rem;font-weight:700;color:#fff;flex-shrink:0">?</div>
     <div id="tool-user-name" style="font-size:.82rem;font-weight:600;color:#23261f">Loading…</div>
@@ -184,6 +184,10 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
       <h1>Financial Wellness Assessment</h1>
       <p>Botswana Pula (BWP) · 8 dimensions · Personalised score &amp; action plan</p>
     </div>
+  </div>
+  <!-- Compulsory first-assessment note (shown only on a member's very first run) -->
+  <div id="firstAssessmentNote" style="display:none;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.82rem;color:#065f46;line-height:1.6">
+    📋 <strong>Let's set your baseline.</strong> This quick assessment gives you your wellness score baseline and powers your Financial Hub on the dashboard.
   </div>
   <!-- Progress -->
   <div class="progress-wrap" id="progressWrap">
@@ -1276,6 +1280,13 @@ async function _flushPendingAssessments(_sb, uid) {
       });
       applyReassessmentMode();
     } else {
+      // First assessment (compulsory): lock the escape hatch and show the
+      // baseline note. The portal itself is also locked (index.html route())
+      // until this assessment is saved; the top "Back to Portal" link is hidden
+      // here so there is no way to skip it. Draft auto-save lets the user resume.
+      document.getElementById('backToPortalTop')?.style.setProperty('display','none');
+      document.getElementById('firstAssessmentNote')?.style.setProperty('display','block');
+      window._isFirstCompulsory = true;
       // First assessment: pre-fill figures from profile
       if (prof?.age) { const el=document.getElementById('age'); if(el&&!el.value) el.value=prof.age; }
       if (prof?.gross_income) {
