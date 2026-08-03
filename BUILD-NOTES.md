@@ -3381,3 +3381,55 @@ Batch 1). Files: `wellness_assessment.html`, `index.html`.
 `will_status` appears ONLY in member-facing files + the Batch-1 migration; no HR
 RPC (`org_report_data*`, `org_overview*`, etc.) or `employer.html` references it.
 No estate data reaches any HR-facing output.
+
+## Batch 7 — Webinars: date, spotlight, watch tracking, infographics placeholder (authored 2026-08-03)
+
+**Status: frontend on `dev`.** No migration (uses `content_items.webinar_date` +
+`webinar_views` from Batch 1). Files: `admin.html`, `index.html`.
+
+### 7.1 Webinar date (admin.html)
+- Create form gains a required "Webinar date" input (`wb-date`); `createWebinar()`
+  validates + inserts `webinar_date`. Library table shows a Date column and now
+  orders by `webinar_date desc` (nulls last) then `created_at`.
+
+### 7.2 Spotlight + ordering (index.html)
+- `lpWebinars()` now sorts newest-first by `webinar_date` (fallback `created_at`);
+  `lpFmtWebinarDate()` added. `renderWebinarsSection()` renders the newest as a
+  full-width **"★ Latest Webinar" spotlight** (reusing `lpOpenWebinar` — no forked
+  player) and the rest in a "Previous Webinars" grid. 1 webinar → spotlight only,
+  no heading; 0 → existing empty state. New `.lp-webinar-spotlight` CSS (stacks
+  ≤640px). Sedimosa header branding untouched.
+- VERIFIED: sort order August→June→March; spotlight = newest + its date; grid
+  excludes the spotlight (2 of 3); 1-webinar and 0-webinar states correct.
+
+### 7.3 Watch tracking (index.html)
+- `lpLogWebinarView(id)` inserts into `webinar_views` on player `ready()` —
+  fire-and-forget: failure only logs to console, NEVER blocks playback. One row
+  per view event (repeat views = repeat rows). RLS: member INSERT own only.
+
+### 7.4 Admin webinar-views report (admin.html)
+- New "Webinar Views" sidebar tab → `renderWebinarViews()`: per-webinar view
+  counts + a filterable view log (Webinar · Viewer name · Viewed timestamp).
+  Viewer names resolved from `allUsers` (profiles). Admin-only via `webinar_views`
+  RLS (SELECT = is_admin()); HR/employers get zero rows. VERIFIED render + filter.
+- **DPA:** the tab carries a visible "admins only … personal data" notice.
+  Individual webinar-viewing activity is personal data — the **privacy notice must
+  disclose that Key Wellness staff can see webinar viewing activity** (already in
+  the Batch-1 DPA list; reinforced here).
+
+### 7.5 Infographics placeholder (index.html)
+- Articles tab: the confidence-progress card is narrowed (~72%) into a
+  `.learn-top-row` with a compact "Infographics — Coming soon" card beside it
+  (stacks below the progress on ≤640px). Clicking → `showInfographics()`: a
+  placeholder view ("← Back to Articles", header, empty state). No backend, no
+  tracking. VERIFIED: the Learn engagement denominator inputs (videoTotal +
+  CONTENT.length) are unchanged.
+
+### ⚠ MANUAL (Tshenolo)
+- **Backfill `webinar_date` on existing webinar rows** (they currently sort by
+  created_at fallback and show "— set date" in admin). Set each in the admin
+  "Webinars" tab isn't possible for existing rows via the create form, so either
+  add dates via the Supabase SQL Editor per row, e.g.:
+  `update content_items set webinar_date = '2026-07-14' where id = '<uuid>';`
+  (list rows with: `select id, title, created_at from content_items where kind='webinar' order by created_at desc;`)
+  New webinars capture the date at creation.
