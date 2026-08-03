@@ -1,3 +1,35 @@
+# Live subdomain `portal.keywellness.co.bw` + github.io redirect (2026-08-03)
+
+`https://portal.keywellness.co.bw` is **now LIVE** and is the canonical production
+URL for the portal. **This supersedes the earlier note** (in the "Fixes & Diagnosis
+Batch" section below) that called it a "future subdomain, not yet live."
+
+- The old GitHub Pages URL `https://mogomotsifrance-star.github.io/keywellness-portal`
+  now **301-redirects** to `https://portal.keywellness.co.bw` (custom-domain CNAME).
+  GitHub Pages still builds/serves from `main`; the github.io host just redirects.
+
+- **Verification gotcha (cost a real misdiagnosis):** `curl`/`fetch` against the
+  github.io URL **without following redirects returns the ~162-byte redirect stub**,
+  not the site — so a `grep` for deployed code reports a **false** "not deployed / 0
+  hits." Always use `curl -L` (follow redirects), or hit `portal.keywellness.co.bw`
+  directly, when checking what's actually deployed. GitHub Pages' CDN also ignores
+  `?cachebuster=` query strings, so those don't help either. During the webinar
+  thumbnail deploy this made the code look absent on live when it was in fact fully
+  served — confirmed present (index.html `lpWebinarPosterImg`, admin.html
+  `fetchVimeoThumb`, css `lp-poster-img`) once the redirect was followed.
+
+- **Now-actionable follow-up (was blocked on this DNS going live):** the email
+  URLs still point at the github.io path. Swap the single `KW_PORTAL_URL` constant in
+  `supabase/functions/_shared/kw-email.ts` from
+  `https://mogomotsifrance-star.github.io/keywellness-portal` to
+  `https://portal.keywellness.co.bw`, then `supabase functions deploy
+  send-booking-email` (bundles the shared module). Also update the same hardcoded URL
+  in the 5 `email-templates/auth/*.html` files and re-paste them into the Supabase
+  dashboard → Authentication → Email Templates. Links still resolve today via the
+  redirect, but should point at the canonical domain directly.
+
+---
+
 # Webinar Thumbnails + Admin Webinar Editing (Vimeo oEmbed + manual fallback)
 
 Full Batch-0 discovery in `BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md` (verdict: GO).
