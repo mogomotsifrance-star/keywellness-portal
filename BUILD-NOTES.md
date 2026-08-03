@@ -3425,11 +3425,14 @@ No estate data reaches any HR-facing output.
   tracking. VERIFIED: the Learn engagement denominator inputs (videoTotal +
   CONTENT.length) are unchanged.
 
+### Inline date editor for pre-existing webinars (added 2026-08-03)
+- The admin "Webinars" library table's Date column is now an **editable date
+  input** per row (`updateWebinarDate(id, val)` → UPDATE content_items). Rows
+  without a date show a red "no date set" flag. This is how pre-existing webinars
+  (which all shared the upload date) get their real dates — no SQL needed. New
+  webinars still capture the date at creation. Verified: handler defined, admin
+  parses clean, no console errors.
+
 ### ⚠ MANUAL (Tshenolo)
-- **Backfill `webinar_date` on existing webinar rows** (they currently sort by
-  created_at fallback and show "— set date" in admin). Set each in the admin
-  "Webinars" tab isn't possible for existing rows via the create form, so either
-  add dates via the Supabase SQL Editor per row, e.g.:
-  `update content_items set webinar_date = '2026-07-14' where id = '<uuid>';`
-  (list rows with: `select id, title, created_at from content_items where kind='webinar' order by created_at desc;`)
-  New webinars capture the date at creation.
+- **Set `webinar_date` on existing webinar rows** via the admin Webinars tab (the
+  inline date input on each row). New webinars capture it at creation.

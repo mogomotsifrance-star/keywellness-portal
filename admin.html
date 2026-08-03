@@ -475,7 +475,7 @@ async function renderWebinars() {
     <tr>
       <td><strong>${escNar(w.title)}</strong>${w.description ? `<br><span style="font-size:11.5px;color:var(--muted)">${escNar(w.description)}</span>` : ''}</td>
       <td>${escNar(orgName(w.org_id))}</td>
-      <td class="mono" style="font-size:11.5px">${fmtWDate(w.webinar_date)}</td>
+      <td><input type="date" value="${w.webinar_date || ''}" onchange="updateWebinarDate('${w.id}', this.value)" style="padding:5px;font-size:12px" title="Set or edit this webinar's date">${!w.webinar_date ? '<div style="font-size:10px;color:var(--kw-red,#c0392b);margin-top:2px">no date set</div>' : ''}</td>
       <td style="font-size:11.5px" class="mono">${escNar(w.video_path || '—')}</td>
       <td class="mono">${fmtDur(w.duration_seconds)}</td>
       <td>${w.published ? '<span style="color:var(--kw-green,#387838);font-weight:700">● Published</span>' : '<span style="color:var(--muted)">○ Draft</span>'}</td>
@@ -579,6 +579,19 @@ async function toggleWebinarPublished(id, publish) {
     return;
   }
   renderWebinars();
+}
+
+// Set/edit a webinar's date inline from the library table (covers pre-existing
+// webinars that predate the date field). Empty clears it back to unset.
+async function updateWebinarDate(id, val) {
+  const wdate = val || null;
+  const { error } = await sb.from('content_items').update({ webinar_date: wdate }).eq('id', id).eq('kind', 'webinar');
+  if (error) {
+    console.error('updateWebinarDate failed:', error);
+    alert('Could not update the webinar date: ' + (error.message || 'unknown error'));
+    return;
+  }
+  renderWebinars();   // re-sort + refresh the "no date set" flags
 }
 
 // ── Webinar Views (admin-only per webinar_views RLS — HR/employers get zero) ──
