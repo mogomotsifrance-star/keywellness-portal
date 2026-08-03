@@ -302,6 +302,9 @@ tbody td{padding:12px 14px;vertical-align:middle}
       <input id="we-title" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
     <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Description
       <input id="we-desc" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Audience *
+      <select id="we-org" style="width:100%;padding:8px;margin-top:4px"></select>
+      <span style="font-weight:400;font-size:11px;color:var(--muted);display:block;margin-top:4px">Which organisation's members can see this. Changing it moves the webinar between audiences — members only ever receive their own organisation's videos.</span></label>
     <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px">
       <label style="font-size:12px;font-weight:600">Vimeo link or ID *
         <input id="we-path" type="text" style="width:100%;padding:8px;margin-top:4px" onblur="wbThumbFetch('we')"></label>
@@ -747,6 +750,11 @@ function openWebinarEdit(id) {
   document.getElementById('we-id').value    = w.id;
   document.getElementById('we-title').value = w.title || '';
   document.getElementById('we-desc').value  = w.description || '';
+  // Audience: same option set as the create form (blank value = all members).
+  const orgSel = document.getElementById('we-org');
+  orgSel.innerHTML = ['<option value="">All members (every organisation)</option>']
+    .concat(allOrgs.map(o => `<option value="${o.id}">${escNar(o.name)}</option>`)).join('');
+  orgSel.value = w.org_id || '';
   document.getElementById('we-path').value  = w.video_path || '';
   document.getElementById('we-date').value  = w.webinar_date || '';
   document.getElementById('we-thumb').value = w.thumbnail_url || '';
@@ -765,6 +773,7 @@ async function saveWebinarEdit() {
   const title  = (document.getElementById('we-title').value || '').trim();
   const desc   = (document.getElementById('we-desc').value || '').trim();
   const rawRef = (document.getElementById('we-path').value || '').trim();
+  const orgId  = document.getElementById('we-org').value || null;   // '' = all members
   const wdate  = document.getElementById('we-date').value || null;
   const thumb  = (document.getElementById('we-thumb').value || '').trim();
   const fail = m => { err.textContent = m; err.style.display = 'block'; };
@@ -775,7 +784,7 @@ async function saveWebinarEdit() {
   const path = ref.hash ? ref.id + '/' + ref.hash : ref.id;
   const btn = document.getElementById('we-save-btn'); btn.disabled = true; btn.textContent = 'Saving…';
   const { error } = await sb.from('content_items').update({
-    title, description: desc || null, video_path: path, webinar_date: wdate, thumbnail_url: thumb || null,
+    title, description: desc || null, org_id: orgId, video_path: path, webinar_date: wdate, thumbnail_url: thumb || null,
   }).eq('id', id).eq('kind', 'webinar');
   btn.disabled = false; btn.textContent = 'Save changes';
   if (error) { console.error('saveWebinarEdit failed:', error); return fail('Could not save: ' + (error.message || 'unknown error')); }
