@@ -6229,9 +6229,48 @@ VIEWS['profile'] = function () {
       </div>
 
       <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
+        <h4 style="margin-bottom:14px;font-size:14px">🔒 Change Password</h4>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input type="password" id="cp-cur" placeholder="Current password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          <input type="password" id="cp-new" placeholder="New password (min 8 characters)" autocomplete="new-password" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+          <input type="password" id="cp-conf" placeholder="Confirm new password" autocomplete="new-password" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
+        </div>
+        <div id="cp-msg" style="display:none;margin-top:12px;font-size:13px;font-weight:600"></div>
+        <button class="btn btn-navy btn-sm" id="cp-btn" style="margin-top:12px" onclick="changePassword()">Update Password</button>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
         <button class="btn btn-outline" style="width:100%;color:var(--red);border-color:var(--red);justify-content:center" onclick="doLogout()">Sign Out</button>
       </div>
     </div>`;
+};
+
+// Shared change-password flow (member profile). Re-authenticates with the current
+// password, then updateUser. Generic failure copy (doesn't reveal which check
+// failed). Works for email or phone accounts (identity read from the session).
+window.changePassword = async function () {
+  const cur = document.getElementById('cp-cur').value;
+  const nw  = document.getElementById('cp-new').value;
+  const cf  = document.getElementById('cp-conf').value;
+  const msg = document.getElementById('cp-msg');
+  const show = (t, ok) => { msg.style.display='block'; msg.textContent=t; msg.style.color = ok ? 'var(--green,#2d8a4e)' : 'var(--red,#c0392b)'; };
+  if (!cur) return show('Enter your current password.', false);
+  if (!nw || nw.length < 8) return show('New password must be at least 8 characters.', false);
+  if (nw !== cf) return show('New passwords do not match.', false);
+  const btn = document.getElementById('cp-btn');
+  const done = () => { if (btn) { btn.disabled=false; btn.textContent='Update Password'; } };
+  if (btn) { btn.disabled=true; btn.textContent='Updating…'; }
+  const { data: { session } } = await sb.auth.getSession();
+  const u = session?.user;
+  const ident = u?.email ? { email: u.email } : (u?.phone ? { phone: u.phone } : null);
+  if (!ident) { show('Could not change your password. Please try again.', false); done(); return; }
+  const { error: reErr } = await sb.auth.signInWithPassword({ ...ident, password: cur });
+  if (reErr) { show('Could not change your password — please check your current password and try again.', false); done(); return; }
+  const { error: upErr } = await sb.auth.updateUser({ password: nw });
+  if (upErr) { show('Could not change your password — please check your current password and try again.', false); done(); return; }
+  show('✓ Password changed successfully.', true);
+  ['cp-cur','cp-new','cp-conf'].forEach(id => { const e = document.getElementById(id); if (e) e.value=''; });
+  done();
 };
 
 window.handleAvatarUpload = function (input) {
