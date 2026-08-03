@@ -3866,16 +3866,22 @@ function. Built to the locked spec (Batches 0–4).
 Status at handoff: migration = NOT YET APPLIED; function = NOT YET DEPLOYED;
 `ANTHROPIC_API_KEY` = assumed NOT SET. All three are the operator's manual steps above.
 
-## LAUNCH BLOCKERS — do NOT enable on `main` until BOTH are done
+## LAUNCH BLOCKERS — CLEARED 2026-08-03; Ask Key is LIVE
 
-- [ ] **Privacy notice updated** to disclose: AI chat processing; **Anthropic as a
+- [x] **Privacy notice updated** to disclose: AI chat processing; **Anthropic as a
       processor**; that an **identifier-stripped** wellness context is sent to generate
       responses; and that **chat content is not stored** by Key Wellness in v1.
-- [ ] **Anthropic added to the DPA foreign-processor register.**
+      (consent-modal in index.html; commit b9e31c8)
+- [x] **Anthropic added to the DPA foreign-processor register** — DPA signed; operator
+      attestation 2026-08-03.
 
-Until both clear, `AI_CHAT_ENABLED` must be `false` on `main`. It is `true` on `dev`.
-(The Edge Function + migration may go live early; the feature stays invisible while the
-frontend flag is off.)
+Enabled 2026-08-03 via a host-derived flag (commit 57e6680, merged to main a6617b3):
+`AI_CHAT_ENABLED` is true on test/preview AND live (keywellness.co.bw + subdomains,
+github.io mirror), false elsewhere; admin/HR still excluded via `isMember()`. Verified
+live on portal.keywellness.co.bw. To take the chat offline again, drop the live-host
+alternations from the regex in index.html. NOTE: the function + migration went live
+earlier and were inert only because of this frontend gate — the gate is now the sole
+on/off control.
 
 ## Privacy / safety properties (as built)
 
