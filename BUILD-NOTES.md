@@ -3288,3 +3288,59 @@ All changes in `budget_planner.html`. VERIFIED in the browser (auth-stubbed copy
 VERIFIED: no console errors; Helper/Moraka/Motshelo render; Budgeted/Actual/
 Variance columns + per-row and summary variance correct (over=red, under=green);
 totals reconcile; mobile layout holds; old-budget load path defensive.
+
+## Batch 4 — In-app notification centre (authored 2026-08-03)
+
+**Status: frontend on `dev` (safe to ship independently). Edge Function change
+authored but MUST be deployed by Tshenolo** (see below). Uses the `notifications`
+table from Batch 1. Files: `index.html`, `admin.html`,
+`supabase/functions/send-booking-email/index.ts`.
+
+### Frontend (index.html) — persisted feed wired into the existing bell/panel
+- `loadAllData` now fetches `notifications` (own rows, newest-first, limit 50) →
+  `state.notifications`. `loadNotifications()` renders persisted rows (read/unread
+  styling, relative time via `fmtRelativeTime`, tap-to-read) above the existing
+  behavioural nudges + custom reminders (separated by a "Reminders" divider).
+- **Read state:** `markNotifRead(id)` (optimistic + `update read_at`),
+  `markAllNotifsRead()` (header button, shown only when unread persisted exist).
+  `refreshNotifications()` re-fetches when the panel opens. Unread badge =
+  unread persisted + un-dismissed nudges.
+- **Zero-regression transition:** the old client-derived "booking confirmed"
+  notifs are kept ONLY while no persisted booking row exists
+  (`hasPersistedBooking`), so there's no gap before the Edge Function is deployed
+  and no duplicate after it is. Persisted feed becomes the single source once the
+  function writes rows.
+- VERIFIED in browser (injected sample rows): newest-first order, read/unread +
+  badge counts, mark-one/mark-all, relative time, separator, empty state; no
+  console errors.
+
+### Notification inserts (server-side) — Edge Function
+- `send-booking-email/index.ts`: added `writeNotification()` using the
+  auto-injected `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (service role bypasses
+  RLS — there is deliberately **no client INSERT policy** on `notifications`).
+  Best-effort (logs, never fatal — email/booking are the gating ops). Writes
+  `booking_received` (type "new") and `booking_confirmed` (type "confirmed").
+- Both invoke sites now pass `user_id`: index.html booking submit
+  (`currentUser.id`) and admin.html confirm (`b.user_id`).
+
+### ⚠ MANUAL DEPLOY REQUIRED (Tshenolo)
+- Deploy the Edge Function so persisted booking notifications start being written:
+  `supabase functions deploy send-booking-email`
+  (or via the dashboard). Until then, the frontend fallback shows booking
+  confirmations in-app; email is unaffected either way.
+- **Rollback lever:** the previous function version is the last committed
+  `index.ts` before this change — re-deploy that git version to revert. (Record
+  the current deployed version in the Supabase dashboard before deploying, per
+  the Batch-1 note about Edge Function version hashes.)
+- `SUPABASE_SERVICE_ROLE_KEY` is auto-injected into Edge Functions by Supabase —
+  no secret to set. If a self-hosted/legacy runtime lacks it, the insert logs and
+  skips (email still sends).
+
+### Parity rule (going forward)
+Any NEW email send MUST ship with a matching `notifications` insert (server-side).
+Supabase Auth SYSTEM emails (signup/reset/etc.) remain the known un-mirrored gap.
+
+### Batch-3 follow-up (deferred)
+For phone-only members (no email), the confirmed-booking invoke in admin.html is
+currently gated by `b.user_email`; when phone accounts land, route the notif
+insert independent of email presence (graceful email-skip).
