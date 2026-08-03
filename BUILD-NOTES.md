@@ -1,3 +1,126 @@
+# Webinar Thumbnails + Admin Webinar Editing (Vimeo oEmbed + manual fallback)
+
+Full Batch-0 discovery in `BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md` (verdict: GO).
+Frontend on `dev`. One production-live Supabase change (a single additive column),
+**not yet applied** — see below. Tshenolo chose the defaults for the two open
+decisions ("category" dropped; both thumbnail paths built with manual as the robust
+fallback).
+
+## Schema-model correction (important for anyone reading the addendum prompt)
+
+The addendum repeatedly says "the webinars table". **There is no `webinars` table.**
+Webinars are `content_items` rows with `kind='webinar'` (Vimeo ref in `video_path`),
+per the locked 2026-07-14 MD decision. Every "webinars table" instruction maps onto
+`content_items where kind='webinar'`. The new `thumbnail_url` column is on
+`content_items`. `webinar_date` already existed (added by
+`supabase_sedimosa_phase2_batch1.sql`); the combined-prompt "Batch 7" is fully applied
+and committed — this workstream integrates with the existing spotlight, no collision.
+
+## Files touched
+
+- **`supabase_webinar_thumbnails.sql`** (NEW, production-live when applied) —
+  `alter table public.content_items add column if not exists thumbnail_url text;`
+  Additive, nullable, no policy change. Rollback:
+  `migrations/rollback-webinar-thumbnails.sql` (written first, per rule).
+- **`admin.html`** — webinar view: load query now selects `thumbnail_url`; library
+  table gains a Thumb column + per-row **Edit** button + a **Backfill thumbnails**
+  control; add-webinar form gains a thumbnail sub-panel (oEmbed auto-fetch on the
+  Vimeo field's blur, "Use this thumbnail" candidate, manual URL input, live
+  preview). New: `fetchVimeoThumb()` (client-side oEmbed — CORS `*` confirmed in
+  Batch 0), `escAttr()`, the `renderThumbPreview/wbThumbFetch/wbUseThumb` picker
+  (shared by create form `wb-*` and edit modal `we-*`), the `webinarEditModal` +
+  `openWebinarEdit/saveWebinarEdit/closeWebinarEditModal`, and
+  `backfillWebinarThumbs()`. `createWebinar()` now stores `thumbnail_url`.
+- **`index.html`** — `lpWebinarPosterImg(w)` renders `thumbnail_url` as an `<img>`
+  layered over the existing `kwPoster()` SVG in both the spotlight (`.lp-ws-art`) and
+  grid cards (`.lp-lc-art`); `onerror` hides the img so the SVG placeholder shows —
+  never a broken image. Member load is `select('*')`, so no member-side query change.
+- **`css/kw-pathways.css`** — `.lp-poster-img` (absolute, `object-fit:cover`) covers
+  the art box over the SVG; the fixed 16:9 box means no layout shift between states.
+
+## Edit modal = full metadata, minus "category"
+
+Per Tshenolo's default: **"category" was dropped** — `content_items` has no category
+column, and adding one wasn't warranted. Edit modal fields: title, description, Vimeo
+URL, webinar date, thumbnail (with live preview + re-fetch). Required: title, URL,
+date. Changing the URL and pressing "Re-fetch from Vimeo" offers a new thumbnail as a
+**declinable** candidate (admin clicks "Use this thumbnail" or ignores it and keeps
+the existing one). No deletion (out of scope; a future `is_active` flag if ever
+needed). Writes go through the existing `content_items_admin_all` (`is_admin()`) RLS —
+members have no write path (Batch 0 confirmed, no pre-existing hole).
+
+## MANUAL Vimeo dashboard steps (BLOCKING for members if missed)
+
+1. Set each webinar video to **"Embed only / Hide from Vimeo"**.
+2. Add BOTH domains to the embed whitelist:
+   - prod: `mogomotsifrance-star.github.io`
+   - dev:  `keywellness-portal.mogomotsifrance.workers.dev` (Cloudflare Pages)
+   **If the dev domain is omitted, webinars silently fail to play on `dev` and read
+   as a bug.**
+
+## Thumbnail acquisition under embed-only — UNVERIFIED, read this
+
+Batch 0 proved oEmbed works **client-side** for *public* videos (returns a 640px
+16:9 `thumbnail_url`). It could **not** be tested against this account's *embed-only*
+videos — no DB access here to get a real stored `video_path`, and oEmbed is known to
+be inconsistent for embed-only videos. Therefore:
+- The **manual thumbnail URL input is the guaranteed path** and is always available.
+- oEmbed auto-fetch is best-effort: on success it fills the field and previews; on
+  failure it shows an explicit note ("Couldn't fetch… paste a thumbnail image URL
+  below, or leave blank for the standard placeholder") and the admin pastes one.
+- **First real upload is the true test.** If oEmbed returns nothing under embed-only,
+  that's expected — use the manual field. If it consistently works, great.
+
+## Backfill (Batch 2.2) — run it in the admin browser, it produces the failure list
+
+There is no DB access from the coding environment, so the one-off backfill is a
+button in the admin Webinar view (**"Backfill thumbnails from Vimeo"**): it iterates
+every webinar with a null thumbnail + a `video_path`, fetches oEmbed one at a time,
+stores successes via individual `update`s, and renders a per-row result table
+(✓ stored / failure reason). **The failure rows are the list for Lone/Tshenolo to
+resolve via Edit** — this replaces a static list here, since the real rows/URLs live
+only in the DB. Run it once after applying the migration.
+
+## Upload procedure note for Lone
+
+The add-webinar form now: (1) requires the exact webinar date (drives ordering + the
+"Latest webinar" spotlight); (2) auto-attempts a Vimeo thumbnail when you tab out of
+the Vimeo field — if found, it previews and fills in; (3) if not found, paste a
+thumbnail image URL, or leave it blank for the standard placeholder. Same thumbnail
+controls exist in the per-webinar Edit modal for fixing anything later.
+
+## Production-live Supabase changes (timestamps)
+
+- `supabase_webinar_thumbnails.sql` — **NOT YET APPLIED** (manual SQL-Editor step,
+  same "no DB credentials in this environment" constraint as every prior batch). Apply
+  it, then run its verification queries. Until applied, `admin.html`'s webinar view
+  will error on the `thumbnail_url` column select, and the member render simply has no
+  thumbnails (unchanged appearance). Rollback artifact:
+  `migrations/rollback-webinar-thumbnails.sql`.
+
+## Verified / not yet done
+
+- **Verified**: both HTML files' scripts compile clean; `lpWebinarPosterImg` markup +
+  escaping (incl. an XSS-injection title/URL — fully neutralised) via a source-
+  extracted mock; `fetchVimeoThumb`/`parseVimeoRef` against the **live** Vimeo oEmbed
+  endpoint (success + 404 + bad-ref paths); the CSS layering in a real browser
+  (poster img `absolute`/`cover`, covers the box at 16:9, play overlay on top, "no
+  thumbnail" → SVG placeholder).
+- **Not yet done** (blocked in this environment): real authenticated admin end-to-end
+  (create/edit/backfill against live data) needs admin creds + the applied migration;
+  in-browser image *load* and `onerror` firing couldn't be observed — the in-app
+  browser pane doesn't load external images (both the real Vimeo CDN and a deliberate
+  invalid host hang rather than resolve); the decisive embed-only-privacy oEmbed
+  outcome needs a real stored `video_path`.
+
+## Future flags
+
+- Webinar deactivation (`is_active`) if removal is ever needed — still out of scope.
+- Revisit thumbnail acquisition if the Vimeo plan/privacy changes make oEmbed
+  consistent under embed-only (could then drop the manual step for new uploads).
+
+---
+
 # Launch Bug-Fix Batch (currency prefix overlap, EF prefill, budget income prefill, lifestyle verdict)
 
 Frontend-only, zero Supabase writes/DDL, per the launch-week prompt. One commit
