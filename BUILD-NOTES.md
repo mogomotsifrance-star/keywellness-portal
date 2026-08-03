@@ -3716,3 +3716,85 @@ supabase functions deploy send-booking-email
   contact-admin message.
 - DPA: phone numbers collected (unverified) as personal data — disclose in the
   privacy notice.
+
+---
+
+# Newsletters — Botswana Financial Trends (infographics placeholder goes live)
+
+Frontend-only, `dev` branch, **zero Supabase changes**. Replaces the earlier
+infographics placeholder (card + empty-state view) with a live Newsletters feature:
+three launch editions authored verbatim in the build prompt. Batch-0 discovery
+verdict: **GO via the REPLACE path** (placeholder card + `showInfographics` view
+already existed from the prior prompt; this swapped content in, keeping the
+`.learn-top-row` 72%/1fr structure intact).
+
+## Files touched
+
+- **`index.html`** (only file changed):
+  - `<style>`: added a scoped `nl-` block (Newsletters) after `.learn-top-row`;
+    removed the now-orphaned `.infographics-card` rules. Added `.nl-card` for the
+    Articles-tab card. No yellow (`#E8C018`) as text or fill anywhere — brand rule.
+  - Data: `NEWSLETTERS` array + `NEWSLETTER_BODIES` map (keyed by `id`), placed
+    where `showInfographics` used to live, mirroring the `CONTENT`/`ARTICLE_BODIES`
+    pattern. Bodies are template-literal HTML, embedded verbatim from the prompt.
+  - `window.showInfographics` → replaced by `window.showNewsletters(id)`:
+    left sidebar (editions newest-first) + content pane; opening with no id selects
+    the newest edition; sidebar clicks swap the pane and active state and scroll to
+    top; "← Back to Articles" returns via `VIEWS['learn']('articles')`.
+  - Articles-tab card: renders from the newest edition (label "NEWSLETTER", 2-line
+    clamped title, `fmtDate` date, arrow); click opens `showNewsletters()`.
+
+## Locked decisions / behaviour
+
+- Content is frontend-baked; new editions ship via git push. Admin upload pipeline
+  is future scoping (see deferred decisions).
+- "Latest" everywhere (card + default open) is derived by sorting on the `date`
+  field (newest first), never array position. **Verified**: deliberately reordering
+  the array in a browser test left the latest edition unchanged.
+- Newsletter reads do NOT count toward the Learn "X of 58" engagement/confidence
+  denominator this iteration. The metric inputs (`state.videoProgress`,
+  `state.articlesRead`, `state.videoTotal + CONTENT.length`) are untouched.
+- Every edition carries the standing disclaimer: educational information, not tax/
+  medical/financial advice, verify with BURS or a professional.
+
+## Content update procedure (interim)
+
+New editions are added by appending an entry to `NEWSLETTERS` and a matching HTML
+body to `NEWSLETTER_BODIES` (keyed by the same `id`), then pushing to `dev`, then
+`main`. Copy must be fact-checked with sources and dates recorded, carry the standing
+disclaimer, and contain **no em dashes, en dashes, or double hyphens** in
+member-facing text (established sanitisation rule; middle-dot `·` in the edition line
+is fine). Suggested cadence: monthly.
+
+## Fact-check timestamp
+
+All figures in the three launch editions were verified **3 August 2026** against BURS
+and Ministry of Finance announcements, the enacted 1 July legislation, and Statistics
+Botswana CPI releases. Editions are dated artefacts and intentionally **not
+retro-edited**; corrections, if ever needed, ship as a note in a subsequent edition.
+NOTE: if this workstream is re-run or reviewed more than ~3 months after 3 Aug 2026,
+treat the embedded figures as potentially stale and flag rather than silently editing.
+
+## Deferred decisions (future newsletter pipeline)
+
+- Admin upload flow (likely a Supabase table + storage, Lone as publisher) replacing
+  the frontend-baked array.
+- Whether newsletter reads should count toward the Learn engagement metric.
+- Read-tracking + in-app notification when a new edition ships.
+- Employer/HR visibility of readership aggregates (would require the standard guards).
+
+## Verification (browser, static server, `showNewsletters` invoked directly)
+
+- No console errors on load (new code parses clean); no new network requests.
+- Card shows the August edition title + "3 Aug 2026"; click opens it directly.
+- Sidebar lists 3 editions newest-first (VAT → Tax Landscape → Inflation); switching
+  swaps the pane and active highlight; back button returns to Articles.
+- Sort stable regardless of array order (guard-rail test passed).
+- At 380px: sidebar becomes a horizontal scroll row (`flex-direction:row`,
+  `overflow-x:auto`); hero, stat band, bars, timeline, actions all render with **no
+  component overflow**. (Page-shell overflow seen in the test came from the portal's
+  desktop nav + off-canvas notif panel, an artifact of bypassing auth in the harness;
+  the real logged-in mobile view uses bottom-nav.)
+- No yellow text or yellow-filled buttons in the new UI.
+- Grep of the three bodies + array: **zero** em dashes, en dashes, or double hyphens.
+- Confidence metric inputs and value unchanged.
