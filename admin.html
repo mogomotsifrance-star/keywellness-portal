@@ -207,6 +207,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
     <div class="sb-item" data-tab="activities" onclick="showTab('activities')"><span>📋</span> Activities</div>
     <div class="sb-item" data-tab="webinars" onclick="showTab('webinars')"><span>🎥</span> Webinars</div>
     <div class="sb-item" data-tab="webinar-views" onclick="showTab('webinar-views')"><span>👁️</span> Webinar Views</div>
+    <div class="sb-item" data-tab="account" onclick="showTab('account')"><span>🔒</span> Account</div>
   </div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-admin-email">Loading…</div>
@@ -427,7 +428,7 @@ function buildStats() {
 }
 
 // ── Tab Router ──
-const TAB_TITLES = { users: 'Users', bookings: 'Appointments', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views' };
+const TAB_TITLES = { users: 'Users', bookings: 'Appointments', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
 
 function showTab(tab) {
   activeTab = tab;
@@ -441,6 +442,7 @@ function showTab(tab) {
   else if (tab === 'activities') renderActivities();
   else if (tab === 'webinars') renderWebinars();
   else if (tab === 'webinar-views') renderWebinarViews();
+  else if (tab === 'account') renderAccount();
   KW.reveal('.card, .stat-box');
 }
 
@@ -658,6 +660,48 @@ function _paintWebinarViews() {
     </div>`;
 }
 window._wvSetFilter = function (v) { _wvFilter = v; _paintWebinarViews(); };
+
+// ── Account: change password (re-auth then updateUser; generic failure copy) ──
+function renderAccount() {
+  const fld = 'width:100%;padding:9px 11px;border:2px solid var(--border,#ddd6c8);border-radius:8px;font-size:14px;font-family:inherit';
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="max-width:460px">
+      <h3 style="margin-bottom:4px">Change password</h3>
+      <p style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Update the password for your Key Wellness admin account.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input type="password" id="cp-cur" placeholder="Current password" autocomplete="current-password" style="${fld}">
+        <input type="password" id="cp-new" placeholder="New password (min 8 characters)" autocomplete="new-password" style="${fld}">
+        <input type="password" id="cp-conf" placeholder="Confirm new password" autocomplete="new-password" style="${fld}">
+      </div>
+      <div id="cp-msg" style="display:none;margin-top:12px;font-size:13px;font-weight:600"></div>
+      <button class="btn btn-primary btn-sm" id="cp-btn" style="margin-top:14px" onclick="changePassword()">Update Password</button>
+    </div>`;
+}
+
+async function changePassword() {
+  const cur = document.getElementById('cp-cur').value;
+  const nw  = document.getElementById('cp-new').value;
+  const cf  = document.getElementById('cp-conf').value;
+  const msg = document.getElementById('cp-msg');
+  const show = (t, ok) => { msg.style.display='block'; msg.textContent=t; msg.style.color = ok ? 'var(--kw-green,#387838)' : 'var(--kw-red,#c0392b)'; };
+  if (!cur) return show('Enter your current password.', false);
+  if (!nw || nw.length < 8) return show('New password must be at least 8 characters.', false);
+  if (nw !== cf) return show('New passwords do not match.', false);
+  const btn = document.getElementById('cp-btn');
+  const done = () => { if (btn) { btn.disabled=false; btn.textContent='Update Password'; } };
+  if (btn) { btn.disabled=true; btn.textContent='Updating…'; }
+  const { data: { session } } = await sb.auth.getSession();
+  const u = session?.user;
+  const ident = u?.email ? { email: u.email } : (u?.phone ? { phone: u.phone } : null);
+  if (!ident) { show('Could not change your password. Please try again.', false); done(); return; }
+  const { error: reErr } = await sb.auth.signInWithPassword({ ...ident, password: cur });
+  if (reErr) { show('Could not change your password — please check your current password and try again.', false); done(); return; }
+  const { error: upErr } = await sb.auth.updateUser({ password: nw });
+  if (upErr) { show('Could not change your password — please check your current password and try again.', false); done(); return; }
+  show('✓ Password changed successfully.', true);
+  ['cp-cur','cp-new','cp-conf'].forEach(id => { const e = document.getElementById(id); if (e) e.value=''; });
+  done();
+}
 
 // ── Users View ──
 function renderUsers(filter = '', statusFilter = 'all') {

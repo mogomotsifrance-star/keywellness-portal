@@ -3436,3 +3436,24 @@ No estate data reaches any HR-facing output.
 ### ⚠ MANUAL (Tshenolo)
 - **Set `webinar_date` on existing webinar rows** via the admin Webinars tab (the
   inline date input on each row). New webinars capture it at creation.
+
+## Batch 8 — Change password (member / admin / employer) (authored 2026-08-03)
+
+**Status: frontend on `dev`.** No migration. Files: `index.html`, `admin.html`,
+`employer.html`.
+
+- **Member** (index.html `VIEWS['profile']`): "🔒 Change Password" section above
+  Sign Out.
+- **Admin** (admin.html): new "🔒 Account" sidebar tab → `renderAccount()`.
+- **Employer** (employer.html): new "🔑 Settings" sidebar item → `renderSettings()`.
+- Shared flow (`changePassword()` per file, same logic): current password + new
+  (min 8) + confirm. Re-authenticates via `signInWithPassword` using the identity
+  read from the live session (email, or phone for future phone accounts), THEN
+  `sb.auth.updateUser({ password })`. Client-side messages for length/mismatch/
+  missing-current; a single **generic** message for any credential/update failure
+  (doesn't reveal which check failed). Success + failure states visible; button
+  disables while working; fields clear on success.
+- VERIFIED in browser (all three): section renders, nav items present, validation
+  (short / mismatch / no-current) fires, no console errors. The full re-auth →
+  update path uses standard Supabase APIs — confirm live by changing a real
+  password and re-logging in (incl. a phone-only account once Batch 3 lands).
