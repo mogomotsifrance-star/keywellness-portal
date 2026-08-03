@@ -526,6 +526,7 @@ async function renderWebinars() {
       <td style="white-space:nowrap">
         <button class="btn btn-outline btn-sm" onclick="openWebinarEdit('${w.id}')">Edit</button>
         <button class="btn btn-outline btn-sm" onclick="toggleWebinarPublished('${w.id}', ${!w.published})">${w.published ? 'Unpublish' : 'Publish'}</button>
+        <button class="btn btn-red btn-sm" onclick="deleteWebinar('${w.id}')">Delete</button>
       </td>
     </tr>`).join('');
   el.innerHTML = `
@@ -642,6 +643,24 @@ async function toggleWebinarPublished(id, publish) {
     alert('Could not update publish status: ' + (error.message || 'unknown error'));
     return;
   }
+  renderWebinars();
+}
+
+// Hard-delete a webinar row. RLS (content_items_admin_all) gates this to
+// admins; webinar_views.webinar_id has ON DELETE CASCADE, so a delete also
+// clears that webinar's view history (irreversible). The Vimeo recording
+// itself is unaffected — this only removes the portal's registration of it.
+async function deleteWebinar(id) {
+  const w = _webinarRows.find(x => x.id === id);
+  const label = w ? `"${w.title}"` : 'this webinar';
+  if (!confirm(`Delete ${label}?\n\nThis removes it from every member's Learn page and permanently deletes its view history. The Vimeo recording is not affected. This cannot be undone.`)) return;
+  const { error } = await sb.from('content_items').delete().eq('id', id).eq('kind', 'webinar');
+  if (error) {
+    console.error('deleteWebinar failed:', error);
+    alert('Could not delete the webinar: ' + (error.message || 'unknown error'));
+    return;
+  }
+  _webinarRows = _webinarRows.filter(x => x.id !== id);
   renderWebinars();
 }
 
