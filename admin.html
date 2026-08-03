@@ -206,6 +206,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
     <div class="sb-item" data-tab="reports" onclick="showTab('reports')"><span>📊</span> Reports</div>
     <div class="sb-item" data-tab="activities" onclick="showTab('activities')"><span>📋</span> Activities</div>
     <div class="sb-item" data-tab="webinars" onclick="showTab('webinars')"><span>🎥</span> Webinars</div>
+    <div class="sb-item" data-tab="webinar-views" onclick="showTab('webinar-views')"><span>👁️</span> Webinar Views</div>
   </div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-admin-email">Loading…</div>
@@ -426,7 +427,7 @@ function buildStats() {
 }
 
 // ── Tab Router ──
-const TAB_TITLES = { users: 'Users', bookings: 'Appointments', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars' };
+const TAB_TITLES = { users: 'Users', bookings: 'Appointments', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views' };
 
 function showTab(tab) {
   activeTab = tab;
@@ -439,6 +440,7 @@ function showTab(tab) {
   else if (tab === 'reports') renderReports();
   else if (tab === 'activities') renderActivities();
   else if (tab === 'webinars') renderWebinars();
+  else if (tab === 'webinar-views') renderWebinarViews();
   KW.reveal('.card, .stat-box');
 }
 
@@ -455,8 +457,9 @@ async function renderWebinars() {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading webinars…</div>';
   const { data: rows, error } = await sb.from('content_items')
-    .select('id,title,description,org_id,video_path,duration_seconds,published,created_at')
+    .select('id,title,description,org_id,video_path,duration_seconds,published,webinar_date,created_at')
     .eq('kind', 'webinar')
+    .order('webinar_date', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false });
   if (error) {
     el.innerHTML = `<div class="card" style="color:var(--kw-red,#c0392b)"><strong>Could not load webinars:</strong> ${escNar(error.message)}<br>
@@ -467,10 +470,12 @@ async function renderWebinars() {
   const orgOptions = ['<option value="">All members (every organisation)</option>']
     .concat(allOrgs.map(o => `<option value="${o.id}">${escNar(o.name)}</option>`)).join('');
   const fmtDur = s => { if (!s) return '—'; const h = Math.floor(s/3600), m = Math.round((s%3600)/60); return h ? `${h}h ${String(m).padStart(2,'0')}m` : `${m}m`; };
+  const fmtWDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }) : '<span style="color:var(--kw-red,#c0392b)">— set date</span>';
   const list = (rows || []).map(w => `
     <tr>
       <td><strong>${escNar(w.title)}</strong>${w.description ? `<br><span style="font-size:11.5px;color:var(--muted)">${escNar(w.description)}</span>` : ''}</td>
       <td>${escNar(orgName(w.org_id))}</td>
+      <td class="mono" style="font-size:11.5px">${fmtWDate(w.webinar_date)}</td>
       <td style="font-size:11.5px" class="mono">${escNar(w.video_path || '—')}</td>
       <td class="mono">${fmtDur(w.duration_seconds)}</td>
       <td>${w.published ? '<span style="color:var(--kw-green,#387838);font-weight:700">● Published</span>' : '<span style="color:var(--muted)">○ Draft</span>'}</td>
@@ -491,6 +496,7 @@ async function renderWebinars() {
         <label style="font-size:12px;font-weight:600">Organisation<select id="wb-org" style="width:100%;padding:8px;margin-top:4px">${orgOptions}</select></label>
         <label style="font-size:12px;font-weight:600">Vimeo link or ID<input id="wb-path" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="e.g. https://vimeo.com/123456789/abcd1234 or 123456789"></label>
         <label style="font-size:12px;font-weight:600">Duration (minutes)<input id="wb-mins" type="number" min="1" style="width:100%;padding:8px;margin-top:4px" placeholder="64"></label>
+        <label style="font-size:12px;font-weight:600">Webinar date<input id="wb-date" type="date" style="width:100%;padding:8px;margin-top:4px"></label>
       </div>
       <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Description (optional)<input id="wb-desc" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
       <button class="btn btn-primary btn-sm" id="wb-create-btn" onclick="createWebinar()">Add webinar (as draft)</button>
@@ -498,7 +504,7 @@ async function renderWebinars() {
     <div class="card">
       <h3 style="margin-bottom:10px">Webinar library (${(rows || []).length})</h3>
       ${(rows || []).length ? `<div class="table-wrap"><table>
-        <thead><tr><th>Title</th><th>Audience</th><th>Vimeo</th><th>Duration</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Title</th><th>Audience</th><th>Date</th><th>Vimeo</th><th>Duration</th><th>Status</th><th></th></tr></thead>
         <tbody>${list}</tbody></table></div>`
       : '<p style="color:var(--muted);font-size:13px">No webinars yet — add the first one above.</p>'}
     </div>`;
@@ -529,8 +535,14 @@ async function createWebinar() {
   const rawRef = (document.getElementById('wb-path').value || '').trim();
   const mins  = parseInt(document.getElementById('wb-mins').value, 10);
   const desc  = (document.getElementById('wb-desc').value || '').trim();
+  const wdate = document.getElementById('wb-date').value || null;   // 'YYYY-MM-DD'
   if (!title || !rawRef) {
     errEl.textContent = 'Title and the Vimeo link (or ID) are both required.';
+    errEl.style.display = 'block';
+    return;
+  }
+  if (!wdate) {
+    errEl.textContent = 'The webinar date is required — it drives the ordering and the "Latest webinar" spotlight.';
     errEl.style.display = 'block';
     return;
   }
@@ -546,7 +558,7 @@ async function createWebinar() {
   const { error } = await sb.from('content_items').insert({
     title, kind: 'webinar', org_id: orgId, video_path: path,
     duration_seconds: (mins && mins > 0) ? mins * 60 : null,
-    description: desc || null, published: false,
+    description: desc || null, published: false, webinar_date: wdate,
     pathway_id: null, section_label: null, sort_order: null,
   });
   btn.disabled = false; btn.textContent = 'Add webinar (as draft)';
@@ -568,6 +580,71 @@ async function toggleWebinarPublished(id, publish) {
   }
   renderWebinars();
 }
+
+// ── Webinar Views (admin-only per webinar_views RLS — HR/employers get zero) ──
+// Individual webinar viewing is member-level personal data: this surface is
+// visible to Key Wellness ADMINS ONLY. Disclosed in the privacy notice (DPA).
+let _wvRows = null, _wvWebinars = null, _wvFilter = 'all';
+async function renderWebinarViews() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading webinar views…</div>';
+  const [{ data: views, error: vErr }, { data: webs, error: wErr }] = await Promise.all([
+    sb.from('webinar_views').select('id,webinar_id,user_id,viewed_at').order('viewed_at', { ascending: false }),
+    sb.from('content_items').select('id,title,webinar_date').eq('kind', 'webinar'),
+  ]);
+  if (vErr) {
+    el.innerHTML = `<div class="card" style="color:var(--kw-red,#c0392b)"><strong>Could not load webinar views:</strong> ${escNar(vErr.message)}<br>
+      <span style="font-size:12px;color:var(--muted)">If the webinar_views table doesn't exist yet, apply supabase_sedimosa_phase2_batch1.sql first.</span></div>`;
+    return;
+  }
+  if (wErr) console.warn('webinar titles load failed:', wErr);
+  _wvRows = views || [];
+  _wvWebinars = webs || [];
+  _wvFilter = 'all';
+  _paintWebinarViews();
+}
+function _paintWebinarViews() {
+  const el = document.getElementById('page-content');
+  const titleOf = id => (_wvWebinars.find(w => w.id === id) || {}).title || '(deleted webinar)';
+  const nameOf = uid => {
+    const u = allUsers.find(x => x.id === uid);
+    const n = u ? [u.first_name, u.last_name].filter(Boolean).join(' ') : '';
+    return n || '(unknown member)';
+  };
+  const fmtDT = ts => new Date(ts).toLocaleString('en-GB', { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+
+  const counts = {};
+  _wvRows.forEach(r => { counts[r.webinar_id] = (counts[r.webinar_id] || 0) + 1; });
+  const countRows = _wvWebinars
+    .map(w => ({ id: w.id, title: w.title, n: counts[w.id] || 0 }))
+    .sort((a, b) => b.n - a.n)
+    .map(c => `<tr><td>${escNar(c.title)}</td><td class="mono">${c.n}</td></tr>`).join('');
+
+  const rows = (_wvFilter === 'all' ? _wvRows : _wvRows.filter(r => r.webinar_id === _wvFilter));
+  const detail = rows.map(r => `
+    <tr><td>${escNar(titleOf(r.webinar_id))}</td><td>${escNar(nameOf(r.user_id))}</td><td class="mono" style="font-size:11.5px">${fmtDT(r.viewed_at)}</td></tr>`).join('');
+  const opts = ['<option value="all">All webinars</option>']
+    .concat(_wvWebinars.map(w => `<option value="${w.id}"${_wvFilter === w.id ? ' selected' : ''}>${escNar(w.title)}</option>`)).join('');
+
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:18px">
+      <h3 style="margin-bottom:10px">Views per webinar</h3>
+      ${_wvWebinars.length
+        ? `<div class="table-wrap"><table><thead><tr><th>Webinar</th><th>Total views</th></tr></thead><tbody>${countRows}</tbody></table></div>`
+        : '<p style="color:var(--muted);font-size:13px">No webinars yet.</p>'}
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+        <h3 style="margin:0">View log (${rows.length})</h3>
+        <label style="font-size:12px;font-weight:600">Filter: <select style="padding:6px;margin-left:6px" onchange="_wvSetFilter(this.value)">${opts}</select></label>
+      </div>
+      ${rows.length
+        ? `<div class="table-wrap"><table><thead><tr><th>Webinar</th><th>Viewer</th><th>Viewed</th></tr></thead><tbody>${detail}</tbody></table></div>`
+        : '<p style="color:var(--muted);font-size:13px">No views recorded yet.</p>'}
+      <p style="font-size:11.5px;color:var(--muted);margin-top:12px">🔒 Visible to Key Wellness admins only — never to HR or employers. Individual webinar viewing is personal data (disclosed in the privacy notice).</p>
+    </div>`;
+}
+window._wvSetFilter = function (v) { _wvFilter = v; _paintWebinarViews(); };
 
 // ── Users View ──
 function renderUsers(filter = '', statusFilter = 'all') {
