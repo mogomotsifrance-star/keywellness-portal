@@ -82,37 +82,35 @@ serve(async (req) => {
   // transport changed, from a FormSubmit autoresponse to Resend via the shared template.
   if (type === "confirmed") {
     const { firstName, email, service, dateStr } = body;
-    if (!email) {
-      return new Response(
-        JSON.stringify({ error: "Missing required field: email" }),
-        { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
-      );
-    }
     const svc = service || "coaching";
     const when = dateStr ? ` on ${dateStr}` : "";
-    const html = renderEmail({
-      subject: "Your Key Wellness booking is confirmed",
-      preheader: `Your ${svc} session${when} has been confirmed.`,
-      eyebrow: "Coaching",
-      heading: `Good news, ${firstName || "there"} — you're confirmed`,
-      bodyHtml: `<p style="margin:0 0 14px;">Your ${svc} session${when} has been confirmed by Key Wellness. We look forward to seeing you.</p>`,
-      asideHtml: "Need to reschedule? Reply to this email or write to wellness@keywellness.co.bw.",
-      variant: "member",
-    });
-    const result = await sendEmail({
-      from: KW_FROM,
-      to: [email],
-      reply_to: KW_REPLY_TO,
-      subject: "Your Key Wellness booking is confirmed",
-      html,
-    });
-    if (!result.ok) {
-      return new Response(
-        JSON.stringify({ error: `Failed to send confirmation email: ${result.error}` }),
-        { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
-      );
+    // Email is OPTIONAL — phone-only members have no routable address; skip the
+    // send WITHOUT error and rely on the in-app notification written below.
+    if (email) {
+      const html = renderEmail({
+        subject: "Your Key Wellness booking is confirmed",
+        preheader: `Your ${svc} session${when} has been confirmed.`,
+        eyebrow: "Coaching",
+        heading: `Good news, ${firstName || "there"} — you're confirmed`,
+        bodyHtml: `<p style="margin:0 0 14px;">Your ${svc} session${when} has been confirmed by Key Wellness. We look forward to seeing you.</p>`,
+        asideHtml: "Need to reschedule? Reply to this email or write to wellness@keywellness.co.bw.",
+        variant: "member",
+      });
+      const result = await sendEmail({
+        from: KW_FROM,
+        to: [email],
+        reply_to: KW_REPLY_TO,
+        subject: "Your Key Wellness booking is confirmed",
+        html,
+      });
+      if (!result.ok) {
+        return new Response(
+          JSON.stringify({ error: `Failed to send confirmation email: ${result.error}` }),
+          { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+        );
+      }
     }
-    // Mirror the confirmation as an in-app notification for the member.
+    // Always mirror the confirmation as an in-app notification (covers phone-only).
     await writeNotification(
       body.user_id,
       "booking_confirmed",
@@ -120,7 +118,7 @@ serve(async (req) => {
       `Your ${svc} session${when} has been confirmed. We look forward to seeing you.`,
     );
     return new Response(
-      JSON.stringify({ ok: true, id: result.id }),
+      JSON.stringify({ ok: true, emailed: !!email }),
       { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );
   }
@@ -128,9 +126,11 @@ serve(async (req) => {
   // ── type "new" (default): booking request received. ──
   const { firstName, lastName, email, phone, service, sessionType, dateStr, time, message } = body;
 
-  if (!email || !service || !dateStr || !time) {
+  // Email is OPTIONAL (phone-only members). The booking itself is already saved
+  // client-side; here we notify. service/date/time are still required.
+  if (!service || !dateStr || !time) {
     return new Response(
-      JSON.stringify({ error: "Missing required fields: email, service, dateStr, time" }),
+      JSON.stringify({ error: "Missing required fields: service, dateStr, time" }),
       { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );
   }
@@ -175,19 +175,22 @@ serve(async (req) => {
     variant: "internal",
   });
 
-  // Send client confirmation — this is the gating send.
-  const clientResult = await sendEmail({
-    from: KW_FROM,
-    to: [email],
-    reply_to: TEAM,
-    subject: `Booking received — ${service}`,
-    html: clientHtml,
-  });
-  if (!clientResult.ok) {
-    return new Response(
-      JSON.stringify({ error: `Failed to send client confirmation: ${clientResult.error}` }),
-      { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
-    );
+  // Send client confirmation — ONLY if the member has a routable email. For a
+  // phone-only member we skip it silently and rely on the in-app notification.
+  if (email) {
+    const clientResult = await sendEmail({
+      from: KW_FROM,
+      to: [email],
+      reply_to: TEAM,
+      subject: `Booking received — ${service}`,
+      html: clientHtml,
+    });
+    if (!clientResult.ok) {
+      return new Response(
+        JSON.stringify({ error: `Failed to send client confirmation: ${clientResult.error}` }),
+        { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
+      );
+    }
   }
 
   // Mirror the "booking received" confirmation as an in-app notification.
@@ -203,19 +206,19 @@ serve(async (req) => {
   const teamResult = await sendEmail({
     from: KW_FROM,
     to: [TEAM],
-    reply_to: email,
+    reply_to: email || TEAM,
     subject: `New booking: ${service} — ${firstName || ""} ${lastName || ""}`,
     html: teamHtml,
   });
   if (!teamResult.ok) {
     return new Response(
-      JSON.stringify({ error: `Client email sent but team notification failed: ${teamResult.error}` }),
+      JSON.stringify({ error: `Team notification failed: ${teamResult.error}` }),
       { status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );
   }
 
   return new Response(
-    JSON.stringify({ ok: true, id: clientResult.id }),
+    JSON.stringify({ ok: true, emailed: !!email }),
     { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
   );
 });
