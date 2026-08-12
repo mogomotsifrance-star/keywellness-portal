@@ -190,6 +190,14 @@ tbody td{padding:12px 14px;vertical-align:middle}
   .kw-print-chart-snapshot { max-width:100%; }
   @page { margin: 16mm 14mm; }
 }
+
+/* ── Interface switcher (multi-role staff) ── */
+#roleSwitcher{padding:12px 20px;border-top:1px solid rgba(255,255,255,.12)}
+.rs-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45);margin-bottom:7px}
+.rs-btn{display:flex;align-items:center;gap:8px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 11px;border-radius:9px;cursor:pointer;margin-bottom:6px;text-align:left}
+.rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.rs-btn.active{background:var(--kw-green);border-color:var(--kw-green);color:#fff;cursor:default}
+.rs-btn span{font-size:14px}
 </style>
 </head>
 <body>
@@ -203,12 +211,14 @@ tbody td{padding:12px 14px;vertical-align:middle}
   <div class="sb-nav">
     <div class="sb-item active" data-tab="users" onclick="showTab('users')"><span>👥</span> Users</div>
     <div class="sb-item" data-tab="bookings" onclick="showTab('bookings')"><span>📅</span> Appointments</div>
+    <div class="sb-item" data-tab="advisors" onclick="showTab('advisors')"><span>🧭</span> Advisors</div>
     <div class="sb-item" data-tab="reports" onclick="showTab('reports')"><span>📊</span> Reports</div>
     <div class="sb-item" data-tab="activities" onclick="showTab('activities')"><span>📋</span> Activities</div>
     <div class="sb-item" data-tab="webinars" onclick="showTab('webinars')"><span>🎥</span> Webinars</div>
     <div class="sb-item" data-tab="webinar-views" onclick="showTab('webinar-views')"><span>👁️</span> Webinar Views</div>
     <div class="sb-item" data-tab="account" onclick="showTab('account')"><span>🔒</span> Account</div>
   </div>
+  <div id="roleSwitcher" style="display:none"></div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-admin-email">Loading…</div>
     <button class="sb-logout" onclick="doLogout()">Sign Out</button>
@@ -219,7 +229,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
 <div id="main">
   <div class="page-header">
     <h2 id="page-title">Admin Dashboard</h2>
-    <a href="index.html" style="font-size:12px;color:var(--kw-green);text-decoration:none;font-weight:600">← Back to Portal</a>
+    <button onclick="kwGoToInterface('member')" style="font-size:12px;color:var(--kw-green);background:none;border:none;font-family:inherit;font-weight:600;cursor:pointer">← My Portal</button>
   </div>
   <div class="page-content" id="page-content">
     <div class="spinner"><div class="spin"></div> Loading admin data…</div>
@@ -376,6 +386,51 @@ function svgGauge(score, color) {
 }
 
 // ── Auth ──
+/* ══ Interface switcher — shared with index.html / advisor.html ══
+   Staff can hold several roles. index.html routes on this same
+   sessionStorage key, so setting it here is what stops a member of
+   staff being bounced straight back out of the member portal. ══ */
+const KW_INTERFACE_KEY = 'kw_interface';
+window._kwRoles = { member:false, advisor:false, admin:false, employer:false };
+
+function kwGoToInterface(id){
+  try { sessionStorage.setItem(KW_INTERFACE_KEY, id); } catch(_) {}
+  window.location.href = id === 'admin'    ? 'admin.html'
+                       : id === 'advisor'  ? 'advisor.html'
+                       : id === 'employer' ? 'employer.html'
+                       : 'index.html';
+}
+
+async function kwDetectRoles(user){
+  const r = window._kwRoles;
+  try { const { data } = await sb.from('profiles').select('id').eq('id', user.id).maybeSingle(); r.member = !!data; } catch(_) {}
+  try { const { data } = await sb.from('admins').select('email').eq('email', user.email).maybeSingle(); r.admin = !!data; } catch(_) {}
+  try { const { data } = await sb.rpc('advisor_me'); r.advisor = !!data; } catch(_) {}
+  try { const { data } = await sb.from('employers').select('org_id')
+          .or(`user_id.eq.${user.id},email.eq.${(user.email||'').toLowerCase()}`).maybeSingle();
+        r.employer = !!data; } catch(_) {}
+  return r;
+}
+
+function kwRenderRoleSwitcher(currentId){
+  const host = document.getElementById('roleSwitcher');
+  if (!host) return;
+  const r = window._kwRoles;
+  const opts = [];
+  if (r.member)   opts.push(['member','\u{1F464}','My Portal']);
+  if (r.advisor)  opts.push(['advisor','\u{1F9ED}','Advisor']);
+  if (r.admin)    opts.push(['admin','\u2699\uFE0F','Admin']);
+  if (r.employer) opts.push(['employer','\u{1F3E2}','HR Dashboard']);
+  if (opts.length < 2) { host.style.display = 'none'; return; }
+  host.style.display = 'block';
+  host.innerHTML = '<div class="rs-label">Interface</div>' + opts.map(function(o){
+    const active = o[0] === currentId;
+    return '<button class="rs-btn' + (active ? ' active' : '') + '"' +
+           (active ? ' disabled' : ' onclick="kwGoToInterface(\'' + o[0] + '\')"') +
+           '><span>' + o[1] + '</span>' + o[2] + '</button>';
+  }).join('');
+}
+
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { window.location.href = 'index.html'; return; }
@@ -390,6 +445,8 @@ async function init() {
   }
 
   document.getElementById('sb-admin-email').textContent = currentUser.email;
+  await kwDetectRoles(currentUser);
+  kwRenderRoleSwitcher('admin');
   await loadAllData();
   showTab('users');
 }
@@ -468,7 +525,7 @@ function buildStats() {
 }
 
 // ── Tab Router ──
-const TAB_TITLES = { users: 'Users', bookings: 'Appointments', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
+const TAB_TITLES = { users: 'Users', bookings: 'Appointments', advisors: 'Advisors', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
 
 function showTab(tab) {
   activeTab = tab;
@@ -478,6 +535,7 @@ function showTab(tab) {
   document.getElementById('page-title').textContent = TAB_TITLES[tab] || tab;
   if (tab === 'users') renderUsers();
   else if (tab === 'bookings') renderBookings();
+  else if (tab === 'advisors') renderAdvisors();
   else if (tab === 'reports') renderReports();
   else if (tab === 'activities') renderActivities();
   else if (tab === 'webinars') renderWebinars();
@@ -928,6 +986,318 @@ async function changePassword() {
 }
 
 // ── Users View ──
+
+/* ══════════════════════════════════════════════════════════════
+   ADVISORS
+   --------------------------------------------------------------
+   Two jobs on this screen:
+
+   1. Roster management — add, edit, deactivate advisors, and assign
+      registered members to their caseload. Before this, `advisors` rows
+      had to be edited directly in the Supabase dashboard, which is the
+      same gap `employers` still has.
+
+   2. Session reporting — per-advisor delivery numbers plus the
+      advisor-sourced vs self-booked split, both from
+      advisor_session_breakdown(). The period filter matches
+      org_report_data() (bookings.created_at within range), so the
+      totals here reconcile with the `sessions` block of an org report.
+   ══════════════════════════════════════════════════════════════ */
+let advisorRoster = [];
+let advisorBreakdown = null;
+let advBdOrg = '';                    // '' = all organisations
+let advBdFrom = '', advBdTo = '';
+let advSubTab = 'roster';
+
+function advDefaultRange() {
+  const to = new Date();
+  const from = new Date(); from.setMonth(from.getMonth() - 3);
+  const iso = d => d.toISOString().slice(0, 10);
+  return { from: iso(from), to: iso(to) };
+}
+
+async function renderAdvisors() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading advisors…</div>';
+
+  if (!advBdFrom) { const r = advDefaultRange(); advBdFrom = r.from; advBdTo = r.to; }
+
+  const [rosterRes, bdRes] = await Promise.all([
+    sb.rpc('admin_advisor_roster'),
+    sb.rpc('advisor_session_breakdown', {
+      p_org_id: advBdOrg || null, p_start: advBdFrom, p_end: advBdTo
+    })
+  ]);
+
+  if (rosterRes.error) {
+    el.innerHTML = `<div class="card"><h3 style="margin-bottom:8px">Couldn't load advisors</h3>
+      <p style="color:var(--muted);font-size:13px">${escNar(rosterRes.error.message)}</p>
+      <p style="color:var(--muted);font-size:12.5px;margin-top:10px">If this says the function does not exist, run
+      <span class="mono">supabase_advisor_portal.sql</span> then <span class="mono">supabase_advisor_rpcs.sql</span> in the SQL editor.</p></div>`;
+    return;
+  }
+  advisorRoster = rosterRes.data || [];
+  advisorBreakdown = bdRes.error ? null : bdRes.data;
+  if (bdRes.error) console.error('advisor_session_breakdown failed:', bdRes.error);
+
+  el.innerHTML = `
+    <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn btn-sm ${advSubTab==='roster'?'btn-primary':'btn-outline'}" onclick="advSwitch('roster')">Roster</button>
+      <button class="btn btn-sm ${advSubTab==='reporting'?'btn-primary':'btn-outline'}" onclick="advSwitch('reporting')">Session Reporting</button>
+    </div>
+    ${advSubTab === 'roster' ? advRosterHtml() : advReportingHtml()}`;
+  KW.reveal('.card, .stat-box');
+}
+
+function advSwitch(t) { advSubTab = t; renderAdvisors(); }
+
+/* ── Roster ─────────────────────────────────────────────────── */
+function advRosterHtml() {
+  const active = advisorRoster.filter(a => a.is_active).length;
+  const rows = advisorRoster.map(a => `
+    <tr${a.is_active ? '' : ' style="opacity:.55"'}>
+      <td>
+        <strong>${escNar(a.full_name)}</strong>
+        ${a.title ? `<div style="font-size:11px;color:var(--muted)">${escNar(a.title)}</div>` : ''}
+      </td>
+      <td>${escNar(a.email)}${a.phone ? `<div style="font-size:11px;color:var(--muted)">${escNar(a.phone)}</div>` : ''}</td>
+      <td>${a.has_logged_in
+            ? '<span class="status-pill status-confirmed">Active account</span>'
+            : '<span class="status-pill status-pending" title="They have an advisor record but have not signed in yet">Not signed in</span>'}</td>
+      <td class="mono">${a.active_clients}</td>
+      <td class="mono">${a.sessions_attended} / ${a.sessions_booked}</td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="advOpenAssign('${a.id}')">Assign member</button>
+        <button class="btn btn-outline btn-sm" onclick="advToggleActive('${a.id}', ${a.is_active ? 'false' : 'true'})">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="stat-grid">
+      <div class="stat-box green"><div class="stat-lbl">Active advisors</div><div class="stat-val mono">${active}</div></div>
+      <div class="stat-box"><div class="stat-lbl">Total on roster</div><div class="stat-val mono">${advisorRoster.length}</div></div>
+      <div class="stat-box gold"><div class="stat-lbl">Assigned clients</div><div class="stat-val mono">${advisorRoster.reduce((s,a)=>s+Number(a.active_clients||0),0)}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Add an advisor</div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+        Add them by email even if they have never signed in — their advisor access
+        activates automatically the first time they log in with that address.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+        <input id="adv-new-name"  class="search-input" type="text"  placeholder="Full name">
+        <input id="adv-new-email" class="search-input" type="email" placeholder="Email address">
+        <input id="adv-new-title" class="search-input" type="text"  placeholder="Title (optional)">
+        <input id="adv-new-phone" class="search-input" type="tel"   placeholder="Phone (optional)">
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="advCreate()">+ Add Advisor</button>
+      <div id="adv-new-msg" style="display:none;margin-top:10px;font-size:12.5px;font-weight:600"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Advisors (${advisorRoster.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Advisor</th><th>Contact</th><th>Status</th><th>Clients</th><th>Attended / booked</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No advisors yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" id="adv-assign-card" style="display:none">
+      <div class="card-title">Assign a member to <span id="adv-assign-name"></span></div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        Search registered members. Assigning creates a client record on that
+        advisor's caseload, already linked to the member's portal account.
+      </p>
+      <input id="adv-assign-q" class="search-input" type="text" placeholder="Surname or full email address — at least 3 characters" oninput="advAssignSearch(this.value)">
+      <div id="adv-assign-results" style="margin-top:12px"></div>
+    </div>`;
+}
+
+async function advCreate() {
+  const name  = document.getElementById('adv-new-name').value.trim();
+  const email = document.getElementById('adv-new-email').value.trim();
+  const title = document.getElementById('adv-new-title').value.trim();
+  const phone = document.getElementById('adv-new-phone').value.trim();
+  const msg   = document.getElementById('adv-new-msg');
+  const show  = (t, ok) => { msg.style.display='block'; msg.textContent=t; msg.style.color = ok ? 'var(--green)' : 'var(--red)'; };
+
+  if (!name)  return show('Enter the advisor’s full name.', false);
+  if (!email || !email.includes('@')) return show('Enter a valid email address.', false);
+
+  const { error } = await sb.from('advisors').insert({
+    full_name: name, email: email, title: title || null, phone: phone || null,
+    created_by: currentUser.id
+  });
+  if (error) {
+    return show(error.code === '23505'
+      ? 'There is already an advisor with that email address.'
+      : 'Could not add the advisor: ' + error.message, false);
+  }
+  show('Advisor added.', true);
+  renderAdvisors();
+}
+
+async function advToggleActive(id, makeActive) {
+  const on = makeActive === true || makeActive === 'true';
+  if (!on && !confirm('Deactivate this advisor? They lose access to the advisor portal immediately. Their client records and past sessions are kept.')) return;
+  const { error } = await sb.from('advisors')
+    .update({ is_active: on, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('Could not update the advisor: ' + error.message); return; }
+  renderAdvisors();
+}
+
+let _advAssignId = null;
+function advOpenAssign(advisorId) {
+  _advAssignId = advisorId;
+  const a = advisorRoster.find(x => x.id === advisorId);
+  document.getElementById('adv-assign-name').textContent = a ? a.full_name : '';
+  document.getElementById('adv-assign-card').style.display = 'block';
+  document.getElementById('adv-assign-q').value = '';
+  document.getElementById('adv-assign-results').innerHTML = '';
+  document.getElementById('adv-assign-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/* Searches through advisor_search_members() rather than the in-memory
+   allUsers array, because `profiles` has no email column — email lookup
+   has to reach auth.users, which only a SECURITY DEFINER function can do. */
+let _advAssignTimer = null;
+function advAssignSearch(q) {
+  clearTimeout(_advAssignTimer);
+  const box = document.getElementById('adv-assign-results');
+  const term = (q || '').trim();
+  if (term.length < 3) {
+    box.innerHTML = term.length ? '<div style="font-size:12.5px;color:var(--muted);padding:8px">Type at least 3 characters.</div>' : '';
+    return;
+  }
+  _advAssignTimer = setTimeout(async () => {
+    const { data, error } = await sb.rpc('advisor_search_members', { p_q: term });
+    if (error) { box.innerHTML = `<div style="font-size:12.5px;color:var(--red);padding:8px">${escNar(error.message)}</div>`; return; }
+    const hits = data || [];
+    box.innerHTML = hits.length ? hits.map(u => {
+      const nm = ((u.first_name || '') + ' ' + (u.last_name || '')).trim() || u.email_masked;
+      return `<div style="display:flex;align-items:center;gap:12px;padding:9px 6px;border-bottom:1px solid var(--border)">
+        <div style="flex:1"><strong style="font-size:13.5px">${escNar(nm)}</strong>
+          <div style="font-size:11.5px;color:var(--muted)">${escNar(u.email_masked || '')}${u.org_name ? ' · ' + escNar(u.org_name) : ''}</div></div>
+        <button class="btn btn-primary btn-sm" onclick="advAssign('${u.user_id}')">Assign</button>
+      </div>`;
+    }).join('') : '<div style="font-size:12.5px;color:var(--muted);padding:8px">No matching member. Search by surname, or paste their full email address.</div>';
+  }, 300);
+}
+
+async function advAssign(userId) {
+  const { error } = await sb.rpc('admin_assign_client', {
+    p_advisor_id: _advAssignId, p_member_user_id: userId
+  });
+  if (error) { alert('Could not assign: ' + error.message); return; }
+  document.getElementById('adv-assign-results').innerHTML =
+    '<div style="font-size:13px;color:var(--green);font-weight:700;padding:8px">✓ Assigned.</div>';
+  const a = advisorRoster.find(x => x.id === _advAssignId);
+  if (a) a.active_clients = Number(a.active_clients || 0) + 1;
+}
+
+/* ── Session reporting ──────────────────────────────────────── */
+function advReportingHtml() {
+  if (!advisorBreakdown) {
+    return `<div class="card"><h3 style="margin-bottom:8px">Session reporting unavailable</h3>
+      <p style="color:var(--muted);font-size:13px">Run <span class="mono">supabase_advisor_rpcs.sql</span> to enable it.</p></div>`;
+  }
+  const t = advisorBreakdown.totals || {};
+  const orgOpts = ['<option value="">All organisations</option>']
+    .concat((allOrgs || []).map(o => `<option value="${o.id}"${advBdOrg === o.id ? ' selected' : ''}>${escNar(o.name)}</option>`))
+    .join('');
+
+  const rows = (advisorBreakdown.by_advisor || []).map(r => `
+    <tr>
+      <td><strong>${escNar(r.advisor_name)}</strong>${r.advisor_active ? '' : ' <span class="status-pill status-pending">inactive</span>'}</td>
+      <td class="mono">${r.booked}</td>
+      <td class="mono">${r.attended}</td>
+      <td class="mono">${r.no_show}</td>
+      <td class="mono">${r.unconfirmed}</td>
+      <td class="mono">${r.declined_by_member}</td>
+      <td class="mono">${r.unique_clients}</td>
+      <td class="mono">${r.attendance_rate == null ? '—' : r.attendance_rate + '%'}</td>
+    </tr>`).join('');
+
+  const pct = t.advisor_sourced_pct;
+
+  return `
+    <div class="card">
+      <div class="card-title">Period &amp; scope</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">From</label>
+          <input type="date" id="adv-bd-from" value="${advBdFrom}" class="search-input" style="min-width:150px"></div>
+        <div><label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">To</label>
+          <input type="date" id="adv-bd-to" value="${advBdTo}" class="search-input" style="min-width:150px"></div>
+        <div><label style="display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px">Organisation</label>
+          <select id="adv-bd-org" class="search-input" style="min-width:200px">${orgOpts}</select></div>
+        <button class="btn btn-primary btn-sm" onclick="advApplyRange()">Apply</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px">
+        Sessions are counted by the date they were <strong>created</strong>, the same
+        rule <span class="mono">org_report_data()</span> uses — so these totals reconcile
+        with the sessions block of an organisation report over the same period.
+      </p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-lbl">Sessions booked</div><div class="stat-val mono">${t.total_booked ?? 0}</div></div>
+      <div class="stat-box green"><div class="stat-lbl">Attended</div><div class="stat-val mono">${t.total_attended ?? 0}</div></div>
+      <div class="stat-box gold"><div class="stat-lbl">Advisor-initiated</div><div class="stat-val mono">${t.advisor_sourced ?? 0}</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:3px">${pct == null ? '' : pct + '% of all sessions'}</div></div>
+      <div class="stat-box"><div class="stat-lbl">Member self-booked</div><div class="stat-val mono">${t.self_booked ?? 0}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Where sessions come from</div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.65;margin-bottom:14px">
+        The split between sessions an advisor put in a member's diary and sessions
+        the member booked themselves. Proactive outreach and self-service demand are
+        very different utilisation stories, and organisations tend to want both.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Source</th><th>Booked</th><th>Attended</th><th>Attendance rate</th></tr></thead>
+          <tbody>
+            <tr><td>Advisor-initiated</td><td class="mono">${t.advisor_sourced ?? 0}</td><td class="mono">${t.advisor_sourced_attended ?? 0}</td>
+                <td class="mono">${t.advisor_sourced ? Math.round(1000 * (t.advisor_sourced_attended || 0) / t.advisor_sourced) / 10 + '%' : '—'}</td></tr>
+            <tr><td>Member self-booked</td><td class="mono">${t.self_booked ?? 0}</td><td class="mono">${t.self_booked_attended ?? 0}</td>
+                <td class="mono">${t.self_booked ? Math.round(1000 * (t.self_booked_attended || 0) / t.self_booked) / 10 + '%' : '—'}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      ${(t.awaiting_response || t.declined_by_member) ? `
+      <div class="notice notice-gold" style="margin-top:14px">
+        ${t.awaiting_response ? `<strong>${t.awaiting_response}</strong> advisor-scheduled session${t.awaiting_response !== 1 ? 's are' : ' is'} still awaiting a reply from the member. ` : ''}
+        ${t.declined_by_member ? `<strong>${t.declined_by_member}</strong> ${t.declined_by_member !== 1 ? 'were' : 'was'} declined.` : ''}
+      </div>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="card-title">By advisor</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Advisor</th><th>Booked</th><th>Attended</th><th>No-show</th><th>Unconfirmed</th><th>Declined</th><th>Clients</th><th>Attendance rate</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No sessions in this period.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px">
+        "Unconfirmed" means nobody has yet recorded whether the session happened.
+        Attendance is what drives the attendance rate in organisation reports and the
+        rewards qualification, so a high unconfirmed count understates real utilisation.
+      </p>
+    </div>`;
+}
+
+function advApplyRange() {
+  advBdFrom = document.getElementById('adv-bd-from').value || advBdFrom;
+  advBdTo   = document.getElementById('adv-bd-to').value   || advBdTo;
+  advBdOrg  = document.getElementById('adv-bd-org').value  || '';
+  renderAdvisors();
+}
+
 function renderUsers(filter = '', statusFilter = 'all') {
   const el = document.getElementById('page-content');
   // Async banner load after synchronous render completes

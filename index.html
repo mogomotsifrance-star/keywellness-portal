@@ -539,6 +539,18 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
   #ak-fab{right:16px;bottom:calc(var(--bottom-nav-h) + 16px)}
   #ak-panel{right:0;left:0;bottom:0;top:0;width:100vw;max-width:100vw;height:100dvh;border-radius:0;border:none}
 }
+
+/* ── Interface switcher (multi-role staff) ── */
+#roleSwitcher{padding:10px 0 12px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,.12)}
+.rs-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45);margin-bottom:7px}
+.rs-btn{display:flex;align-items:center;gap:8px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 11px;border-radius:9px;cursor:pointer;margin-bottom:6px;text-align:left}
+.rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.rs-btn.active{background:var(--gold);border-color:var(--gold);color:#fff;cursor:default}
+.ic-opt{display:flex;align-items:center;gap:14px;width:100%;background:var(--cream-dark);border:1px solid var(--border);border-radius:12px;padding:16px 18px;cursor:pointer;font-family:inherit;text-align:left;transition:border-color .18s,transform .18s}
+.ic-opt:hover{border-color:var(--gold);transform:translateY(-1px)}
+.ic-opt .ic-ic{font-size:24px;line-height:1}
+.ic-opt .ic-t{font-size:15px;font-weight:700;color:var(--navy)}
+.ic-opt .ic-d{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -616,6 +628,20 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 </div>
 
 <!-- ══ DATA PROTECTION CONSENT MODAL ══ -->
+
+<!-- ══ INTERFACE CHOOSER ══
+     Shown when a signed-in person holds more than one role. Before this
+     existed, admins and HR managers were redirected out of the member
+     portal on every sign-in and could never get back in. ══ -->
+<div id="interface-chooser" style="display:none;position:fixed;inset:0;background:var(--cream);z-index:1002;align-items:center;justify-content:center;padding:24px">
+  <div style="background:#fff;border:1px solid var(--border);border-radius:18px;padding:34px;max-width:560px;width:100%;box-shadow:0 10px 40px rgba(26,39,68,.10)">
+    <h2 style="font-size:21px;color:var(--navy);margin-bottom:6px">Welcome back<span id="ic-name"></span></h2>
+    <p style="font-size:13.5px;color:var(--muted);line-height:1.6;margin-bottom:24px">You have access to more than one interface. Which would you like to open?</p>
+    <div id="ic-options" style="display:grid;gap:12px"></div>
+    <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:20px">You can switch at any time from the bottom of the sidebar.</p>
+  </div>
+</div>
+
 <div id="consent-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:1001;align-items:center;justify-content:center;padding:20px">
   <div class="welcome-modal-box" style="max-width:520px;max-height:90vh;overflow-y:auto">
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
@@ -891,7 +917,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
         <div class="sb-user" id="sb-email" style="font-size:10px;color:rgba(255,255,255,.4);margin:0;word-break:break-all"></div>
       </div>
     </div>
-    <div class="sb-points-chip">🏅 Points: <span id="sb-pts" class="mono">0</span></div>
+    <div id="roleSwitcher" style="display:none"></div>
+  <div class="sb-points-chip">🏅 Points: <span id="sb-pts" class="mono">0</span></div>
     <button class="sb-logout" onclick="doLogout()">Sign Out</button>
   </div>
 </nav>
@@ -1139,6 +1166,13 @@ async function loadAllData() {
     const { data: empRow } = await sb.from('employers').select('org_id').eq('email', currentUser.email.toLowerCase()).maybeSingle();
     window._employerOrgId = empRow?.org_id || null;
   } catch (_) { window._employerOrgId = null; }
+
+  // Advisor check — resolved server-side by advisor_me() so the is_active
+  // flag and the email/user_id fallback live in one place.
+  try {
+    const { data: advRow } = await sb.rpc('advisor_me');
+    window._advisor = advRow || null;
+  } catch (_) { window._advisor = null; }
 }
 
 async function saveUser() {
@@ -1176,6 +1210,8 @@ async function saveUser() {
     net_is_manual:        u.net_is_manual        ?? false,
     fin_updated_at:       u.fin_updated_at       ?? null,
     leaderboard_opt_in:   u.leaderboard_opt_in   ?? false,
+    advisor_data_consent:    u.advisor_data_consent    ?? false,
+    advisor_data_consent_at: u.advisor_data_consent_at ?? null,
     display_alias:        u.display_alias        ?? null,
     updated_at:        new Date().toISOString(),
   };
@@ -1458,8 +1494,10 @@ async function confirmSession() {
   document.getElementById('session-confirm').style.display = 'none';
 
   await loadAllData();
-  if (window._isAdmin) { window.location.replace('admin.html'); return; }
-  if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+  // Staff with more than one hat now CHOOSE where to land instead of being
+  // bounced out — see kwRouteByRole(). Single-role staff still go straight
+  // through, so nothing changes for them.
+  if (kwRouteByRole()) return;
   initProfileUI();
   loadNotifications();
   route();
@@ -1883,9 +1921,122 @@ function closeSidebar() {
   document.body.style.overflow = '';
 }
 
+
+/* ══════════════════════════════════════════════════════════════
+   INTERFACE SWITCHING (member / advisor / admin / HR)
+   --------------------------------------------------------------
+   Before this, admins and HR managers were hard-redirected out of
+   index.html on every sign-in (three separate call sites), which meant
+   a member of staff could never use the member portal, and admin.html's
+   "Back to Portal" link was an infinite bounce.
+
+   Now: the roles a person holds are collected after loadAllData(), and
+   kwRouteByRole() decides what to do with them.
+     • one role only            → behave exactly as before, go straight there
+     • more than one role       → show the chooser once per session
+     • an explicit choice made  → honour it, and let them switch from the sidebar
+
+   The choice lives in sessionStorage, so it lasts for the browsing
+   session and resets on the next sign-in.
+   ══════════════════════════════════════════════════════════════ */
+const KW_INTERFACE_KEY = 'kw_interface';
+
+function kwAvailableInterfaces() {
+  const out = [{
+    id: 'member', icon: '👤', title: 'My Portal',
+    desc: 'Your own wellness dashboard, tools, assessment and bookings.',
+    href: 'index.html'
+  }];
+  if (window._advisor) out.push({
+    id: 'advisor', icon: '🧭', title: 'Advisor Portal',
+    desc: 'Your clients, consultation assessments and session diary.',
+    href: 'advisor.html'
+  });
+  if (window._isAdmin) out.push({
+    id: 'admin', icon: '⚙️', title: 'Admin',
+    desc: 'All members, bookings, advisors and organisation reporting.',
+    href: 'admin.html'
+  });
+  if (window._employerOrgId) out.push({
+    id: 'employer', icon: '🏢', title: 'HR Dashboard',
+    desc: 'Your organisation’s aggregate wellness reporting.',
+    href: 'employer.html'
+  });
+  return out;
+}
+
+function kwGetInterface() {
+  try { return sessionStorage.getItem(KW_INTERFACE_KEY); } catch (_) { return null; }
+}
+function kwSetInterface(id) {
+  try { sessionStorage.setItem(KW_INTERFACE_KEY, id); } catch (_) {}
+}
+function kwGoToInterface(id) {
+  kwSetInterface(id);
+  const match = kwAvailableInterfaces().find(i => i.id === id);
+  window.location.href = match ? match.href : 'index.html';
+}
+
+/* Returns true when the caller should stop — we are navigating away. */
+function kwRouteByRole() {
+  const options = kwAvailableInterfaces();
+
+  // Plain member: nothing to choose, nothing to do.
+  if (options.length === 1) return false;
+
+  const chosen = kwGetInterface();
+  if (chosen) {
+    if (chosen === 'member') return false;                     // they asked to be here
+    const match = options.find(i => i.id === chosen);
+    if (match) { window.location.replace(match.href); return true; }
+    // Stale choice for a role they no longer hold — fall through to the chooser.
+  }
+
+  // Exactly one staff hat and no member expectation: preserve the old
+  // straight-through behaviour so nothing changes for existing HR/admin users.
+  const staff = options.filter(i => i.id !== 'member');
+  if (staff.length === 1) {
+    kwSetInterface(staff[0].id);
+    window.location.replace(staff[0].href);
+    return true;
+  }
+
+  kwShowInterfaceChooser(options);
+  return true;
+}
+
+function kwShowInterfaceChooser(options) {
+  const first = (state.user && state.user.first_name) || '';
+  document.getElementById('ic-name').textContent = first ? ', ' + first : '';
+  document.getElementById('ic-options').innerHTML = options.map(o => `
+    <button class="ic-opt" onclick="kwGoToInterface('${o.id}')">
+      <span class="ic-ic" aria-hidden="true">${o.icon}</span>
+      <span>
+        <span class="ic-t">${o.title}</span>
+        <span class="ic-d">${o.desc}</span>
+      </span>
+    </button>`).join('');
+  const el = document.getElementById('interface-chooser');
+  el.style.display = 'flex';
+  showAuthScreen(false);
+}
+
+/* Sidebar control, rendered from buildNav() so it survives re-renders. */
+function kwRenderRoleSwitcher() {
+  const host = document.getElementById('roleSwitcher');
+  if (!host) return;
+  const options = kwAvailableInterfaces();
+  if (options.length < 2) { host.style.display = 'none'; return; }
+  host.style.display = 'block';
+  host.innerHTML = '<div class="rs-label">Interface</div>' + options.map(o => {
+    const active = o.id === 'member';
+    return `<button class="rs-btn${active ? ' active' : ''}"${active ? ' disabled' : ` onclick="kwGoToInterface('${o.id}')"`}>
+      <span aria-hidden="true">${o.icon}</span>${o.title}</button>`;
+  }).join('');
+}
+
 function buildNav(current) {
   const navItems = [...NAV];
-  if (window._isAdmin) navItems.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
   document.getElementById('sb-nav').innerHTML = navItems.map(n => `
     <div class="sb-item${current===n.id?' active':''}" role="button" tabindex="0" aria-current="${current===n.id?'page':'false'}" onclick="closeSidebar();${n.id==='admin-link'?`openTool('admin.html')`:`go('${n.id}')`}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" aria-label="${n.label}">
       <span class="icon" aria-hidden="true">${n.icon}</span>${n.label}
@@ -1896,13 +2047,16 @@ function buildNav(current) {
     </div>`).join('');
   document.getElementById('sb-pts').textContent = (state.points && state.points.total) || 0;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
+  kwRenderRoleSwitcher();
 }
 
 // Mobile "More" sheet — makes every sidebar page reachable on mobile without crowding the bottom bar
 window.openMoreMenu = function () {
   const inBottom = MOBILE_NAV.map(n => n.id);
   const items = NAV.filter(n => !inBottom.includes(n.id));
-  if (window._isAdmin) items.push({ id:'admin-link', icon:'⚙️', label:'Admin' });
+  kwAvailableInterfaces().forEach(function(o){
+    if (o.id !== 'member') items.push({ id:'switch-' + o.id, icon:o.icon, label:o.title });
+  });
   document.getElementById('more-sheet-list').innerHTML = items.map(n => `
     <div class="more-item" role="menuitem" tabindex="0" onclick="moreGo('${n.id}')"
          onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();moreGo('${n.id}')}">
@@ -1917,8 +2071,8 @@ window.closeMoreMenu = function () {
 };
 window.moreGo = function (id) {
   closeMoreMenu();
-  if (id === 'admin-link') openTool('admin.html');
-  else go(id);
+  if (id && id.indexOf('switch-') === 0) { kwGoToInterface(id.slice(7)); return; }
+  go(id);
 };
 
 // ══════════════════════════════════════════════════
@@ -3134,6 +3288,18 @@ VIEWS['dashboard'] = async function () {
       const confirmed = (state.bookings||[]).filter(b=>b.status==='confirmed' && !b.client_seen_confirmation);
       const firstConfirmed = confirmed[0];
       const banners = [];
+      // Sessions an advisor put in this member's diary that still need an answer.
+      // Sits above the confirmation banner because it is the only one asking
+      // the member to actually do something.
+      const awaiting = (state.bookings||[]).filter(b=>b.booked_by==='advisor' && !b.member_response && b.status!=='cancelled');
+      if (awaiting.length) {
+        const b0 = awaiting[0];
+        banners.push(`<div class="notice notice-gold" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:18px">🧭</span>
+          <div style="flex:1;min-width:180px;font-size:13px"><strong>Your advisor scheduled a session for you</strong>${b0.requested_date?' on '+fmtDate(b0.requested_date):''}${awaiting.length>1?` (and ${awaiting.length-1} more)`:''}. Let them know if it works.</div>
+          <button class="btn btn-primary btn-sm" onclick="go('my-bookings')">Review →</button>
+        </div>`);
+      }
       // Confirmation banner (dismissible)
       if (firstConfirmed) {
         banners.push(`<div class="notice notice-green" style="margin-bottom:18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -6488,6 +6654,30 @@ function renderBadgeCards() {
 // ══════════════════════════════════════════════════
 //  VIEW: MY BOOKINGS
 // ══════════════════════════════════════════════════
+
+/* ── Responding to a session an advisor scheduled ──────────────
+   The status transition happens inside member_respond_booking() rather
+   than in a client-side update, so a member can only ever move their own
+   advisor-scheduled booking, and only between valid states. ── */
+window.openRescheduleBox = function (id) {
+  const box = document.getElementById('resched-' + id);
+  if (box) { box.style.display = 'block'; document.getElementById('reschedNote-' + id).focus(); }
+};
+
+window.respondToBooking = async function (id, response) {
+  if (response === 'declined' && !confirm('Decline this session? Your advisor will be told.')) return;
+  const noteEl = document.getElementById('reschedNote-' + id);
+  const note = noteEl ? noteEl.value.trim() : '';
+  const { error } = await sb.rpc('member_respond_booking', {
+    p_booking_id: id, p_response: response, p_note: note || null
+  });
+  if (error) { console.error('respondToBooking failed:', error); showToast('⚠️ Could not save your reply. Please try again.'); return; }
+  showToast(response === 'accepted' ? '✅ Session accepted'
+          : response === 'declined' ? 'Session declined — your advisor has been notified.'
+          : '📅 Reschedule request sent.');
+  go('my-bookings');
+};
+
 VIEWS['my-bookings'] = async function () {
   const el = document.getElementById('page-content');
   el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading bookings…</div>';
@@ -6497,9 +6687,19 @@ VIEWS['my-bookings'] = async function () {
   let bookings = [];
   let loadFailed = false;
   if (currentUser) {
-    const { data, error } = await sb.from('bookings').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    const { data, error } = await sb.from('bookings')
+      .select('*, advisor:advisors(full_name,title)')
+      .eq('user_id', currentUser.id)
+      .order('created_at', { ascending: false });
     if (error) { console.error('My Bookings load failed:', error); loadFailed = true; }
     bookings = data || [];
+    // Sessions an advisor put in the member's diary and that still need an
+    // answer come first — they are the only ones asking anything of the member.
+    bookings.sort(function (a, b) {
+      const aw = (a.booked_by === 'advisor' && !a.member_response) ? 0 : 1;
+      const bw = (b.booked_by === 'advisor' && !b.member_response) ? 0 : 1;
+      return aw - bw;
+    });
   }
 
   // A load failure must NOT masquerade as "no bookings" — show a retry card so a
@@ -6529,25 +6729,49 @@ VIEWS['my-bookings'] = async function () {
     return;
   }
   el.innerHTML = `
-    <div class="notice notice-gold" style="margin-bottom:18px">🗓️ <strong>Your Sessions</strong> — all coaching sessions you have requested.</div>
+    <div class="notice notice-gold" style="margin-bottom:18px">🗓️ <strong>Your Sessions</strong> — sessions you have requested, and any your advisor has scheduled for you.</div>
     ${bookings.map(b=>{
       const status = b.status || 'pending';
       const dateStr = (b.requested_date||b.date) ? new Date((b.requested_date||b.date)+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : '—';
-      const timeStr = b.time || '—';
+      // NOTE: the booking form writes `requested_time`; `time` is only present on
+      // some very early rows. Read both so the time actually shows.
+      const timeStr = b.requested_time || b.time || '—';
       const createdStr = new Date(b.created_at||b.created).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
       const sType = b.session_type || b.sessionType || '';
-      return `<div class="booking-hist-card" style="border-left-color:${statusColor[status]||'var(--gold)'}">
+      const mode = b.session_mode || '';
+      const byAdvisor = b.booked_by === 'advisor';
+      const advName = (b.advisor && b.advisor.full_name) || 'your advisor';
+      const needsReply = byAdvisor && !b.member_response && status !== 'cancelled';
+      return `<div class="booking-hist-card" style="border-left-color:${needsReply ? 'var(--gold)' : (statusColor[status]||'var(--gold)')}${needsReply ? ';background:#fffbf2' : ''}">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
           <div class="bh-service">${b.service||'Coaching Session'}</div>
           <span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;text-transform:uppercase;letter-spacing:.05em;background:${statusBg[status]||statusBg.pending};color:${statusColor[status]||statusColor.pending}">${status}</span>
         </div>
+        ${byAdvisor ? `<div style="font-size:12px;color:var(--navy);font-weight:600;margin-bottom:6px">🧭 Scheduled for you by ${advName}</div>` : ''}
         <div class="bh-meta">
           <span>📅 ${dateStr}</span>
           ${timeStr !== '—' ? `<span>🕐 ${timeStr}</span>` : ''}
           ${sType ? `<span>${sType === 'Virtual' ? '💻' : '🏢'} ${sType}</span>` : ''}
+          ${mode ? `<span>${mode === 'virtual' ? '💻 Virtual' : '🏢 In person'}</span>` : ''}
         </div>
+        ${needsReply ? `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12.5px;color:var(--text);margin-bottom:10px">Does this work for you?</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-primary" style="padding:7px 16px;font-size:12.5px" onclick="respondToBooking('${b.id}','accepted')">✓ Accept</button>
+            <button class="btn btn-outline" style="padding:7px 16px;font-size:12.5px" onclick="openRescheduleBox('${b.id}')">Ask to move it</button>
+            <button class="btn btn-outline" style="padding:7px 16px;font-size:12.5px;color:var(--red);border-color:var(--red)" onclick="respondToBooking('${b.id}','declined')">Decline</button>
+          </div>
+          <div id="resched-${b.id}" style="display:none;margin-top:10px">
+            <textarea id="reschedNote-${b.id}" rows="2" placeholder="When would suit you better?" style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:13px;resize:vertical"></textarea>
+            <button class="btn btn-primary" style="padding:7px 16px;font-size:12.5px;margin-top:8px" onclick="respondToBooking('${b.id}','reschedule_requested')">Send request</button>
+          </div>
+        </div>` : ''}
+        ${byAdvisor && b.member_response ? `<div style="font-size:11.5px;color:var(--muted);margin-top:8px">
+          You ${b.member_response === 'accepted' ? 'accepted this session' : b.member_response === 'declined' ? 'declined this session' : 'asked to move this session'}${b.member_response_at ? ' on ' + new Date(b.member_response_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : ''}.
+        </div>` : ''}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-          <div style="font-size:11px;color:var(--muted)">Booked ${createdStr}</div>
+          <div style="font-size:11px;color:var(--muted)">${byAdvisor ? 'Scheduled' : 'Booked'} ${createdStr}</div>
         </div>
       </div>`;
     }).join('')}
@@ -6651,6 +6875,23 @@ VIEWS['profile'] = function () {
       </div>
 
       <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
+        <h4 style="margin-bottom:10px;font-size:14px">🛡️ Privacy — sharing with your advisor</h4>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.65;margin-bottom:12px">
+          Key Wellness advisors can always see your name, contact details and the
+          sessions you have with them. Turning this on additionally lets your
+          advisor see the financial information you have entered here — your
+          assessment scores, income and expenses, debts, savings and check-ins —
+          so they can prepare properly before a session. You can turn it off again
+          at any time.
+        </p>
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text);line-height:1.5">
+          <input type="checkbox" id="adv-consent" ${u.advisor_data_consent ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="saveAdvisorConsent(this.checked)">
+          <span>Let my Key Wellness advisor see my financial data</span>
+        </label>
+        <div id="adv-consent-msg" style="display:none;margin-top:10px;font-size:12.5px;font-weight:600"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-top:28px;padding-top:20px">
         <h4 style="margin-bottom:14px;font-size:14px">🔒 Change Password</h4>
         <div style="display:flex;flex-direction:column;gap:10px">
           <input type="password" id="cp-cur" placeholder="Current password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px">
@@ -6665,6 +6906,28 @@ VIEWS['profile'] = function () {
         <button class="btn btn-outline" style="width:100%;color:var(--red);border-color:var(--red);justify-content:center" onclick="doLogout()">Sign Out</button>
       </div>
     </div>`;
+};
+
+
+/* Advisor data-sharing consent. This is the flag advisor_client_detail()
+   checks server-side — turning it off genuinely stops the advisor portal
+   returning this member's financial data, it is not just a UI preference. */
+window.saveAdvisorConsent = async function (on) {
+  const msg = document.getElementById('adv-consent-msg');
+  const show = (t, ok) => { if (!msg) return; msg.style.display='block'; msg.textContent=t; msg.style.color = ok ? 'var(--green)' : 'var(--red)'; };
+  const now = new Date().toISOString();
+  const { error } = await sb.from('profiles')
+    .update({ advisor_data_consent: !!on, advisor_data_consent_at: on ? now : null })
+    .eq('id', currentUser.id);
+  if (error) {
+    console.error('advisor consent save failed:', error);
+    show('Could not save that — please try again.', false);
+    const box = document.getElementById('adv-consent');
+    if (box) box.checked = !on;      // put the switch back where it was
+    return;
+  }
+  state.user = { ...state.user, advisor_data_consent: !!on, advisor_data_consent_at: on ? now : null };
+  show(on ? 'Saved — your advisor can now see your financial data.' : 'Saved — your advisor can no longer see your financial data.', true);
 };
 
 // Shared change-password flow (member profile). Re-authenticates with the current
@@ -7052,11 +7315,10 @@ function registerAuthListener() {
       currentUser = session?.user ?? null;
       if (currentUser) { enforceUserScope(currentUser.id); touchSessionTrust(currentUser.id); }
       await loadAllData();
-      // Admins skip onboarding, consent, the welcome video, assessment nags and all
-      // member surfaces — send them straight to the admin home.
-      if (window._isAdmin) { window.location.replace('admin.html'); return; }
-      // HR managers (employers) likewise skip the member journey — straight to org dashboard.
-      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+      // Staff with more than one hat now CHOOSE where to land instead of being
+      // bounced out — see kwRouteByRole(). Single-role staff still go straight
+      // through, so nothing changes for them.
+      if (kwRouteByRole()) return;
       initProfileUI();
       loadNotifications();
       route();
@@ -7136,8 +7398,10 @@ async function init() {
       // Still within the trust window — proceed without interrupting, and slide the window forward.
       touchSessionTrust(currentUser.id);
       await loadAllData();
-      if (window._isAdmin) { window.location.replace('admin.html'); return; }
-      if (window._employerOrgId) { window.location.replace('employer.html'); return; }
+      // Staff with more than one hat now CHOOSE where to land instead of being
+      // bounced out — see kwRouteByRole(). Single-role staff still go straight
+      // through, so nothing changes for them.
+      if (kwRouteByRole()) return;
       initProfileUI();
       loadNotifications();
       route();

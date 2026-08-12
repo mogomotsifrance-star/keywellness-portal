@@ -49,6 +49,9 @@ git status
 ```
 keywellness-portal/
 ├── index.html                    ← Main portal (auth, dashboard, all core views)
+├── admin.html                    ← Key Wellness admin (users, bookings, advisors, org reports)
+├── employer.html                 ← HR / employer organisation dashboard
+├── advisor.html                  ← Advisor portal (clients, assessments, session diary)
 ├── wellness_assessment.html      ← 8-dimension financial wellness assessment
 ├── budget_planner.html           ← Monthly budget builder (50/30/20)
 ├── expense_tracker.html          ← Daily expense logging
@@ -83,6 +86,10 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // anon key — 
 | `checkins` | Monthly check-in scores and notes |
 | `badges` | Earned badge IDs and total points |
 | `emergency_fund` | Emergency fund targets and progress |
+| `bookings` | Coaching sessions — member-booked and advisor-scheduled |
+| `advisors` | Advisor roster (email-keyed, like `employers`) |
+| `advisor_clients` | An advisor's caseload; `member_user_id` is nullable |
+| `advisor_notes` | Private advisor working notes |
 
 ### Important Data Gap
 The 13 tool pages (budget, goals, net worth, etc.) currently save data to **localStorage only** — not Supabase. This means data is lost if a user switches devices. Migrating tool data to Supabase is a priority before real client onboarding.
@@ -235,7 +242,33 @@ git checkout dev
 2. **Admin dashboard** — for Key Wellness team to see all users and their wellness scores
 3. **Push notifications / email reminders** — monthly check-in reminders
 4. **Video content** — replace placeholder "Coming Soon" videos with real content
-5. **Advisor portal** — coaches can see client data and add notes
+5. ~~**Advisor portal**~~ — ✅ built. See `ADVISOR-PORTAL-HANDOVER.md`
+
+---
+
+## Roles & Interfaces
+
+Four interfaces, all sharing one Supabase project and one auth flow:
+
+| Interface | File | Who gets in |
+|---|---|---|
+| Member portal | `index.html` | anyone with a `profiles` row |
+| Advisor portal | `advisor.html` | a row in `advisors` (matched on email or user_id, `is_active`) |
+| Admin | `admin.html` | a row in `admins` (matched on email) |
+| HR dashboard | `employer.html` | a row in `employers` (email or user_id) |
+
+Roles are **table membership, not a column**. A person can hold several —
+`france@keywealth.co.bw` holds member + advisor + admin.
+
+**Do not reintroduce hard redirects in `index.html`.** Routing goes through
+`kwRouteByRole()`, which offers a choice to multi-role staff and stores it in
+`sessionStorage` under `kw_interface`. Single-role staff still route straight
+through, and plain members are never interrupted.
+
+`bookings` is the single source of truth for sessions. Anything that creates a
+session — member booking, advisor scheduling — must write there, or it will not
+appear on the member's side and will not count in organisation utilisation
+reporting.
 
 ---
 
@@ -246,4 +279,7 @@ git checkout dev
 - Do not modify `main` branch directly
 - Do not change the colour system without updating all references
 - Do not break the existing auth flow in index.html
+- Do not reintroduce `window.location.replace()` role redirects in index.html — use `kwRouteByRole()`
+- Do not give advisors direct RLS read access to `profiles` / `assessments` / `checkins` — member financial data goes through the consent-gated RPCs only
+- Do not create a separate table for advisor sessions — they belong in `bookings`
 - Do not use `localStorage` for new features — use Supabase instead
