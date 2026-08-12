@@ -1,0 +1,2814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Key Wellness — Advisor Portal</title>
+<link rel="icon" type="image/svg+xml" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ============================================================
+   kw-theme.css — inlined so this file renders correctly no matter
+   where it's opened from. If you drop this page into the
+   keywellness-portal repo, you can safely delete this block and
+   restore `<link rel="stylesheet" href="css/kw-theme.css">` in its
+   place — the class names and tokens below are identical to the
+   shared stylesheet, so nothing else needs to change.
+   ============================================================ */
+:root{
+  --kw-green:#397e2b;--kw-green-deep:#2a5f20;--kw-green-tint:#eef4ea;--kw-green-wash:#f4f8f1;
+  --kw-yellow:#f0c90a;--kw-yellow-ink:#6f5d08;--kw-yellow-tint:#fdf5cf;
+  --kw-navy:#1a2744;--kw-navy-light:#243360;
+  --kw-ink:#23261f;--kw-body:#4b4e48;--kw-grey:#6c6d70;--kw-line:#e7e9e3;--kw-surface:#f5f6f2;--kw-canvas:#fbfcfa;--kw-white:#ffffff;
+  --kw-red:#c0392b;--kw-orange:#d97706;
+  --kw-r:14px;--kw-r-lg:18px;
+  --kw-shadow-hover:0 10px 30px rgba(35,38,31,.09),0 2px 8px rgba(35,38,31,.05);
+  --kw-ease:cubic-bezier(.22,.9,.32,1);
+  --kw-dur:0.45s;--kw-stagger:60ms;--kw-countup:1100ms;
+}
+.kw-mono{font-family:'DM Mono',monospace}
+.kw-card{background:var(--kw-white);border:1px solid var(--kw-line);border-radius:var(--kw-r-lg);padding:24px}
+.kw-card--tint{background:var(--kw-surface);border:none}
+.kw-card--lift{transition:transform var(--kw-dur) var(--kw-ease),box-shadow var(--kw-dur) var(--kw-ease)}
+.kw-card--lift:hover{transform:translateY(-3px);box-shadow:var(--kw-shadow-hover)}
+.kw-label{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--kw-grey)}
+.kw-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:999px;padding:11px 22px;font-family:'Nunito',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:transform .15s var(--kw-ease),background-color var(--kw-dur) var(--kw-ease),box-shadow var(--kw-dur) var(--kw-ease),border-color var(--kw-dur) var(--kw-ease)}
+.kw-btn:active{transform:scale(.96)}
+.kw-btn--primary{background:var(--kw-green);color:var(--kw-white)}
+.kw-btn--primary:hover{background:var(--kw-green-deep);box-shadow:var(--kw-shadow-hover)}
+.kw-btn--secondary{background:var(--kw-white);border:1px solid var(--kw-line);color:var(--kw-ink)}
+.kw-btn--secondary:hover{border-color:var(--kw-grey)}
+.kw-pill{display:inline-flex;align-items:center;gap:8px;border-radius:999px;padding:9px 16px;font-size:14px;font-weight:700;color:var(--kw-body);background:transparent;border:none;cursor:pointer;transition:background-color var(--kw-dur) var(--kw-ease),color var(--kw-dur) var(--kw-ease),box-shadow var(--kw-dur) var(--kw-ease)}
+.kw-pill:hover{background:var(--kw-green-tint)}
+.kw-pill.is-active{background:var(--kw-white);color:var(--kw-green);box-shadow:0 1px 4px rgba(35,38,31,.12)}
+.kw-badge--points{display:inline-flex;align-items:center;gap:6px;background:var(--kw-yellow-tint);color:var(--kw-yellow-ink);border-radius:999px;padding:6px 14px;font-size:13px;font-weight:800}
+.kw-bar{position:relative;width:100%;height:6px;border-radius:999px;background:var(--kw-surface);overflow:hidden}
+.kw-bar__fill{position:absolute;left:0;top:0;bottom:0;width:0%;border-radius:999px;background:var(--kw-green);transition:width var(--kw-dur) var(--kw-ease)}
+.kw-bar__fill.is-flag{background:var(--kw-yellow)}
+.kw-input{width:100%;background:var(--kw-white);border:1px solid var(--kw-line);border-radius:var(--kw-r);padding:10px 14px;font-family:'Nunito',sans-serif;font-size:14px;color:var(--kw-ink);transition:border-color var(--kw-dur) var(--kw-ease),box-shadow var(--kw-dur) var(--kw-ease)}
+.kw-input:focus{outline:none;border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
+.reveal{opacity:0;transform:translateY(12px);transition:opacity var(--kw-dur) var(--kw-ease),transform var(--kw-dur) var(--kw-ease)}
+.reveal.in{opacity:1;transform:translateY(0)}
+
+/* ============================================================
+   Advisor Portal — page-specific styling on top of the tokens
+   above (same pattern admin.html uses). Client records persist to
+   Supabase under row-level security — see the "DATA LAYER" comment
+   block in the script.
+   ============================================================ */
+:root{
+  --navy:var(--kw-ink);--navy-light:var(--kw-green-deep);--gold:var(--kw-green);--gold-light:var(--kw-green-deep);
+  --cream:var(--kw-canvas);--cream-dark:var(--kw-surface);--white:var(--kw-white);
+  --green:var(--kw-green);--red:var(--kw-red);--orange:var(--kw-orange);--muted:var(--kw-grey);
+  --text:var(--kw-body);--border:var(--kw-line);--radius:var(--kw-r-lg);--radius-sm:var(--kw-r);
+  --shadow:0 1px 3px rgba(35,38,31,.06);--sidebar-w:240px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--text);min-height:100vh;display:flex}
+button{cursor:pointer;font-family:'Nunito',sans-serif}
+input,select,textarea{font-family:'Nunito',sans-serif}
+.mono{font-family:'DM Mono',monospace}
+
+/* ── Sidebar ── */
+#sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--kw-navy);display:flex;flex-direction:column;position:fixed;left:0;top:0;z-index:100}
+.sb-logo{padding:24px 20px 18px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo h1{color:#fff;font-size:14px;font-weight:800;letter-spacing:.02em}
+.sb-logo span{color:var(--kw-yellow);font-size:11px;font-weight:500;display:block;margin-top:2px}
+.sb-nav{flex:1;padding:14px 12px}
+.sb-item{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:2px;border-radius:999px;color:rgba(255,255,255,.65);font-size:13px;font-weight:700;cursor:pointer;transition:background-color .2s var(--kw-ease),color .2s var(--kw-ease)}
+.sb-item:hover{color:#fff;background:rgba(255,255,255,.08)}
+.sb-item.active{color:var(--kw-green);background:var(--white);box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.sb-section{padding:14px 20px 4px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.35)}
+.sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.1)}
+.sb-user{color:rgba(255,255,255,.5);font-size:11px;margin-bottom:10px;word-break:break-all}
+.sb-logout{background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.7);font-size:11px;font-weight:700;padding:8px 12px;border-radius:999px;cursor:pointer;width:100%;transition:.15s}
+.sb-logout:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.3);color:#fff}
+
+/* ── Main ── */
+#main{margin-left:var(--sidebar-w);flex:1;min-height:100vh;min-width:0}
+.page-header{background:var(--white);border-bottom:1px solid var(--border);padding:16px 32px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.page-header h2{font-size:19px;font-weight:800;flex:1}
+.page-header .sub{font-size:12px;color:var(--muted);font-weight:600;margin-top:2px}
+.page-content{padding:28px 32px}
+
+/* ── Cards ── */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px}
+.card-title{font-size:14px;font-weight:800;margin-bottom:16px;color:var(--navy)}
+.card-hint{font-size:11.5px;color:var(--muted);margin-top:-10px;margin-bottom:16px;font-style:italic;line-height:1.5}
+
+/* ── Stat boxes ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:24px}
+.stat-box{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.stat-val{font-family:'DM Mono',monospace;font-size:24px;font-weight:500;color:var(--navy)}
+.stat-lbl{font-size:11px;font-weight:600;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.04em}
+.stat-box.gold .stat-val{color:var(--kw-yellow-ink)}
+.stat-box.green .stat-val{color:var(--green)}
+.stat-box.red .stat-val{color:var(--red)}
+.stat-box.orange .stat-val{color:var(--orange)}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:999px;font-size:13px;font-weight:700;border:none;transition:background-color .2s var(--kw-ease),transform .1s;cursor:pointer}
+.btn:active{transform:scale(.96)}
+.btn-primary{background:var(--kw-green);color:#fff}
+.btn-primary:hover{background:var(--kw-green-deep)}
+.btn-outline{background:transparent;color:var(--navy);border:1px solid var(--border)}
+.btn-outline:hover{border-color:var(--kw-grey)}
+.btn-navy{background:var(--white);color:var(--navy);border:1px solid var(--border)}
+.btn-navy:hover{border-color:var(--kw-grey)}
+.btn-sm{padding:6px 13px;font-size:12px}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:transparent;color:var(--red);border:1px solid #f3cfc9}
+.btn-red:hover{background:#fdf2f2}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:2px;border-bottom:2px solid var(--border);margin-bottom:24px;flex-wrap:wrap}
+.tab{padding:10px 16px;font-size:12.5px;font-weight:700;border:none;background:transparent;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;white-space:nowrap}
+.tab:hover{color:var(--navy)}
+.tab.active{color:var(--kw-green);border-bottom-color:var(--kw-green)}
+
+/* ── Search ── */
+.search-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+.search-input{flex:1;min-width:200px;padding:10px 15px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--white);outline:none;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease)}
+.search-input:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--kw-ink);color:rgba(255,255,255,.85);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:11px 14px;text-align:left;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border);transition:.15s}
+tbody tr:hover{background:var(--kw-surface)}
+tbody td{padding:10px 12px;vertical-align:middle}
+.score-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;font-family:'DM Mono',monospace}
+.status-pill{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+.status-green{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+.status-gold{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.status-orange{background:#fff3e6;color:var(--orange)}
+.status-red{background:#fdf2f2;color:var(--red)}
+.status-grey{background:var(--kw-surface);color:var(--muted)}
+
+/* ── Empty state ── */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
+.empty-state .ic{font-size:40px;margin-bottom:12px}
+.empty-state h3{font-size:15px;color:var(--navy);margin-bottom:6px}
+.empty-state p{font-size:13px;max-width:380px;margin:0 auto 18px}
+
+/* ── Form fields ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px}
+.form-grid.cols-2{grid-template-columns:repeat(2,1fr)}
+.form-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+@media (max-width:700px){.form-grid.cols-2,.form-grid.cols-3{grid-template-columns:1fr}}
+.field label{display:block;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;background:var(--white);outline:none;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease);color:var(--text)}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
+.field textarea{resize:vertical;min-height:80px;line-height:1.5;font-size:13px}
+.field .money-wrap{position:relative}
+.field .money-wrap input{padding-left:26px}
+.field .money-wrap .pre{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);font-family:'DM Mono',monospace}
+
+/* ── Repeatable row tables ── */
+.rt-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:12px}
+.rt-wrap table{min-width:640px}
+.rt-wrap thead th{background:var(--kw-surface);color:var(--kw-grey);font-size:10.5px}
+.rt-wrap td{padding:6px 8px}
+.rt-wrap input,.rt-wrap select{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:12.5px;background:var(--white)}
+.rt-wrap input:focus,.rt-wrap select:focus{border-color:var(--kw-green);outline:none}
+.rt-wrap input[readonly]{background:var(--kw-surface);color:var(--muted)}
+.rt-del{background:transparent;border:none;color:var(--muted);font-size:15px;padding:4px 6px;border-radius:6px}
+.rt-del:hover{color:var(--red);background:#fdf2f2}
+.rt-del:disabled{opacity:.25;cursor:not-allowed}
+.rt-fixed-name{font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap}
+
+/* ── Diagnostic cards ── */
+.diag-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px}
+.diag-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border-top:4px solid var(--border)}
+.diag-card.st-green{border-top-color:var(--green)}
+.diag-card.st-gold{border-top-color:var(--kw-yellow)}
+.diag-card.st-orange{border-top-color:var(--orange)}
+.diag-card.st-red{border-top-color:var(--red)}
+.diag-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px}
+.diag-head h4{font-size:13.5px;font-weight:800;color:var(--navy)}
+.diag-list{list-style:none;font-size:12.5px;line-height:1.7;color:var(--text);margin-bottom:10px}
+.diag-list li{padding-left:16px;position:relative}
+.diag-list li::before{content:'—';position:absolute;left:0;color:var(--muted)}
+
+/* ── Notices ── */
+.notice{padding:12px 16px;border-radius:var(--radius-sm);font-size:12.5px;font-weight:600;line-height:1.5;margin-bottom:16px}
+.notice-gold{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.notice-green{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+.notice-red{background:#fdf2f2;color:var(--red)}
+.notice-orange{background:#fff3e6;color:var(--orange)}
+
+/* ── Progress / budget bars ── */
+.bud-bar{background:var(--kw-surface);border-radius:999px;height:10px;overflow:hidden;margin:6px 0}
+.bud-fill{height:100%;border-radius:999px;transition:.4s}
+.bud-row{display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--navy)}
+.bud-target{font-size:11px;color:var(--muted);font-weight:600}
+.cat-group{border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:10px;overflow:hidden}
+.cat-group-header{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer}
+.cat-group-name{flex:1;font-size:13px;font-weight:800}
+.cat-group-badge{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px}
+.cat-group-body{padding:4px 14px 14px}
+.cat-row{display:grid;grid-template-columns:1fr 140px;gap:10px;align-items:center;padding:6px 0}
+.cat-row span{font-size:12.5px;font-weight:500}
+
+/* ── Modal ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(35,38,31,.45);z-index:500;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--white);border-radius:var(--kw-r-lg);padding:32px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.modal-header h3{font-size:18px;font-weight:800}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);padding:4px;border-radius:6px}
+.modal-close:hover{color:var(--navy)}
+
+/* ── Client editor header ── */
+.client-hero{display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.client-avatar{width:52px;height:52px;border-radius:50%;background:var(--kw-navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0}
+.client-hero h2{font-size:20px;font-weight:800;color:var(--navy)}
+.client-hero .meta{font-size:12px;color:var(--muted);margin-top:2px}
+.save-flag{font-size:11px;color:var(--green);font-weight:700;display:inline-flex;align-items:center;gap:5px;opacity:0;transition:opacity .3s}
+.save-flag.show{opacity:1}
+
+/* ── Report / print ── */
+.report-doc{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:32px;max-width:820px}
+.report-doc h3{font-size:15px;font-weight:800;color:var(--navy);margin:22px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--kw-green-tint)}
+.report-doc h3:first-child{margin-top:0}
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:13px;margin-bottom:6px}
+.report-grid div span{color:var(--muted);font-weight:600}
+.report-grid div strong{color:var(--navy)}
+.report-doc .table-wrap{margin-bottom:6px}
+.report-doc table{font-size:12px}
+.report-doc thead th{background:var(--kw-surface);color:var(--kw-grey);font-size:10px}
+.report-doc tbody td{padding:8px 10px}
+.rp-empty{font-size:12.5px;color:var(--muted);font-style:italic;padding:4px 0 10px}
+.rp-summary{background:var(--kw-green-wash);border:1px solid var(--kw-green-tint);border-radius:var(--radius-sm);padding:16px 18px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:14px}
+.rp-notes{background:var(--kw-surface);border-radius:var(--radius-sm);padding:16px 18px;margin-bottom:10px}
+.rp-notes h4{font-size:12px;font-weight:800;color:var(--navy);margin-bottom:4px}
+.rp-notes p{font-size:12.5px;line-height:1.6;color:var(--text);margin-bottom:12px;white-space:pre-wrap}
+.rp-notes p:last-child{margin-bottom:0}
+.rp-status{font-weight:800}
+.rp-status.st-green{color:var(--green)}
+.rp-status.st-gold{color:var(--kw-yellow-ink)}
+.rp-status.st-orange{color:var(--orange)}
+.rp-status.st-red{color:var(--red)}
+.rp-status.st-grey{color:var(--muted)}
+
+/* ── Interface switcher ── */
+.role-switcher{padding:12px 14px;border-top:1px solid rgba(255,255,255,.12)}
+.rs-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45);margin-bottom:7px}
+.rs-btn{display:flex;align-items:center;gap:8px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 11px;border-radius:9px;cursor:pointer;margin-bottom:6px;text-align:left;transition:background .18s}
+.rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.rs-btn.active{background:var(--kw-green);border-color:var(--kw-green);color:#fff;cursor:default}
+.rs-btn span{font-size:14px}
+
+@media print{
+  #sidebar,.page-header,.tabs,.no-print{display:none!important}
+  #main{margin-left:0!important}
+  .page-content{padding:0!important}
+  body{background:#fff}
+  .report-doc{border:none;box-shadow:none;padding:0;max-width:100%}
+}
+@media (max-width:900px){
+  #sidebar{display:none}
+  #main{margin-left:0}
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<nav id="sidebar">
+  <div class="sb-logo">
+    <h1>KEY WELLNESS</h1>
+    <span>Advisor Portal</span>
+  </div>
+  <div class="sb-nav">
+    <div class="sb-item active" data-view="clients" onclick="go('clients')"><span>👥</span> Clients</div>
+    <div class="sb-item" data-view="appointments" onclick="go('appointments')"><span>📅</span> Appointments <span id="apptBadge" class="kw-badge--points" style="display:none;margin-left:auto;padding:2px 9px;font-size:10.5px"></span></div>
+    <div class="sb-item" data-view="activity" onclick="go('activity')"><span>📊</span> Activity Report</div>
+    <div class="sb-item" data-view="tools" onclick="go('tools')"><span>🛠️</span> Tools</div>
+    <div class="sb-item" data-view="framework" onclick="go('framework')"><span>🧭</span> Advisory Framework</div>
+  </div>
+  <div class="role-switcher" id="roleSwitcher" style="display:none"></div>
+  <div class="sb-footer">
+    <div class="sb-user" id="sb-advisor-name">Advisor</div>
+    <button onclick="doLogout()" style="display:block;width:100%;text-align:center;font-size:11px;color:rgba(255,255,255,.6);background:none;text-decoration:none;font-weight:700;padding:8px;border:1px solid rgba(255,255,255,.15);border-radius:999px;cursor:pointer;font-family:inherit">Sign Out</button>
+  </div>
+</nav>
+
+<!-- ══ MAIN ══ -->
+<div id="main">
+  <div class="page-header">
+    <div style="flex:1">
+      <h2 id="page-title">Clients</h2>
+      <div class="sub" id="page-sub">Financial assessments captured during consultations</div>
+    </div>
+    <span class="save-flag" id="saveFlag">✓ Saved</span>
+    <input type="file" id="importFileInput" accept="application/json" style="display:none" onchange="importClientFile(this.files[0])">
+    <button class="btn btn-outline no-print" id="importClientBtn" onclick="document.getElementById('importFileInput').click()">⬆ Import Client File</button>
+    <button class="btn btn-outline no-print" id="exportClientBtn" style="display:none" onclick="exportClient(currentClientId)">💾 Save Client File</button>
+    <button class="btn btn-outline no-print" id="findMemberBtn" onclick="openFindMemberModal()">🔍 Add Portal Member</button>
+    <button class="btn btn-primary no-print" id="newClientBtn" onclick="openNewClientModal()">+ New Client Assessment</button>
+  </div>
+  <div class="page-content" id="page-content"></div>
+</div>
+
+<!-- ══ NEW CLIENT MODAL ══ -->
+<div class="modal-overlay" id="newClientModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>New Client Assessment</h3>
+      <button class="modal-close" onclick="closeModal('newClientModal')">✕</button>
+    </div>
+    <div class="field" style="margin-bottom:14px">
+      <label>Name</label>
+      <input type="text" id="nc-name" placeholder="First name">
+    </div>
+    <div class="field" style="margin-bottom:14px">
+      <label>Surname</label>
+      <input type="text" id="nc-surname" placeholder="Surname">
+    </div>
+    <div class="field" style="margin-bottom:14px">
+      <label>Email <span style="font-weight:600;color:var(--muted)">— links this client to their portal account</span></label>
+      <input type="email" id="nc-email" placeholder="name@example.com">
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <label>Phone</label>
+      <input type="tel" id="nc-phone" placeholder="+267 ...">
+    </div>
+    <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-bottom:20px">
+      The client does not need a portal account. If they sign up later using this
+      email address, their record links to it automatically.
+    </p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('newClientModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createClientRecord()">Start Assessment</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ FIND PORTAL MEMBER MODAL ══ -->
+<div class="modal-overlay" id="findMemberModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Add a portal member</h3>
+      <button class="modal-close" onclick="closeModal('findMemberModal')">✕</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+      Search registered members by surname or by their full email address.
+      Adding someone here creates a client record already linked to their portal account.
+    </p>
+    <div class="field" style="margin-bottom:14px">
+      <label>Surname or email</label>
+      <input type="text" id="fm-query" placeholder="At least 3 characters" oninput="searchMembers(this.value)">
+    </div>
+    <div id="fm-results" style="max-height:280px;overflow:auto"></div>
+  </div>
+</div>
+
+<!-- ══ DELETE CONFIRM MODAL ══ -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header">
+      <h3>Delete this client?</h3>
+      <button class="modal-close" onclick="closeModal('deleteModal')">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text);margin-bottom:20px;line-height:1.6">This removes <strong id="del-name"></strong>'s full assessment — personal details, budget, and advisory notes. This can't be undone.</p>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('deleteModal')">Cancel</button>
+      <button class="btn" style="background:var(--red);color:#fff" onclick="confirmDelete()">Delete Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ INSTITUTION PICKERS ══
+     Real Botswana banks / microlenders / asset managers, used as
+     suggestions on the Liabilities and Savings & Investments institution
+     fields below. These are <datalist> elements, so the field stays a
+     normal text input — an advisor can pick from the list or just type
+     any name that isn't listed. ══ -->
+<datalist id="bw-institutions-credit">
+  <option value="Absa Bank Botswana">
+  <option value="Access Bank Botswana (formerly BancABC)">
+  <option value="Bank Gaborone">
+  <option value="Bank of Baroda (Botswana)">
+  <option value="BBS Bank">
+  <option value="First Capital Bank Botswana">
+  <option value="First National Bank Botswana (FNB)">
+  <option value="Stanbic Bank Botswana">
+  <option value="Standard Chartered Bank Botswana">
+  <option value="Botswana Savings Bank">
+  <option value="Letshego Financial Services Botswana">
+  <option value="Bayport Financial Services Botswana">
+  <option value="Women's Finance House Botswana (WFHB)">
+</datalist>
+<datalist id="bw-institutions-invest">
+  <option value="Absa Bank Botswana">
+  <option value="Access Bank Botswana (formerly BancABC)">
+  <option value="Bank Gaborone">
+  <option value="Bank of Baroda (Botswana)">
+  <option value="BBS Bank">
+  <option value="First Capital Bank Botswana">
+  <option value="First National Bank Botswana (FNB)">
+  <option value="Stanbic Bank Botswana">
+  <option value="Standard Chartered Bank Botswana">
+  <option value="Botswana Savings Bank">
+  <option value="Botswana Insurance Fund Management (BIFM)">
+  <option value="African Alliance Botswana">
+  <option value="Investec Asset Management Botswana">
+  <option value="Allan Gray Botswana">
+  <option value="Vunani Fund Managers Botswana">
+  <option value="ALUWANI Fund Managers Botswana">
+  <option value="iPRO Investment Professionals">
+  <option value="Aleyo Capital">
+</datalist>
+
+<script>
+/* ================================================================
+   DATA LAYER — Supabase
+   ------------------------------------------------------------
+   Replaces the localStorage prototype. What changed and why:
+
+   * Client records live in `advisor_clients`, one row per client, with
+     the advisor's working consultation record held in the `assessment`
+     jsonb column. The in-memory `clients` array keeps EXACTLY the shape
+     the prototype used, so none of the render/calc code below had to
+     change — only load, save and the appointment functions.
+
+   * Appointments are no longer a local array. They are rows in the
+     shared `bookings` table — the same table index.html writes to. That
+     is what makes an advisor-scheduled session show up in the member's
+     "My Bookings", and what makes it count in the admin org utilisation
+     report. `c.appointments` is now a read-only projection of bookings.
+
+   * A client does NOT need a portal login. `advisor_clients.member_user_id`
+     is null until that person signs up with a matching email, at which
+     point a database trigger links the record automatically.
+
+   * A linked member's own financial data (their budget, assessment,
+     check-ins) is fetched through advisor_client_detail() and only
+     returns anything if that member has switched on advisor data
+     consent in their profile. There is no client-side way around it —
+     the gate is inside the SECURITY DEFINER function.
+
+   Requires: supabase_advisor_portal.sql + supabase_advisor_rpcs.sql
+   ================================================================ */
+const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
+
+if (!window.supabase || !window.supabase.createClient) {
+  document.body.innerHTML = '<div style="font-family:Nunito,sans-serif;padding:48px;text-align:center;color:#c0392b">Could not load the database client. Check your connection and refresh.</div>';
+  throw new Error('supabase-js failed to load');
+}
+const { createClient } = window.supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+window._kwSb = sb;
+
+let clients = [];
+let currentClientId = null;
+let currentTab = 'personal';
+let pendingDeleteId = null;
+let ADVISOR = null;              // { id, full_name, email, title }
+let CURRENT_USER = null;
+let ROLES = { advisor:false, admin:false, member:false };
+
+/* ── Boot: authenticate, confirm advisor, load ─────────────── */
+function bootError(msg, showLogin){
+  document.body.innerHTML =
+    '<div style="font-family:Nunito,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fbfcfa;padding:24px">' +
+      '<div style="background:#fff;border:1px solid #e7e9e3;border-radius:18px;padding:36px;max-width:420px;text-align:center">' +
+        '<div style="font-size:34px;margin-bottom:10px">🔒</div>' +
+        '<h2 style="font-size:19px;color:#1a2744;margin-bottom:10px">Advisor Portal</h2>' +
+        '<p style="font-size:13.5px;color:#4b4e48;line-height:1.6;margin-bottom:22px">' + msg + '</p>' +
+        (showLogin ? '<a href="index.html" style="display:inline-block;background:#397e2b;color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:11px 24px;border-radius:999px">Go to sign in</a>' : '') +
+      '</div>' +
+    '</div>';
+}
+
+async function bootAdvisor(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { bootError('Please sign in to the Key Wellness portal first.', true); return false; }
+  CURRENT_USER = session.user;
+
+  const { data: me, error } = await sb.rpc('advisor_me');
+  if (error) {
+    console.error('advisor_me failed:', error);
+    bootError('We could not verify your advisor access. If this keeps happening, contact the Key Wellness team.', true);
+    return false;
+  }
+  if (!me) {
+    bootError('This account is not registered as an advisor. If that is wrong, ask an administrator to add you on the Advisors screen.', true);
+    return false;
+  }
+  ADVISOR = me;
+
+  // Which other interfaces can this person switch into?
+  ROLES.advisor = true;
+  try {
+    const { data: adminRow } = await sb.from('admins').select('email').eq('email', CURRENT_USER.email).maybeSingle();
+    ROLES.admin = !!adminRow;
+  } catch(_) { ROLES.admin = false; }
+  try {
+    const { data: prof } = await sb.from('profiles').select('id').eq('id', CURRENT_USER.id).maybeSingle();
+    ROLES.member = !!prof;
+  } catch(_) { ROLES.member = false; }
+
+  const nameEl = document.getElementById('sb-advisor-name');
+  if (nameEl) nameEl.textContent = ADVISOR.full_name || CURRENT_USER.email;
+  renderRoleSwitcher();
+  return true;
+}
+
+/* ── Interface switcher ───────────────────────────────────────
+   Remembers the chosen interface in sessionStorage so index.html
+   does not bounce a multi-role user straight back out. See the
+   matching kwGoToInterface() in index.html / admin.html. ── */
+function kwGoToInterface(target){
+  try { sessionStorage.setItem('kw_interface', target); } catch(_) {}
+  const dest = target === 'admin' ? 'admin.html'
+             : target === 'advisor' ? 'advisor.html'
+             : target === 'employer' ? 'employer.html'
+             : 'index.html';
+  window.location.href = dest;
+}
+
+function renderRoleSwitcher(){
+  const host = document.getElementById('roleSwitcher');
+  if (!host) return;
+  const opts = [];
+  if (ROLES.member) opts.push(['member','👤','My Portal']);
+  opts.push(['advisor','🧭','Advisor']);
+  if (ROLES.admin)  opts.push(['admin','⚙️','Admin']);
+  if (opts.length < 2) { host.style.display = 'none'; return; }
+  host.style.display = 'block';
+  host.innerHTML =
+    '<div class="rs-label">Interface</div>' +
+    opts.map(function(o){
+      const active = o[0] === 'advisor';
+      return '<button class="rs-btn' + (active ? ' active' : '') + '"' +
+             (active ? ' disabled' : ' onclick="kwGoToInterface(\'' + o[0] + '\')"') +
+             '><span>' + o[1] + '</span>' + o[2] + '</button>';
+    }).join('');
+}
+
+/* ── Load ─────────────────────────────────────────────────── */
+// Fills any missing branch of the client record with the blank defaults,
+// so a record saved by an older version never crashes a renderer.
+function normalizeClient(row){
+  const base = blankClient(row.first_name || '', row.last_name || '');
+  const a = row.assessment || {};
+  const c = Object.assign(base, a);
+  // Relational columns always win — they are what the database joins on.
+  c.id        = row.id;
+  c.createdAt = row.created_at || c.createdAt;
+  c.updatedAt = row.updated_at || row.created_at || c.updatedAt;
+  c.personal  = Object.assign({}, base.personal, a.personal || {});
+  if (!c.personal.name)    c.personal.name    = row.first_name || '';
+  if (!c.personal.surname) c.personal.surname = row.last_name  || '';
+  c.email = row.email || '';
+  c.phone = row.phone || '';
+  // Portal linkage — read-only, drives the "Portal member" panel.
+  c._link = {
+    isMember:    !!row.is_member,
+    hasConsent:  !!row.has_consent,
+    orgName:     row.org_name || null,
+    source:      row.source,
+    wellnessScore: row.wellness_score,
+    sessionsTotal: Number(row.sessions_total || 0),
+    sessionsAttended: Number(row.sessions_attended || 0),
+    lastSessionDate: row.last_session_date || null
+  };
+  c._memberUserId = row.member_user_id || null;
+  c.appointments = [];   // filled by syncBookings()
+  return c;
+}
+
+async function loadClients(){
+  const { data, error } = await sb.rpc('advisor_clients_list', { p_include_archived: false });
+  if (error) { console.error('advisor_clients_list failed:', error); showBanner('Could not load your clients. ' + error.message); clients = []; return; }
+  clients = (data || []).map(normalizeClient);
+  await syncBookings();
+}
+
+/* ── Bookings ↔ appointments ───────────────────────────────── */
+// Maps a bookings row onto the appointment shape the UI already renders.
+function bookingToAppt(b){
+  let status = 'Scheduled';
+  if (b.attended === true)            status = 'Completed';
+  else if (b.attended === false)      status = 'No-show';
+  else if (b.status === 'cancelled')  status = 'Cancelled';
+  return {
+    id: b.id,
+    date: b.requested_date || '',
+    time: b.requested_time || '',
+    type: b.service || b.session_type || 'Consultation',
+    notes: b.member_response_note || '',
+    status: status,
+    source: b.booked_by === 'advisor' ? 'advisor' : 'client_portal',
+    mode: b.session_mode || '',
+    memberResponse: b.member_response || null,
+    isMine: b.advisor_id === (ADVISOR && ADVISOR.id),
+    createdAt: b.created_at
+  };
+}
+
+async function syncBookings(){
+  // RLS returns only this advisor's bookings plus those of their linked clients.
+  const { data, error } = await sb
+    .from('bookings')
+    .select('id,user_id,advisor_id,advisor_client_id,service,session_type,session_mode,requested_date,requested_time,status,booked_by,member_response,member_response_at,member_response_note,attended,attendance_confirmed_at,created_at')
+    .order('requested_date', { ascending: true });
+  if (error) { console.error('bookings load failed:', error); return; }
+
+  const byClientId = {};
+  const byUserId = {};
+  clients.forEach(function(c){
+    c.appointments = [];
+    byClientId[c.id] = c;
+    if (c._memberUserId) byUserId[c._memberUserId] = c;
+  });
+
+  (data || []).forEach(function(b){
+    let c = b.advisor_client_id ? byClientId[b.advisor_client_id] : null;
+    if (!c && b.user_id) c = byUserId[b.user_id];
+    if (c) c.appointments.push(bookingToAppt(b));
+  });
+  window._allBookings = data || [];
+  refreshApptBadge();
+}
+
+/* ── Save ─────────────────────────────────────────────────── */
+// Every existing call site still just calls persistClients(). Writes are
+// debounced so typing in a field does not fire a request per keystroke.
+const _dirty = new Set();
+let _saveTimer = null;
+
+function persistClients(){
+  if (currentClientId) _dirty.add(currentClientId);
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(flushSaves, 700);
+  flashSaved();
+  refreshApptBadge();
+}
+
+// Strip the fields that belong in relational columns or are derived,
+// so the jsonb blob stays the advisor's consultation record and nothing else.
+function assessmentPayload(c){
+  const out = JSON.parse(JSON.stringify(c));
+  delete out.id; delete out._link; delete out._memberUserId;
+  delete out.appointments;          // bookings are the source of truth
+  delete out.createdAt; delete out.updatedAt;
+  return out;
+}
+
+async function flushSaves(){
+  const ids = Array.from(_dirty);
+  _dirty.clear();
+  for (const id of ids) {
+    const c = clients.find(function(x){ return x.id === id; });
+    if (!c) continue;
+    const { error } = await sb.from('advisor_clients').update({
+      first_name: (c.personal.name || '').trim() || 'Unnamed',
+      last_name:  (c.personal.surname || '').trim() || null,
+      email:      (c.email || '').trim() || null,
+      phone:      (c.phone || '').trim() || null,
+      assessment: assessmentPayload(c),
+      updated_at: new Date().toISOString()
+    }).eq('id', id);
+    if (error) {
+      console.error('save failed for client', id, error);
+      showBanner('Could not save changes: ' + error.message);
+      _dirty.add(id);       // keep it queued for the next attempt
+    } else {
+      c.updatedAt = new Date().toISOString();
+    }
+  }
+}
+
+// Force a save immediately — used before navigating away from a client.
+async function saveNow(){
+  clearTimeout(_saveTimer);
+  await flushSaves();
+}
+window.addEventListener('beforeunload', function(){ if (_dirty.size) flushSaves(); });
+
+/* ── Small UI helpers ──────────────────────────────────────── */
+function showBanner(msg){
+  let el = document.getElementById('kwBanner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'kwBanner';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:24px;background:#c0392b;color:#fff;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;padding:12px 20px;border-radius:999px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,.2);max-width:90vw;text-align:center';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(window._bannerT);
+  window._bannerT = setTimeout(function(){ el.style.display = 'none'; }, 5000);
+}
+
+// Sidebar badge: overdue + due-today Scheduled appointments across all clients.
+function refreshApptBadge(){
+  const el = document.getElementById('apptBadge');
+  if(!el || typeof daysUntil !== 'function') return;
+  let count = 0;
+  clients.forEach(c=> (c.appointments||[]).forEach(a=>{
+    if(a.status==='Scheduled' && daysUntil(a.date)<=0) count++;
+  }));
+  el.style.display = count>0 ? 'inline-flex' : 'none';
+  el.textContent = count;
+}
+function flashSaved(){
+  const el = document.getElementById('saveFlag');
+  if(!el) return;
+  el.classList.add('show');
+  clearTimeout(window._saveT);
+  window._saveT = setTimeout(()=>el.classList.remove('show'), 1200);
+}
+
+/* ── Utilities (matching conventions used across the other tool pages) ── */
+function fmt(v){ v = v||0; return 'P '+Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtSigned(v){ v=v||0; return (v<0?'-':'')+fmt(v); }
+function pf(v){ const n = parseFloat(String(v==null?'':v).replace(/[,P\s]/g,''))||0; return n; }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function uid(){ return 'id_'+Date.now()+'_'+Math.floor(Math.random()*10000); }
+function initials(c){
+  const n=(c.personal.name||'').trim()[0]||'', s=(c.personal.surname||'').trim()[0]||'';
+  return (n+s).toUpperCase() || '?';
+}
+function fullName(c){
+  const n=(c.personal.name||'').trim(), s=(c.personal.surname||'').trim();
+  return (n+' '+s).trim() || 'Unnamed client';
+}
+
+/* ── Botswana resident individual PAYE tax table (BURS) ──
+   Annual brackets: 0–48,000 @0% · 48,001–84,000 @5% · 84,001–120,000 @12.5%
+   · 120,001–156,000 @18.75% · 156,001+ @25%. Gross salary is annualised,
+   taxed, then divided back to a monthly PAYE figure — the standard
+   annualised-earnings method employers use for payroll. ── */
+function calcAnnualTax(annual){
+  annual = Math.max(0, annual);
+  if(annual<=48000) return 0;
+  if(annual<=84000) return (annual-48000)*0.05;
+  if(annual<=120000) return 1800+(annual-84000)*0.125;
+  if(annual<=156000) return 6300+(annual-120000)*0.1875;
+  return 13050+(annual-156000)*0.25;
+}
+function calcMonthlyPAYE(monthlyGross){
+  return calcAnnualTax(pf(monthlyGross)*12)/12;
+}
+function calcNetSalary(income){
+  const gross = pf(income.monthlySalary);
+  const paye = calcMonthlyPAYE(gross);
+  const net = Math.max(0, gross - paye - pf(income.otherDeductions));
+  return { gross, paye, net };
+}
+
+/* ── Client model ── */
+function blankClient(name, surname){
+  return {
+    id: uid(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    personal:{ name:name||'', surname:surname||'', employer:'', maritalStatus:'', regime:'', dob:'', age:'', yearsToRetirement:'', monthsToRetirement:'', salariesToRetirement:'' },
+    kids:[],
+    income:{ monthlySalary:0, otherDeductions:0, spouseIncome:0, rentals:0, businessIncome:0, dividends:0 },
+    liabilities:[
+      {item:'Personal Loan', institution:'', loanAmount:0, interestRate:'', balance:0, monthlyInstalment:0, fixed:true},
+      {item:'Mortgage Loan', institution:'', loanAmount:0, interestRate:'', balance:0, monthlyInstalment:0, fixed:true},
+      {item:'Credit Card',   institution:'', loanAmount:0, interestRate:'', balance:0, monthlyInstalment:0, fixed:true},
+      {item:'Car Loan',      institution:'', loanAmount:0, interestRate:'', balance:0, monthlyInstalment:0, fixed:true},
+    ],
+    assets:[],
+    savings:[],
+    risk:[
+      {type:'Life Cover',        cover:0, monthlyContribution:0, needed:0, fixed:true},
+      {type:'Funeral Cover',     cover:0, monthlyContribution:0, needed:0, fixed:true},
+      {type:'Property Insurance',cover:0, monthlyContribution:0, needed:0, fixed:true},
+      {type:'Car Insurance',     cover:0, monthlyContribution:0, needed:0, fixed:true},
+    ],
+    businesses:[],
+    budget:{}, // { catId: monthlyAmount }
+    budgetOtherCustom:[], // [{id, name}] — custom line items added under the Budget "Other" group
+    lifeVision:{ when:'', monthsLeft:'', passiveIncome:'', whichCar:'', livingWhere:'', other:'' },
+    notes:{ income:'', expense:'', debt:'', lifestyle:'', general:'' },
+    consultationNotes:[], // [{id, createdAt, updatedAt, text}] — free-form, dated notes log
+    appointments:[], // [{id, date, time, type, notes, status, source, createdAt}] — status: Scheduled/Completed/Cancelled/No-show
+    documents:[] // [{id, name, mime, size, uploadedAt, dataUrl}] — payslips, IDs, statements etc.
+  };
+}
+
+/* ================================================================
+   ROUTING / SHELL
+   ================================================================ */
+function go(view){
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
+  document.getElementById('newClientBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
+  document.getElementById('findMemberBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
+  document.getElementById('importClientBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
+  document.getElementById('exportClientBtn').style.display = 'none';
+  if(view==='clients'){
+    if(currentClientId) saveNow();
+    currentClientId = null;
+    document.getElementById('page-title').textContent = 'Clients';
+    document.getElementById('page-sub').textContent = 'Financial assessments captured during consultations';
+    renderClientsList();
+  } else if(view==='framework'){
+    document.getElementById('page-title').textContent = 'Advisory Framework';
+    document.getElementById('page-sub').textContent = 'How the diagnostics on each client are scored';
+    renderFrameworkView();
+  } else if(view==='appointments'){
+    document.getElementById('page-title').textContent = 'Appointments';
+    document.getElementById('page-sub').textContent = 'Upcoming sessions across all clients';
+    renderAppointmentsView();
+  } else if(view==='activity'){
+    document.getElementById('page-title').textContent = 'Activity Report';
+    document.getElementById('page-sub').textContent = 'Clients seen, sessions logged, and presenting issues';
+    renderActivityView();
+  } else if(view==='tools'){
+    document.getElementById('page-title').textContent = 'Tools';
+    document.getElementById('page-sub').textContent = 'Loan, retirement, consolidation and restructuring calculators';
+    renderToolsView();
+  }
+}
+
+/* ================================================================
+   CLIENTS LIST
+   ================================================================ */
+function renderClientsList(){
+  const wrap = document.getElementById('page-content');
+  if(clients.length===0){
+    wrap.innerHTML = `
+      <div class="card">
+        <div class="empty-state">
+          <div class="ic">📋</div>
+          <h3>No client assessments yet</h3>
+          <p>Capture a client's income, expenses, debt and assets during a consultation to get an instant Income / Expense / Debt / Lifestyle diagnostic.</p>
+          <button class="btn btn-primary" onclick="openNewClientModal()">+ New Client Assessment</button>
+          <button class="btn btn-outline" style="margin-left:8px" onclick="openFindMemberModal()">🔍 Add Portal Member</button>
+        </div>
+      </div>`;
+    return;
+  }
+  const rows = clients.map(c=>{
+    const t = calcTotals(c);
+    const dti = diagDebt(t);
+    return `<tr>
+      <td><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--muted)">${c.personal.age?c.personal.age+' yrs · ':''}Updated ${fmtDate(c.updatedAt)}</div></td>
+      <td class="mono">${fmt(t.totalIncome)}/mo</td>
+      <td class="mono">${fmt(t.netWorth)}</td>
+      <td><span class="status-pill status-${dti.color}">${dti.label}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="openClient('${c.id}')">Open</button>
+        <button class="btn btn-red btn-sm" onclick="askDelete('${c.id}')">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const totalClients = clients.length;
+  const flagged = clients.filter(c=>{ const t=calcTotals(c); return diagDebt(t).color==='red' || diagDebt(t).color==='orange'; }).length;
+  const avgNetWorth = clients.reduce((s,c)=>s+calcTotals(c).netWorth,0)/totalClients;
+
+  wrap.innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">Clients</div></div>
+      <div class="stat-box ${flagged>0?'red':'green'}"><div class="stat-val">${flagged}</div><div class="stat-lbl">Flagged Debt Risk</div></div>
+      <div class="stat-box gold"><div class="stat-val">${fmt(avgNetWorth)}</div><div class="stat-lbl">Avg. Net Worth</div></div>
+    </div>
+    <div class="search-row">
+      <input type="text" class="search-input" id="clientSearch" placeholder="Search clients by name…" oninput="renderClientsList()">
+    </div>
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Client</th><th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  const q = (document.getElementById('clientSearch')?.value||'').toLowerCase();
+  if(q){
+    document.querySelectorAll('tbody tr').forEach(tr=>{
+      tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  }
+}
+function fmtDate(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+
+function openNewClientModal(){
+  document.getElementById('nc-name').value='';
+  document.getElementById('nc-surname').value='';
+  document.getElementById('nc-email').value='';
+  document.getElementById('nc-phone').value='';
+  document.getElementById('newClientModal').classList.add('open');
+}
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+async function createClientRecord(){
+  const name    = document.getElementById('nc-name').value.trim();
+  const surname = document.getElementById('nc-surname').value.trim();
+  const email   = (document.getElementById('nc-email').value || '').trim();
+  const phone   = (document.getElementById('nc-phone').value || '').trim();
+  if(!name){ alert('A first name is required.'); return; }
+
+  const draft = blankClient(name, surname);
+  const { data, error } = await sb.from('advisor_clients').insert({
+    advisor_id: ADVISOR.id,
+    first_name: name,
+    last_name:  surname || null,
+    email:      email || null,
+    phone:      phone || null,
+    assessment: assessmentPayload(draft),
+    created_by: CURRENT_USER.id
+  }).select('id, member_user_id').single();
+
+  if(error){
+    // The unique index on (advisor_id, lower(email)) is the usual cause.
+    showBanner(error.code === '23505'
+      ? 'You already have a client with that email address.'
+      : 'Could not create the client: ' + error.message);
+    return;
+  }
+  closeModal('newClientModal');
+  await loadClients();
+  if(data.member_user_id){
+    showBanner('Linked to an existing portal member with that email.');
+  }
+  openClient(data.id);
+}
+/* ── Adding a client who already has a portal account ────────
+   The search RPC is deliberately narrow: three characters minimum,
+   surname prefix or exact email only, 20 results max, and it returns a
+   masked email rather than a usable address. Advisors work across every
+   client organisation, which is not the same as being able to browse
+   the whole member base. ── */
+function openFindMemberModal(){
+  document.getElementById('fm-query').value = '';
+  document.getElementById('fm-results').innerHTML = '';
+  document.getElementById('findMemberModal').classList.add('open');
+}
+
+let _fmTimer = null;
+function searchMembers(q){
+  clearTimeout(_fmTimer);
+  const box = document.getElementById('fm-results');
+  if((q||'').trim().length < 3){ box.innerHTML = ''; return; }
+  box.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:8px">Searching…</div>';
+  _fmTimer = setTimeout(async function(){
+    const { data, error } = await sb.rpc('advisor_search_members', { p_q: q });
+    if(error){ box.innerHTML = '<div style="font-size:12.5px;color:var(--red);padding:8px">'+esc(error.message)+'</div>'; return; }
+    if(!data || !data.length){ box.innerHTML = '<div style="font-size:12.5px;color:var(--muted);padding:8px">No matching member found. If they are not on the portal, use <strong>+ New Client Assessment</strong> instead.</div>'; return; }
+    box.innerHTML = data.map(function(m){
+      const nm = ((m.first_name||'') + ' ' + (m.last_name||'')).trim() || m.email_masked;
+      return '<div style="display:flex;align-items:center;gap:12px;padding:10px 8px;border-bottom:1px solid var(--border)">' +
+        '<div style="flex:1"><strong style="font-size:13.5px">' + esc(nm) + '</strong>' +
+        '<div style="font-size:11.5px;color:var(--muted)">' + esc(m.email_masked) + (m.org_name ? ' · ' + esc(m.org_name) : '') + '</div></div>' +
+        (m.already_client
+          ? '<span class="status-pill status-grey">Already yours</span>'
+          : '<button class="btn btn-primary btn-sm" onclick="addMemberAsClient(\'' + m.user_id + '\')">Add</button>') +
+        '</div>';
+    }).join('');
+  }, 350);
+}
+
+async function addMemberAsClient(userId){
+  const { data, error } = await sb.rpc('advisor_add_member_client', { p_member_user_id: userId });
+  if(error){ showBanner('Could not add: ' + error.message); return; }
+  closeModal('findMemberModal');
+  await loadClients();
+  openClient(data);
+}
+
+function askDelete(id){
+  pendingDeleteId = id;
+  const c = clients.find(x=>x.id===id);
+  document.getElementById('del-name').textContent = fullName(c);
+  document.getElementById('deleteModal').classList.add('open');
+}
+async function confirmDelete(){
+  const id = pendingDeleteId;
+  const { error } = await sb.from('advisor_clients').delete().eq('id', id);
+  if(error){ showBanner('Could not delete: ' + error.message); return; }
+  closeModal('deleteModal');
+  await loadClients();
+  if(currentClientId===id){ go('clients'); } else { renderClientsList(); }
+}
+
+/* ── Save / Import a client as an actual file on disk ──
+   Client records now live in Supabase, so this is no longer a durability
+   workaround — it is a portability one. "Save Client File" downloads the
+   full record (including uploaded documents) as a .json the advisor can
+   archive or hand over; "Import Client File" reads one back in as a new
+   client. Sessions are deliberately NOT included in the export: they are
+   rows in the shared `bookings` table, not the advisor's private record. ── */
+function exportClient(id){
+  const c = clients.find(x=>x.id===id);
+  if(!c) return;
+  const blob = new Blob([JSON.stringify(c, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = fullName(c).replace(/[^a-z0-9]+/gi,'_').replace(/^_+|_+$/g,'') || 'client';
+  a.href = url;
+  a.download = `${safeName}_financial_assessment.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+function importClientFile(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try{
+      const imported = JSON.parse(reader.result);
+      if(!imported || !imported.personal){ alert('This does not look like a Key Wellness client file.'); return; }
+      // Always assign a fresh id so importing never overwrites an existing client by accident.
+      const name    = (imported.personal.name||'').trim() || 'Imported';
+      const surname = (imported.personal.surname||'').trim();
+      delete imported.id; delete imported._link; delete imported._memberUserId;
+      delete imported.appointments;   // sessions live in `bookings`, not in a file
+      const { error } = await sb.from('advisor_clients').insert({
+        advisor_id: ADVISOR.id,
+        first_name: name,
+        last_name:  surname || null,
+        email:      (imported.email||'').trim() || null,
+        phone:      (imported.phone||'').trim() || null,
+        assessment: imported,
+        created_by: CURRENT_USER.id
+      });
+      if(error){ showBanner('Could not import: ' + error.message); return; }
+      await loadClients();
+      renderClientsList();
+    } catch(e){
+      alert('Could not read that file — make sure it\'s a client file exported from this portal.');
+    } finally {
+      document.getElementById('importFileInput').value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ================================================================
+   CLIENT EDITOR
+   ================================================================ */
+const CLIENT_TABS = [
+  {id:'personal',   label:'Personal & Family'},
+  {id:'income',     label:'Income'},
+  {id:'liabilities',label:'Liabilities'},
+  {id:'assets',     label:'Assets & Investments'},
+  {id:'risk',       label:'Risk & Businesses'},
+  {id:'budget',     label:'Personal Budget'},
+  {id:'diagnostics',label:'Diagnostics & Notes'},
+  {id:'vision',     label:'Life Vision'},
+  {id:'notes',      label:'Notes'},
+  {id:'appointments',label:'Appointments'},
+  {id:'portal',     label:'Portal Data'},
+  {id:'robo',       label:'Robo-Advisor'},
+  {id:'documents',  label:'Documents'},
+  {id:'report',     label:'Report'},
+];
+
+function openClient(id){
+  if(currentClientId && currentClientId !== id) saveNow();
+  _portalCache = {};
+  currentClientId = id;
+  currentTab = 'personal';
+  document.getElementById('newClientBtn').style.display = 'none';
+  document.getElementById('findMemberBtn').style.display = 'none';
+  document.getElementById('importClientBtn').style.display = 'none';
+  document.getElementById('exportClientBtn').style.display = 'inline-flex';
+  document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
+  renderClientEditor();
+}
+function getClient(){ return clients.find(c=>c.id===currentClientId); }
+function switchTab(tab){ currentTab = tab; renderClientEditor(); }
+
+function renderClientEditor(){
+  const c = getClient();
+  if(!c){ go('clients'); return; }
+  document.getElementById('page-title').textContent = fullName(c);
+  document.getElementById('page-sub').innerHTML = `<a href="#" onclick="go('clients');return false;" style="color:var(--kw-green);text-decoration:none;font-weight:700">← Back to Clients</a>`;
+
+  const tabsHtml = CLIENT_TABS.map(t=>`<button class="tab ${currentTab===t.id?'active':''}" onclick="switchTab('${t.id}')">${t.label}</button>`).join('');
+
+  let panel = '';
+  if(currentTab==='personal')    panel = panelPersonal(c);
+  if(currentTab==='income')      panel = panelIncome(c);
+  if(currentTab==='liabilities') panel = panelLiabilities(c);
+  if(currentTab==='assets')      panel = panelAssets(c);
+  if(currentTab==='risk')        panel = panelRisk(c);
+  if(currentTab==='budget')      panel = panelBudget(c);
+  if(currentTab==='diagnostics') panel = panelDiagnostics(c);
+  if(currentTab==='vision')      panel = panelVision(c);
+  if(currentTab==='notes')       panel = panelNotes(c);
+  if(currentTab==='appointments')panel = panelAppointments(c);
+  if(currentTab==='portal')      panel = panelPortal(c);
+  if(currentTab==='robo')        panel = panelRobo(c);
+  if(currentTab==='documents')   panel = panelDocuments(c);
+  if(currentTab==='report')      panel = panelReport(c);
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="client-hero">
+      <div class="client-avatar">${initials(c)}</div>
+      <div style="flex:1">
+        <h2>${esc(fullName(c))}</h2>
+        <div class="meta">${c.personal.age?c.personal.age+' years old · ':''}Assessment started ${fmtDate(c.createdAt)}${c._link&&c._link.orgName?' · '+esc(c._link.orgName):''}</div>
+      </div>
+      ${linkChip(c)}
+    </div>
+    <div class="tabs no-print">${tabsHtml}</div>
+    <div id="tab-panel">${panel}</div>`;
+
+  if(currentTab==='budget') wireBudgetGroups(c);
+}
+
+/* ── Portal linkage ──────────────────────────────────────────
+   Three states a client can be in:
+     not a member  — no portal account yet; the record links itself
+                     automatically if they sign up with this email
+     member, no consent — we know who they are, but they have not agreed
+                     to share their own financial data with an advisor
+     member, consent — their portal data is available below
+   ── */
+function linkChip(c){
+  const L = c._link || {};
+  if(!L.isMember) return '<span class="status-pill status-grey" title="No portal account found for this email">Not on portal</span>';
+  if(!L.hasConsent) return '<span class="status-pill status-gold" title="This member has not shared their financial data">Portal member · no data consent</span>';
+  return '<span class="status-pill status-green">Portal member · data shared</span>';
+}
+
+let _portalCache = {};
+function panelPortal(c){
+  const L = c._link || {};
+  if(!L.isMember){
+    return `
+      <div class="card">
+        <div class="card-title">Not linked to a portal account</div>
+        <p style="font-size:13px;color:var(--text);line-height:1.7">
+          No Key Wellness account was found for <strong>${esc(c.email)||'this client'}</strong>.
+          You can carry on working with them here exactly as normal — nothing on this
+          page needs a portal account.
+        </p>
+        <p style="font-size:13px;color:var(--text);line-height:1.7;margin-top:10px">
+          If they register later using that email address, this record links itself
+          automatically and their portal data will appear here (once they consent to share it).
+        </p>
+        ${c.email ? '' : '<div class="notice notice-gold" style="margin-top:14px">Add an email address on the <strong>Personal &amp; Family</strong> tab so the link can happen automatically.</div>'}
+      </div>`;
+  }
+  if(!L.hasConsent){
+    return `
+      <div class="card">
+        <div class="card-title">Waiting on the client's consent</div>
+        <div class="notice notice-gold">This client has a Key Wellness account, but has not turned on
+          <strong>“Share my financial data with my advisor”</strong> in their profile.</div>
+        <p style="font-size:13px;color:var(--text);line-height:1.7;margin-top:12px">
+          Until they do, you can see their contact details and the sessions you have
+          together — but not their budget, assessment scores or check-ins. Ask them to
+          switch it on under <strong>My Profile → Privacy</strong> in their portal.
+        </p>
+        <div class="kw-card kw-card--tint" style="margin-top:16px;padding:16px">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:6px">Sessions on record</div>
+          <div style="font-size:13px;color:var(--text)">${L.sessionsAttended} attended of ${L.sessionsTotal} booked${L.lastSessionDate?' · last on '+fmtApptDate(L.lastSessionDate):''}</div>
+        </div>
+      </div>`;
+  }
+  const d = _portalCache[c.id];
+  if(!d){ loadPortalData(c.id); return '<div class="card"><div class="empty-state"><div class="ic">⏳</div><h3>Loading their portal data…</h3></div></div>'; }
+
+  const pr = d.profile || {};
+  const as = d.latest_assessment;
+  const row = (label, val) => val==null||val===''?'':`<div><span>${label}</span><br><strong>${val}</strong></div>`;
+  const checkins = (d.checkins||[]).slice(0,6).map(k=>`<tr><td>${fmtDate(k.created_at)}</td><td class="mono">${k.score==null?'—':k.score}</td></tr>`).join('');
+
+  return `
+    <div class="notice notice-green">This member has agreed to share their financial data. Everything below is
+      what <strong>they</strong> entered in their own portal — it is not the assessment you captured on the other tabs.</div>
+    <div class="card">
+      <div class="card-title">Their wellness assessment</div>
+      ${as ? `<div class="report-grid">
+        ${row('Overall score', as.score)}
+        ${row('Taken', fmtDate(as.created_at))}
+      </div>` : '<div class="rp-empty">They have not completed an assessment yet.</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">Their own figures</div>
+      <div class="report-grid">
+        ${row('Monthly income', pr.monthly_income!=null?fmt(pr.monthly_income):'')}
+        ${row('Monthly expenses', pr.monthly_expenses!=null?fmt(pr.monthly_expenses):'')}
+        ${row('Net income', pr.net_income!=null?fmt(pr.net_income):'')}
+        ${row('Monthly debt repayments', pr.monthly_debt!=null?fmt(pr.monthly_debt):'')}
+        ${row('Total debt balance', pr.total_debt_balance!=null?fmt(pr.total_debt_balance):'')}
+        ${row('Total assets', pr.total_assets!=null?fmt(pr.total_assets):'')}
+        ${row('Total liabilities', pr.total_liabilities!=null?fmt(pr.total_liabilities):'')}
+        ${row('Total savings', pr.total_savings!=null?fmt(pr.total_savings):'')}
+        ${row('Employment', pr.employment)}
+        ${row('Last updated', pr.fin_updated_at?fmtDate(pr.fin_updated_at):'')}
+      </div>
+      ${pr.fin_updated_at?'':'<div class="rp-empty">They have not filled in their financial figures yet.</div>'}
+    </div>
+    <div class="card">
+      <div class="card-title">Recent check-ins</div>
+      ${checkins ? `<div class="rt-wrap"><table><thead><tr><th>When</th><th style="width:90px">Score</th></tr></thead><tbody>${checkins}</tbody></table></div>`
+                 : '<div class="rp-empty">No check-ins recorded yet.</div>'}
+    </div>`;
+}
+
+async function loadPortalData(clientId){
+  const { data, error } = await sb.rpc('advisor_client_detail', { p_client_id: clientId });
+  if(error){ showBanner('Could not load portal data: ' + error.message); return; }
+  _portalCache[clientId] = data;
+  if(currentClientId === clientId && currentTab === 'portal') renderClientEditor();
+}
+
+function saveField(path, value, opts){
+  const c = getClient();
+  const keys = path.split('.');
+  let obj = c;
+  for(let i=0;i<keys.length-1;i++) obj = obj[keys[i]];
+  obj[keys[keys.length-1]] = (opts&&opts.money) ? pf(value) : value;
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+}
+function saveRow(section, idx, key, value, isMoney){
+  const c = getClient();
+  c[section][idx][key] = isMoney ? pf(value) : value;
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  if(section==='liabilities' || section==='risk'){ refreshSummaryBits(); }
+}
+function addRow(section, template){
+  const c = getClient();
+  c[section].push(Object.assign({}, template));
+  persistClients();
+  renderClientEditor();
+}
+function removeRow(section, idx){
+  const c = getClient();
+  c[section].splice(idx,1);
+  persistClients();
+  renderClientEditor();
+}
+function refreshSummaryBits(){
+  // lightweight re-render of computed cells (shortfall, DTI) without losing focus elsewhere
+  const c = getClient();
+  if(currentTab==='risk') document.querySelectorAll('[data-shortfall]').forEach(el=>{
+    const i = +el.dataset.shortfall;
+    const r = c.risk[i];
+    el.textContent = fmt(Math.max(0,(pf(r.needed)-pf(r.cover))));
+  });
+}
+
+/* ---------- PERSONAL & FAMILY ---------- */
+function panelPersonal(c){
+  const p = c.personal;
+  const kidsRows = c.kids.map((k,i)=>`
+    <tr>
+      <td><input type="text" value="${esc(k.name)}" oninput="saveRow('kids',${i},'name',this.value)" placeholder="Name & surname"></td>
+      <td><input type="number" value="${k.age||''}" oninput="saveRow('kids',${i},'age',this.value)" placeholder="Age"></td>
+      <td><input type="number" value="${k.yearsToUni||''}" oninput="saveRow('kids',${i},'yearsToUni',this.value)" placeholder="Years"></td>
+      <td><button class="rt-del" onclick="removeRow('kids',${i})">✕</button></td>
+    </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Personal Details</div>
+      <div class="form-grid cols-3">
+        <div class="field"><label>Name</label><input type="text" value="${esc(p.name)}" oninput="saveField('personal.name', this.value)"></div>
+        <div class="field"><label>Surname</label><input type="text" value="${esc(p.surname)}" oninput="saveField('personal.surname', this.value)"></div>
+        <div class="field"><label>Employer</label><input type="text" value="${esc(p.employer)}" placeholder="Company name" oninput="saveField('personal.employer', this.value)"></div>
+        <div class="field">
+          <label>Email ${c._link&&c._link.isMember?'<span style="color:var(--green);font-weight:700">· linked to portal</span>':'<span style="font-weight:600;color:var(--muted)">· links to their portal account</span>'}</label>
+          <input type="email" value="${esc(c.email)}" placeholder="name@example.com" oninput="saveField('email', this.value)">
+        </div>
+        <div class="field"><label>Phone</label><input type="tel" value="${esc(c.phone)}" placeholder="+267 ..." oninput="saveField('phone', this.value)"></div>
+        <div class="field"><label>D.O.B</label><input type="date" value="${esc(p.dob)}" oninput="saveField('personal.dob', this.value)"></div>
+        <div class="field"><label>Age</label><input type="number" value="${esc(p.age)}" oninput="saveField('personal.age', this.value)"></div>
+        <div class="field">
+          <label>Marital Status</label>
+          <select onchange="saveField('personal.maritalStatus', this.value)">
+            <option value="" ${!p.maritalStatus?'selected':''}>Select…</option>
+            <option value="Single" ${p.maritalStatus==='Single'?'selected':''}>Single</option>
+            <option value="Married" ${p.maritalStatus==='Married'?'selected':''}>Married</option>
+            <option value="Divorced" ${p.maritalStatus==='Divorced'?'selected':''}>Divorced</option>
+            <option value="Widowed" ${p.maritalStatus==='Widowed'?'selected':''}>Widowed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Marriage Regime</label>
+          <select onchange="saveField('personal.regime', this.value)">
+            <option value="" ${!p.regime?'selected':''}>Select…</option>
+            <option value="Not Applicable" ${p.regime==='Not Applicable'?'selected':''}>Not Applicable</option>
+            <option value="In Community of Property" ${p.regime==='In Community of Property'?'selected':''}>In Community of Property</option>
+            <option value="Out of Community (with accrual)" ${p.regime==='Out of Community (with accrual)'?'selected':''}>Out of Community (with accrual)</option>
+            <option value="Out of Community (without accrual)" ${p.regime==='Out of Community (without accrual)'?'selected':''}>Out of Community (without accrual)</option>
+          </select>
+        </div>
+        <div class="field"><label>Years to Retirement</label><input type="number" value="${esc(p.yearsToRetirement)}" oninput="saveField('personal.yearsToRetirement', this.value)"></div>
+        <div class="field"><label>Months to Retirement</label><input type="number" value="${esc(p.monthsToRetirement)}" oninput="saveField('personal.monthsToRetirement', this.value)"></div>
+        <div class="field"><label>Salaries to Retirement</label><input type="number" value="${esc(p.salariesToRetirement)}" oninput="saveField('personal.salariesToRetirement', this.value)"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Kids</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th>Name & Surname</th><th style="width:90px">Age</th><th style="width:140px">Years to University</th><th style="width:36px"></th></tr></thead>
+          <tbody>${kidsRows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No dependants added</td></tr>'}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('kids',{name:'',age:'',yearsToUni:''})">+ Add child</button>
+    </div>`;
+}
+
+/* ---------- INCOME ---------- */
+function panelIncome(c){
+  const i = c.income;
+  const field = (key,label,hint)=>`
+    <div class="field">
+      <label>${label}</label>
+      <div class="money-wrap"><span class="pre">P</span>
+      <input type="text" inputmode="decimal" value="${i[key]?Number(i[key]).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0" oninput="saveField('income.${key}', this.value, {money:true}); livePreview()"></div>
+      ${hint?`<div style="font-size:10.5px;color:var(--muted);margin-top:4px">${hint}</div>`:''}
+    </div>`;
+  return `
+    <div class="card">
+      <div class="card-title">Monthly Income</div>
+      <div class="card-hint">"Salary is blood and sweat. Passive income creates wealth." — capture every income stream, not just salary. Net salary is calculated automatically from the BURS PAYE tax table below.</div>
+      <div class="form-grid cols-3">
+        ${field('monthlySalary','Monthly Salary (gross)')}
+        ${field('otherDeductions','Other Deductions','Pension, medical aid, garnishee, union fees, etc.')}
+        ${field('spouseIncome','Spouse Income')}
+        ${field('rentals','Rental Income')}
+        ${field('businessIncome','Business Income')}
+        ${field('dividends','Dividends')}
+      </div>
+    </div>
+    <div class="card" id="incomeLive">${incomeLiveHtml(c)}</div>`;
+}
+function incomeLiveHtml(c){
+  const t = calcTotals(c);
+  const passivePct = t.totalIncome>0 ? Math.round(t.passiveIncome/t.totalIncome*100) : 0;
+  return `
+    <div class="card-title">Net Salary — calculated from the BURS tax table</div>
+    <div class="report-grid" style="margin-bottom:16px">
+      <div><span>Gross salary:</span> <strong>${fmt(t.grossSalary)}</strong></div>
+      <div><span>PAYE (tax table):</span> <strong style="color:var(--red)">-${fmt(t.paye)}</strong></div>
+      <div><span>Other deductions:</span> <strong style="color:var(--red)">-${fmt(pf(c.income.otherDeductions))}</strong></div>
+      <div><span>Net salary (take-home):</span> <strong style="color:var(--green)">${fmt(t.netSalary)}</strong></div>
+    </div>
+    <div class="card-title">At a glance</div>
+    <div class="stat-grid" style="margin-bottom:0">
+      <div class="stat-box"><div class="stat-val">${fmt(t.totalIncome)}</div><div class="stat-lbl">Total Monthly Household Income</div></div>
+      <div class="stat-box ${passivePct<10?'orange':'green'}"><div class="stat-val">${passivePct}%</div><div class="stat-lbl">From Passive Sources</div></div>
+    </div>`;
+}
+function livePreview(){
+  const el = document.getElementById('incomeLive');
+  if(el) el.innerHTML = incomeLiveHtml(getClient());
+}
+
+/* ---------- LIABILITIES ---------- */
+function panelLiabilities(c){
+  const rows = c.liabilities.map((r,i)=>`
+    <tr>
+      <td>${r.fixed?`<span class="rt-fixed-name">${esc(r.item)}</span>`:`<input type="text" value="${esc(r.item)}" oninput="saveRow('liabilities',${i},'item',this.value)" placeholder="Item">`}</td>
+      <td><input type="text" list="bw-institutions-credit" value="${esc(r.institution)}" oninput="saveRow('liabilities',${i},'institution',this.value)" placeholder="Bank or microlender"></td>
+      <td><input type="text" inputmode="decimal" value="${r.loanAmount?Number(r.loanAmount).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'loanAmount',this.value,true)" placeholder="0"></td>
+      <td><input type="text" value="${esc(r.interestRate)}" oninput="saveRow('liabilities',${i},'interestRate',this.value)" placeholder="e.g. 14%"></td>
+      <td><input type="text" inputmode="decimal" value="${r.balance?Number(r.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'balance',this.value,true)" placeholder="0"></td>
+      <td><input type="text" inputmode="decimal" value="${r.monthlyInstalment?Number(r.monthlyInstalment).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'monthlyInstalment',this.value,true); refreshDebtStat()" placeholder="0"></td>
+      <td><button class="rt-del" ${r.fixed?'disabled':''} onclick="removeRow('liabilities',${i})">✕</button></td>
+    </tr>`).join('');
+  return `
+    <div class="card">
+      <div class="card-title">Liabilities</div>
+      <div class="card-hint">You must know all unsecured loans, and how much interest you pay on each.</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th style="width:130px">Item</th><th>Institution</th><th style="width:110px">Loan Amount</th><th style="width:90px">Interest</th><th style="width:110px">Balance</th><th style="width:120px">Monthly Instalment</th><th style="width:36px"></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('liabilities',{item:'Other',institution:'',loanAmount:0,interestRate:'',balance:0,monthlyInstalment:0,fixed:false})">+ Add liability</button>
+    </div>
+    <div class="card" id="debtStat">${debtStatHtml(c)}</div>`;
+}
+function debtStatHtml(c){
+  const t = calcTotals(c);
+  const d = diagDebt(t);
+  return `
+    <div class="card-title">At a glance</div>
+    <div class="stat-grid" style="margin-bottom:0">
+      <div class="stat-box"><div class="stat-val">${fmt(t.totalDebtInstalment)}</div><div class="stat-lbl">Total Monthly Debt</div></div>
+      <div class="stat-box ${d.color}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income (DTI)</div></div>
+    </div>`;
+}
+function refreshDebtStat(){ const el=document.getElementById('debtStat'); if(el) el.innerHTML = debtStatHtml(getClient()); }
+
+/* ---------- ASSETS ---------- */
+function panelAssets(c){
+  const rows = c.assets.map((r,i)=>`
+    <tr>
+      <td><input type="text" value="${esc(r.name)}" oninput="saveRow('assets',${i},'name',this.value)" placeholder="Asset name"></td>
+      <td><input type="text" inputmode="decimal" value="${r.value?Number(r.value).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('assets',${i},'value',this.value,true)" placeholder="0"></td>
+      <td><select onchange="saveRow('assets',${i},'status',this.value)">
+            <option value="Income-Generating" ${r.status==='Income-Generating'?'selected':''}>Income-Generating</option>
+            <option value="Personal Use" ${r.status==='Personal Use'?'selected':''}>Personal Use</option>
+          </select></td>
+      <td><input type="text" value="${esc(r.size)}" oninput="saveRow('assets',${i},'size',this.value)" placeholder="e.g. 3-bed"></td>
+      <td><input type="text" inputmode="decimal" value="${r.monthlyIncome?Number(r.monthlyIncome).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('assets',${i},'monthlyIncome',this.value,true)" placeholder="0"></td>
+      <td><input type="text" inputmode="decimal" value="${r.potentialIncome?Number(r.potentialIncome).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('assets',${i},'potentialIncome',this.value,true)" placeholder="0"></td>
+      <td><button class="rt-del" onclick="removeRow('assets',${i})">✕</button></td>
+    </tr>`).join('');
+
+  const savRows = c.savings.map((r,i)=>`
+    <tr>
+      <td><input type="text" list="bw-institutions-invest" value="${esc(r.institution)}" oninput="saveRow('savings',${i},'institution',this.value)" placeholder="Bank or asset manager"></td>
+      <td><input type="text" inputmode="decimal" value="${r.currentBalance?Number(r.currentBalance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('savings',${i},'currentBalance',this.value,true); refreshSavingsStat()" placeholder="0"></td>
+      <td><input type="text" inputmode="decimal" value="${r.monthlyContribution?Number(r.monthlyContribution).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('savings',${i},'monthlyContribution',this.value,true)" placeholder="0"></td>
+      <td><input type="text" value="${esc(r.purpose)}" oninput="saveRow('savings',${i},'purpose',this.value)" placeholder="Purpose"></td>
+      <td><input type="text" value="${esc(r.expectedMaturity)}" oninput="saveRow('savings',${i},'expectedMaturity',this.value)" placeholder="e.g. Dec 2028"></td>
+      <td><button class="rt-del" onclick="removeRow('savings',${i})">✕</button></td>
+    </tr>`).join('');
+
+  const t = calcTotals(c);
+  return `
+    <div class="card">
+      <div class="card-title">Assets</div>
+      <div class="card-hint">70% of a client's assets should be income-generating assets.</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th style="width:140px">Asset name</th><th style="width:100px">Value</th><th style="width:150px">Status</th><th style="width:100px">Asset Size</th><th style="width:110px">Monthly Income</th><th style="width:110px">Potential Income</th><th style="width:36px"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No assets added</td></tr>'}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('assets',{name:'',value:0,status:'Personal Use',size:'',monthlyIncome:0,potentialIncome:0})">+ Add asset</button>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${fmt(t.totalAssets)}</div><div class="stat-lbl">Total Asset Value</div></div>
+        <div class="stat-box ${t.assetIncomePct>=70?'green':'orange'}"><div class="stat-val">${t.assetIncomePct.toFixed(2)}%</div><div class="stat-lbl">Income-Generating (target 70%)</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Savings & Investments</div>
+      <div class="card-hint">The concept is to SAVE TO INVEST — save for a purpose, not just for saving's sake. Current balance feeds into Net Worth alongside Assets.</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th>Saving / Institution</th><th style="width:110px">Current Balance</th><th style="width:120px">Monthly Contribution</th><th>Purpose</th><th style="width:130px">Expected Maturity</th><th style="width:36px"></th></tr></thead>
+          <tbody>${savRows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No savings or investments added</td></tr>'}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('savings',{institution:'',currentBalance:0,monthlyContribution:0,purpose:'',expectedMaturity:''})">+ Add saving / investment</button>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="savingsStat">${savingsStatHtml(c)}</div>
+    </div>`;
+}
+function savingsStatHtml(c){
+  const t = calcTotals(c);
+  return `<div class="stat-box gold"><div class="stat-val">${fmt(t.totalSavingsBalance)}</div><div class="stat-lbl">Total Savings & Investments Balance</div></div>`;
+}
+function refreshSavingsStat(){ const el=document.getElementById('savingsStat'); if(el) el.innerHTML = savingsStatHtml(getClient()); }
+
+/* ---------- RISK & BUSINESSES ---------- */
+function panelRisk(c){
+  const riskRows = c.risk.map((r,i)=>{
+    const shortfall = Math.max(0,(pf(r.needed)-pf(r.cover)));
+    return `
+    <tr>
+      <td><span class="rt-fixed-name">${esc(r.type)}</span></td>
+      <td><input type="text" inputmode="decimal" value="${r.cover?Number(r.cover).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('risk',${i},'cover',this.value,true)" placeholder="0"></td>
+      <td><input type="text" inputmode="decimal" value="${r.monthlyContribution?Number(r.monthlyContribution).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('risk',${i},'monthlyContribution',this.value,true)" placeholder="0"></td>
+      <td><input type="text" inputmode="decimal" value="${r.needed?Number(r.needed).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('risk',${i},'needed',this.value,true)" placeholder="0"></td>
+      <td class="mono" style="color:${shortfall>0?'var(--red)':'var(--green)'};font-weight:700" data-shortfall="${i}">${fmt(shortfall)}</td>
+      <td><button class="rt-del" ${r.fixed?'disabled':''} onclick="removeRow('risk',${i})">✕</button></td>
+    </tr>`;}).join('');
+
+  const bizRows = c.businesses.map((r,i)=>`
+    <tr>
+      <td><input type="text" value="${esc(r.name)}" oninput="saveRow('businesses',${i},'name',this.value)" placeholder="Business name"></td>
+      <td><input type="text" value="${esc(r.industry)}" oninput="saveRow('businesses',${i},'industry',this.value)" placeholder="Industry"></td>
+      <td><select onchange="saveRow('businesses',${i},'status',this.value)">
+            <option value="Active" ${r.status==='Active'?'selected':''}>Active</option>
+            <option value="To be opened" ${r.status==='To be opened'?'selected':''}>To be opened</option>
+          </select></td>
+      <td><input type="text" inputmode="decimal" value="${r.annualTurnover?Number(r.annualTurnover).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('businesses',${i},'annualTurnover',this.value,true)" placeholder="0"></td>
+      <td><button class="rt-del" onclick="removeRow('businesses',${i})">✕</button></td>
+    </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Risk Management</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th style="width:150px">Risk</th><th style="width:110px">Cover</th><th style="width:120px">Monthly Contribution</th><th style="width:100px">Needed</th><th style="width:100px">Shortfall</th><th style="width:36px"></th></tr></thead>
+          <tbody>${riskRows}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('risk',{type:'Other',cover:0,monthlyContribution:0,needed:0,fixed:false})">+ Add cover</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Current Businesses <span style="font-weight:500;color:var(--muted);font-size:11.5px">(active and to be opened)</span></div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th>Business Name</th><th>Industry</th><th style="width:140px">Status</th><th style="width:120px">Annual Turnover</th><th style="width:36px"></th></tr></thead>
+          <tbody>${bizRows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:16px">No businesses added</td></tr>'}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addRow('businesses',{name:'',industry:'',status:'Active',annualTurnover:0})">+ Add business</button>
+    </div>`;
+}
+
+/* ---------- PERSONAL BUDGET (50/30/20) ---------- */
+const EXPENSE_GROUPS = [
+  { id:'needs', name:'Needs', icon:'🏠', color:'#163561', cats:[
+    {id:'housing',name:'Housing & Rent'},{id:'utilities',name:'Utilities'},{id:'food',name:'Food & Groceries'},
+    {id:'transport',name:'Transport'},{id:'health',name:'Health & Medical'},{id:'childcare',name:'Child / Education'},
+    {id:'insurance',name:'Insurance'},{id:'debt_min',name:'Minimum Debt Payments'},
+  ]},
+  { id:'wants', name:'Wants', icon:'🎬', color:'#D97706', cats:[
+    {id:'entertain',name:'Entertainment'},{id:'dining',name:'Dining Out'},{id:'shopping',name:'Shopping & Clothing'},
+    {id:'personal',name:'Personal Care'},{id:'subscript',name:'Subscriptions'},{id:'travel',name:'Travel & Holidays'},
+  ]},
+  { id:'savings', name:'Savings & Investments', icon:'💰', color:'#1A8C5B', cats:[
+    {id:'emfund',name:'Emergency Fund'},{id:'retirement',name:'Retirement / Pension'},{id:'invest',name:'Investments'},
+    {id:'goals',name:'Goal Savings'},{id:'motshelo',name:'Motshelo / Moraka'},{id:'debt_extra',name:'Extra Debt Repayment'},
+  ]},
+  { id:'other', name:'Other', icon:'📋', color:'#64748B', cats:[
+    {id:'misc',name:'Miscellaneous'},
+  ]},
+];
+function panelBudget(c){
+  const t = calcTotals(c);
+  const groupsHtml = EXPENSE_GROUPS.map(g=>{
+    const customItems = g.id==='other' ? (c.budgetOtherCustom||[]) : [];
+    const fixedTotal = g.cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+    const customTotal = customItems.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+    const groupTotal = fixedTotal + customTotal;
+    return `<div class="cat-group">
+      <div class="cat-group-header" style="background:${g.color}18;" onclick="this.parentElement.querySelector('.cat-group-body').classList.toggle('hide')">
+        <span>${g.icon}</span><span class="cat-group-name" style="color:${g.color}">${g.name}</span>
+        <span class="cat-group-badge" style="background:${g.color}22;color:${g.color}">${fmt(groupTotal)}</span>
+      </div>
+      <div class="cat-group-body">
+        ${g.cats.map(cat=>`
+          <div class="cat-row">
+            <span>${cat.name}</span>
+            <div class="money-wrap"><span class="pre">P</span>
+            <input type="text" inputmode="decimal" value="${c.budget[cat.id]?Number(c.budget[cat.id]).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0"
+              oninput="saveBudget('${cat.id}', this.value)"></div>
+          </div>`).join('')}
+        ${customItems.map(cat=>`
+          <div class="cat-row" style="grid-template-columns:1fr 140px 28px">
+            <input type="text" value="${esc(cat.name)}" placeholder="Item name" style="border:1px solid var(--border);border-radius:7px;padding:7px 9px;font-size:12.5px" oninput="saveBudgetOtherName('${cat.id}', this.value)">
+            <div class="money-wrap"><span class="pre">P</span>
+            <input type="text" inputmode="decimal" value="${c.budget[cat.id]?Number(c.budget[cat.id]).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0"
+              oninput="saveBudget('${cat.id}', this.value)"></div>
+            <button class="rt-del" onclick="removeBudgetOtherItem('${cat.id}')">✕</button>
+          </div>`).join('')}
+        ${g.id==='other' ? `<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="addBudgetOtherItem()">+ Add item</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Personal Budget — 50/30/20</div>
+      <div class="card-hint">Budgeted against total monthly income captured on the Income tab (${fmt(t.totalIncome)}/mo). Needs target ≤50%, Wants ≤30%, Savings ≥20%.</div>
+      <div id="budgetBars">${budgetBarsHtml(c)}</div>
+    </div>
+    <div class="card">${groupsHtml}</div>`;
+}
+function addBudgetOtherItem(){
+  const c = getClient();
+  const id = 'custom_'+uid();
+  c.budgetOtherCustom = c.budgetOtherCustom || [];
+  c.budgetOtherCustom.push({id, name:''});
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  renderClientEditor();
+}
+function saveBudgetOtherName(id, name){
+  const c = getClient();
+  const item = (c.budgetOtherCustom||[]).find(x=>x.id===id);
+  if(item) item.name = name;
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+}
+function removeBudgetOtherItem(id){
+  const c = getClient();
+  c.budgetOtherCustom = (c.budgetOtherCustom||[]).filter(x=>x.id!==id);
+  delete c.budget[id];
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  renderClientEditor();
+}
+function budgetBarsHtml(c){
+  const t = calcTotals(c);
+  const rows = [
+    {label:'Needs',   pct:t.needsPct,   target:50, color:'var(--navy)'},
+    {label:'Wants',   pct:t.wantsPct,   target:30, color:'var(--orange)'},
+    {label:'Savings', pct:t.savingsPct, target:20, color:'var(--green)'},
+  ];
+  return rows.map(r=>`
+    <div style="margin-bottom:14px">
+      <div class="bud-row"><span>${r.label}</span><span class="bud-target">${r.pct.toFixed(2)}% <span style="color:var(--muted);font-weight:600">/ target ${r.target}%</span></span></div>
+      <div class="bud-bar"><div class="bud-fill" style="width:${Math.min(100,r.pct)}%;background:${r.color}"></div></div>
+    </div>`).join('') +
+    `<div style="font-size:12.5px;font-weight:700;color:${t.surplus>=0?'var(--green)':'var(--red)'}">${t.surplus>=0?'Monthly surplus':'Monthly shortfall'}: ${fmt(Math.abs(t.surplus))}</div>`;
+}
+function saveBudget(catId, value){
+  const c = getClient();
+  c.budget[catId] = pf(value);
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  const bars = document.getElementById('budgetBars');
+  if(bars) bars.innerHTML = budgetBarsHtml(c);
+}
+function wireBudgetGroups(c){ /* groups render open by default; toggle handled inline */ }
+
+/* ---------- DIAGNOSTICS & NOTES ---------- */
+function panelDiagnostics(c){
+  const t = calcTotals(c);
+  const inc = diagIncome(t), exp = diagExpense(t), debt = diagDebt(t), life = diagLifestyle(t);
+
+  const card = (key, d, notesKey)=>`
+    <div class="diag-card st-${d.color}">
+      <div class="diag-head">
+        <h4>${d.title}</h4>
+        <span class="status-pill status-${d.color}">${d.label}</span>
+      </div>
+      <ul class="diag-list">${d.points.map(p=>`<li>${p}</li>`).join('')}</ul>
+      <div class="field" style="margin-top:10px">
+        <label>Advisor note — ${d.title.toLowerCase()}</label>
+        <textarea placeholder="Recommendation for this area…" oninput="saveField('notes.${notesKey}', this.value)">${esc(c.notes[notesKey])}</textarea>
+      </div>
+    </div>`;
+
+  return `
+    <div class="stat-grid">
+      <div class="stat-box"><div class="stat-val">${fmt(t.totalAssets)}</div><div class="stat-lbl">Total Assets</div></div>
+      <div class="stat-box gold"><div class="stat-val">${fmt(t.totalSavingsBalance)}</div><div class="stat-lbl">Savings & Investments</div></div>
+      <div class="stat-box red"><div class="stat-val">${fmt(t.totalLiabilityBalance)}</div><div class="stat-lbl">Total Liabilities</div></div>
+      <div class="stat-box ${t.netWorth>=0?'green':'red'}"><div class="stat-val">${fmtSigned(t.netWorth)}</div><div class="stat-lbl">Net Worth</div></div>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin:-16px 0 20px">Net Worth = (Assets + Savings & Investments) − Liabilities.</div>
+    <div class="diag-grid">
+      ${card('income', inc, 'income')}
+      ${card('expense', exp, 'expense')}
+      ${card('debt', debt, 'debt')}
+      ${card('lifestyle', life, 'lifestyle')}
+    </div>
+    <div class="card">
+      <div class="card-title">Personal Finance Advisory</div>
+      <div class="card-hint">Freeform coaching notes — the human judgement behind the numbers above.</div>
+      <div class="field"><textarea style="min-height:140px" placeholder="Overall advisory summary and next steps for this client…" oninput="saveField('notes.general', this.value)">${esc(c.notes.general)}</textarea></div>
+    </div>`;
+}
+
+/* ---------- LIFE VISION ---------- */
+function panelVision(c){
+  const v = c.lifeVision;
+  const field=(key,label,ph)=>`<div class="field"><label>${label}</label><input type="text" value="${esc(v[key])}" placeholder="${ph||''}" oninput="saveField('lifeVision.${key}', this.value)"></div>`;
+  return `
+    <div class="card">
+      <div class="card-title">Create a Picture of Your Life</div>
+      <div class="card-hint">To better craft the future, paint a picture of how it's going to be when it's done, and work towards building it — like an architect.</div>
+      <div class="form-grid cols-2">
+        ${field('when','When (specific date)')}
+        ${field('monthsLeft','Months left')}
+        ${field('passiveIncome','Passive income target')}
+        ${field('whichCar','Which car')}
+        ${field('livingWhere','Living where')}
+        ${field('other','Other')}
+      </div>
+    </div>`;
+}
+
+/* ---------- NOTES (consultation log) ---------- */
+function fmtDateTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ', ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+}
+function panelNotes(c){
+  const notes = (c.consultationNotes||[]).slice().sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  const rows = notes.map(n=>`
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11.5px;color:var(--muted);font-weight:700">${fmtDateTime(n.createdAt)}${n.updatedAt && n.updatedAt!==n.createdAt ? ' · edited '+fmtDateTime(n.updatedAt) : ''}</div>
+        <button class="rt-del" onclick="removeConsultationNote('${n.id}')">✕</button>
+      </div>
+      <div class="field"><textarea style="min-height:80px" oninput="updateConsultationNote('${n.id}', this.value)">${esc(n.text)}</textarea></div>
+    </div>`).join('');
+  return `
+    <div class="card">
+      <div class="card-title">Add a Note</div>
+      <div class="card-hint">Capture anything from the consultation — context, quotes, follow-ups — as its own dated entry, separate from the category notes on the Diagnostics tab.</div>
+      <div class="field"><textarea id="newNoteText" placeholder="What came up in this session…" style="min-height:100px"></textarea></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addConsultationNote()">+ Add Note</button>
+    </div>
+    ${notes.length ? rows : `<div class="card"><div class="empty-state" style="padding:30px 20px"><div class="ic">📝</div><h3>No notes yet</h3><p>Notes added here build a dated history for this client across consultations.</p></div></div>`}`;
+}
+function addConsultationNote(){
+  const c = getClient();
+  const text = (document.getElementById('newNoteText')?.value||'').trim();
+  if(!text) return;
+  const now = new Date().toISOString();
+  c.consultationNotes = c.consultationNotes || [];
+  c.consultationNotes.push({ id:uid(), createdAt:now, updatedAt:now, text });
+  c.updatedAt = now;
+  persistClients();
+  renderClientEditor();
+}
+function updateConsultationNote(id, text){
+  const c = getClient();
+  const n = (c.consultationNotes||[]).find(x=>x.id===id);
+  if(!n) return;
+  n.text = text;
+  n.updatedAt = new Date().toISOString();
+  c.updatedAt = n.updatedAt;
+  persistClients();
+}
+function removeConsultationNote(id){
+  const c = getClient();
+  c.consultationNotes = (c.consultationNotes||[]).filter(x=>x.id!==id);
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  renderClientEditor();
+}
+
+/* ---------- APPOINTMENTS ----------
+   `source` on each appointment is either 'advisor' (booked here) or
+   'client_portal' — the latter is the swap point for when this reads
+   from the same Supabase `bookings` table the client-facing booking
+   flow (booking_form_v2.html) already writes to on the live site. ---------- */
+function fmtApptDate(dateStr){
+  if(!dateStr) return '—';
+  const [y,m,d] = dateStr.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const target = new Date(y,m-1,d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.round((target-today)/86400000);
+}
+function apptStatusClass(a){
+  if(a.status==='Completed') return 'status-green';
+  if(a.status==='Cancelled') return 'status-grey';
+  if(a.status==='No-show') return 'status-red';
+  const days = daysUntil(a.date);
+  return days<0 ? 'status-orange' : days<=2 ? 'status-gold' : 'status-green';
+}
+function panelAppointments(c){
+  const appts = (c.appointments||[]).slice().sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+  const next = appts.find(a=>a.status==='Scheduled' && daysUntil(a.date)>=0);
+  const rows = appts.map(a=>{
+    const days = daysUntil(a.date);
+    return `<tr>
+      <td>${fmtApptDate(a.date)}${a.time?', '+esc(a.time):''}${a.mode?`<div style="font-size:11px;color:var(--muted)">${a.mode==='virtual'?'Virtual':'In person'}</div>`:''}</td>
+      <td>${esc(a.type)}</td>
+      <td><span class="status-pill ${apptStatusClass(a)}">${a.status}</span></td>
+      <td>${memberResponseCell(a)}</td>
+      <td style="max-width:200px;white-space:normal">${esc(a.notes)||'—'}</td>
+      <td style="white-space:nowrap">
+        ${a.status==='Scheduled' && a.isMine ? `<button class="btn btn-outline btn-sm" onclick="setAppointmentStatus('${a.id}','Completed')">✓ Attended</button> <button class="btn btn-outline btn-sm" onclick="setAppointmentStatus('${a.id}','No-show')">No-show</button> <button class="btn btn-outline btn-sm" onclick="setAppointmentStatus('${a.id}','Cancelled')">Cancel</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+  return `
+    ${next ? `<div class="notice ${daysUntil(next.date)<=0?'notice-orange':'notice-green'}">Next appointment: <strong>${fmtApptDate(next.date)}${next.time?', '+esc(next.time):''}</strong> — ${esc(next.type)}${daysUntil(next.date)===0?' (today)':daysUntil(next.date)===1?' (tomorrow)':' (in '+daysUntil(next.date)+' days)'}</div>` : `<div class="notice notice-gold">No upcoming appointment scheduled for this client.</div>`}
+    <div class="card">
+      <div class="card-title">Schedule an Appointment</div>
+      <div class="form-grid cols-3">
+        <div class="field"><label>Date</label><input type="date" id="appt-date"></div>
+        <div class="field"><label>Time</label><input type="time" id="appt-time"></div>
+        <div class="field"><label>Type</label>
+          <select id="appt-type">
+            <option>Consultation</option><option>Follow-up</option><option>Review</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-grid cols-3" style="margin-top:12px">
+        <div class="field"><label>Delivery</label>
+          <select id="appt-mode">
+            <option value="physical">In person</option><option value="virtual">Virtual</option>
+          </select>
+        </div>
+        <div class="field" style="grid-column:span 2"><label>Private note (advisor only)</label><input type="text" id="appt-notes" placeholder="Optional — not shown to the client"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="addAppointment(this)">+ Schedule</button>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:10px">
+        Scheduling here creates a real session in the client's portal. If they have an
+        account they will see it under <strong>My Bookings</strong> and can accept,
+        decline or ask to reschedule. Either way it counts towards their
+        organisation's utilisation reporting.
+      </p>
+    </div>
+    <div class="card">
+      <div class="card-title">Appointment History</div>
+      <div class="rt-wrap">
+        <table>
+          <thead><tr><th>When</th><th style="width:110px">Type</th><th style="width:110px">Status</th><th style="width:130px">Client response</th><th>Note</th><th style="width:240px"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px">No appointments yet</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+/* How the client responded to a session the advisor put in their diary.
+   Only meaningful for advisor-booked sessions — a member who booked
+   themselves has nothing to respond to. */
+function memberResponseCell(a){
+  if(a.source !== 'advisor') return '<span style="color:var(--muted);font-size:11.5px">Self-booked</span>';
+  if(a.memberResponse === 'accepted')  return '<span class="status-pill status-green">Accepted</span>';
+  if(a.memberResponse === 'declined')  return '<span class="status-pill status-red">Declined</span>';
+  if(a.memberResponse === 'reschedule_requested') return '<span class="status-pill status-orange">Wants to move</span>';
+  return '<span class="status-pill status-gold">Awaiting reply</span>';
+}
+
+/* Creates a real row in `bookings` via advisor_book_session(). The RPC
+   stamps advisor_id and booked_by server-side, so the member's portal and
+   the admin utilisation report both pick it up without any extra sync. */
+async function addAppointment(btn){
+  const c = getClient();
+  const date  = document.getElementById('appt-date').value;
+  if(!date){ alert('Pick a date first.'); return; }
+  const time  = document.getElementById('appt-time').value;
+  const type  = document.getElementById('appt-type').value;
+  const mode  = document.getElementById('appt-mode').value;
+  const notes = document.getElementById('appt-notes').value.trim();
+  if(!time){ alert('Pick a time first.'); return; }
+
+  if(btn){ btn.disabled = true; btn.textContent = 'Scheduling…'; }
+
+  const { data, error } = await sb.rpc('advisor_book_session', {
+    p_client_id:    c.id,
+    p_service:      type,
+    p_session_type: 'Individual',
+    p_date:         date,
+    p_time:         time,
+    p_session_mode: mode,
+    p_note:         notes || null
+  });
+  if(btn){ btn.disabled = false; btn.textContent = '+ Schedule'; }
+
+  if(error){ showBanner('Could not schedule: ' + error.message); return; }
+
+  // Tell the client, reusing the portal's existing booking email function.
+  if(data && data.notify_email){
+    try {
+      await sb.functions.invoke('send-booking-email', {
+        body: {
+          firstName: c.personal.name || '',
+          lastName:  c.personal.surname || '',
+          email:     data.notify_email,
+          phone:     c.phone || '',
+          service:   type,
+          sessionType: mode === 'virtual' ? 'Virtual' : 'In person',
+          dateStr:   date,
+          time:      time,
+          message:   'This session was scheduled for you by your Key Wellness advisor'
+                     + (ADVISOR && ADVISOR.full_name ? ', ' + ADVISOR.full_name : '')
+                     + '. You can accept, decline or ask to move it from My Bookings in your portal.',
+          user_id:   c._memberUserId || null,
+          booked_by: 'advisor'
+        }
+      });
+    } catch(e){ console.warn('booking email failed (session was still created):', e); }
+  }
+
+  await syncBookings();
+  renderClientEditor();
+  showBanner(data && data.is_member
+    ? 'Scheduled. The client can see it in their portal now.'
+    : 'Scheduled. This client has no portal account yet, so no notification was sent.');
+}
+
+/* Attendance is what drives the rewards qualification and the attendance
+   rate in the org report, so it writes the same columns admin.html does. */
+async function setAppointmentStatus(id, status){
+  const patch = { updated_at: new Date().toISOString() };
+  if(status === 'Completed'){
+    patch.attended = true;
+    patch.attendance_confirmed_by = CURRENT_USER.id;
+    patch.attendance_confirmed_at = new Date().toISOString();
+    patch.status = 'confirmed';
+  } else if(status === 'No-show'){
+    patch.attended = false;
+    patch.attendance_confirmed_by = CURRENT_USER.id;
+    patch.attendance_confirmed_at = new Date().toISOString();
+  } else if(status === 'Cancelled'){
+    if(!confirm('Cancel this session? The client will see it as cancelled in their portal.')) return;
+    patch.status = 'cancelled';
+  }
+  const { error } = await sb.from('bookings').update(patch).eq('id', id);
+  if(error){ showBanner('Could not update the session: ' + error.message); return; }
+  await syncBookings();
+  renderClientEditor();
+  flashSaved();
+}
+
+/* Sessions are never hard-deleted — they are real delivery records that
+   organisation utilisation reporting depends on. Cancelling is the
+   equivalent action and keeps the audit trail intact. */
+function removeAppointment(id){ setAppointmentStatus(id, 'Cancelled'); }
+
+/* ---- Portal-wide Appointments view (across all clients) ---- */
+function renderAppointmentsView(){
+  const all = [];
+  clients.forEach(c=>{
+    (c.appointments||[]).forEach(a=> all.push(Object.assign({}, a, {clientId:c.id, clientName:fullName(c)})));
+  });
+  all.sort((a,b)=> (a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+
+  const scheduled = all.filter(a=>a.status==='Scheduled');
+  const overdue = scheduled.filter(a=>daysUntil(a.date)<0);
+  const todayCount = scheduled.filter(a=>daysUntil(a.date)===0).length;
+  const weekCount = scheduled.filter(a=>{ const d=daysUntil(a.date); return d>=0 && d<=7; }).length;
+
+  const banner = (overdue.length||todayCount||weekCount)
+    ? `<div class="notice ${overdue.length?'notice-red':todayCount?'notice-orange':'notice-gold'}">
+        ${overdue.length?`⚠️ <strong>${overdue.length}</strong> overdue appointment${overdue.length!==1?'s':''}. `:''}
+        ${todayCount?`📅 <strong>${todayCount}</strong> today. `:''}
+        ${weekCount?`🔔 <strong>${weekCount}</strong> in the next 7 days.`:''}
+      </div>`
+    : `<div class="notice notice-green">No upcoming appointments in the next 7 days.</div>`;
+
+  const rows = all.map(a=>`<tr>
+      <td><a href="#" onclick="openClient('${a.clientId}');switchTab('appointments');return false;" style="color:var(--kw-green);text-decoration:none;font-weight:700">${esc(a.clientName)}</a></td>
+      <td>${fmtApptDate(a.date)}${a.time?', '+esc(a.time):''}</td>
+      <td>${esc(a.type)}</td>
+      <td><span class="status-pill ${apptStatusClass(a)}">${a.status}</span></td>
+      <td>${memberResponseCell(a)}</td>
+      <td>${a.source==='client_portal'?'Client Portal':'Advisor'}</td>
+    </tr>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    ${banner}
+    <div class="card" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Client</th><th>When</th><th>Type</th><th>Status</th><th>Client response</th><th>Booked Via</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No appointments booked yet — open a client and use their Appointments tab.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="notice notice-gold" style="margin-top:16px">"Booked Via" separates sessions you scheduled here from ones the client booked themselves in their portal. Both are rows in the shared <span class="mono">bookings</span> table, so both count towards their organisation's utilisation reporting.</div>`;
+}
+
+/* ---------- ROBO-ADVISOR (debt strategy) ----------
+   A transparent, rules-based recommendation engine — NOT a live AI model.
+   It simulates Avalanche vs Snowball payoff using the client's actual
+   liabilities, checks whether Consolidation or Restructuring would help,
+   and pulls expense guidance from the Budget diagnostics already computed
+   in calcTotals(). Scenario inputs (extra payment, consolidation
+   rate/term) are kept in-memory per client — they're "what-if" tools for
+   the conversation, not saved data. ---------- */
+let roboState = {};
+function getRoboState(id){
+  if(!roboState[id]) roboState[id] = { extra:0, consRate:16, consTerm:60 };
+  return roboState[id];
+}
+function fmtMonths(m){
+  if(!isFinite(m)) return 'Never at this payment';
+  const y = Math.floor(m/12), mm = Math.round(m%12);
+  return y>0 ? `${y}y ${mm}mo` : `${Math.round(m)} mo`;
+}
+function updateRobo(clientId, key, value, isMoney){
+  const rs = getRoboState(clientId);
+  rs[key] = isMoney ? pf(value) : pf(value);
+  const el = document.getElementById('tab-panel');
+  if(el) el.innerHTML = panelRobo(getClient());
+}
+function panelRobo(c){
+  const t = calcTotals(c);
+  const debts = c.liabilities.filter(l=>pf(l.balance)>0).map(l=>({
+    name: l.item, balance: pf(l.balance), rate: pf(String(l.interestRate||'').replace('%','')), minPayment: pf(l.monthlyInstalment)
+  }));
+  if(!debts.length){
+    return `<div class="card"><div class="empty-state"><div class="ic">🤖</div><h3>No active debt to analyse</h3><p>Capture balances and instalments on the Liabilities tab, and this robo-advisor will simulate the fastest, cheapest way to clear them.</p></div></div>`;
+  }
+  const rs = getRoboState(c.id);
+  const totalMin = debts.reduce((s,d)=>s+d.minPayment,0);
+  const totalBal = debts.reduce((s,d)=>s+d.balance,0);
+  const weightedRate = totalBal>0 ? debts.reduce((s,d)=>s+d.balance*d.rate,0)/totalBal : 0;
+  const budget = totalMin + Math.max(0,pf(rs.extra));
+
+  const avalanche = simulatePayoff(debts, budget, 'avalanche');
+  const snowball = simulatePayoff(debts, budget, 'snowball');
+
+  const consNew = loanTotals(totalBal, rs.consRate, rs.consTerm);
+  let currentInterestEstimate = 0, anyInfeasible = false;
+  debts.forEach(d=>{ const m=impliedMonths(d.balance,d.rate,d.minPayment); if(!isFinite(m)) anyInfeasible=true; else currentInterestEstimate += Math.max(0,d.minPayment*m-d.balance); });
+  const consolidationHelps = anyInfeasible || (consNew.monthly < totalMin && consNew.interest < currentInterestEstimate);
+
+  const targetPayment = t.totalIncome*0.35;
+  const needsRestructuring = t.dti > 45 && targetPayment>0;
+  const restructMonths = needsRestructuring ? impliedMonths(totalBal, weightedRate, targetPayment) : null;
+
+  const wantsOverBudget = Math.max(0, t.wantsAmt - t.totalIncome*0.3);
+
+  let stratPick, stratReason;
+  if(!avalanche.feasible){
+    stratPick = 'Neither — budget too low';
+    stratReason = `Even the minimum payments (${fmt(totalMin)}/mo) exceed what's budgeted — address income or expenses (see below) before a payoff plan will work.`;
+  } else {
+    const interestDiff = snowball.totalInterest - avalanche.totalInterest;
+    if(interestDiff > Math.max(500, avalanche.totalInterest*0.03)){
+      stratPick = 'Avalanche';
+      stratReason = `Avalanche (highest interest rate first) saves ${fmt(interestDiff)} in interest versus Snowball, for the same ${fmt(budget)}/mo budget.`;
+    } else {
+      stratPick = 'Snowball';
+      stratReason = `Interest savings between the two methods are small (${fmt(interestDiff)}) — Snowball (smallest balance first) is recommended for quick wins and motivation, at almost no extra cost.`;
+    }
+  }
+
+  let overallPath;
+  if(needsRestructuring && (!isFinite(restructMonths) || t.dti>65)){
+    overallPath = `Debt-to-income is ${t.dti.toFixed(2)}% — restructuring or consolidation should come first, to bring the monthly obligation down to an affordable level before a ${stratPick.split(' ')[0].toLowerCase()} payoff plan is realistic.`;
+  } else if(consolidationHelps){
+    overallPath = `Consolidation looks favourable at an estimated ${rs.consRate}% over ${rs.consTerm} months — pair it with the ${stratPick.split(' ')[0]} method on whatever stays outside the consolidation.`;
+  } else if(needsRestructuring){
+    overallPath = `Consider restructuring to ease monthly pressure (DTI ${t.dti.toFixed(2)}%), then follow the ${stratPick.split(' ')[0]} method.`;
+  } else {
+    overallPath = `Current debt load is manageable at this income — proceed directly with the ${stratPick.split(' ')[0]} method.`;
+  }
+
+  const payoffCard = (label, sim, isPicked)=> `
+    <div class="diag-card ${isPicked?'st-green':'st-grey'}">
+      <div class="diag-head"><h4>${label}</h4>${isPicked?'<span class="status-pill status-green">Suggested</span>':''}</div>
+      <ul class="diag-list">
+        <li>Debt-free in <strong>${fmtMonths(sim.months)}</strong></li>
+        <li>Total interest paid: <strong>${sim.feasible?fmt(sim.totalInterest):'—'}</strong></li>
+        <li>Payoff order: ${sim.order.length?sim.order.map(esc).join(' → '):'—'}</li>
+      </ul>
+    </div>`;
+
+  return `
+    <div class="notice notice-gold">🤖 Automated recommendation, built from the numbers on this client's Liabilities, Income and Budget tabs. Rules-based, not a live AI model — use it to frame the conversation, not replace judgement.</div>
+    <div class="stat-grid">
+      <div class="stat-box red"><div class="stat-val">${fmt(totalBal)}</div><div class="stat-lbl">Total Debt Balance</div></div>
+      <div class="stat-box"><div class="stat-val">${weightedRate.toFixed(2)}%</div><div class="stat-lbl">Weighted Avg. Rate</div></div>
+      <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Min. Payments</div></div>
+      <div class="stat-box ${t.dti<=35?'green':t.dti<=50?'gold':'red'}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Payoff Budget</div>
+      <div class="card-hint">Extra beyond the current minimums, if the client can find room in their budget — this feeds both simulations below.</div>
+      <div class="field" style="max-width:260px"><label>Extra Monthly Payment</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${rs.extra?Number(rs.extra).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="updateRobo('${c.id}','extra',this.value,true)"></div></div>
+    </div>
+
+    <div class="diag-grid">
+      ${payoffCard('Avalanche (highest rate first)', avalanche, stratPick==='Avalanche')}
+      ${payoffCard('Snowball (smallest balance first)', snowball, stratPick.startsWith('Snowball'))}
+    </div>
+    <div class="notice ${avalanche.feasible?'notice-green':'notice-red'}" style="margin-top:-6px">${stratReason}</div>
+
+    <div class="card">
+      <div class="card-title">Consolidation Check</div>
+      <div class="form-grid cols-2">
+        <div class="field"><label>Estimated Consolidated Rate (%)</label><input type="text" inputmode="decimal" value="${rs.consRate}" oninput="updateRobo('${c.id}','consRate',this.value)"></div>
+        <div class="field"><label>Term (months)</label><input type="text" inputmode="decimal" value="${rs.consTerm}" oninput="updateRobo('${c.id}','consTerm',this.value)"></div>
+      </div>
+      <div class="stat-grid" style="margin-top:14px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Total Payment</div></div>
+        <div class="stat-box ${consNew.monthly<totalMin?'green':'red'}"><div class="stat-val">${fmt(consNew.monthly)}</div><div class="stat-lbl">Consolidated Payment</div></div>
+      </div>
+      <div class="notice ${consolidationHelps?'notice-green':'notice-orange'}" style="margin-top:14px;margin-bottom:0">${consolidationHelps ? 'Consolidation looks worth pursuing at this rate/term.' : 'Consolidation does not clearly help at this rate/term — try adjusting the estimate.'}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Restructuring Check</div>
+      ${needsRestructuring
+        ? `<div class="notice notice-orange" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is above the 45% affordability line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (35% of income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
+        : `<div class="notice notice-green" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is within an affordable range — restructuring isn't the priority here.</div>`}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Expense Guidance</div>
+      ${wantsOverBudget>0
+        ? `<div class="notice notice-orange" style="margin-bottom:0">Wants spending is ${fmt(wantsOverBudget)}/mo over the 30% target — redirecting even part of that toward debt would shorten the payoff meaningfully.</div>`
+        : `<div class="notice notice-green" style="margin-bottom:0">Wants spending is within target — no obvious slack to redirect toward debt from there.</div>`}
+    </div>
+
+    <div class="notice notice-gold" style="font-weight:700">Recommended path: ${overallPath}</div>`;
+}
+
+/* ---------- DOCUMENTS ---------- */
+function fmtBytes(n){
+  n = n||0;
+  if(n<1024) return n+' B';
+  if(n<1024*1024) return (n/1024).toFixed(2)+' KB';
+  return (n/1024/1024).toFixed(2)+' MB';
+}
+function panelDocuments(c){
+  const rows = (c.documents||[]).map((d,i)=>`
+    <tr>
+      <td>📄 ${esc(d.name)}</td>
+      <td class="mono">${fmtBytes(d.size)}</td>
+      <td>${fmtDate(d.uploadedAt)}</td>
+      <td style="white-space:nowrap">
+        <a href="${d.dataUrl}" download="${esc(d.name)}" class="btn btn-outline btn-sm" style="text-decoration:none">Download</a>
+        <button class="rt-del" onclick="removeDocument(${i})">✕</button>
+      </td>
+    </tr>`).join('');
+  return `
+    <div class="card">
+      <div class="card-title">Documents</div>
+      <div class="card-hint">Attach payslips, ID copies, bank statements or anything else relevant to this consultation.</div>
+      <label class="btn btn-primary btn-sm" style="cursor:pointer;display:inline-flex">📎 Upload file(s)
+        <input type="file" multiple style="display:none" onchange="handleDocUpload(this.files)">
+      </label>
+      <div class="rt-wrap" style="margin-top:14px">
+        <table>
+          <thead><tr><th>File</th><th style="width:90px">Size</th><th style="width:130px">Uploaded</th><th style="width:170px"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No documents uploaded yet</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="notice notice-gold" style="margin-top:16px">Documents are stored as part of this browser's local data for now, which has limited capacity (a few MB total) — keep files under ~2MB each. Use "💾 Save Client File" to back everything (including documents) up to disk; a production version would move these into real file storage (e.g. Supabase Storage) instead.</div>
+    </div>`;
+}
+function handleDocUpload(fileList){
+  const c = getClient();
+  const files = Array.from(fileList||[]);
+  let remaining = files.length;
+  if(!remaining) return;
+  files.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = () => {
+      c.documents = c.documents || [];
+      c.documents.push({ id:uid(), name:file.name, mime:file.type||'application/octet-stream', size:file.size, uploadedAt:new Date().toISOString(), dataUrl:reader.result });
+      c.updatedAt = new Date().toISOString();
+      remaining--;
+      if(remaining<=0){ persistClients(); if(currentTab==='documents') renderClientEditor(); }
+    };
+    reader.onerror = () => { remaining--; };
+    reader.readAsDataURL(file);
+  });
+}
+function removeDocument(idx){
+  const c = getClient();
+  c.documents.splice(idx,1);
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  renderClientEditor();
+}
+
+/* ---------- REPORT ---------- */
+function rpTable(headers, rows, emptyMsg){
+  if(!rows.length) return `<div class="rp-empty">${emptyMsg||'None captured'}</div>`;
+  return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function panelReport(c){
+  const t = calcTotals(c);
+  const inc = diagIncome(t), exp = diagExpense(t), debt = diagDebt(t), life = diagLifestyle(t);
+
+  /* ── Executive summary (notes ABOVE the tables) — a short narrative
+     an advisor can read out loud, auto-built from the diagnostics. ── */
+  const summary = `As of ${fmtDate(new Date().toISOString())}, ${esc(fullName(c))} has a net worth of
+    <strong>${fmtSigned(t.netWorth)}</strong> on total monthly household income of <strong>${fmt(t.totalIncome)}</strong>.
+    Debt-to-income sits at <strong>${t.dti.toFixed(2)}%</strong> (${debt.label}). Income is rated
+    <strong>${inc.label}</strong>, spending against the 50/30/20 budget is <strong>${exp.label}</strong>, and lifestyle
+    affordability is <strong>${life.label}</strong>. Full detail for each area is below, with the advisor's
+    recommendations at the end of this report.`;
+
+  const personalRows = [[esc(fullName(c)), esc(c.personal.employer)||'—', (esc(c.personal.maritalStatus)||'—')+(c.personal.regime&&c.personal.regime!=='Not Applicable'?' ('+esc(c.personal.regime)+')':''), esc(c.personal.age)||'—', esc(c.personal.yearsToRetirement)||'—', String(c.kids.length)]];
+
+  const incomeRows = [
+    ['Gross salary', fmt(t.grossSalary)],
+    ['PAYE (tax table)', '-'+fmt(t.paye)],
+    ['Other deductions', '-'+fmt(pf(c.income.otherDeductions))],
+    ['Net salary', fmt(t.netSalary)],
+    ['Spouse income', fmt(t.spouseIncome)],
+    ['Rental income', fmt(pf(c.income.rentals))],
+    ['Business income', fmt(pf(c.income.businessIncome))],
+    ['Dividends', fmt(pf(c.income.dividends))],
+    ['<strong>Total monthly income</strong>', '<strong>'+fmt(t.totalIncome)+'</strong>'],
+  ];
+
+  const liabData = c.liabilities.filter(r=>pf(r.balance)||pf(r.monthlyInstalment)||r.institution||pf(r.loanAmount));
+  const liabRows = liabData.map(r=>[esc(r.item), esc(r.institution)||'—', fmt(pf(r.loanAmount)), esc(r.interestRate)||'—', fmt(pf(r.balance)), fmt(pf(r.monthlyInstalment))]);
+
+  const assetData = c.assets.filter(r=>r.name||pf(r.value));
+  const assetRows = assetData.map(r=>[esc(r.name)||'—', r.status, fmt(pf(r.value)), fmt(pf(r.monthlyIncome)), fmt(pf(r.potentialIncome))]);
+
+  const savData = c.savings.filter(r=>r.institution||pf(r.currentBalance)||pf(r.monthlyContribution));
+  const savRows = savData.map(r=>[esc(r.institution)||'—', fmt(pf(r.currentBalance)), fmt(pf(r.monthlyContribution)), esc(r.purpose)||'—', esc(r.expectedMaturity)||'—']);
+
+  const riskRows = c.risk.map(r=>[esc(r.type), fmt(pf(r.cover)), fmt(pf(r.monthlyContribution)), fmt(pf(r.needed)), fmt(Math.max(0,pf(r.needed)-pf(r.cover)))]);
+
+  const bizData = c.businesses.filter(r=>r.name);
+  const bizRows = bizData.map(r=>[esc(r.name), esc(r.industry)||'—', r.status, fmt(pf(r.annualTurnover))]);
+
+  const budgetRows = [
+    ['Needs', fmt(t.needsAmt), t.needsPct.toFixed(2)+'%', '≤ 50%'],
+    ['Wants', fmt(t.wantsAmt), t.wantsPct.toFixed(2)+'%', '≤ 30%'],
+    ['Savings', fmt(t.savingsAmt), t.savingsPct.toFixed(2)+'%', '≥ 20%'],
+    ['Other', fmt(t.otherAmt), t.totalIncome>0?(t.otherAmt/t.totalIncome*100).toFixed(2)+'%':'0%', '—'],
+  ];
+
+  const diagRows = [
+    ['Income Problem', `<span class="rp-status st-${inc.color}">${inc.label}</span>`, inc.points.join(' ').replace(/<\/?strong>/g,'')],
+    ['Expense Problem', `<span class="rp-status st-${exp.color}">${exp.label}</span>`, exp.points.join(' ').replace(/<\/?strong>/g,'')],
+    ['Debt Problem', `<span class="rp-status st-${debt.color}">${debt.label}</span>`, debt.points.join(' ').replace(/<\/?strong>/g,'')],
+    ['Lifestyle & Affordability', `<span class="rp-status st-${life.color}">${life.label}</span>`, life.points.join(' ').replace(/<\/?strong>/g,'')],
+  ];
+
+  const visionRows = [[esc(c.lifeVision.when)||'—', esc(c.lifeVision.monthsLeft)||'—', esc(c.lifeVision.passiveIncome)||'—', esc(c.lifeVision.whichCar)||'—', esc(c.lifeVision.livingWhere)||'—', esc(c.lifeVision.other)||'—']];
+
+  /* ── Advisor notes (notes BELOW the tables) — every note field captured
+     on the Diagnostics tab, gathered in one place as the closing section. ── */
+  const noteBlock = (label, val)=> val ? `<h4>${label}</h4><p>${esc(val)}</p>` : '';
+  const notesHtml = [
+    noteBlock('Income', c.notes.income),
+    noteBlock('Expense', c.notes.expense),
+    noteBlock('Debt', c.notes.debt),
+    noteBlock('Lifestyle & Affordability', c.notes.lifestyle),
+    noteBlock('Personal Finance Advisory — Overall Summary & Next Steps', c.notes.general),
+  ].join('');
+
+  const consultNotes = (c.consultationNotes||[]).slice().sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
+  const consultNotesHtml = consultNotes.map(n=>`<h4>${fmtDateTime(n.createdAt)}</h4><p>${esc(n.text)}</p>`).join('');
+
+  return `
+    <div style="margin-bottom:14px" class="no-print"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+    <div class="report-doc">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--kw-green);text-transform:uppercase">Key Wellness</div>
+          <h2 style="font-size:20px;font-weight:800;color:var(--navy)">Personal Financial Assessment</h2>
+        </div>
+        <div style="text-align:right;font-size:12px;color:var(--muted)">Prepared ${fmtDate(new Date().toISOString())}</div>
+      </div>
+
+      <div class="rp-summary">${summary}</div>
+
+      <h3>Personal & Family</h3>
+      ${rpTable(['Client','Employer','Marital Status','Age','Yrs to Retirement','Dependants'], personalRows)}
+
+      <h3>Income</h3>
+      ${rpTable(['Item','Amount'], incomeRows)}
+
+      <h3>Liabilities</h3>
+      ${rpTable(['Item','Institution','Loan Amount','Interest','Balance','Monthly Instalment'], liabRows, 'No liabilities captured')}
+
+      <h3>Assets</h3>
+      ${rpTable(['Asset','Status','Value','Monthly Income','Potential Income'], assetRows, 'No assets captured')}
+
+      <h3>Savings & Investments</h3>
+      ${rpTable(['Institution','Current Balance','Monthly Contribution','Purpose','Expected Maturity'], savRows, 'No savings or investments captured')}
+
+      <h3>Risk Management</h3>
+      ${rpTable(['Cover Type','Cover','Monthly Contribution','Needed','Shortfall'], riskRows)}
+
+      <h3>Current Businesses</h3>
+      ${rpTable(['Business','Industry','Status','Annual Turnover'], bizRows, 'No businesses captured')}
+
+      <h3>Personal Budget — 50/30/20</h3>
+      ${rpTable(['Category','Monthly Amount','% of Income','Target'], budgetRows)}
+
+      <h3>Advisory Diagnostic</h3>
+      ${rpTable(['Area','Status','Key Insight'], diagRows)}
+
+      <h3>Net Worth</h3>
+      ${rpTable(['Total Assets','Savings & Investments','Total Liabilities','Net Worth'], [[fmt(t.totalAssets), fmt(t.totalSavingsBalance), fmt(t.totalLiabilityBalance), '<strong>'+fmtSigned(t.netWorth)+'</strong>']])}
+
+      <h3>Create a Picture of Your Life</h3>
+      ${rpTable(['When','Months Left','Passive Income Target','Which Car','Living Where','Other'], visionRows)}
+
+      <h3>Advisor Notes & Recommendations</h3>
+      <div class="rp-notes">${notesHtml || '<p style="color:var(--muted);font-style:italic">No advisor notes captured yet — add these on the Diagnostics & Notes tab.</p>'}</div>
+
+      <h3>Consultation Notes Log</h3>
+      <div class="rp-notes">${consultNotesHtml || '<p style="color:var(--muted);font-style:italic">No dated notes captured yet — add these on the Notes tab.</p>'}</div>
+    </div>`;
+}
+
+/* ================================================================
+   CALCULATIONS & DIAGNOSTICS
+   Thresholds mirror dti_calculator.html / lifestyle_inflation_calculator.html
+   so a client reads the same way here as on their own tool pages.
+   ================================================================ */
+function calcTotals(c){
+  const netCalc = calcNetSalary(c.income);
+  const grossSalary = netCalc.gross, paye = netCalc.paye, netSalary = netCalc.net;
+  const spouseIncome = pf(c.income.spouseIncome);
+  const passiveIncome = pf(c.income.rentals) + pf(c.income.businessIncome) + pf(c.income.dividends);
+  const totalIncome = netSalary + spouseIncome + passiveIncome;
+
+  const totalDebtInstalment = c.liabilities.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
+  const totalLiabilityBalance = c.liabilities.reduce((s,r)=>s+pf(r.balance),0);
+  const dti = totalIncome>0 ? (totalDebtInstalment/totalIncome*100) : 0;
+
+  const totalAssets = c.assets.reduce((s,r)=>s+pf(r.value),0);
+  const incomeGenAssets = c.assets.filter(r=>r.status==='Income-Generating').reduce((s,r)=>s+pf(r.value),0);
+  const assetIncomePct = totalAssets>0 ? (incomeGenAssets/totalAssets*100) : 0;
+  const totalSavingsBalance = c.savings.reduce((s,r)=>s+pf(r.currentBalance),0);
+  // Net Worth = (Assets & Investments) − Liabilities
+  const netWorth = (totalAssets + totalSavingsBalance) - totalLiabilityBalance;
+
+  const savingsMonthly = c.savings.reduce((s,r)=>s+pf(r.monthlyContribution),0);
+  const savingsRateFromSavingsTab = totalIncome>0 ? (savingsMonthly/totalIncome*100) : 0;
+
+  const needsAmt = EXPENSE_GROUPS.find(g=>g.id==='needs').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+  const wantsAmt = EXPENSE_GROUPS.find(g=>g.id==='wants').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+  const savingsAmt = EXPENSE_GROUPS.find(g=>g.id==='savings').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+  const otherAmt = EXPENSE_GROUPS.find(g=>g.id==='other').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0)
+    + (c.budgetOtherCustom||[]).reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+  const totalExpenses = needsAmt+wantsAmt+savingsAmt+otherAmt;
+  const surplus = totalIncome - totalExpenses;
+
+  const needsPct = totalIncome>0 ? needsAmt/totalIncome*100 : 0;
+  const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
+  const savingsPct = totalIncome>0 ? savingsAmt/totalIncome*100 : 0;
+
+  const capacity35 = Math.max(0, totalIncome*0.35 - totalDebtInstalment);
+
+  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, totalDebtInstalment, totalLiabilityBalance, dti,
+    totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
+    needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, capacity35 };
+}
+
+function diagIncome(t){
+  const points = [];
+  let color='green', label='Healthy';
+  if(t.totalIncome<=0){
+    return {title:'Income Problem', color:'grey', label:'Incomplete', points:['Capture income on the Income tab to run this diagnostic.']};
+  }
+  const passivePct = t.totalIncome>0 ? (t.passiveIncome/t.totalIncome*100) : 0;
+  points.push(`Passive income makes up <strong>${passivePct.toFixed(2)}%</strong> of total monthly income.`);
+  if(passivePct < 10){ color='orange'; label='Salary-Dependent'; points.push('Almost entirely dependent on salary — "salary is blood and sweat; passive income creates wealth."'); }
+  else if(passivePct < 30){ label='Building'; points.push('Passive income is emerging — keep growing rental, business and dividend streams.'); }
+  else { color='green'; label='Diversified'; points.push('Good diversification away from active/salary income.'); }
+  if(t.surplus < 0){ color='red'; label='Shortfall'; points.push(`Income does not currently cover budgeted expenses — a monthly shortfall of ${fmt(Math.abs(t.surplus))}.`); }
+  return {title:'Income Problem', color, label, points};
+}
+function diagExpense(t){
+  if(t.totalExpenses<=0){
+    return {title:'Expense Problem', color:'grey', label:'Incomplete', points:['Capture the Personal Budget tab to run this diagnostic.']};
+  }
+  const points = [`Needs ${t.needsPct.toFixed(2)}% (target ≤50%) · Wants ${t.wantsPct.toFixed(2)}% (target ≤30%) · Savings ${t.savingsPct.toFixed(2)}% (target ≥20%).`];
+  let color='green', label='On Target';
+  if(t.needsPct>60 || t.wantsPct>40){ color='red'; label='Overspending'; points.push('Essential and/or discretionary spending is significantly above the 50/30/20 guideline.'); }
+  else if(t.needsPct>50 || t.wantsPct>30 || t.savingsPct<20){ color='orange'; label='Caution'; points.push('One or more budget categories is drifting off target — review with the client.'); }
+  else { points.push('Spending is well balanced against the 50/30/20 rule.'); }
+  return {title:'Expense Problem', color, label, points};
+}
+function diagDebt(t){
+  if(t.totalIncome<=0){
+    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture income and liabilities to run this diagnostic.']};
+  }
+  const points = [`Debt-to-income (DTI) is <strong>${t.dti.toFixed(2)}%</strong> of gross monthly income.`];
+  let color, label;
+  if(t.dti<=35){ color='green'; label='Healthy'; points.push('Within Botswana lending norms (≤35%) — strong borrowing capacity.'); points.push(`Remaining capacity at the 35% threshold: ${fmt(t.capacity35)}/mo.`); }
+  else if(t.dti<=50){ color='gold'; label='Acceptable'; points.push('Approaching the upper limit most lenders accept — reduce before taking on new credit.'); }
+  else if(t.dti<=65){ color='orange'; label='High Risk'; points.push('Elevated DTI — some lenders may decline applications. Prioritise debt reduction.'); }
+  else { color='red'; label='Critical'; points.push('Exceeds safe lending thresholds — most lenders would decline. Immediate debt-reduction priority.'); }
+  return {title:'Debt Problem', color, label, points};
+}
+function diagLifestyle(t){
+  if(t.totalIncome<=0){
+    return {title:'Lifestyle Inflation & Affordability', color:'grey', label:'Incomplete', points:['Capture income, budget and assets to run this diagnostic.']};
+  }
+  const points = [];
+  let color='green', label='Sustainable';
+  if(t.wantsPct>30 && t.savingsPct<20){ color='red'; label='At Risk'; points.push(`Wants spending (${t.wantsPct.toFixed(2)}%) is outpacing savings (${t.savingsPct.toFixed(2)}%) — classic lifestyle-inflation pattern.`); }
+  else if(t.wantsPct>30 || t.savingsPct<20){ color='orange'; label='Caution'; points.push('Discretionary spending or savings rate is drifting away from a sustainable balance.'); }
+  else { points.push('Discretionary spending and savings rate are in a healthy balance.'); }
+  points.push(`Can comfortably afford up to ${fmt(t.capacity35)}/mo of new debt before hitting the 35% DTI threshold.`);
+  if(t.totalAssets>0 && t.assetIncomePct<70){ if(color==='green') color='gold'; points.push(`Only ${t.assetIncomePct.toFixed(2)}% of assets are income-generating — target is 70%.`); }
+  return {title:'Lifestyle Inflation & Affordability', color, label, points};
+}
+
+/* ---------- FRAMEWORK EXPLAINER VIEW ---------- */
+function renderFrameworkView(){
+  document.getElementById('page-content').innerHTML = `
+    <div class="diag-grid">
+      <div class="diag-card st-green">
+        <div class="diag-head"><h4>Income Problem</h4></div>
+        <ul class="diag-list">
+          <li>Flags heavy dependence on salary vs. passive income (rentals, business, dividends).</li>
+          <li>Flags when budgeted expenses exceed total income (a monthly shortfall).</li>
+        </ul>
+      </div>
+      <div class="diag-card st-gold">
+        <div class="diag-head"><h4>Expense Problem</h4></div>
+        <ul class="diag-list">
+          <li>Checks the personal budget against the 50/30/20 rule: Needs ≤50%, Wants ≤30%, Savings ≥20%.</li>
+          <li>Flags when Needs or Wants materially exceed target.</li>
+        </ul>
+      </div>
+      <div class="diag-card st-orange">
+        <div class="diag-head"><h4>Debt Problem</h4></div>
+        <ul class="diag-list">
+          <li>Debt-to-income ratio: total monthly instalments ÷ gross monthly income.</li>
+          <li>Healthy ≤35% · Acceptable ≤50% · High Risk ≤65% · Critical &gt;65% — matching the DTI Calculator thresholds used elsewhere on the portal.</li>
+        </ul>
+      </div>
+      <div class="diag-card st-red">
+        <div class="diag-head"><h4>Lifestyle Inflation & Affordability</h4></div>
+        <ul class="diag-list">
+          <li>Compares Wants spending against the Savings rate to spot lifestyle creep.</li>
+          <li>Reports remaining borrowing capacity at the 35% DTI threshold.</li>
+          <li>Checks that ≥70% of assets are income-generating, per the Key Wealth assessment guideline.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Personal Finance Advisory</div>
+      <p style="font-size:13px;line-height:1.7;color:var(--text)">Every client also gets a freeform advisor notes field on the Diagnostics tab — the automated flags above are a starting point for the conversation, not a replacement for it.</p>
+    </div>`;
+}
+
+/* ================================================================
+   ACTIVITY REPORT — aggregated across all clients for a chosen month.
+   "Session" = a dated Notes entry or a Completed appointment recorded
+   in that month; "Clients Seen" = clients with at least one such
+   session; "Presenting Issues" reuses the same Income/Expense/Debt/
+   Lifestyle diagnostic flags shown on each client, tallied across
+   everyone seen that month.
+   ================================================================ */
+function currentYYYYMM(){
+  const d = new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+}
+let activityMonth = currentYYYYMM();
+function inMonth(dateStr, ym){ return !!dateStr && dateStr.slice(0,7)===ym; }
+function renderActivityView(){
+  document.getElementById('page-content').innerHTML = `
+    <div class="card no-print">
+      <div class="field" style="max-width:220px"><label>Month</label><input type="month" id="activityMonthPicker" value="${activityMonth}" onchange="activityMonth=this.value;renderActivityBody()"></div>
+    </div>
+    <div id="activityBody"></div>`;
+  renderActivityBody();
+}
+function renderActivityBody(){
+  const ym = activityMonth;
+  const monthLabel = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7))-1, 1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+
+  const seen = [];
+  let totalSessions = 0;
+  const issueCounts = {income:0, expense:0, debt:0, lifestyle:0};
+  const flagged = (d)=> d.color!=='green' && d.color!=='grey';
+
+  clients.forEach(c=>{
+    const noteSessions = (c.consultationNotes||[]).filter(n=>inMonth(n.createdAt, ym)).length;
+    const apptSessions = (c.appointments||[]).filter(a=>a.status==='Completed' && inMonth(a.date, ym)).length;
+    const sessions = noteSessions + apptSessions;
+    if(sessions>0){
+      totalSessions += sessions;
+      const t = calcTotals(c);
+      const inc=diagIncome(t), exp=diagExpense(t), debt=diagDebt(t), life=diagLifestyle(t);
+      if(flagged(inc)) issueCounts.income++;
+      if(flagged(exp)) issueCounts.expense++;
+      if(flagged(debt)) issueCounts.debt++;
+      if(flagged(life)) issueCounts.lifestyle++;
+      seen.push({ client:c, sessions, inc, exp, debt, life });
+    }
+  });
+
+  const n = seen.length;
+  const issueBar = (label,count)=>`
+    <div style="margin-bottom:14px">
+      <div class="bud-row"><span>${label}</span><span class="bud-target">${count} of ${n} (${n?Math.round(count/n*100):0}%)</span></div>
+      <div class="bud-bar"><div class="bud-fill" style="width:${n?Math.round(count/n*100):0}%;background:var(--kw-green)"></div></div>
+    </div>`;
+
+  const clientRows = seen.map(s=>[
+    `<a href="#" onclick="openClient('${s.client.id}');return false;" style="color:var(--kw-green);text-decoration:none;font-weight:700">${esc(fullName(s.client))}</a>`,
+    String(s.sessions),
+    `<span class="status-pill status-${s.inc.color}">Income</span> <span class="status-pill status-${s.exp.color}">Expense</span> <span class="status-pill status-${s.debt.color}">Debt</span> <span class="status-pill status-${s.life.color}">Lifestyle</span>`
+  ]);
+
+  document.getElementById('activityBody').innerHTML = `
+    <div style="margin-bottom:14px" class="no-print"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+    <div class="report-doc">
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--kw-green);text-transform:uppercase">Key Wellness</div>
+        <h2 style="font-size:20px;font-weight:800;color:var(--navy)">Advisor Activity Report — ${monthLabel}</h2>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-val">${n}</div><div class="stat-lbl">Clients Seen</div></div>
+        <div class="stat-box gold"><div class="stat-val">${totalSessions}</div><div class="stat-lbl">Sessions Logged</div></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin:-10px 0 20px">"Sessions" = dated Notes entries plus Completed appointments recorded this month. "Clients Seen" = clients with at least one such session.</div>
+
+      <h3>Presenting Issues (current diagnostic flags, among clients seen)</h3>
+      ${issueBar('Income Problem', issueCounts.income)}
+      ${issueBar('Expense Problem', issueCounts.expense)}
+      ${issueBar('Debt Problem', issueCounts.debt)}
+      ${issueBar('Lifestyle & Affordability', issueCounts.lifestyle)}
+
+      <h3>Clients Seen This Month</h3>
+      ${rpTable(['Client','Sessions','Flags'], clientRows, 'No clients seen this month yet — log a Note or complete an appointment to populate this.')}
+    </div>`;
+}
+
+/* ================================================================
+   AMORTIZATION HELPERS — shared by the Tools calculators and the
+   Robo-Advisor's payoff simulations.
+   ================================================================ */
+function pmt(principal, annualRatePct, months){
+  const r = (annualRatePct/100)/12;
+  principal = Math.max(0, pf(principal)); months = Math.max(0, Math.round(pf(months)));
+  if(months<=0) return 0;
+  if(r===0) return principal/months;
+  return principal * r / (1-Math.pow(1+r,-months));
+}
+function loanTotals(principal, annualRatePct, months){
+  const monthly = pmt(principal, annualRatePct, months);
+  const total = monthly*months;
+  return { monthly, total, interest: Math.max(0,total-pf(principal)) };
+}
+function amortYearly(principal, annualRatePct, months){
+  const r = (annualRatePct/100)/12;
+  const payment = pmt(principal, annualRatePct, months);
+  let balance = pf(principal);
+  const years = [];
+  let yPaid=0, yInterest=0;
+  for(let m=1;m<=months && balance>0.005;m++){
+    const interest = balance*r;
+    let principalPaid = payment-interest;
+    if(principalPaid>balance) principalPaid = balance;
+    balance = Math.max(0, balance-principalPaid);
+    yPaid += payment; yInterest += interest;
+    if(m%12===0 || balance<=0.005){
+      years.push({ year: Math.ceil(m/12), paid:yPaid, interest:yInterest, balance });
+      yPaid=0; yInterest=0;
+    }
+  }
+  return years;
+}
+// Months to pay off a single debt at a fixed payment; Infinity if the payment never covers interest.
+function impliedMonths(balance, annualRatePct, payment){
+  const r = (annualRatePct/100)/12;
+  balance = pf(balance); payment = pf(payment);
+  if(payment<=0) return Infinity;
+  if(r===0) return balance/payment;
+  if(payment<=balance*r) return Infinity;
+  return Math.log(payment/(payment-balance*r))/Math.log(1+r);
+}
+// Simulate paying off multiple debts with a fixed total monthly budget, snowball or avalanche order.
+// debts: [{name, balance, rate, minPayment}]. Returns {months, totalInterest, order:[name,...], feasible}.
+function simulatePayoff(debts, monthlyBudget, strategy){
+  let pool = debts.filter(d=>pf(d.balance)>0).map(d=>({ name:d.name, balance:pf(d.balance), rate:pf(d.rate), min:Math.max(0,pf(d.minPayment)) }));
+  const totalMin = pool.reduce((s,d)=>s+d.min,0);
+  if(monthlyBudget < totalMin) return { months:Infinity, totalInterest:0, order:[], feasible:false, totalMin };
+  const order = [];
+  let months = 0, totalInterest = 0;
+  const MAX_MONTHS = 600;
+  while(pool.length && months<MAX_MONTHS){
+    months++;
+    // interest accrues on every remaining balance
+    pool.forEach(d=>{ const int = d.balance*(d.rate/100/12); totalInterest += int; d.balance += int; });
+    // pay minimums to all
+    pool.forEach(d=>{ const pay = Math.min(d.min, d.balance); d.balance -= pay; });
+    // target order: avalanche = highest rate first, snowball = smallest balance first
+    const sorted = [...pool].sort((a,b)=> strategy==='avalanche' ? b.rate-a.rate : a.balance-b.balance);
+    let extra = monthlyBudget - pool.reduce((s,d)=>s+Math.min(d.min, d.balance+ (d.balance<0?0:0)),0); // budget minus minimums actually paid
+    extra = monthlyBudget - pool.reduce((s,d)=>s+d.min,0) + pool.filter(d=>d.balance<=0).reduce((s,d)=>s+d.min,0);
+    extra = Math.max(0, monthlyBudget - pool.reduce((s,d)=> s + Math.min(d.min, Math.max(0,d.balance)), 0));
+    for(const d of sorted){
+      if(extra<=0) break;
+      if(d.balance<=0) continue;
+      const pay = Math.min(extra, d.balance);
+      d.balance -= pay; extra -= pay;
+    }
+    // remove paid-off debts, recording payoff order
+    pool.filter(d=>d.balance<=0.005).forEach(d=>order.push(d.name));
+    pool = pool.filter(d=>d.balance>0.005);
+  }
+  return { months: pool.length? Infinity : months, totalInterest, order, feasible: pool.length===0, totalMin };
+}
+
+/* ================================================================
+   TOOLS — standalone calculators available to the advisor at any time,
+   independent of a specific client (loan/consolidation tools can
+   optionally load a client's existing liabilities to save re-typing).
+   ================================================================ */
+const TOOLS_TABS = [
+  {id:'loan',          label:'Loan Calculator'},
+  {id:'retirement',    label:'Retirement Calculator'},
+  {id:'consolidation', label:'Debt Consolidation'},
+  {id:'restructuring', label:'Loan Restructuring'},
+];
+let toolsCurrentTab = 'loan';
+const toolState = {
+  loan:         { amount:150000, rate:14, months:60 },
+  retirement:   { currentAge:35, retireAge:65, currentSavings:50000, monthlyContribution:1500, returnRate:8 },
+  consolidation:{ clientId:'', debts:[{name:'Debt 1', balance:0, rate:0, payment:0}], newRate:16, newTerm:48 },
+  restructuring:{ clientId:'', balance:100000, rate:16, remainingMonths:36, newRate:16, newTerm:60 },
+};
+function renderToolsView(){
+  const tabsHtml = TOOLS_TABS.map(t=>`<button class="tab ${toolsCurrentTab===t.id?'active':''}" onclick="switchToolsTab('${t.id}')">${t.label}</button>`).join('');
+  let panel = '';
+  if(toolsCurrentTab==='loan')          panel = toolLoanCalculator();
+  if(toolsCurrentTab==='retirement')    panel = toolRetirementCalculator();
+  if(toolsCurrentTab==='consolidation') panel = toolConsolidationCalculator();
+  if(toolsCurrentTab==='restructuring') panel = toolRestructuringCalculator();
+  document.getElementById('page-content').innerHTML = `<div class="tabs no-print">${tabsHtml}</div><div id="tools-panel">${panel}</div>`;
+}
+function switchToolsTab(id){ toolsCurrentTab = id; renderToolsView(); }
+function refreshToolsPanel(){
+  const el = document.getElementById('tools-panel');
+  if(!el) return;
+  if(toolsCurrentTab==='loan')          el.innerHTML = toolLoanCalculator();
+  if(toolsCurrentTab==='retirement')    el.innerHTML = toolRetirementCalculator();
+  if(toolsCurrentTab==='consolidation') el.innerHTML = toolConsolidationCalculator();
+  if(toolsCurrentTab==='restructuring') el.innerHTML = toolRestructuringCalculator();
+}
+
+/* ---- Loan Calculator ---- */
+function toolLoanCalculator(){
+  const s = toolState.loan;
+  const r = loanTotals(s.amount, s.rate, s.months);
+  const years = amortYearly(s.amount, s.rate, s.months);
+  const rows = years.map(y=>[String(y.year), fmt(y.paid), fmt(y.interest), fmt(y.balance)]);
+  return `
+    <div class="card">
+      <div class="card-title">Loan Calculator</div>
+      <div class="form-grid cols-3">
+        <div class="field"><label>Loan Amount</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.amount?Number(s.amount).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.loan.amount=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Annual Interest Rate (%)</label><input type="text" inputmode="decimal" value="${s.rate}" oninput="toolState.loan.rate=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>Term (months)</label><input type="text" inputmode="decimal" value="${s.months}" oninput="toolState.loan.months=pf(this.value);refreshToolsPanel()"></div>
+      </div>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${fmt(r.monthly)}</div><div class="stat-lbl">Monthly Payment</div></div>
+        <div class="stat-box gold"><div class="stat-val">${fmt(r.interest)}</div><div class="stat-lbl">Total Interest</div></div>
+        <div class="stat-box"><div class="stat-val">${fmt(r.total)}</div><div class="stat-lbl">Total Repayment</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Year-by-Year Breakdown</div>
+      ${rpTable(['Year','Paid That Year','Interest That Year','Balance Remaining'], rows)}
+    </div>`;
+}
+
+/* ---- Retirement Calculator ---- */
+function toolRetirementCalculator(){
+  const s = toolState.retirement;
+  const monthsToGo = Math.max(0, (pf(s.retireAge)-pf(s.currentAge))*12);
+  const r = (pf(s.returnRate)/100)/12;
+  const fv = r===0
+    ? pf(s.currentSavings) + pf(s.monthlyContribution)*monthsToGo
+    : pf(s.currentSavings)*Math.pow(1+r,monthsToGo) + pf(s.monthlyContribution)*((Math.pow(1+r,monthsToGo)-1)/r);
+  const monthlyIncome4pct = (fv*0.04)/12;
+  return `
+    <div class="card">
+      <div class="card-title">Retirement Calculator</div>
+      <div class="card-hint">Projects retirement savings using monthly-compounded growth, and estimates sustainable monthly income using the common 4% annual withdrawal rule.</div>
+      <div class="form-grid cols-3">
+        <div class="field"><label>Current Age</label><input type="text" inputmode="decimal" value="${s.currentAge}" oninput="toolState.retirement.currentAge=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>Retirement Age</label><input type="text" inputmode="decimal" value="${s.retireAge}" oninput="toolState.retirement.retireAge=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>Expected Annual Return (%)</label><input type="text" inputmode="decimal" value="${s.returnRate}" oninput="toolState.retirement.returnRate=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>Current Savings</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.currentSavings?Number(s.currentSavings).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.currentSavings=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Monthly Contribution</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.monthlyContribution?Number(s.monthlyContribution).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.monthlyContribution=pf(this.value);refreshToolsPanel()"></div></div>
+      </div>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${(monthsToGo/12).toFixed(2)}</div><div class="stat-lbl">Years to Retirement</div></div>
+        <div class="stat-box green"><div class="stat-val">${fmt(fv)}</div><div class="stat-lbl">Projected Savings at Retirement</div></div>
+        <div class="stat-box gold"><div class="stat-val">${fmt(monthlyIncome4pct)}</div><div class="stat-lbl">Est. Monthly Income (4% rule)</div></div>
+      </div>
+    </div>`;
+}
+
+/* ---- Debt Consolidation Calculator ---- */
+function toolClientPicker(section){
+  const opts = clients.map(cl=>`<option value="${cl.id}">${esc(fullName(cl))}</option>`).join('');
+  return `<select onchange="loadClientDebtsIntoTool('${section}', this.value)"><option value="">— Load debts from a client (optional) —</option>${opts}</select>`;
+}
+function loadClientDebtsIntoTool(section, clientId){
+  toolState[section].clientId = clientId;
+  const cl = clients.find(x=>x.id===clientId);
+  if(cl){
+    const debts = cl.liabilities.filter(l=>pf(l.balance)>0).map(l=>({ name:l.item, balance:pf(l.balance), rate:pf(String(l.interestRate).replace('%','')), payment:pf(l.monthlyInstalment) }));
+    if(section==='consolidation') toolState.consolidation.debts = debts.length? debts : [{name:'Debt 1', balance:0, rate:0, payment:0}];
+    if(section==='restructuring' && debts.length){
+      toolState.restructuring.balance = debts.reduce((s,d)=>s+d.balance,0);
+      toolState.restructuring.rate = debts[0].rate;
+    }
+  }
+  refreshToolsPanel();
+}
+function toolConsolidationCalculator(){
+  const s = toolState.consolidation;
+  const debtRows = s.debts.map((d,i)=>`
+    <tr>
+      <td><input type="text" value="${esc(d.name)}" oninput="toolState.consolidation.debts[${i}].name=this.value"></td>
+      <td><input type="text" inputmode="decimal" value="${d.balance?Number(d.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].balance=pf(this.value);refreshToolsPanel()"></td>
+      <td><input type="text" inputmode="decimal" value="${d.rate||''}" oninput="toolState.consolidation.debts[${i}].rate=pf(this.value);refreshToolsPanel()"></td>
+      <td><input type="text" inputmode="decimal" value="${d.payment?Number(d.payment).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].payment=pf(this.value);refreshToolsPanel()"></td>
+      <td><button class="rt-del" onclick="removeToolDebt('consolidation',${i})">✕</button></td>
+    </tr>`).join('');
+
+  const currentTotalPayment = s.debts.reduce((sum,d)=>sum+pf(d.payment),0);
+  const currentTotalBalance = s.debts.reduce((sum,d)=>sum+pf(d.balance),0);
+  let currentTotalInterest = 0, anyInfeasible = false;
+  s.debts.forEach(d=>{
+    const m = impliedMonths(d.balance, d.rate, d.payment);
+    if(!isFinite(m)){ anyInfeasible = true; } else { currentTotalInterest += Math.max(0, d.payment*m - pf(d.balance)); }
+  });
+  const nl = loanTotals(currentTotalBalance, s.newRate, s.newTerm);
+  const monthlySaving = currentTotalPayment - nl.monthly;
+  const verdict = anyInfeasible
+    ? 'One or more current debts never pay down at their listed payment — consolidation is likely to help.'
+    : (nl.monthly < currentTotalPayment && nl.interest < currentTotalInterest)
+      ? 'Consolidation lowers both the monthly payment and total interest — worth pursuing.'
+      : (nl.monthly < currentTotalPayment)
+        ? 'Consolidation lowers the monthly payment, but stretches total interest higher — useful if affordability is the priority.'
+        : 'Consolidation does not clearly improve on the current path at this rate/term — try a lower rate or shorter term.';
+
+  return `
+    <div class="card">
+      <div class="card-title">Debt Consolidation Calculator</div>
+      <div class="card-hint">List the client's current debts (or load them from a saved client), then compare against a single consolidated loan.</div>
+      ${toolClientPicker('consolidation')}
+      <div class="rt-wrap" style="margin-top:14px">
+        <table>
+          <thead><tr><th>Debt</th><th style="width:110px">Balance</th><th style="width:90px">Rate %</th><th style="width:110px">Monthly Payment</th><th style="width:36px"></th></tr></thead>
+          <tbody>${debtRows}</tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addToolDebt('consolidation')">+ Add debt</button>
+      <div class="form-grid cols-2" style="margin-top:18px">
+        <div class="field"><label>New Consolidated Rate (%)</label><input type="text" inputmode="decimal" value="${s.newRate}" oninput="toolState.consolidation.newRate=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>New Term (months)</label><input type="text" inputmode="decimal" value="${s.newTerm}" oninput="toolState.consolidation.newTerm=pf(this.value);refreshToolsPanel()"></div>
+      </div>
+      <div class="stat-grid" style="margin-top:14px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${fmt(currentTotalPayment)}</div><div class="stat-lbl">Current Total Monthly Payment</div></div>
+        <div class="stat-box ${monthlySaving>0?'green':'red'}"><div class="stat-val">${fmt(nl.monthly)}</div><div class="stat-lbl">New Consolidated Payment</div></div>
+        <div class="stat-box"><div class="stat-val">${anyInfeasible?'—':fmt(currentTotalInterest)}</div><div class="stat-lbl">Current Est. Total Interest</div></div>
+        <div class="stat-box gold"><div class="stat-val">${fmt(nl.interest)}</div><div class="stat-lbl">New Total Interest</div></div>
+      </div>
+      <div class="notice ${anyInfeasible||nl.monthly<currentTotalPayment?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div>
+    </div>`;
+}
+function addToolDebt(section){
+  toolState[section].debts.push({name:'Debt '+(toolState[section].debts.length+1), balance:0, rate:0, payment:0});
+  refreshToolsPanel();
+}
+function removeToolDebt(section, idx){
+  toolState[section].debts.splice(idx,1);
+  if(!toolState[section].debts.length) toolState[section].debts.push({name:'Debt 1', balance:0, rate:0, payment:0});
+  refreshToolsPanel();
+}
+
+/* ---- Loan Restructuring Calculator ---- */
+function toolRestructuringCalculator(){
+  const s = toolState.restructuring;
+  const current = loanTotals(s.balance, s.rate, s.remainingMonths);
+  const restructured = loanTotals(s.balance, s.newRate, s.newTerm);
+  const monthlyChange = current.monthly - restructured.monthly;
+  const interestChange = restructured.interest - current.interest;
+  const verdict = restructured.monthly < current.monthly
+    ? `Restructuring frees up ${fmt(monthlyChange)}/month${interestChange>0?`, at a cost of ${fmt(interestChange)} in extra interest over the life of the loan`:''} — useful when the current payment is straining affordability.`
+    : `The restructured terms cost more per month — restructuring only makes sense here if it's shortening the term or lowering the rate materially.`;
+  return `
+    <div class="card">
+      <div class="card-title">Loan Restructuring Calculator</div>
+      <div class="card-hint">Compares the current loan against a restructured (extended/re-priced) version — the classic move when a client's instalment no longer fits their budget.</div>
+      ${toolClientPicker('restructuring')}
+      <div class="form-grid cols-3" style="margin-top:14px">
+        <div class="field"><label>Current Balance</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.balance?Number(s.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.restructuring.balance=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Current Rate (%)</label><input type="text" inputmode="decimal" value="${s.rate}" oninput="toolState.restructuring.rate=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>Current Remaining Term (months)</label><input type="text" inputmode="decimal" value="${s.remainingMonths}" oninput="toolState.restructuring.remainingMonths=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>New Rate (%)</label><input type="text" inputmode="decimal" value="${s.newRate}" oninput="toolState.restructuring.newRate=pf(this.value);refreshToolsPanel()"></div>
+        <div class="field"><label>New Term (months)</label><input type="text" inputmode="decimal" value="${s.newTerm}" oninput="toolState.restructuring.newTerm=pf(this.value);refreshToolsPanel()"></div>
+      </div>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+        <div class="stat-box"><div class="stat-val">${fmt(current.monthly)}</div><div class="stat-lbl">Current Monthly Payment</div></div>
+        <div class="stat-box ${monthlyChange>0?'green':'red'}"><div class="stat-val">${fmt(restructured.monthly)}</div><div class="stat-lbl">Restructured Monthly Payment</div></div>
+        <div class="stat-box"><div class="stat-val">${fmt(current.interest)}</div><div class="stat-lbl">Current Total Interest</div></div>
+        <div class="stat-box gold"><div class="stat-val">${fmt(restructured.interest)}</div><div class="stat-lbl">Restructured Total Interest</div></div>
+      </div>
+      <div class="notice ${monthlyChange>0?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div>
+    </div>`;
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+/* ── Boot ───────────────────────────────────────────────────
+   Auth and the advisor check must both pass before anything renders. ── */
+(async function(){
+  const ok = await bootAdvisor();
+  if(!ok) return;
+  await loadClients();
+  go('clients');
+  refreshApptBadge();
+})();
+
+async function doLogout(){
+  await saveNow();
+  try { sessionStorage.removeItem('kw_interface'); } catch(_) {}
+  await sb.auth.signOut();
+  window.location.replace('index.html');
+}
+</script>
+</body>
+</html>

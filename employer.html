@@ -219,6 +219,14 @@ button{cursor:pointer;font-family:'Nunito',sans-serif}
     @bottom-center { content: counter(page) " / " counter(pages); font-size: 9px; color: #888; }
   }
 }
+
+/* ── Interface switcher (multi-role staff) ── */
+#roleSwitcher{padding:12px 20px;border-top:1px solid rgba(255,255,255,.12)}
+.rs-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45);margin-bottom:7px}
+.rs-btn{display:flex;align-items:center;gap:8px;width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.85);font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 11px;border-radius:9px;cursor:pointer;margin-bottom:6px;text-align:left}
+.rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
+.rs-btn.active{background:var(--kw-green);border-color:var(--kw-green);color:#fff;cursor:default}
+.rs-btn span{font-size:14px}
 </style>
 </head>
 <body>
@@ -236,6 +244,7 @@ button{cursor:pointer;font-family:'Nunito',sans-serif}
     <div class="sb-item" id="nav-reports" onclick="switchTab('reports')">&#128196; Reports</div>
     <div class="sb-item" id="nav-settings" onclick="switchTab('settings')">&#128273; Settings</div>
   </div>
+  <div id="roleSwitcher" style="display:none"></div>
   <div class="sb-footer">
     <div class="sb-user" id="sb-user-email"></div>
     <button class="sb-logout" onclick="doLogout()">Sign Out</button>
@@ -296,6 +305,51 @@ function scoreBandLabel(score) {
   return 'Struggling';
 }
 
+/* ══ Interface switcher — shared with index.html / advisor.html ══
+   Staff can hold several roles. index.html routes on this same
+   sessionStorage key, so setting it here is what stops a member of
+   staff being bounced straight back out of the member portal. ══ */
+const KW_INTERFACE_KEY = 'kw_interface';
+window._kwRoles = { member:false, advisor:false, admin:false, employer:false };
+
+function kwGoToInterface(id){
+  try { sessionStorage.setItem(KW_INTERFACE_KEY, id); } catch(_) {}
+  window.location.href = id === 'admin'    ? 'admin.html'
+                       : id === 'advisor'  ? 'advisor.html'
+                       : id === 'employer' ? 'employer.html'
+                       : 'index.html';
+}
+
+async function kwDetectRoles(user){
+  const r = window._kwRoles;
+  try { const { data } = await sb.from('profiles').select('id').eq('id', user.id).maybeSingle(); r.member = !!data; } catch(_) {}
+  try { const { data } = await sb.from('admins').select('email').eq('email', user.email).maybeSingle(); r.admin = !!data; } catch(_) {}
+  try { const { data } = await sb.rpc('advisor_me'); r.advisor = !!data; } catch(_) {}
+  try { const { data } = await sb.from('employers').select('org_id')
+          .or(`user_id.eq.${user.id},email.eq.${(user.email||'').toLowerCase()}`).maybeSingle();
+        r.employer = !!data; } catch(_) {}
+  return r;
+}
+
+function kwRenderRoleSwitcher(currentId){
+  const host = document.getElementById('roleSwitcher');
+  if (!host) return;
+  const r = window._kwRoles;
+  const opts = [];
+  if (r.member)   opts.push(['member','\u{1F464}','My Portal']);
+  if (r.advisor)  opts.push(['advisor','\u{1F9ED}','Advisor']);
+  if (r.admin)    opts.push(['admin','\u2699\uFE0F','Admin']);
+  if (r.employer) opts.push(['employer','\u{1F3E2}','HR Dashboard']);
+  if (opts.length < 2) { host.style.display = 'none'; return; }
+  host.style.display = 'block';
+  host.innerHTML = '<div class="rs-label">Interface</div>' + opts.map(function(o){
+    const active = o[0] === currentId;
+    return '<button class="rs-btn' + (active ? ' active' : '') + '"' +
+           (active ? ' disabled' : ' onclick="kwGoToInterface(\'' + o[0] + '\')"') +
+           '><span>' + o[1] + '</span>' + o[2] + '</button>';
+  }).join('');
+}
+
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { window.location.replace('index.html'); return; }
@@ -321,6 +375,9 @@ async function init() {
   }
 
   window._isEmployer = isEmployer;
+  // employer.html previously had no way back to any other interface at all.
+  await kwDetectRoles(user);
+  kwRenderRoleSwitcher('employer');
 
   // Load org name (allowed by orgs_own RLS for the employer's own org).
   if (isEmployer && empRes.data && empRes.data.org_id) {
