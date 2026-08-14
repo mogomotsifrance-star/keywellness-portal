@@ -221,3 +221,82 @@ very early rows — so every booking showed `—`. Now reads
    the right home for these before real client volume.
 5. **HR managers** cannot see the advisor breakdown from `employer.html` yet, even
    though `advisor_session_breakdown()` already authorises them for their own org.
+
+---
+
+## 10. Follow-up changes (second pass)
+
+No database changes — `advisor.html` only. The SQL from the first pass is unaffected.
+
+### Robo-Advisor: monetary fields would not accept more than one digit
+
+**Cause.** `updateRobo()` rebuilt the entire tab panel on every keystroke
+(`el.innerHTML = panelRobo(...)`). That destroyed the input element being typed
+into, so focus was lost after the first character. The money field was worse
+because it re-formatted through `toLocaleString` on each render — typing `5`
+became `5.00` with the cursor gone. Affected Extra Monthly Payment, Estimated
+Consolidated Rate and Term.
+
+**Fix.** The four derived regions now sit in `#robo-stats`, `#robo-payoff`,
+`#robo-cons` and `#robo-restruct`. `updateRobo()` renders into a detached node
+and swaps only those regions, so the input the advisor is typing in is never
+re-created. Recalculation is debounced by 180ms, and the money field formats on
+blur instead of mid-typing.
+
+### Personal & Family: retirement horizon auto-calculates
+
+The advisor types **Years to Retirement**; **Months** and **Salaries** derive
+from it and are read-only, so the three figures can never disagree.
+
+- Months = years × 12 (rounded, so half-years work)
+- Salaries = the same number — a count of remaining monthly pay cheques
+
+Salaries deliberately matches months. It is the framing advisors use in the room
+("216 more pay cheques to fix this"), which lands differently to a number of
+years. **If a client is on a 13th cheque this understates the count** — note it
+in the advisory notes, or say the word and it becomes years × 13.
+
+A live sentence under the fields restates the horizon in plain English.
+
+### Diagnostics & Notes: problem identification with indicators and a plan
+
+New layer on top of the existing `diag*()` functions, in `problemAnalysis()`.
+For income, expenses and debt it produces a 0–100 severity, the named
+**indicators** that fired, and an ordered **plan of action**. Thresholds come
+from the Advisory Framework already in the portal — 50/30/20, DTI ≤35%, the 45%
+restructuring line, 30% passive income, 70% income-generating assets.
+
+Indicators by area:
+
+| Area | Indicators |
+|---|---|
+| Expenses | Budget deficit · Essentials over 50% / severely over · Wants above 30% · Discretionary overspend · Not saving / below target · Large unclassified spending |
+| Debt | DTI above lending threshold · Past the restructuring line · Debt servicing unaffordable · No borrowing headroom · Negative net worth · High-cost credit (≥20%) · Multiple creditors · Servicing debt from a deficit |
+| Income | Income below essentials · Salary dependency · Passive income below target · Single income stream · Assets not working · Thin margin |
+
+A banner at the top names the primary problem. Lifestyle is shown but not
+ranked — it is a symptom of the other three rather than something an advisor
+works on directly.
+
+**One design decision worth knowing.** A genuinely distressed client saturates
+every area: a deficit drives the income and debt scores up too. In testing, a
+realistic stressed profile scored 100 / 99 / 98, at which point naming one area
+"the main problem" is arbitrary and misleading. When the top scores fall within
+10 points of each other the portal says so explicitly and gives a sequencing
+rule instead — close the deficit, then the income gap, then restructure the debt
+— because a payoff plan funded from a deficit will not hold. A client with one
+dominant issue still gets a single clear verdict.
+
+### Testing at merge time
+
+Merged into the repo on 14 Aug 2026 (commit 91562be). The standalone build was
+forked before cae4dc0, so it was applied additively rather than copied over —
+the role fixes from that commit (HR role in ROLES, parallel role lookup, HR
+Dashboard in the interface switcher) were re-applied on top and verified present.
+
+Verified at merge: the inline script parses; problemAnalysis() and
+panelDiagnostics() exercised against distressed, healthy and empty client
+records (compound detection fires on the distressed profile at 100/90/90, every
+ranked area carries actions, no NaN or undefined in the rendered panels);
+panelReport() still renders; the page boots to the auth gate with no console
+errors. The standalone build's own headless-browser suite was not re-run here.
