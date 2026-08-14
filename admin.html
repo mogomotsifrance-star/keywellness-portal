@@ -404,12 +404,24 @@ function kwGoToInterface(id){
 
 async function kwDetectRoles(user){
   const r = window._kwRoles;
-  try { const { data } = await sb.from('profiles').select('id').eq('id', user.id).maybeSingle(); r.member = !!data; } catch(_) {}
-  try { const { data } = await sb.from('admins').select('email').eq('email', user.email).maybeSingle(); r.admin = !!data; } catch(_) {}
-  try { const { data } = await sb.rpc('advisor_me'); r.advisor = !!data; } catch(_) {}
-  try { const { data } = await sb.from('employers').select('org_id')
-          .or(`user_id.eq.${user.id},email.eq.${(user.email||'').toLowerCase()}`).maybeSingle();
-        r.employer = !!data; } catch(_) {}
+  const email = (user.email || '').toLowerCase();
+  const safe = p => Promise.resolve(p).then(res => res, () => ({ data: null }));
+  // Four independent lookups. Serialised, they held the sidebar switcher back by
+  // four round trips on every page load. admins.email is compared lowercase to
+  // match how grants store it — an exact-case compare has locked admins out
+  // before and needed a data migration to unstick.
+  const [mem, adm, adv, emp] = await Promise.all([
+    safe(sb.from('profiles').select('id').eq('id', user.id).maybeSingle()),
+    safe(sb.from('admins').select('email').eq('email', email).maybeSingle()),
+    safe(sb.rpc('advisor_me')),
+    safe(sb.from('employers').select('org_id')
+      .or(`user_id.eq.${user.id},email.eq.${email}`).maybeSingle()),
+  ]);
+  r.member   = !!mem.data;
+  r.admin    = !!adm.data;
+  r.advisor  = !!adv.data;
+  r.employer = !!emp.data;
+  r.employerOrgId = emp.data?.org_id || null;
   return r;
 }
 
@@ -437,16 +449,17 @@ async function init() {
   if (!session) { window.location.href = 'index.html'; return; }
   currentUser = session.user;
 
-  // Check admins table
-  const { data: adminRow } = await sb.from('admins').select('email').eq('email', currentUser.email).maybeSingle();
-  if (!adminRow) {
+  // One role sweep answers both questions at once — may this person be here,
+  // and which other interfaces should the switcher offer. The admins row used
+  // to be fetched twice: once for this gate, once inside kwDetectRoles.
+  const roles = await kwDetectRoles(currentUser);
+  if (!roles.admin) {
     alert('Access denied. You are not an admin.');
     window.location.href = 'index.html';
     return;
   }
 
   document.getElementById('sb-admin-email').textContent = currentUser.email;
-  await kwDetectRoles(currentUser);
   kwRenderRoleSwitcher('admin');
   await loadAllData();
   showTab('users');
@@ -473,7 +486,10 @@ const DIM_LABELS = {
 async function loadAllData() {
   const [uR, aR, bR, bkR, orgR, ciR, repR, actR] = await Promise.all([
     sb.from('profiles').select('*').order('joined_at', { ascending: false }),
-    sb.from('assessments').select('user_id,score,cat_scores,answers,created_at').order('created_at', { ascending: false }),
+    // `answers` (a per-assessment JSONB blob) is deliberately not selected: it
+    // is several KB per row, nothing on this page reads it, and pulling it for
+    // every assessment ever taken was the bulk of the admin sign-in payload.
+    sb.from('assessments').select('user_id,score,cat_scores,created_at').order('created_at', { ascending: false }),
     sb.from('badges').select('*'),
     sb.from('bookings').select('*').order('created_at', { ascending: false }),
     sb.from('organizations').select('id,name').order('name'),
@@ -1542,7 +1558,7 @@ function renderUsers(filter = '', statusFilter = 'all') {
     <div class="card">
       <div class="card-title">All Users (${users.length})</div>
       <div class="search-row">
-        <input class="search-input" type="text" placeholder="Search by name or email…" id="user-search" value="${filter}" oninput="renderUsers(this.value, document.getElementById('status-filter').value)">
+        <input class="search-input" type="text" placeholder="Search by name or email…" id="user-search" value="${escAttr(filter)}" oninput="renderUsers(this.value, document.getElementById('status-filter').value)">
         <select id="status-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="renderUsers(document.getElementById('user-search').value, this.value)">
           <option value="all"${statusFilter==='all'?' selected':''}>All Users</option>
           <option value="assessed"${statusFilter==='assessed'?' selected':''}>Completed Assessment</option>
@@ -1551,7 +1567,7 @@ function renderUsers(filter = '', statusFilter = 'all') {
         <select id="org-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="selectedOrgId=this.value;renderUsers(document.getElementById('user-search').value,document.getElementById('status-filter').value)">
           <option value="">All Organisations</option>
           <option value="__none__"${selectedOrgId==='__none__'?' selected':''}>No Organisation</option>
-          ${allOrgs.map(o=>`<option value="${o.id}"${selectedOrgId===o.id?' selected':''}>${o.name}</option>`).join('')}
+          ${allOrgs.map(o=>`<option value="${o.id}"${selectedOrgId===o.id?' selected':''}>${escNar(o.name)}</option>`).join('')}
         </select>
       </div>
       ${selectedOrgId && selectedOrgId !== '__none__' ? `<div id="org-overview-banner" style="margin-bottom:16px;padding:14px 18px;background:var(--cream-dark);border-radius:var(--radius-sm);font-size:13px;color:var(--muted)">Loading organisation summary…</div>` : ''}
@@ -1696,7 +1712,7 @@ function renderBookings(filter = '', statusFilter = 'all') {
       </div>
       ${bkView === 'calendar' ? '<div id="cal-container"></div>' : `
       <div class="search-row">
-        <input class="search-input" type="text" placeholder="Search by client name or email…" id="bk-search" value="${filter}" oninput="renderBookings(this.value, document.getElementById('bk-status-filter').value)">
+        <input class="search-input" type="text" placeholder="Search by client name or email…" id="bk-search" value="${escAttr(filter)}" oninput="renderBookings(this.value, document.getElementById('bk-status-filter').value)">
         <select id="bk-status-filter" style="padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onchange="renderBookings(document.getElementById('bk-search').value, this.value)">
           <option value="all"${statusFilter==='all'?' selected':''}>All Statuses</option>
           <option value="pending"${statusFilter==='pending'?' selected':''}>Pending</option>
@@ -1883,7 +1899,7 @@ function renderCalGrid() {
 
     html += `<div class="cal-cell${isToday ? ' cal-today' : ''}">
       <div class="cal-daynum">${day}</div>
-      ${shown.map(b => `<div class="cal-entry" title="${escNar(b.user_name || 'Client')} — ${escNar(b.service || '')}" onclick="openCalDayModal('${key}')">${escNar(b.requested_time || '')} ${escNar(b.service || '')}</div>`).join('')}
+      ${shown.map(b => `<div class="cal-entry" title="${escAttr(b.user_name || 'Client')} — ${escAttr(b.service || '')}" onclick="openCalDayModal('${key}')">${escNar(b.requested_time || '')} ${escNar(b.service || '')}</div>`).join('')}
       ${overflow > 0 ? `<div class="cal-more" onclick="openCalDayModal('${key}')">+${overflow} more</div>` : ''}
     </div>`;
   }
@@ -2052,7 +2068,7 @@ function openNewReportModal() {
     <div class="field" style="margin-bottom:14px">
       <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">Organisation</label>
       <select id="nr-org" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
-        ${allOrgs.map(o => `<option value="${o.id}">${o.name}</option>`).join('')}
+        ${allOrgs.map(o => `<option value="${o.id}">${escNar(o.name)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="margin-bottom:14px">
@@ -2473,7 +2489,7 @@ function renderChallengesRows(readOnly) {
   return rows.map((r, i) => `
     <div class="challenge-row">
       <div class="row-fields">
-        <input type="text" placeholder="Challenge" value="${escNar(r.challenge)}" ${readOnly?'readonly':''} oninput="currentNarrative.challenges_risks[${i}].challenge=this.value">
+        <input type="text" placeholder="Challenge" value="${escAttr(r.challenge)}" ${readOnly?'readonly':''} oninput="currentNarrative.challenges_risks[${i}].challenge=this.value">
         <select ${readOnly?'disabled':''} onchange="currentNarrative.challenges_risks[${i}].severity=this.value; refreshChallengesEditor()">
           ${SEVERITIES.map(s => `<option value="${s}"${r.severity===s?' selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`).join('')}
         </select>
@@ -2764,7 +2780,7 @@ function renderActivities() {
       <div class="search-row">
         <select id="act-org-filter" style="padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream)" onchange="activitiesOrgId=this.value;renderActivities()">
           <option value="">All Organisations</option>
-          ${allOrgs.map(o => `<option value="${o.id}"${activitiesOrgId===o.id?' selected':''}>${o.name}</option>`).join('')}
+          ${allOrgs.map(o => `<option value="${o.id}"${activitiesOrgId===o.id?' selected':''}>${escNar(o.name)}</option>`).join('')}
         </select>
       </div>
       ${rows.length === 0 ? '<div class="empty">No activities logged yet.</div>' : `
@@ -2799,12 +2815,12 @@ function openActivityModal(id) {
     <div class="field" style="margin-bottom:12px">
       <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">Organisation</label>
       <select id="act-org" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
-        ${allOrgs.map(o => `<option value="${o.id}"${(editing ? editing.org_id === o.id : activitiesOrgId === o.id) ? ' selected' : ''}>${o.name}</option>`).join('')}
+        ${allOrgs.map(o => `<option value="${o.id}"${(editing ? editing.org_id === o.id : activitiesOrgId === o.id) ? ' selected' : ''}>${escNar(o.name)}</option>`).join('')}
       </select>
     </div>
     <div class="field" style="margin-bottom:12px">
       <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">Title</label>
-      <input type="text" id="act-title" value="${editing ? escNar(editing.title) : ''}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+      <input type="text" id="act-title" value="${editing ? escAttr(editing.title) : ''}" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
     </div>
     <div style="display:flex;gap:10px;margin-bottom:12px">
       <div class="field" style="flex:1">
