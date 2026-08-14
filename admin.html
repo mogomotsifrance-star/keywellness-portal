@@ -212,6 +212,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
     <div class="sb-item active" data-tab="users" onclick="showTab('users')"><span>👥</span> Users</div>
     <div class="sb-item" data-tab="bookings" onclick="showTab('bookings')"><span>📅</span> Appointments</div>
     <div class="sb-item" data-tab="advisors" onclick="showTab('advisors')"><span>🧭</span> Advisors</div>
+    <div class="sb-item" data-tab="roles" onclick="showTab('roles')"><span>🛡️</span> Roles &amp; Access</div>
     <div class="sb-item" data-tab="reports" onclick="showTab('reports')"><span>📊</span> Reports</div>
     <div class="sb-item" data-tab="activities" onclick="showTab('activities')"><span>📋</span> Activities</div>
     <div class="sb-item" data-tab="webinars" onclick="showTab('webinars')"><span>🎥</span> Webinars</div>
@@ -525,7 +526,7 @@ function buildStats() {
 }
 
 // ── Tab Router ──
-const TAB_TITLES = { users: 'Users', bookings: 'Appointments', advisors: 'Advisors', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
+const TAB_TITLES = { users: 'Users', bookings: 'Appointments', advisors: 'Advisors', roles: 'Roles & Access', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
 
 function showTab(tab) {
   activeTab = tab;
@@ -536,6 +537,7 @@ function showTab(tab) {
   if (tab === 'users') renderUsers();
   else if (tab === 'bookings') renderBookings();
   else if (tab === 'advisors') renderAdvisors();
+  else if (tab === 'roles') renderRoles();
   else if (tab === 'reports') renderReports();
   else if (tab === 'activities') renderActivities();
   else if (tab === 'webinars') renderWebinars();
@@ -1196,6 +1198,183 @@ async function advAssign(userId) {
     '<div style="font-size:13px;color:var(--green);font-weight:700;padding:8px">✓ Assigned.</div>';
   const a = advisorRoster.find(x => x.id === _advAssignId);
   if (a) a.active_clients = Number(a.active_clients || 0) + 1;
+}
+
+/* ── Roles & Access ───────────────────────────────────────────
+   Grants and revokes role-table membership (admins, employers +
+   hr_unit_scope) through the admin_role_* RPCs, so onboarding staff
+   no longer needs SQL in the Supabase editor. Advisors are managed
+   on the Advisors tab; members join themselves via signup. */
+let rolesData = null;
+
+async function renderRoles() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading roles…</div>';
+  const { data, error } = await sb.rpc('admin_roles_overview');
+  if (error) {
+    el.innerHTML = `<div class="card"><div class="card-title">Roles unavailable</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6">${escNar(error.message)}<br>
+      If the function does not exist yet, run <span class="mono">supabase_admin_roles_rpcs.sql</span> in the Supabase SQL Editor, then reopen this tab.</p></div>`;
+    return;
+  }
+  rolesData = data || {};
+  el.innerHTML = rolesHtml();
+  roleHrOrgChanged();
+}
+
+function rolesHtml() {
+  const admins = rolesData.admins || [];
+  const hr     = rolesData.hr     || [];
+  const orgs   = rolesData.orgs   || [];
+  const myEmail = (currentUser?.email || '').toLowerCase();
+  const regBadge = ok => ok
+    ? '<span style="color:var(--green);font-weight:600">registered</span>'
+    : '<span style="color:var(--orange);font-weight:600">not yet registered</span>';
+
+  const adminRows = admins.map((a, i) => `
+    <tr>
+      <td><strong>${escNar(a.email)}</strong>${a.email === myEmail ? ' <span style="font-size:11px;color:var(--muted)">(you)</span>' : ''}</td>
+      <td>${regBadge(a.registered)}</td>
+      <td style="text-align:right">${a.email === myEmail
+        ? '<button class="btn btn-outline btn-sm" disabled title="You cannot remove your own admin access">Remove</button>'
+        : `<button class="btn btn-outline btn-sm" onclick="roleRemoveAdmin(${i})">Remove</button>`}</td>
+    </tr>`).join('');
+
+  const hrRows = hr.map((h, i) => `
+    <tr>
+      <td><strong>${escNar(h.email || '—')}</strong></td>
+      <td>${escNar(h.org_name || '—')}</td>
+      <td>${(h.units && h.units.length) ? escNar(h.units.join(', ')) : 'Whole organisation'}</td>
+      <td>${regBadge(h.registered)}</td>
+      <td style="text-align:right"><button class="btn btn-outline btn-sm" onclick="roleRemoveHr(${i})">Remove</button></td>
+    </tr>`).join('');
+
+  const orgOpts = orgs.map(o => `<option value="${o.id}">${escNar(o.name)}</option>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Roles &amp; Access</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0">
+        Roles are held per email address, and one person can hold several at once
+        (member + advisor + admin + HR). Adding someone here works even before they
+        register — access activates on their first sign-in. Changes take effect the
+        next time the person signs in or refreshes their page.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Administrators (${admins.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Account</th><th style="text-align:right"></th></tr></thead>
+          <tbody>${adminRows || '<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px">No admins found.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <input id="role-admin-email" class="search-input" type="email" placeholder="Email address" style="flex:1;min-width:220px">
+        <button class="btn btn-primary btn-sm" onclick="roleAddAdmin()">+ Add Admin</button>
+      </div>
+      <div id="role-admin-msg" style="display:none;margin-top:10px;font-size:12.5px;font-weight:600"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">HR Managers (${hr.length})</div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        An HR manager sees their organisation's aggregate wellness reporting on the
+        HR dashboard — whole organisation by default, or narrowed to one company/unit.
+        A person can be HR for one organisation at a time; granting again moves them
+        or changes their scope.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Organisation</th><th>Scope</th><th>Account</th><th style="text-align:right"></th></tr></thead>
+          <tbody>${hrRows || '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">No HR managers yet.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <input id="role-hr-email" class="search-input" type="email" placeholder="Email address" style="flex:1;min-width:220px">
+        <select id="role-hr-org" class="search-input" style="min-width:180px" onchange="roleHrOrgChanged()">${orgOpts}</select>
+        <select id="role-hr-unit" class="search-input" style="min-width:180px"></select>
+        <button class="btn btn-primary btn-sm" onclick="roleAddHr()">+ Grant HR</button>
+      </div>
+      <div id="role-hr-msg" style="display:none;margin-top:10px;font-size:12.5px;font-weight:600"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Advisors</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        Advisors are managed on the Advisors tab — add to the roster, deactivate,
+        and assign member caseloads there.
+      </p>
+      <button class="btn btn-navy btn-sm" onclick="showTab('advisors')">Open Advisors</button>
+    </div>`;
+}
+
+/* Unit dropdown follows the selected org; children indented under parents. */
+function roleHrOrgChanged() {
+  const orgSel = document.getElementById('role-hr-org');
+  const unitSel = document.getElementById('role-hr-unit');
+  if (!orgSel || !unitSel) return;
+  const units = (rolesData.units || []).filter(u => u.org_id === orgSel.value);
+  const opts = ['<option value="">Whole organisation</option>'];
+  const seen = new Set();
+  const walk = (parentId, depth) => {
+    units.filter(u => (u.parent_unit_id || null) === parentId).forEach(u => {
+      seen.add(u.id);
+      opts.push(`<option value="${u.id}">${'&nbsp;&nbsp;'.repeat(depth)}${escNar(u.name)}</option>`);
+      walk(u.id, depth + 1);
+    });
+  };
+  walk(null, 0);
+  units.filter(u => !seen.has(u.id)).forEach(u =>       // orphaned units still selectable
+    opts.push(`<option value="${u.id}">${escNar(u.name)}</option>`));
+  unitSel.innerHTML = opts.join('');
+  unitSel.style.display = units.length ? '' : 'none';
+}
+
+function roleShowMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = text;
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
+async function roleAddAdmin() {
+  const email = document.getElementById('role-admin-email').value.trim();
+  if (!email || !email.includes('@')) return roleShowMsg('role-admin-msg', 'Enter a valid email address.', false);
+  const { error } = await sb.rpc('admin_role_grant_admin', { p_email: email });
+  if (error) return roleShowMsg('role-admin-msg', 'Could not add: ' + error.message, false);
+  renderRoles();
+}
+
+async function roleRemoveAdmin(i) {
+  const a = (rolesData.admins || [])[i];
+  if (!a) return;
+  if (!confirm('Remove admin access for ' + a.email + '? They keep any other roles they hold (member, advisor, HR).')) return;
+  const { error } = await sb.rpc('admin_role_revoke_admin', { p_email: a.email });
+  if (error) { alert('Could not remove: ' + error.message); return; }
+  renderRoles();
+}
+
+async function roleAddHr() {
+  const email = document.getElementById('role-hr-email').value.trim();
+  const orgId = document.getElementById('role-hr-org').value;
+  const unitId = document.getElementById('role-hr-unit').value || null;
+  if (!email || !email.includes('@')) return roleShowMsg('role-hr-msg', 'Enter a valid email address.', false);
+  if (!orgId) return roleShowMsg('role-hr-msg', 'Choose an organisation.', false);
+  const { error } = await sb.rpc('admin_role_grant_hr', { p_email: email, p_org_id: orgId, p_unit_id: unitId });
+  if (error) return roleShowMsg('role-hr-msg', 'Could not grant: ' + error.message, false);
+  renderRoles();
+}
+
+async function roleRemoveHr(i) {
+  const h = (rolesData.hr || [])[i];
+  if (!h) return;
+  if (!confirm('Remove HR access for ' + (h.email || 'this manager') + '? They lose the ' + (h.org_name || 'organisation') + ' HR dashboard immediately. Nothing else about their account changes.')) return;
+  const { error } = await sb.rpc('admin_role_revoke_hr', { p_employer_id: h.id });
+  if (error) { alert('Could not remove: ' + error.message); return; }
+  renderRoles();
 }
 
 /* ── Session reporting ──────────────────────────────────────── */
