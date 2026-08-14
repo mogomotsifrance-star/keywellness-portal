@@ -1153,26 +1153,28 @@ async function loadAllData() {
 
   if (state.stressLogs.length) localStorage.setItem('financial_stress_v1', JSON.stringify(state.stressLogs));
 
-  // Admin check
-  try {
-    const { data: adminRow } = await sb.from('admins').select('email').eq('email', currentUser.email).maybeSingle();
-    window._isAdmin = !!adminRow;
-  } catch (_) { window._isAdmin = false; }
-
-  // Employer check (HR manager role) — look up by email, same pattern as admins.
-  // This allows employers to be added by email before they ever register,
-  // so their first login routes straight to employer.html with no member visit.
-  try {
-    const { data: empRow } = await sb.from('employers').select('org_id').eq('email', currentUser.email.toLowerCase()).maybeSingle();
-    window._employerOrgId = empRow?.org_id || null;
-  } catch (_) { window._employerOrgId = null; }
-
-  // Advisor check — resolved server-side by advisor_me() so the is_active
-  // flag and the email/user_id fallback live in one place.
-  try {
-    const { data: advRow } = await sb.rpc('advisor_me');
-    window._advisor = advRow || null;
-  } catch (_) { window._advisor = null; }
+  // ── Role checks (admin / HR / advisor) ──
+  // Run together: they are independent, and serialised they added three extra
+  // round trips to every sign-in before the chooser could be drawn.
+  const email = (currentUser.email || '').toLowerCase();
+  const [adminRes, empRes, advRes] = await Promise.all([
+    // admins.email is stored lowercase (admin_role_grant_admin lowercases on
+    // insert), but rows seeded by hand have needed a data migration to match an
+    // exact-case compare — normalise here so casing can never lock an admin out.
+    safe(sb.from('admins').select('email').eq('email', email).maybeSingle()),
+    // Match user_id OR email, exactly as employer.html and admin.html do: an HR
+    // manager added by email before registering has no user_id yet, while one
+    // linked at grant time may have a user_id and a differently-cased email.
+    // Matching on email alone hid the HR Dashboard from the second group.
+    safe(sb.from('employers').select('org_id')
+      .or(`user_id.eq.${currentUser.id},email.eq.${email}`).maybeSingle()),
+    // Advisor is resolved server-side by advisor_me() so the is_active flag and
+    // the email/user_id fallback live in one place.
+    safe(sb.rpc('advisor_me')),
+  ]);
+  window._isAdmin        = !!adminRes.data;
+  window._employerOrgId  = empRes.data?.org_id || null;
+  window._advisor        = advRes.data || null;
 }
 
 async function saveUser() {
@@ -2095,7 +2097,10 @@ function route() {
   // member's first assessment is recorded in Supabase. Server-authoritative
   // (state.assessments comes from loadAllData) so a cleared cache can neither
   // bypass the lock nor falsely re-lock a completed member. Staff never hit this.
-  const _isStaff = window._isAdmin || window._employerOrgId;
+  // Advisors count as staff too — the lock is meant for members only, and an
+  // advisor browsing their own portal was previously forced to sit an
+  // assessment before they could open any view.
+  const _isStaff = window._isAdmin || window._employerOrgId || window._advisor;
   const _firstAssessmentDone = Array.isArray(state.assessments) && state.assessments.length > 0;
   if (!_isStaff && hasOnboarded && !_firstAssessmentDone && view !== 'onboarding') {
     buildNav(view);
@@ -2111,7 +2116,24 @@ function route() {
   document.getElementById('header-actions').innerHTML = '';
   document.getElementById('page-content').innerHTML = '';
   const fn = VIEWS[view] || VIEWS['dashboard'];
-  fn();
+  // page-content was just cleared, so a view that throws used to leave the
+  // member staring at a blank page with no way back. Show the failure and keep
+  // the rest of the portal reachable instead.
+  try {
+    fn();
+  } catch (e) {
+    console.error('[KW] view "' + view + '" failed to render:', e);
+    document.getElementById('page-content').innerHTML = `
+      <div class="card" style="max-width:560px;margin:24px auto;text-align:center">
+        <div style="font-size:34px;margin-bottom:8px">⚠️</div>
+        <h3 style="margin-bottom:8px">This page could not be displayed</h3>
+        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:20px">
+          Something went wrong loading this section. Your data is safe. Try again, or
+          contact <a href="mailto:wellness@keywellness.co.bw" style="color:var(--gold)">wellness@keywellness.co.bw</a> if it keeps happening.
+        </p>
+        <button class="btn btn-primary" onclick="go('dashboard')">Back to Dashboard</button>
+      </div>`;
+  }
 }
 
 // Portal-lock screen shown until the member completes their compulsory first
@@ -2341,6 +2363,19 @@ function escHtml(str) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Every view re-renders on navigation, so creating a chart without destroying
+// the previous one leaks that instance and its ResizeObserver for the life of
+// the tab — revisiting Progress a few times is enough to feel it. Keyed by
+// canvas id, mirroring the registry in kw-report-charts.js.
+const _kwCharts = {};
+function kwChart(canvas, config) {
+  if (!canvas || !window.Chart) return null;
+  const key = canvas.id || '_anon';
+  if (_kwCharts[key]) { try { _kwCharts[key].destroy(); } catch (_) {} }
+  _kwCharts[key] = new Chart(canvas, config);
+  return _kwCharts[key];
 }
 
 // ══════════════════════════════════════════════════
@@ -2821,7 +2856,7 @@ VIEWS['assessment'] = function () {
     if (ctx && window.Chart) {
       const labels = allAsc.map(a => fmtDate(a.created_at));
       const scores = allAsc.map(a => Math.round(a.score || 0));
-      new Chart(ctx, {
+      kwChart(ctx, {
         type: 'line',
         data: {
           labels,
@@ -6002,7 +6037,7 @@ VIEWS['progress'] = function () {
   if (asc.length>=2) {
     setTimeout(() => {
       const ctx = document.getElementById('score-chart');
-      if (ctx) new Chart(ctx, {
+      if (ctx) kwChart(ctx, {
         type:'line',
         data:{ labels: asc.map(a=>fmtDate(a.created_at)),
           datasets:[{ label:'Score', data: asc.map(a=>a.score), borderColor:'#397e2b', backgroundColor:'rgba(57,126,43,.1)', tension:.3, pointBackgroundColor:'#1a2744', pointRadius:5, fill:true }] },
@@ -6013,7 +6048,7 @@ VIEWS['progress'] = function () {
   if (csc.length>=1) {
     setTimeout(() => {
       const ctx = document.getElementById('ci-chart');
-      if (ctx) new Chart(ctx, {
+      if (ctx) kwChart(ctx, {
         type:'bar',
         data:{ labels: csc.map(c=>fmtDate(c.created_at)),
           datasets:[{ label:'Check-in Score', data: csc.map(c=>c.score), backgroundColor:'rgba(57,126,43,.7)', borderColor:'#397e2b', borderWidth:2, borderRadius:6 }] },
@@ -6885,7 +6920,7 @@ VIEWS['profile'] = function () {
           at any time.
         </p>
         <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text);line-height:1.5">
-          <input type="checkbox" id="adv-consent" ${u.advisor_data_consent ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="saveAdvisorConsent(this.checked)">
+          <input type="checkbox" id="adv-consent" ${state.user?.advisor_data_consent ? 'checked' : ''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="saveAdvisorConsent(this.checked)">
           <span>Let my Key Wellness advisor see my financial data</span>
         </label>
         <div id="adv-consent-msg" style="display:none;margin-top:10px;font-size:12.5px;font-weight:600"></div>

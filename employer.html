@@ -322,12 +322,24 @@ function kwGoToInterface(id){
 
 async function kwDetectRoles(user){
   const r = window._kwRoles;
-  try { const { data } = await sb.from('profiles').select('id').eq('id', user.id).maybeSingle(); r.member = !!data; } catch(_) {}
-  try { const { data } = await sb.from('admins').select('email').eq('email', user.email).maybeSingle(); r.admin = !!data; } catch(_) {}
-  try { const { data } = await sb.rpc('advisor_me'); r.advisor = !!data; } catch(_) {}
-  try { const { data } = await sb.from('employers').select('org_id')
-          .or(`user_id.eq.${user.id},email.eq.${(user.email||'').toLowerCase()}`).maybeSingle();
-        r.employer = !!data; } catch(_) {}
+  const email = (user.email || '').toLowerCase();
+  const safe = p => Promise.resolve(p).then(res => res, () => ({ data: null }));
+  // Four independent lookups. Serialised, they held the sidebar switcher back by
+  // four round trips on every page load. admins.email is compared lowercase to
+  // match how grants store it — an exact-case compare has locked admins out
+  // before and needed a data migration to unstick.
+  const [mem, adm, adv, emp] = await Promise.all([
+    safe(sb.from('profiles').select('id').eq('id', user.id).maybeSingle()),
+    safe(sb.from('admins').select('email').eq('email', email).maybeSingle()),
+    safe(sb.rpc('advisor_me')),
+    safe(sb.from('employers').select('org_id')
+      .or(`user_id.eq.${user.id},email.eq.${email}`).maybeSingle()),
+  ]);
+  r.member   = !!mem.data;
+  r.admin    = !!adm.data;
+  r.advisor  = !!adv.data;
+  r.employer = !!emp.data;
+  r.employerOrgId = emp.data?.org_id || null;
   return r;
 }
 
@@ -357,17 +369,15 @@ async function init() {
   const user = session.user;
   document.getElementById('sb-user-email').textContent = user.email || '';
 
-  // Verify caller is employer or admin — otherwise send them back to the member portal.
-  // Employer lookup mirrors employer_org(): match by user_id OR email, since
-  // employers added by email before their first login won't have user_id set
-  // until the signup backfill trigger fires (existing accounts never get it).
-  const [empRes, adminRes] = await Promise.all([
-    sb.from('employers').select('org_id').or(`user_id.eq.${user.id},email.eq.${user.email.toLowerCase()}`).maybeSingle(),
-    sb.from('admins').select('email').eq('email', user.email).maybeSingle(),
-  ]);
-
-  const isEmployer = !!empRes.data;
-  const isAdmin    = !!adminRes.data;
+  // Verify caller is employer or admin — otherwise send them back to the member
+  // portal. One role sweep covers the gate and the switcher; the employers and
+  // admins rows used to be fetched twice, once here and once in kwDetectRoles.
+  // The employer lookup inside it mirrors employer_org(): match by user_id OR
+  // email, since employers added by email before their first login won't have
+  // user_id set until the signup backfill trigger fires.
+  const roles = await kwDetectRoles(user);
+  const isEmployer = roles.employer;
+  const isAdmin    = roles.admin;
 
   if (!isEmployer && !isAdmin) {
     window.location.replace('index.html');
@@ -376,15 +386,14 @@ async function init() {
 
   window._isEmployer = isEmployer;
   // employer.html previously had no way back to any other interface at all.
-  await kwDetectRoles(user);
   kwRenderRoleSwitcher('employer');
 
   // Load org name (allowed by orgs_own RLS for the employer's own org).
-  if (isEmployer && empRes.data && empRes.data.org_id) {
+  if (isEmployer && roles.employerOrgId) {
     const { data: orgRow } = await sb
       .from('organizations')
       .select('name')
-      .eq('id', empRes.data.org_id)
+      .eq('id', roles.employerOrgId)
       .maybeSingle();
     if (orgRow && orgRow.name) {
       currentOrgName = orgRow.name;

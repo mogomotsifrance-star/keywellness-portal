@@ -472,7 +472,7 @@ let currentTab = 'personal';
 let pendingDeleteId = null;
 let ADVISOR = null;              // { id, full_name, email, title }
 let CURRENT_USER = null;
-let ROLES = { advisor:false, admin:false, member:false };
+let ROLES = { advisor:false, admin:false, member:false, employer:false };
 
 /* ── Boot: authenticate, confirm advisor, load ─────────────── */
 function bootError(msg, showLogin){
@@ -504,16 +504,23 @@ async function bootAdvisor(){
   }
   ADVISOR = me;
 
-  // Which other interfaces can this person switch into?
+  // Which other interfaces can this person switch into? Run together rather
+  // than one after another, and include the HR role — the switcher used to omit
+  // it entirely, so an advisor who was also an HR manager had no way to reach
+  // the HR dashboard from here. admins.email is compared lowercase to match how
+  // grants store it.
   ROLES.advisor = true;
-  try {
-    const { data: adminRow } = await sb.from('admins').select('email').eq('email', CURRENT_USER.email).maybeSingle();
-    ROLES.admin = !!adminRow;
-  } catch(_) { ROLES.admin = false; }
-  try {
-    const { data: prof } = await sb.from('profiles').select('id').eq('id', CURRENT_USER.id).maybeSingle();
-    ROLES.member = !!prof;
-  } catch(_) { ROLES.member = false; }
+  const _email = (CURRENT_USER.email || '').toLowerCase();
+  const _safe = p => Promise.resolve(p).then(r => r, () => ({ data: null }));
+  const [admRes, profRes, empRes] = await Promise.all([
+    _safe(sb.from('admins').select('email').eq('email', _email).maybeSingle()),
+    _safe(sb.from('profiles').select('id').eq('id', CURRENT_USER.id).maybeSingle()),
+    _safe(sb.from('employers').select('org_id')
+      .or(`user_id.eq.${CURRENT_USER.id},email.eq.${_email}`).maybeSingle()),
+  ]);
+  ROLES.admin    = !!admRes.data;
+  ROLES.member   = !!profRes.data;
+  ROLES.employer = !!empRes.data;
 
   const nameEl = document.getElementById('sb-advisor-name');
   if (nameEl) nameEl.textContent = ADVISOR.full_name || CURRENT_USER.email;
@@ -540,7 +547,8 @@ function renderRoleSwitcher(){
   const opts = [];
   if (ROLES.member) opts.push(['member','👤','My Portal']);
   opts.push(['advisor','🧭','Advisor']);
-  if (ROLES.admin)  opts.push(['admin','⚙️','Admin']);
+  if (ROLES.admin)    opts.push(['admin','⚙️','Admin']);
+  if (ROLES.employer) opts.push(['employer','🏢','HR Dashboard']);
   if (opts.length < 2) { host.style.display = 'none'; return; }
   host.style.display = 'block';
   host.innerHTML =
