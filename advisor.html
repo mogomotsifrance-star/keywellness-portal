@@ -163,6 +163,9 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;background:var(--white);outline:none;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease);color:var(--text)}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .field textarea{resize:vertical;min-height:80px;line-height:1.5;font-size:13px}
+.derived-tag{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--kw-green-deep);background:var(--kw-green-tint);padding:2px 6px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.field input[readonly]{background:var(--kw-surface);color:var(--muted);cursor:default}
+.derived-note{font-size:12px;color:var(--muted);line-height:1.6;margin:0}
 .field .money-wrap{position:relative}
 .field .money-wrap input{padding-left:26px}
 .field .money-wrap .pre{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--muted);font-family:'DM Mono',monospace}
@@ -261,6 +264,52 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
 .rs-btn.active{background:var(--kw-green);border-color:var(--kw-green);color:#fff;cursor:default}
 .rs-btn span{font-size:14px}
+
+
+/* ── Problem analysis (Diagnostics & Notes) ── */
+.verdict{border-radius:var(--radius);padding:20px 22px;margin-bottom:20px;border-left:5px solid var(--border);background:var(--white);border:1px solid var(--border);border-left-width:5px}
+.verdict-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:4px}
+.verdict-main{font-size:19px;font-weight:800;color:var(--navy);line-height:1.25;margin-bottom:8px}
+.verdict p{font-size:13px;line-height:1.65;color:var(--text);margin:0}
+.verdict-red{border-left-color:var(--red);background:#fdf5f4}
+.verdict-orange{border-left-color:var(--orange);background:#fffaf3}
+.verdict-gold{border-left-color:var(--kw-yellow);background:var(--kw-yellow-tint)}
+.verdict-green{border-left-color:var(--green);background:var(--kw-green-wash)}
+.verdict-grey{border-left-color:var(--border);background:var(--kw-surface)}
+.rank-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.rank-lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.rank-chip{font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:999px;background:var(--kw-surface);color:var(--muted)}
+.rank-chip.st-red{background:#fdf2f2;color:var(--red)}
+.rank-chip.st-orange{background:#fff3e6;color:var(--orange)}
+.rank-chip.st-gold{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.rank-chip.st-green{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+
+.diag-card.is-primary{box-shadow:0 0 0 2px var(--kw-green-tint),var(--shadow)}
+.primary-flag{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#fff;background:var(--navy);padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.diag-summary{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+.sev-bar{height:6px;border-radius:999px;background:var(--kw-surface);overflow:hidden;margin-bottom:5px}
+.sev-fill{display:block;height:100%;border-radius:999px;background:var(--border);transition:width .4s var(--kw-ease)}
+.sev-fill.st-red{background:var(--red)}
+.sev-fill.st-orange{background:var(--orange)}
+.sev-fill.st-gold{background:var(--kw-yellow)}
+.sev-fill.st-green{background:var(--green)}
+.sev-scale{font-size:10.5px;font-weight:700;color:var(--muted);margin-bottom:14px;font-family:'DM Mono',monospace}
+
+.ind-title{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:14px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.ind-list{display:flex;flex-direction:column;gap:9px}
+.ind{display:flex;flex-direction:column;gap:3px}
+.ind-chip{align-self:flex-start;font-size:11.5px;font-weight:800;padding:3px 10px;border-radius:6px;background:var(--kw-surface);color:var(--muted)}
+.ind-chip.st-red{background:#fdf2f2;color:var(--red)}
+.ind-chip.st-orange{background:#fff3e6;color:var(--orange)}
+.ind-chip.st-gold{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.ind-chip.st-green{background:var(--kw-green-tint);color:var(--kw-green-deep)}
+.ind-detail{font-size:12.5px;line-height:1.6;color:var(--text)}
+.ind-none{font-size:12.5px;color:var(--muted);font-style:italic}
+.action-list{margin:0;padding-left:20px;font-size:12.5px;line-height:1.7;color:var(--text)}
+.action-list li{margin-bottom:7px;padding-left:2px}
+.action-list li::marker{font-weight:800;color:var(--kw-green-deep)}
+.diag-card.st-grey{border-top-color:var(--border)}
+@media (min-width:1100px){ .diag-grid{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))} }
 
 @media print{
   #sidebar,.page-header,.tabs,.no-print{display:none!important}
@@ -1273,6 +1322,52 @@ function refreshSummaryBits(){
 }
 
 /* ---------- PERSONAL & FAMILY ---------- */
+/* ── Retirement horizon ─────────────────────────────────────
+   The advisor types years; months and salaries derive from it and are
+   read-only, so the three figures can never disagree with each other.
+
+   Salaries to Retirement is a COUNT of remaining monthly salary payments
+   — the same number as months, deliberately. It is the number advisors
+   use in the room ("you have 216 more pay cheques to fix this"), which
+   lands very differently to a number of years. If a client is on a 13th
+   cheque this understates it slightly; note it in the advisory notes.
+   ── */
+function retirementMonths(years){
+  const y = pf(years);
+  if(y <= 0) return 0;
+  return Math.round(y * 12);
+}
+
+function retirementNote(p){
+  const y = pf(p.yearsToRetirement);
+  if(y <= 0) return 'Enter years to retirement — months and salaries calculate automatically.';
+  const m = retirementMonths(y);
+  return `${y} year${y===1?'':'s'} left means <strong>${m}</strong> more month${m===1?'':'s'}, and <strong>${m}</strong> more salar${m===1?'y':'ies'} to work with before retirement.`;
+}
+
+function setYearsToRetirement(value){
+  const c = getClient();
+  if(!c) return;
+  const years  = value === '' ? '' : pf(value);
+  const months = years === '' ? '' : retirementMonths(years);
+
+  c.personal.yearsToRetirement     = years;
+  c.personal.monthsToRetirement    = months;
+  c.personal.salariesToRetirement  = months;   // one salary per remaining month
+  c.updatedAt = new Date().toISOString();
+
+  // Update the two derived fields in place rather than re-rendering the
+  // panel — re-rendering would pull focus out of the field being typed in.
+  const mEl = document.getElementById('pf-monthsToRet');
+  const sEl = document.getElementById('pf-salariesToRet');
+  const nEl = document.getElementById('pf-retNote');
+  if(mEl) mEl.value = months;
+  if(sEl) sEl.value = months;
+  if(nEl) nEl.innerHTML = retirementNote(c.personal);
+
+  persistClients();
+}
+
 function panelPersonal(c){
   const p = c.personal;
   const kidsRows = c.kids.map((k,i)=>`
@@ -1317,9 +1412,21 @@ function panelPersonal(c){
             <option value="Out of Community (without accrual)" ${p.regime==='Out of Community (without accrual)'?'selected':''}>Out of Community (without accrual)</option>
           </select>
         </div>
-        <div class="field"><label>Years to Retirement</label><input type="number" value="${esc(p.yearsToRetirement)}" oninput="saveField('personal.yearsToRetirement', this.value)"></div>
-        <div class="field"><label>Months to Retirement</label><input type="number" value="${esc(p.monthsToRetirement)}" oninput="saveField('personal.monthsToRetirement', this.value)"></div>
-        <div class="field"><label>Salaries to Retirement</label><input type="number" value="${esc(p.salariesToRetirement)}" oninput="saveField('personal.salariesToRetirement', this.value)"></div>
+        <div class="field">
+          <label>Years to Retirement</label>
+          <input type="number" min="0" max="60" step="0.5" id="pf-yearsToRet" value="${esc(p.yearsToRetirement)}" oninput="setYearsToRetirement(this.value)">
+        </div>
+        <div class="field">
+          <label>Months to Retirement <span class="derived-tag">auto</span></label>
+          <input type="number" id="pf-monthsToRet" value="${esc(p.monthsToRetirement)}" readonly tabindex="-1">
+        </div>
+        <div class="field">
+          <label>Salaries to Retirement <span class="derived-tag">auto</span></label>
+          <input type="number" id="pf-salariesToRet" value="${esc(p.salariesToRetirement)}" readonly tabindex="-1">
+        </div>
+        <div class="field" style="grid-column:1/-1;margin-top:-6px">
+          <p class="derived-note" id="pf-retNote">${retirementNote(p)}</p>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1642,19 +1749,95 @@ function wireBudgetGroups(c){ /* groups render open by default; toggle handled i
 function panelDiagnostics(c){
   const t = calcTotals(c);
   const inc = diagIncome(t), exp = diagExpense(t), debt = diagDebt(t), life = diagLifestyle(t);
+  const pa = problemAnalysis(t, c);
+  const NOTE_KEY = { income:'income', expense:'expense', debt:'debt' };
 
-  const card = (key, d, notesKey)=>`
-    <div class="diag-card st-${d.color}">
+  /* Headline verdict — the one thing to open the conversation with. */
+  const verdict = (()=>{
+    if(!pa.ranked.length){
+      return `<div class="verdict verdict-grey">
+        <div class="verdict-lbl">Primary problem</div>
+        <div class="verdict-main">Not enough data yet</div>
+        <p>Capture income, budget and liabilities and this will identify which area to work on first.</p>
+      </div>`;
+    }
+    if(!pa.primary){
+      return `<div class="verdict verdict-green">
+        <div class="verdict-lbl">Primary problem</div>
+        <div class="verdict-main">None dominant — broadly on track</div>
+        <p>No area scores highly enough to be called the main problem. Use the session to protect the position and build passive income rather than to fix something.</p>
+      </div>`;
+    }
+    const b = sevBand(pa.primary.score);
+    const top = pa.primary.indicators[0];
+    const others = pa.ranked.slice(1).filter(a=>a.score>0)
+      .map(a=>`<span class="rank-chip st-${sevBand(a.score).color}">${a.title} · ${sevBand(a.score).label}</span>`).join('');
+
+    // Several areas equally bad — say so rather than picking one at random.
+    if(pa.compound){
+      const names = pa.tied.map(a=>a.title);
+      const list = names.length===2 ? names.join(' and ')
+                 : names.slice(0,-1).join(', ') + ' and ' + names[names.length-1];
+      return `<div class="verdict verdict-${b.color}">
+        <div class="verdict-lbl">Primary problem</div>
+        <div class="verdict-main">${list} — all ${b.label.toLowerCase()}</div>
+        <p>These score within ${TIE_WINDOW} points of each other, so there is no single main problem here — they are driving one another. A deficit forces borrowing, and the borrowing deepens the deficit.</p>
+        ${pa.sequence ? `<p style="margin-top:8px"><strong>Where to start:</strong> ${pa.sequence}. A payoff plan funded from a deficit will not hold.</p>` : ''}
+        <div class="rank-row"><span class="rank-lbl">Severity:</span>${
+          pa.ranked.filter(a=>a.score>0).map(a=>`<span class="rank-chip st-${sevBand(a.score).color}">${a.title} ${a.score}</span>`).join('')
+        }</div>
+      </div>`;
+    }
+
+    return `<div class="verdict verdict-${b.color}">
+      <div class="verdict-lbl">Primary problem</div>
+      <div class="verdict-main">${pa.primary.title} problem — ${b.label}</div>
+      ${top ? `<p><strong>Leading indicator:</strong> ${top.label}. ${top.detail}</p>` : ''}
+      ${others ? `<div class="rank-row"><span class="rank-lbl">Then:</span>${others}</div>` : ''}
+    </div>`;
+  })();
+
+  /* One analysis block per area — indicators, then the plan. */
+  const analysisCard = (a)=>{
+    if(a.incomplete){
+      return `<div class="diag-card st-grey">
+        <div class="diag-head"><h4>${a.title}</h4><span class="status-pill status-grey">Incomplete</span></div>
+        <p class="diag-summary">${a.summary}</p>
+      </div>`;
+    }
+    const b = sevBand(a.score);
+    const isPrimary = pa.compound
+      ? pa.tied.some(x => x.key === a.key)
+      : (pa.primary && pa.primary.key === a.key);
+    return `<div class="diag-card st-${b.color}${isPrimary?' is-primary':''}">
       <div class="diag-head">
-        <h4>${d.title}</h4>
-        <span class="status-pill status-${d.color}">${d.label}</span>
+        <h4>${a.title}${isPrimary?` <span class="primary-flag">${pa.compound?'Priority':'Main problem'}</span>`:''}</h4>
+        <span class="status-pill status-${b.color}">${b.label}</span>
       </div>
-      <ul class="diag-list">${d.points.map(p=>`<li>${p}</li>`).join('')}</ul>
-      <div class="field" style="margin-top:10px">
-        <label>Advisor note — ${d.title.toLowerCase()}</label>
-        <textarea placeholder="Recommendation for this area…" oninput="saveField('notes.${notesKey}', this.value)">${esc(c.notes[notesKey])}</textarea>
+      <p class="diag-summary">${a.summary}</p>
+      <div class="sev-bar"><span class="sev-fill st-${b.color}" style="width:${a.score}%"></span></div>
+      <div class="sev-scale">Severity ${a.score}/100</div>
+
+      <div class="ind-title">Indicators</div>
+      ${a.indicators.length
+        ? `<div class="ind-list">${a.indicators.map(i=>`
+            <div class="ind">
+              <span class="ind-chip st-${b.color}">${i.label}</span>
+              <span class="ind-detail">${i.detail}</span>
+            </div>`).join('')}</div>`
+        : `<p class="ind-none">No problem indicators triggered in this area.</p>`}
+
+      <div class="ind-title">Proposed plan of action</div>
+      <ol class="action-list">${a.actions.map(x=>`<li>${x}</li>`).join('')}</ol>
+
+      <div class="field" style="margin-top:14px">
+        <label>Advisor note — ${a.title.toLowerCase()}</label>
+        <textarea placeholder="What you agreed with the client in this area…" oninput="saveField('notes.${NOTE_KEY[a.key]}', this.value)">${esc(c.notes[NOTE_KEY[a.key]])}</textarea>
       </div>
     </div>`;
+  };
+
+  const ordered = pa.ranked.concat(pa.incomplete);
 
   return `
     <div class="stat-grid">
@@ -1664,12 +1847,26 @@ function panelDiagnostics(c){
       <div class="stat-box ${t.netWorth>=0?'green':'red'}"><div class="stat-val">${fmtSigned(t.netWorth)}</div><div class="stat-lbl">Net Worth</div></div>
     </div>
     <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin:-16px 0 20px">Net Worth = (Assets + Savings & Investments) − Liabilities.</div>
+
+    ${verdict}
+
     <div class="diag-grid">
-      ${card('income', inc, 'income')}
-      ${card('expense', exp, 'expense')}
-      ${card('debt', debt, 'debt')}
-      ${card('lifestyle', life, 'lifestyle')}
+      ${ordered.map(analysisCard).join('')}
     </div>
+
+    <div class="card">
+      <div class="card-title">Lifestyle Inflation & Affordability</div>
+      <div class="card-hint">A cross-cutting read on the three areas above rather than a problem worked on directly, so it is not ranked.</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span class="status-pill status-${life.color}">${life.label}</span>
+      </div>
+      <ul class="diag-list">${life.points.map(p=>`<li>${p}</li>`).join('')}</ul>
+      <div class="field" style="margin-top:10px">
+        <label>Advisor note — lifestyle</label>
+        <textarea placeholder="Recommendation for this area…" oninput="saveField('notes.lifestyle', this.value)">${esc(c.notes.lifestyle)}</textarea>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-title">Personal Finance Advisory</div>
       <div class="card-hint">Freeform coaching notes — the human judgement behind the numbers above.</div>
@@ -1986,11 +2183,37 @@ function fmtMonths(m){
   const y = Math.floor(m/12), mm = Math.round(m%12);
   return y>0 ? `${y}y ${mm}mo` : `${Math.round(m)} mo`;
 }
+/* Recalculates the robo-advisor WITHOUT touching the inputs.
+   The old version replaced the whole tab panel on every keystroke, which
+   destroyed the field being typed into — you lost focus after one
+   character, and the money field re-formatted "5" to "5.00" mid-typing.
+   That is why monetary values could not be entered beyond a single digit.
+   Now only the derived result regions are swapped, so the input element
+   the advisor is typing in is never re-created. */
+let _roboTimer = null;
+const ROBO_RESULT_REGIONS = ['robo-stats', 'robo-payoff', 'robo-cons', 'robo-restruct'];
+
 function updateRobo(clientId, key, value, isMoney){
   const rs = getRoboState(clientId);
-  rs[key] = isMoney ? pf(value) : pf(value);
-  const el = document.getElementById('tab-panel');
-  if(el) el.innerHTML = panelRobo(getClient());
+  rs[key] = pf(value);
+  clearTimeout(_roboTimer);
+  _roboTimer = setTimeout(function(){
+    const c = getClient();
+    if(!c || c.id !== clientId) return;
+    const staged = document.createElement('div');
+    staged.innerHTML = panelRobo(c);
+    ROBO_RESULT_REGIONS.forEach(function(id){
+      const fresh = staged.querySelector('#' + id);
+      const live  = document.getElementById(id);
+      if(fresh && live) live.innerHTML = fresh.innerHTML;
+    });
+  }, 180);
+}
+
+/* Tidy the money field once the advisor leaves it, never while typing. */
+function roboFormatMoney(el){
+  const n = pf(el.value);
+  el.value = n ? n.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
 }
 function panelRobo(c){
   const t = calcTotals(c);
@@ -2064,18 +2287,21 @@ function panelRobo(c){
       <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Min. Payments</div></div>
       <div class="stat-box ${t.dti<=35?'green':t.dti<=50?'gold':'red'}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income</div></div>
     </div>
+    <div id="robo-stats"></div>
 
     <div class="card">
       <div class="card-title">Payoff Budget</div>
       <div class="card-hint">Extra beyond the current minimums, if the client can find room in their budget — this feeds both simulations below.</div>
-      <div class="field" style="max-width:260px"><label>Extra Monthly Payment</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${rs.extra?Number(rs.extra).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="updateRobo('${c.id}','extra',this.value,true)"></div></div>
+      <div class="field" style="max-width:260px"><label>Extra Monthly Payment</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${rs.extra?Number(rs.extra).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="updateRobo('${c.id}','extra',this.value,true)" onblur="roboFormatMoney(this)"></div></div>
     </div>
 
-    <div class="diag-grid">
-      ${payoffCard('Avalanche (highest rate first)', avalanche, stratPick==='Avalanche')}
-      ${payoffCard('Snowball (smallest balance first)', snowball, stratPick.startsWith('Snowball'))}
+    <div id="robo-payoff">
+      <div class="diag-grid">
+        ${payoffCard('Avalanche (highest rate first)', avalanche, stratPick==='Avalanche')}
+        ${payoffCard('Snowball (smallest balance first)', snowball, stratPick.startsWith('Snowball'))}
+      </div>
+      <div class="notice ${avalanche.feasible?'notice-green':'notice-red'}" style="margin-top:-6px">${stratReason}</div>
     </div>
-    <div class="notice ${avalanche.feasible?'notice-green':'notice-red'}" style="margin-top:-6px">${stratReason}</div>
 
     <div class="card">
       <div class="card-title">Consolidation Check</div>
@@ -2083,18 +2309,20 @@ function panelRobo(c){
         <div class="field"><label>Estimated Consolidated Rate (%)</label><input type="text" inputmode="decimal" value="${rs.consRate}" oninput="updateRobo('${c.id}','consRate',this.value)"></div>
         <div class="field"><label>Term (months)</label><input type="text" inputmode="decimal" value="${rs.consTerm}" oninput="updateRobo('${c.id}','consTerm',this.value)"></div>
       </div>
-      <div class="stat-grid" style="margin-top:14px;margin-bottom:0">
-        <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Total Payment</div></div>
-        <div class="stat-box ${consNew.monthly<totalMin?'green':'red'}"><div class="stat-val">${fmt(consNew.monthly)}</div><div class="stat-lbl">Consolidated Payment</div></div>
+      <div id="robo-cons">
+        <div class="stat-grid" style="margin-top:14px;margin-bottom:0">
+          <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Total Payment</div></div>
+          <div class="stat-box ${consNew.monthly<totalMin?'green':'red'}"><div class="stat-val">${fmt(consNew.monthly)}</div><div class="stat-lbl">Consolidated Payment</div></div>
+        </div>
+        <div class="notice ${consolidationHelps?'notice-green':'notice-orange'}" style="margin-top:14px;margin-bottom:0">${consolidationHelps ? 'Consolidation looks worth pursuing at this rate/term.' : 'Consolidation does not clearly help at this rate/term — try adjusting the estimate.'}</div>
       </div>
-      <div class="notice ${consolidationHelps?'notice-green':'notice-orange'}" style="margin-top:14px;margin-bottom:0">${consolidationHelps ? 'Consolidation looks worth pursuing at this rate/term.' : 'Consolidation does not clearly help at this rate/term — try adjusting the estimate.'}</div>
     </div>
 
     <div class="card">
       <div class="card-title">Restructuring Check</div>
-      ${needsRestructuring
+      <div id="robo-restruct">${needsRestructuring
         ? `<div class="notice notice-orange" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is above the 45% affordability line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (35% of income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
-        : `<div class="notice notice-green" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is within an affordable range — restructuring isn't the priority here.</div>`}
+        : `<div class="notice notice-green" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is within an affordable range — restructuring isn't the priority here.</div>`}</div>
     </div>
 
     <div class="card">
@@ -2391,6 +2619,259 @@ function diagLifestyle(t){
   points.push(`Can comfortably afford up to ${fmt(t.capacity35)}/mo of new debt before hitting the 35% DTI threshold.`);
   if(t.totalAssets>0 && t.assetIncomePct<70){ if(color==='green') color='gold'; points.push(`Only ${t.assetIncomePct.toFixed(2)}% of assets are income-generating — target is 70%.`); }
   return {title:'Lifestyle Inflation & Affordability', color, label, points};
+}
+
+
+/* ══════════════════════════════════════════════════════════════
+   PROBLEM ANALYSIS — what is actually wrong, and what to do
+   --------------------------------------------------------------
+   The four diag*() functions above describe each area. This layer sits
+   on top and answers the question an advisor actually asks in the room:
+   "of income, expenses and debt, which one is THE problem here, and what
+   do I do about it?"
+
+   For each of the three areas it produces:
+     • a severity score 0–100, from the same thresholds the Advisory
+       Framework already uses (50/30/20, DTI ≤35%, 30% passive income,
+       70% income-generating assets, the 45% restructuring line)
+     • named INDICATORS — the specific observable signs that fired, e.g.
+       an expense problem shows "Budget deficit"
+     • a PLAN OF ACTION, ordered, with the biggest lever first
+
+   Lifestyle is deliberately excluded from the ranking. It is a
+   cross-cutting symptom of the other three rather than a problem an
+   advisor works on directly.
+
+   Ties are broken debt → expense → income, because debt has the hardest
+   consequences (default, blacklisting) and the longest lead time to fix.
+   ══════════════════════════════════════════════════════════════ */
+
+function sevBand(score){
+  if(score >= 65) return { color:'red',    label:'Critical' };
+  if(score >= 40) return { color:'orange', label:'Concern' };
+  if(score >= 20) return { color:'gold',   label:'Watch' };
+  return                 { color:'green',  label:'On track' };
+}
+
+function analyseIncome(t, c){
+  const ind = [], act = [];
+  let score = 0;
+  const passivePct = t.totalIncome > 0 ? (t.passiveIncome / t.totalIncome * 100) : 0;
+  const marginPct  = t.totalIncome > 0 ? (t.surplus / t.totalIncome * 100) : 0;
+
+  if(t.totalIncome <= 0){
+    return { key:'income', title:'Income', score:null, incomplete:true,
+             indicators:[], actions:[], summary:'Capture the Income tab to run this analysis.' };
+  }
+
+  // Needs alone exceeding income is an income problem, not an overspending one.
+  if(t.needsAmt > 0 && t.needsAmt > t.totalIncome){
+    score += 45;
+    ind.push({ label:'Income below essentials', detail:`Essential spending of ${fmt(t.needsAmt)} exceeds total income of ${fmt(t.totalIncome)}. No budget change alone can close this.` });
+  }
+  if(passivePct < 10){
+    score += 30;
+    ind.push({ label:'Salary dependency', detail:`Only ${passivePct.toFixed(1)}% of income is passive. If the salary stops, so does almost everything.` });
+  } else if(passivePct < 30){
+    score += 12;
+    ind.push({ label:'Passive income below target', detail:`Passive income is ${passivePct.toFixed(1)}% against a 30% target.` });
+  }
+  if(t.spouseIncome <= 0 && t.passiveIncome <= 0){
+    score += 15;
+    ind.push({ label:'Single income stream', detail:'The household depends on one salary with no second earner and no passive income.' });
+  }
+  if(t.totalAssets > 0 && t.assetIncomePct < 70){
+    score += 10;
+    ind.push({ label:'Assets not working', detail:`Only ${t.assetIncomePct.toFixed(1)}% of assets are income-generating, against a 70% target.` });
+  }
+  if(t.surplus > 0 && marginPct < 10){
+    score += 12;
+    ind.push({ label:'Thin margin', detail:`Only ${fmt(t.surplus)} (${marginPct.toFixed(1)}%) is left after expenses — one shock absorbs it.` });
+  }
+
+  // Plan of action
+  act.push('Verify the income figures are complete — allowances, overtime, 13th cheque and any spouse income. Under-captured income is the most common cause of a false income problem.');
+  if(ind.some(i=>i.label==='Income below essentials')){
+    act.push('Treat this as an income problem first: budgeting cannot close a gap where essentials alone exceed income. Agree one concrete income action before adjusting the budget.');
+    act.push('Review whether any essential is actually a restructurable commitment (housing, transport, insurance) rather than a fixed cost.');
+  }
+  if(passivePct < 30){
+    act.push('Set a passive income target of 30% and name the first stream to build — rental, business or dividends. Record it on the Life Vision tab so it is revisited.');
+  }
+  if(t.totalAssets > 0 && t.assetIncomePct < 70){
+    act.push('Go through the Assets tab and identify which idle assets could be made income-generating, working towards the 70% benchmark.');
+  }
+  act.push('Re-run this diagnostic at the next review and compare the passive income percentage.');
+
+  return { key:'income', title:'Income', score:Math.min(100, score), incomplete:false,
+           indicators:ind, actions:act,
+           summary:`Passive income ${passivePct.toFixed(1)}% of total · monthly margin ${fmtSigned(t.surplus)}` };
+}
+
+function analyseExpense(t, c){
+  const ind = [], act = [];
+  let score = 0;
+
+  if(t.totalExpenses <= 0){
+    return { key:'expense', title:'Expenses', score:null, incomplete:true,
+             indicators:[], actions:[], summary:'Capture the Personal Budget tab to run this analysis.' };
+  }
+
+  if(t.surplus < 0){
+    score += 45;
+    ind.push({ label:'Budget deficit', detail:`Spending exceeds income by ${fmt(Math.abs(t.surplus))} every month. This is funded by debt or arrears whether the client says so or not.` });
+  }
+  if(t.needsPct > 60){
+    score += 25;
+    ind.push({ label:'Essentials severely over', detail:`Needs are ${t.needsPct.toFixed(1)}% of income against a 50% guideline.` });
+  } else if(t.needsPct > 50){
+    score += 12;
+    ind.push({ label:'Essentials over 50%', detail:`Needs are ${t.needsPct.toFixed(1)}% of income — above the 50/30/20 guideline.` });
+  }
+  if(t.wantsPct > 40){
+    score += 22;
+    ind.push({ label:'Discretionary overspend', detail:`Wants are ${t.wantsPct.toFixed(1)}% of income against a 30% guideline — the most controllable gap on this page.` });
+  } else if(t.wantsPct > 30){
+    score += 10;
+    ind.push({ label:'Wants above 30%', detail:`Wants are ${t.wantsPct.toFixed(1)}% of income, slightly above guideline.` });
+  }
+  if(t.savingsPct < 10){
+    score += 20;
+    ind.push({ label:'Not saving', detail:`Savings are ${t.savingsPct.toFixed(1)}% of income against a 20% target — there is no buffer being built.` });
+  } else if(t.savingsPct < 20){
+    score += 10;
+    ind.push({ label:'Saving below target', detail:`Savings are ${t.savingsPct.toFixed(1)}% of income against a 20% target.` });
+  }
+  if(t.totalIncome > 0 && t.otherAmt > t.totalIncome * 0.10){
+    score += 8;
+    ind.push({ label:'Large unclassified spending', detail:`${fmt(t.otherAmt)} sits in "Other" — categorise it before agreeing a budget.` });
+  }
+
+  act.push('Rebuild the budget on the Personal Budget tab against 50/30/20 and show the client the three percentages side by side.');
+  if(t.surplus < 0){
+    act.push(`Close the ${fmt(Math.abs(t.surplus))} deficit before anything else — every month it runs, debt grows. Name the specific lines being cut and the pula each saves.`);
+  }
+  if(t.wantsPct > 30){
+    act.push('Cut the largest discretionary line first and quantify the monthly saving. Wants are the fastest lever and require no third party to agree.');
+  }
+  if(t.needsPct > 50){
+    act.push('Essentials above 50% usually means housing, transport or insurance is structurally too big. Renegotiate or restructure the underlying commitment — trimming around the edges will not move this.');
+  }
+  if(t.savingsPct < 20){
+    act.push('Set up an automatic transfer on payday so savings behaves like a bill rather than whatever is left over.');
+  }
+  act.push('Have the client log actual spending for one month on the Expense Tracker before locking the final budget — stated budgets and real spending usually differ.');
+
+  return { key:'expense', title:'Expenses', score:Math.min(100, score), incomplete:false,
+           indicators:ind, actions:act,
+           summary:`Needs ${t.needsPct.toFixed(1)}% · Wants ${t.wantsPct.toFixed(1)}% · Savings ${t.savingsPct.toFixed(1)}%` };
+}
+
+function analyseDebt(t, c){
+  const ind = [], act = [];
+  let score = 0;
+
+  if(t.totalIncome <= 0){
+    return { key:'debt', title:'Debt', score:null, incomplete:true,
+             indicators:[], actions:[], summary:'Capture income and liabilities to run this analysis.' };
+  }
+  const active = (c.liabilities || []).filter(l => pf(l.balance) > 0);
+  const costly = active.filter(l => pf(String(l.interestRate || '').replace('%','')) >= 20);
+
+  if(t.totalLiabilityBalance <= 0){
+    return { key:'debt', title:'Debt', score:0, incomplete:false, indicators:[],
+             actions:['No active debt on record. Protect this position — check the client understands their borrowing capacity before it is used.'],
+             summary:'No outstanding debt recorded' };
+  }
+
+  if(t.dti > 65){
+    score += 55;
+    ind.push({ label:'Debt servicing unaffordable', detail:`DTI is ${t.dti.toFixed(1)}%. Most lenders would decline, and the client is likely rotating credit to meet instalments.` });
+  } else if(t.dti > 45){
+    score += 38;
+    ind.push({ label:'Past the restructuring line', detail:`DTI is ${t.dti.toFixed(1)}%, above the 45% affordability line where restructuring becomes the realistic route.` });
+  } else if(t.dti > 35){
+    score += 22;
+    ind.push({ label:'DTI above lending threshold', detail:`DTI is ${t.dti.toFixed(1)}%, above the 35% Botswana lending norm. New credit will be difficult.` });
+  }
+  if(t.capacity35 <= 0 && t.dti > 35){
+    score += 8;
+    ind.push({ label:'No borrowing headroom', detail:'There is no room for further credit at the 35% threshold — any new obligation worsens the position.' });
+  }
+  if(t.netWorth < 0){
+    score += 18;
+    ind.push({ label:'Negative net worth', detail:`Liabilities exceed assets and savings by ${fmt(Math.abs(t.netWorth))}.` });
+  }
+  if(costly.length){
+    score += 15;
+    ind.push({ label:'High-cost credit', detail:`${costly.length} facilit${costly.length===1?'y is':'ies are'} at 20% or above (${costly.map(l=>esc(l.item)).join(', ')}). These compound fastest.` });
+  }
+  if(active.length >= 4){
+    score += 8;
+    ind.push({ label:'Multiple creditors', detail:`${active.length} active facilities — administratively fragile and a strong consolidation candidate.` });
+  }
+  if(t.surplus < 0 && t.totalDebtInstalment > 0){
+    score += 12;
+    ind.push({ label:'Servicing debt from a deficit', detail:'Instalments are being met while the budget is already short — the shortfall is compounding.' });
+  }
+
+  act.push('Open the Robo-Advisor tab and compare Avalanche against Snowball for this client. Agree one and write it down.');
+  if(costly.length){
+    act.push('Attack the facilities at 20% or above first, regardless of balance size — the interest saved outweighs the psychological win of a small balance.');
+  }
+  if(t.surplus > 0){
+    act.push(`Direct the ${fmt(t.surplus)} monthly surplus to the priority debt as an extra payment and model it in the Robo-Advisor to show the client the time saved.`);
+  } else {
+    act.push('There is no surplus to accelerate with. Fix the budget deficit first — a payoff strategy on a deficit is theoretical.');
+  }
+  if(active.length >= 3 || t.dti > 45){
+    act.push('Run the Consolidation Check with a realistic rate and term. If it does not clearly reduce the monthly payment, do not recommend it.');
+  }
+  if(t.dti > 45){
+    act.push('Begin restructuring conversations with creditors now rather than after a missed payment — terms are far better before default.');
+  }
+  act.push('Agree a credit freeze until DTI is back under 35%, and record the target date.');
+
+  return { key:'debt', title:'Debt', score:Math.min(100, score), incomplete:false,
+           indicators:ind, actions:act,
+           summary:`DTI ${t.dti.toFixed(1)}% · ${fmt(t.totalLiabilityBalance)} outstanding across ${active.length} facilit${active.length===1?'y':'ies'}` };
+}
+
+/* Ranks the three areas and names the primary problem.
+
+   Important: a genuinely distressed client saturates every area — a
+   budget deficit drives up the income and debt scores too. When the top
+   scores sit within TIE_WINDOW of each other, naming one of them "the
+   main problem" would be arbitrary and would mislead the advisor. In
+   that case we say so, and give a sequencing rule instead: cash flow
+   before debt, because a payoff plan funded from a deficit is fiction. */
+const TIE_WINDOW = 10;
+
+function problemAnalysis(t, c){
+  const areas = [analyseDebt(t, c), analyseExpense(t, c), analyseIncome(t, c)];
+  const scored = areas.filter(a => !a.incomplete);
+  // Already in tie-break precedence (debt, expense, income); a stable sort
+  // by score therefore resolves exact ties in that order.
+  const ranked = scored.slice().sort((a, b) => b.score - a.score);
+  const primary = ranked.length && ranked[0].score >= 20 ? ranked[0] : null;
+  const tied = primary
+    ? ranked.filter(a => a.score >= 20 && (primary.score - a.score) <= TIE_WINDOW)
+    : [];
+  const compound = tied.length > 1;
+
+  // Advisory sequencing when several areas are critical at once.
+  let sequence = null;
+  if(compound){
+    const order = [];
+    const has = k => tied.some(a => a.key === k);
+    if(has('expense')) order.push('close the monthly deficit so the budget balances');
+    if(has('income'))  order.push('address the income gap where essentials alone exceed earnings');
+    if(has('debt'))    order.push('restructure or accelerate the debt');
+    sequence = order.join(', then ');
+  }
+
+  const incomplete = areas.filter(a => a.incomplete);
+  return { ranked, primary, tied, compound, sequence, incomplete, all: areas };
 }
 
 /* ---------- FRAMEWORK EXPLAINER VIEW ---------- */
