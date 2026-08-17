@@ -676,8 +676,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <h2 id="welcome-heading">You're all set! 🎉</h2>
     <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
     <div id="welcome-video-area">
+      <!-- Vimeo-hosted (see KW_WELCOME_VIMEO). The Player API fills this box —
+           the 56.25% padding keeps the 16:9 frame before the iframe lands. -->
       <div style="padding:56.25% 0 0 0;position:relative;border-radius:12px;overflow:hidden;background:#000">
-        <video id="welcome-video" controls playsinline preload="metadata" style="position:absolute;top:0;left:0;width:100%;height:100%;background:#000" title="Welcome to Key Wellness"></video>
+        <div id="welcome-vimeo" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>
       </div>
     </div>
     <div id="welcome-start-wrap" style="display:none;margin-top:8px">
@@ -3538,6 +3540,24 @@ function _showStartButton() {
   if (wait) wait.style.display = 'none';
 }
 
+// ── Onboarding welcome video ───────────────────────────────────────
+// Vimeo-hosted, in line with the Vimeo hosting decision for portal video.
+// Held here rather than in a Supabase content_items row: this is the one
+// video every new member must see before they can start, so it should not
+// depend on a data row being present and correctly configured.
+//
+// Accepts '<id>' or '<id>/<privacy-hash>' — see lpParseVimeoRef(). To swap the
+// video, change this line only; embedding is restricted to the portal's domains
+// on the Vimeo account side.
+const KW_WELCOME_VIMEO = '1217352503';   // "Welcome to the portal"
+
+let _kwWelcomePlayer = null;
+let _kwWelcomeApiTimer = null;
+function _kwDestroyWelcomePlayer() {
+  clearTimeout(_kwWelcomeApiTimer);
+  if (_kwWelcomePlayer) { try { _kwWelcomePlayer.destroy(); } catch (_) {} _kwWelcomePlayer = null; }
+}
+
 function showWelcomeVideo(){
   const _wlp = safeParseLS('kw_profile', {});
   const _wn  = state.user?.first_name || _wlp.firstName || '';
@@ -3553,41 +3573,43 @@ function showWelcomeVideo(){
   // Reveal the "Start My Assessment" button ONLY when the welcome video ends.
   // The button stays hidden during playback so it never appears at the start
   // (no skip control — watching the intro is intentionally required).
-  const vid = document.getElementById('welcome-video');
-  if (vid && !vid._kwWired) {
-    const reveal = () => _showStartButton();
-    vid.addEventListener('ended', reveal);
-    // Fallback for browsers/paths that don't fire 'ended' reliably: reveal once
-    // playback reaches the very end.
-    vid.addEventListener('timeupdate', () => {
-      if (vid.duration && vid.currentTime >= vid.duration - 0.5) reveal();
-    });
-    // If the video can't load (e.g. the welcome file isn't uploaded to the
-    // Storage bucket yet), don't trap the member — let them continue.
-    vid.addEventListener('error', reveal);
-    vid._kwWired = true;
-  }
+  const box = document.getElementById('welcome-vimeo');
+  _kwDestroyWelcomePlayer();
+  if (box) box.innerHTML = '';
 
-  // Source the welcome video from Supabase (the content_items row with no
-  // pathway — the same Storage bucket the Learning Pathways use), not a
-  // hardcoded third-party embed.
-  (async () => {
+  // Fail open. This modal sits between a new member and their first assessment,
+  // so anything that stops the video reaching us — Vimeo blocked on a corporate
+  // network, the API script never loading, a bad reference — must release the
+  // button rather than leave them staring at a black box.
+  const failOpen = (why) => {
+    if (why) console.warn('Welcome video unavailable:', why);
+    const wait = document.getElementById('welcome-wait-msg');
+    if (wait) wait.textContent = 'The welcome video could not load — you can continue to your assessment.';
+    _showStartButton();
+  };
+
+  const ref = lpParseVimeoRef(KW_WELCOME_VIMEO);
+  if (!box || !ref) { failOpen('no welcome video configured'); return; }
+
+  _ensureVimeoApi(() => {
+    if (!document.getElementById('welcome-modal').classList.contains('visible')) return;
     try {
-      await loadPathwaysData();
-      const w = (typeof lpWelcome === 'function') ? lpWelcome() : null;
-      if (w && w.video_path && vid) {
-        vid.src = lpStorageUrl(w.video_path);
-        try { vid.poster = 'data:image/svg+xml;utf8,' + encodeURIComponent(kwPoster(w, 640)); } catch (_) {}
-        vid.load();
-      } else {
-        // No welcome video is configured — don't trap the user; let them proceed.
-        _showStartButton();
-      }
-    } catch (err) {
-      console.warn('Welcome video load failed:', err);
-      _showStartButton();
-    }
-  })();
+      const opts = ref.hash
+        ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
+        : { id: Number(ref.id), responsive: true };
+      _kwWelcomePlayer = new Vimeo.Player(box, opts);
+      _kwWelcomePlayer.on('ended', () => _showStartButton());
+      _kwWelcomePlayer.on('error', e => failOpen(e));
+      _kwWelcomePlayer.ready().catch(e => failOpen(e));
+    } catch (e) { failOpen(e); }
+  }, () => failOpen('player.js failed to load'));
+
+  // If the API script neither loads nor errors (a proxy that hangs the request),
+  // stop waiting after 15s rather than holding onboarding for the full 6 minutes.
+  clearTimeout(_kwWelcomeApiTimer);
+  _kwWelcomeApiTimer = setTimeout(() => {
+    if (!_kwWelcomePlayer) failOpen('player.js did not load in time');
+  }, 15000);
 
   // Safety net: if 'ended' never fires (e.g. the video can't load), reveal the
   // button after ~6 minutes so a member is never permanently stuck.
@@ -3596,6 +3618,7 @@ function showWelcomeVideo(){
 
 window.closeWelcome = async function(){
   document.getElementById('welcome-modal').classList.remove('visible');
+  _kwDestroyWelcomePlayer();   // stop playback — the modal only hides, it stays in the DOM
   // Mark welcome as seen in both places so it never shows again
   localStorage.setItem('kw_welcome_seen', 'true');
   if (state.user) {
@@ -3930,10 +3953,15 @@ async function markArticleRead(title) {
   const _res = await KWBadges.recordPoints('article_read', title);
   if (_res && typeof _res.total === 'number') state.points = { ...state.points, total: _res.total, season: state.points?.season || 0 };
 }
-// Load the Vimeo Player API once, then run cb() when it's ready. Still used by the
-// onboarding welcome-modal player (showWelcomeVideo()) — NOT by Learning Pathways,
-// which streams native <video> from Supabase Storage instead of Vimeo embeds.
-function _ensureVimeoApi(cb) {
+// Load the Vimeo Player API once, then run cb() when it's ready. Used by the
+// onboarding welcome-modal player (showWelcomeVideo()) and by webinar playback
+// (lpOpenWebinar()). Learning Pathways lessons are NOT Vimeo — they stream
+// native <video> from Supabase Storage.
+//
+// onFail() is optional and fires if the script cannot load at all — Vimeo being
+// unreachable on a corporate network is a real possibility here, and the
+// welcome modal gates onboarding, so callers need a way to fail open.
+function _ensureVimeoApi(cb, onFail) {
   if (window.Vimeo && window.Vimeo.Player) { if (cb) cb(); return; }
   let tag = document.querySelector('script[src*="player.vimeo.com/api/player.js"]');
   if (!tag) {
@@ -3942,6 +3970,7 @@ function _ensureVimeoApi(cb) {
     document.head.appendChild(tag);
   }
   if (cb) tag.addEventListener('load', cb);
+  if (onFail) tag.addEventListener('error', onFail);
 }
 
 // ══════════════════════════════════════════════════
@@ -3964,7 +3993,7 @@ state.lp = {
   quizResult: null,
   certName: '',
   playingId: null,
-  playingKind: 'lesson', // 'lesson' | 'webinar' — drives completion vs ping-only behaviour
+  playingKind: 'lesson', // 'lesson' | 'webinar' | 'welcome' — drives completion vs ping-only behaviour
   upNextId: null,
   branding: null,        // { program_name, program_logo_path } from my_program_branding() — null = Key Wellness
   watch: {},             // content_id -> max_position_seconds (resume, from video_watch_progress)
@@ -4231,7 +4260,7 @@ function renderLpLanding(el) {
         <div class="lp-w-tag">Not part of a pathway</div>
         <div class="lp-w-title">${escHtml(welcome.title)}</div>
       </div>
-      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenWelcome('${welcome.id}')">▶ Watch</button>
     </div>` : ''}`;
 }
 
@@ -4550,6 +4579,82 @@ async function lpOpenWebinar(id) {
     }
   });
 }
+// ── Welcome video — Vimeo, same source as onboarding ──────────────
+// The welcome strip on the Learn landing plays the SAME video the
+// onboarding modal does (KW_WELCOME_VIMEO), so the two surfaces can never
+// drift apart. The content_items row is still what makes the strip appear
+// and carries the title — only the video source moved off Storage.
+//
+// Kept separate from lpOpenWebinar(): a webinar logs a view row and can
+// never earn Learning credit, neither of which applies here. Completion
+// still goes through lpMarkComplete() exactly as it did on the native
+// player, so badges behave as before. (record_video_progress() already
+// returns 'not_in_library' for a null-pathway item, so no Learning points
+// are at stake either way.)
+async function lpOpenWelcome(id) {
+  clearInterval(_lpUnTimer);
+  const item = lpFindItem(id);
+  if (!item) return;
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  lpDestroyVimeo();
+  state.lp.playingId = id;
+  state.lp.playingKind = 'welcome';
+  document.getElementById('lp-pm-title').textContent = item.title;
+  document.getElementById('lp-pm-sub').textContent = 'Welcome' + (item.duration_seconds ? ' · ' + lpFmtDuration(item.duration_seconds) : '');
+  document.getElementById('lp-pm-flash').classList.remove('on');
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
+  const video = document.getElementById('lp-pm-video');
+  video.pause();
+  video._lpCompletionStarted = false;
+  video._lpCompletionData = null;
+  video.removeAttribute('src'); video.load();
+  video.style.display = 'none';
+  const box = document.getElementById('lp-pm-vimeo');
+  box.style.display = 'block';
+  document.getElementById('lp-player-modal').classList.add('on');
+
+  const ref = lpParseVimeoRef(KW_WELCOME_VIMEO);
+  if (!ref) { lpShowPlayerError('The welcome video is not configured. Contact wellness@keywellness.co.bw.'); return; }
+  _ensureVimeoApi(() => {
+    if (state.lp.playingId !== id || state.lp.playingKind !== 'welcome') return;
+    try {
+      const opts = ref.hash
+        ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
+        : { id: Number(ref.id), responsive: true };
+      _lpVimeoPlayer = new Vimeo.Player(box, opts);
+      _lpVimeoPlayer.on('timeupdate', d => {
+        state.lp._vmPos = Math.floor(d.seconds || 0);
+        state.lp._vmDur = Math.round(d.duration || 0);
+      });
+      _lpVimeoPlayer.on('pause', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('ended', async () => {
+        lpSendProgressPing(true);
+        // No up-next: the welcome video sits outside every pathway.
+        await lpMarkComplete();
+      });
+      _lpVimeoPlayer.on('error', e => {
+        console.error('[LP] Vimeo player error (welcome):', e);
+        lpShowPlayerError('Playback failed — the video may be unavailable or restricted. Try again, and contact wellness@keywellness.co.bw if it persists.');
+      });
+      _lpVimeoPlayer.ready().then(() => {
+        const saved = state.lp.watch[id] || 0;
+        const dur = item.duration_seconds || 0;
+        if (saved > 30 && (!dur || saved < dur * 0.95)) {
+          _lpVimeoPlayer.setCurrentTime(Math.max(0, saved - 5)).catch(() => {});
+        }
+        lpStartPings();
+      }).catch(err => {
+        console.error('[LP] Vimeo ready() failed (welcome):', err);
+        lpShowPlayerError('Could not load the welcome video — check your connection and try again.');
+      });
+    } catch (err) {
+      console.error('[LP] Vimeo init failed (welcome):', err);
+      lpShowPlayerError('Could not load the welcome video — check your connection and try again.');
+    }
+  }, () => lpShowPlayerError('Could not reach the video service. If this keeps happening on your work network, contact wellness@keywellness.co.bw.'));
+}
+
 function lpShowPlayerError(msg) {
   const e = document.getElementById('lp-pm-error');
   document.getElementById('lp-pm-error-msg').textContent = msg;
@@ -4560,6 +4665,7 @@ function lpRetryPlayback() {
   if (!id) return;
   document.getElementById('lp-pm-error').style.display = 'none';
   if (state.lp.playingKind === 'webinar') lpOpenWebinar(id);
+  else if (state.lp.playingKind === 'welcome') lpOpenWelcome(id);
   else lpOpenPlayer(id);
 }
 function lpVideoError() {
@@ -4584,7 +4690,7 @@ async function lpSendProgressPing(force) {
   const id = state.lp.playingId;
   if (!id) return;
   let pos, dur;
-  if (state.lp.playingKind === 'webinar') {
+  if (state.lp.playingKind === 'webinar' || state.lp.playingKind === 'welcome') {
     // Vimeo playback — position comes from the player's timeupdate events.
     pos = state.lp._vmPos || 0;
     dur = state.lp._vmDur || 0;
