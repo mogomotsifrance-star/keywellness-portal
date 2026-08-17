@@ -3993,7 +3993,7 @@ state.lp = {
   quizResult: null,
   certName: '',
   playingId: null,
-  playingKind: 'lesson', // 'lesson' | 'webinar' — drives completion vs ping-only behaviour
+  playingKind: 'lesson', // 'lesson' | 'webinar' | 'welcome' — drives completion vs ping-only behaviour
   upNextId: null,
   branding: null,        // { program_name, program_logo_path } from my_program_branding() — null = Key Wellness
   watch: {},             // content_id -> max_position_seconds (resume, from video_watch_progress)
@@ -4260,7 +4260,7 @@ function renderLpLanding(el) {
         <div class="lp-w-tag">Not part of a pathway</div>
         <div class="lp-w-title">${escHtml(welcome.title)}</div>
       </div>
-      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenPlayer('${welcome.id}')">▶ Watch</button>
+      <button class="lp-btn lp-btn-outline lp-btn-sm" onclick="lpOpenWelcome('${welcome.id}')">▶ Watch</button>
     </div>` : ''}`;
 }
 
@@ -4579,6 +4579,82 @@ async function lpOpenWebinar(id) {
     }
   });
 }
+// ── Welcome video — Vimeo, same source as onboarding ──────────────
+// The welcome strip on the Learn landing plays the SAME video the
+// onboarding modal does (KW_WELCOME_VIMEO), so the two surfaces can never
+// drift apart. The content_items row is still what makes the strip appear
+// and carries the title — only the video source moved off Storage.
+//
+// Kept separate from lpOpenWebinar(): a webinar logs a view row and can
+// never earn Learning credit, neither of which applies here. Completion
+// still goes through lpMarkComplete() exactly as it did on the native
+// player, so badges behave as before. (record_video_progress() already
+// returns 'not_in_library' for a null-pathway item, so no Learning points
+// are at stake either way.)
+async function lpOpenWelcome(id) {
+  clearInterval(_lpUnTimer);
+  const item = lpFindItem(id);
+  if (!item) return;
+  { const _v = document.getElementById('lp-pm-video'); _v.pause(); }
+  lpDestroyVimeo();
+  state.lp.playingId = id;
+  state.lp.playingKind = 'welcome';
+  document.getElementById('lp-pm-title').textContent = item.title;
+  document.getElementById('lp-pm-sub').textContent = 'Welcome' + (item.duration_seconds ? ' · ' + lpFmtDuration(item.duration_seconds) : '');
+  document.getElementById('lp-pm-flash').classList.remove('on');
+  document.getElementById('lp-pm-upnext').classList.remove('on');
+  document.getElementById('lp-pm-error').style.display = 'none';
+  const video = document.getElementById('lp-pm-video');
+  video.pause();
+  video._lpCompletionStarted = false;
+  video._lpCompletionData = null;
+  video.removeAttribute('src'); video.load();
+  video.style.display = 'none';
+  const box = document.getElementById('lp-pm-vimeo');
+  box.style.display = 'block';
+  document.getElementById('lp-player-modal').classList.add('on');
+
+  const ref = lpParseVimeoRef(KW_WELCOME_VIMEO);
+  if (!ref) { lpShowPlayerError('The welcome video is not configured. Contact wellness@keywellness.co.bw.'); return; }
+  _ensureVimeoApi(() => {
+    if (state.lp.playingId !== id || state.lp.playingKind !== 'welcome') return;
+    try {
+      const opts = ref.hash
+        ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
+        : { id: Number(ref.id), responsive: true };
+      _lpVimeoPlayer = new Vimeo.Player(box, opts);
+      _lpVimeoPlayer.on('timeupdate', d => {
+        state.lp._vmPos = Math.floor(d.seconds || 0);
+        state.lp._vmDur = Math.round(d.duration || 0);
+      });
+      _lpVimeoPlayer.on('pause', () => lpSendProgressPing(true));
+      _lpVimeoPlayer.on('ended', async () => {
+        lpSendProgressPing(true);
+        // No up-next: the welcome video sits outside every pathway.
+        await lpMarkComplete();
+      });
+      _lpVimeoPlayer.on('error', e => {
+        console.error('[LP] Vimeo player error (welcome):', e);
+        lpShowPlayerError('Playback failed — the video may be unavailable or restricted. Try again, and contact wellness@keywellness.co.bw if it persists.');
+      });
+      _lpVimeoPlayer.ready().then(() => {
+        const saved = state.lp.watch[id] || 0;
+        const dur = item.duration_seconds || 0;
+        if (saved > 30 && (!dur || saved < dur * 0.95)) {
+          _lpVimeoPlayer.setCurrentTime(Math.max(0, saved - 5)).catch(() => {});
+        }
+        lpStartPings();
+      }).catch(err => {
+        console.error('[LP] Vimeo ready() failed (welcome):', err);
+        lpShowPlayerError('Could not load the welcome video — check your connection and try again.');
+      });
+    } catch (err) {
+      console.error('[LP] Vimeo init failed (welcome):', err);
+      lpShowPlayerError('Could not load the welcome video — check your connection and try again.');
+    }
+  }, () => lpShowPlayerError('Could not reach the video service. If this keeps happening on your work network, contact wellness@keywellness.co.bw.'));
+}
+
 function lpShowPlayerError(msg) {
   const e = document.getElementById('lp-pm-error');
   document.getElementById('lp-pm-error-msg').textContent = msg;
@@ -4589,6 +4665,7 @@ function lpRetryPlayback() {
   if (!id) return;
   document.getElementById('lp-pm-error').style.display = 'none';
   if (state.lp.playingKind === 'webinar') lpOpenWebinar(id);
+  else if (state.lp.playingKind === 'welcome') lpOpenWelcome(id);
   else lpOpenPlayer(id);
 }
 function lpVideoError() {
@@ -4613,7 +4690,7 @@ async function lpSendProgressPing(force) {
   const id = state.lp.playingId;
   if (!id) return;
   let pos, dur;
-  if (state.lp.playingKind === 'webinar') {
+  if (state.lp.playingKind === 'webinar' || state.lp.playingKind === 'welcome') {
     // Vimeo playback — position comes from the player's timeupdate events.
     pos = state.lp._vmPos || 0;
     dur = state.lp._vmDur || 0;
