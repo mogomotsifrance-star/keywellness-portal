@@ -465,3 +465,33 @@ directly — without the two-level, leaf-selectability and close-cascade guards 
 RPCs applied. Reordering also leaves `sort_order` renumbered in 10s within any
 sibling group that was moved; that is just a different set of integers and needs
 no undo.
+
+
+## supabase_admin_depts_rpcs.sql (Departments sub-tab in admin.html)
+
+```sql
+-- migrations/rollback-admin-depts-rpcs.sql
+drop function if exists admin_depts_overview(uuid);
+drop function if exists admin_dept_add(uuid, text[]);
+drop function if exists admin_dept_copy_from(uuid, uuid);
+drop function if exists admin_dept_rename(uuid, text);
+drop function if exists admin_dept_set_active(uuid, boolean);
+drop function if exists admin_dept_move(uuid, text);
+drop function if exists admin_dept_reassign_members(uuid, uuid);
+drop function if exists admin_dept_delete(uuid);
+```
+
+Creates no tables and alters no existing object, so dropping the functions is
+complete. `unit_departments` rows and `profiles.department_id` are untouched.
+
+Unlike the organisations and units batches, this one has functions that CHANGE
+MEMBER DATA, and those changes do not come back with the rollback:
+`admin_dept_reassign_members()` rewrites `profiles.department_id`, and moving
+members to Unassigned sets it to NULL — the previous value cannot be
+reconstructed from this file. Departments added or renamed through the UI, and
+`sort_order` renumbered in 10s inside any reordered unit, likewise persist.
+
+Note: `unit_departments_admin_all` RLS predates these functions, so an admin can
+still write to the table directly afterwards — without the case-insensitive
+duplicate guard, the parent-company reporting warning, or the strand-the-members
+warning.

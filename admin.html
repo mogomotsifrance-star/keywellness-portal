@@ -1277,10 +1277,12 @@ async function advAssign(userId) {
    SELECT-only under RLS, by design). Onboarding order is:
    create the organisation here → grant HR on Roles & Access →
    share the invite code with employees. */
-let orgsData   = [];
-let orgSubTab  = 'orgs';   // 'orgs' | 'units'
-let unitsOrgId = '';       // which organisation the Companies sub-tab is showing
-let unitsData  = [];
+let orgsData    = [];
+let orgSubTab   = 'orgs';  // 'orgs' | 'units' | 'depts'
+let unitsOrgId  = '';      // which organisation the Companies/Departments sub-tabs are showing
+let unitsData   = [];
+let deptsUnitId = '';      // which company/site the Departments sub-tab is showing
+let deptsData   = [];
 
 async function renderOrgs() {
   const el = document.getElementById('page-content');
@@ -1296,7 +1298,7 @@ async function renderOrgs() {
   // Keep the org pickers on the other tabs in step with what was just changed.
   allOrgs = orgsData.map(o => ({ id: o.id, name: o.name }));
 
-  if (orgSubTab === 'units') {
+  if (orgSubTab === 'units' || orgSubTab === 'depts') {
     if (!unitsOrgId || !orgsData.some(o => o.id === unitsOrgId)) {
       unitsOrgId = (orgsData[0] || {}).id || '';
     }
@@ -1310,7 +1312,26 @@ async function renderOrgs() {
       return;
     }
     unitsData = r.data || [];
+  }
+
+  if (orgSubTab === 'units') {
     el.innerHTML = orgSubTabsHtml() + unitsHtml();
+  } else if (orgSubTab === 'depts') {
+    // Departments hang off one company/site, so a unit must be chosen first.
+    if (!deptsUnitId || !unitsData.some(u => u.id === deptsUnitId)) {
+      deptsUnitId = (unitsData[0] || {}).id || '';
+    }
+    const d = deptsUnitId
+      ? await sb.rpc('admin_depts_overview', { p_unit_id: deptsUnitId })
+      : { data: [], error: null };
+    if (d.error) {
+      el.innerHTML = orgSubTabsHtml() + `<div class="card"><div class="card-title">Departments unavailable</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6">${escNar(d.error.message)}<br>
+        If the function does not exist yet, run <span class="mono">supabase_admin_depts_rpcs.sql</span> in the Supabase SQL Editor, then reopen this tab.</p></div>`;
+      return;
+    }
+    deptsData = d.data || [];
+    el.innerHTML = orgSubTabsHtml() + deptsHtml();
   } else {
     el.innerHTML = orgSubTabsHtml() + orgsHtml();
   }
@@ -1321,6 +1342,7 @@ function orgSubTabsHtml() {
   return `<div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
     <button class="btn btn-sm ${orgSubTab==='orgs' ?'btn-primary':'btn-outline'}" onclick="orgSwitch('orgs')">Organisations</button>
     <button class="btn btn-sm ${orgSubTab==='units'?'btn-primary':'btn-outline'}" onclick="orgSwitch('units')">Companies &amp; Sites</button>
+    <button class="btn btn-sm ${orgSubTab==='depts'?'btn-primary':'btn-outline'}" onclick="orgSwitch('depts')">Departments</button>
   </div>`;
 }
 
@@ -1708,6 +1730,199 @@ async function saveUnitEdit() {
     return;
   }
   closeUnitEditModal();
+  renderOrgs();
+}
+
+/* ── Departments (unit_departments) ───────────────────────────
+   A department belongs to ONE company/site, so the same name is
+   repeated per unit — the Sedimosa seed put one shared list of 22
+   names across 6 units, which is why the live table holds ~161 rows
+   over ~38 distinct names. The two operations that actually matter are
+   therefore "paste a list" and "copy another unit's list", not "add
+   one"; both go through admin_dept_add(), which takes an array.
+
+   Departments are a separate dimension from the unit tree: a member's
+   unit is their company/site, their department is orthogonal to it. */
+
+function unitLabelFor(u) {
+  return u.parent_unit_id ? `${u.parent_name} › ${u.name}` : u.name;
+}
+
+function deptsHtml() {
+  const unit = unitsData.find(u => u.id === deptsUnitId) || {};
+  const isParent = (unit.child_count || 0) > 0;
+  const active = deptsData.filter(d => d.is_active).length;
+  const placed = deptsData.reduce((s, d) => s + (d.member_count || 0), 0);
+
+  const unitOpts = unitsData.map(u =>
+    `<option value="${u.id}"${u.id === deptsUnitId ? ' selected' : ''}>${escNar(unitLabelFor(u))}${u.is_active ? '' : ' (closed)'}</option>`).join('');
+
+  // Copy source: any other unit in this organisation that has departments.
+  const copyOpts = ['<option value="">Copy departments from…</option>'].concat(
+    unitsData.filter(u => u.id !== deptsUnitId && (u.dept_count || 0) > 0)
+             .map(u => `<option value="${u.id}">${escNar(unitLabelFor(u))} (${u.dept_count})</option>`)).join('');
+
+  const rows = deptsData.map((d, i) => `
+    <tr${d.is_active ? '' : ' style="opacity:.62"'}>
+      <td><strong>${escNar(d.name)}</strong></td>
+      <td><span class="status-pill ${d.is_active ? 'status-confirmed' : 'status-cancelled'}">${d.is_active ? 'open' : 'closed'}</span></td>
+      <td class="mono">${d.member_count}${(!d.is_active && d.member_count > 0)
+        ? ' <span title="Members on a closed department appear in neither an active-department row nor the Unassigned row — they drop out of the department breakdown" style="color:var(--orange)">⚠</span>' : ''}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-outline btn-sm" style="padding:4px 9px" onclick="deptMove(${i},'up')" title="Move up">↑</button>
+        <button class="btn btn-outline btn-sm" style="padding:4px 9px" onclick="deptMove(${i},'down')" title="Move down">↓</button>
+        <button class="btn btn-outline btn-sm" onclick="deptRename(${i})">Rename</button>
+        ${d.member_count > 0
+          ? `<button class="btn btn-outline btn-sm" onclick="deptReassign(${i})">Move members</button>` : ''}
+        <button class="btn btn-outline btn-sm" onclick="deptToggleActive(${i})">${d.is_active ? 'Close' : 'Reopen'}</button>
+        ${d.deletable
+          ? `<button class="btn btn-outline btn-sm" onclick="deptDelete(${i})">Delete</button>`
+          : '<button class="btn btn-outline btn-sm" disabled title="Members are on this department — move them first, or just close it">Delete</button>'}
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Departments</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600">Organisation
+          <select class="search-input" style="min-width:200px;margin-left:8px" onchange="deptsOrgChanged(this.value)">
+            ${orgsData.map(o => `<option value="${o.id}"${o.id === unitsOrgId ? ' selected' : ''}>${escNar(o.name)}</option>`).join('')}
+          </select></label>
+        <label style="font-size:12px;font-weight:600">Company / site
+          <select id="depts-unit" class="search-input" style="min-width:240px;margin-left:8px" onchange="deptsUnitChanged(this.value)">${unitOpts}</select></label>
+      </div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0">
+        Departments belong to one company or site, so each one keeps its own list — the same
+        department name is repeated per site rather than shared. A member's department sits
+        alongside their company/site, not inside it.
+      </p>
+      ${isParent ? `<div class="notice-gold" style="margin-top:14px;padding:12px 14px;background:var(--cream-dark);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.6;color:var(--orange);font-weight:600">
+        ${escNar(unit.name)} has ${unit.child_count} site(s), so it reports as a combined multi-site view — departments here will not appear in any report. Add them to the individual sites instead.
+      </div>` : ''}
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${deptsData.length}</div><div class="stat-lbl">Departments</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${active}</div><div class="stat-lbl">Open</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${placed}</div><div class="stat-lbl">Members Placed</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Add departments</div>
+      <label style="font-size:12px;font-weight:600;display:block">One per line
+        <textarea id="dept-new-names" class="search-input" rows="4" style="width:100%;margin-top:4px;font-family:inherit;resize:vertical" placeholder="Finance&#10;Human Resources&#10;Information Technology"></textarea></label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="deptAdd()">+ Add to ${escNar(unit.name || 'this unit')}</button>
+        <span style="font-size:12px;color:var(--muted)">or</span>
+        <select id="dept-copy-src" class="search-input" style="min-width:230px">${copyOpts}</select>
+        <button class="btn btn-navy btn-sm" onclick="deptCopy()">Copy list</button>
+      </div>
+      <div id="dept-new-msg" style="display:none;margin-top:12px;font-size:12.5px;font-weight:600;line-height:1.6"></div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">
+        Names already on this company or site are skipped rather than duplicated, so pasting a
+        longer version of the same list is safe.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">${escNar(unit.name || '—')} — departments (${deptsData.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Status</th><th>Members</th><th style="text-align:right"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px">No departments here yet. Paste a list above, or copy another site\'s.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px">
+        Closing a department hides it from new members but leaves anyone already on it there —
+        and those members then appear in neither their department's row nor the Unassigned row of
+        a report. Move them first with <strong>Move members</strong> if you want them to keep counting.
+      </p>`
+      + `</div>`;
+}
+
+function deptsOrgChanged(id) { unitsOrgId = id; deptsUnitId = ''; renderOrgs(); }
+function deptsUnitChanged(id) { deptsUnitId = id; renderOrgs(); }
+
+async function deptAdd() {
+  const raw = (document.getElementById('dept-new-names').value || '');
+  const names = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!names.length) return orgShowMsg('dept-new-msg', 'Enter at least one department name.', false);
+  const { data, error } = await sb.rpc('admin_dept_add', { p_unit_id: deptsUnitId, p_names: names });
+  if (error) return orgShowMsg('dept-new-msg', 'Could not add: ' + error.message, false);
+  await renderOrgs();
+  orgShowMsg('dept-new-msg', (data && data.msg) || 'Added.', true);
+}
+
+async function deptCopy() {
+  const src = document.getElementById('dept-copy-src').value;
+  if (!src) return orgShowMsg('dept-new-msg', 'Choose a company or site to copy from.', false);
+  const { data, error } = await sb.rpc('admin_dept_copy_from', {
+    p_target_unit_id: deptsUnitId, p_source_unit_id: src });
+  if (error) return orgShowMsg('dept-new-msg', 'Could not copy: ' + error.message, false);
+  await renderOrgs();
+  orgShowMsg('dept-new-msg', (data && data.msg) || 'Copied.', true);
+}
+
+async function deptRename(i) {
+  const d = deptsData[i];
+  if (!d) return;
+  const name = prompt('Rename department', d.name);
+  if (name === null) return;
+  const { error } = await sb.rpc('admin_dept_rename', { p_dept_id: d.id, p_name: name.trim() });
+  if (error) { alert('Could not rename: ' + error.message); return; }
+  renderOrgs();
+}
+
+async function deptMove(i, dir) {
+  const d = deptsData[i];
+  if (!d) return;
+  const { error } = await sb.rpc('admin_dept_move', { p_dept_id: d.id, p_direction: dir });
+  if (error) { alert('Could not move: ' + error.message); return; }
+  renderOrgs();
+}
+
+async function deptToggleActive(i) {
+  const d = deptsData[i];
+  if (!d) return;
+  let msg = d.is_active
+    ? `Close ${d.name}? New members will no longer be able to choose it.`
+    : `Reopen ${d.name}? Members will be able to choose it again.`;
+  if (d.is_active && d.member_count > 0) {
+    msg += `\n\n${d.member_count} member(s) are on it. While it is closed they appear in neither their department's row nor the Unassigned row of a report — they drop out of the department breakdown entirely (unit totals are unaffected).\n\nUse "Move members" first if you want them to keep counting.`;
+  }
+  if (!confirm(msg)) return;
+  const { data, error } = await sb.rpc('admin_dept_set_active', { p_dept_id: d.id, p_is_active: !d.is_active });
+  if (error) { alert('Could not update: ' + error.message); return; }
+  await renderOrgs();
+  if (data && data.msg) orgShowMsg('dept-new-msg', data.msg, true);
+}
+
+/* Destination must be in the same unit, so offer only this unit's other
+   departments — plus Unassigned, which is a real reported bucket. */
+async function deptReassign(i) {
+  const d = deptsData[i];
+  if (!d) return;
+  const others = deptsData.filter(x => x.id !== d.id);
+  const menu = others.map((x, n) => `${n + 1}. ${x.name}${x.is_active ? '' : ' (closed)'}`).join('\n');
+  const answer = prompt(
+    `Move the ${d.member_count} member(s) on "${d.name}" to:\n\n0. Unassigned (still counted in reports)\n${menu}\n\nEnter a number:`, '0');
+  if (answer === null) return;
+  const n = parseInt(answer, 10);
+  if (isNaN(n) || n < 0 || n > others.length) { alert('That is not one of the options.'); return; }
+  const to = n === 0 ? null : others[n - 1].id;
+  const { data, error } = await sb.rpc('admin_dept_reassign_members', { p_dept_id: d.id, p_to_dept_id: to });
+  if (error) { alert('Could not move members: ' + error.message); return; }
+  await renderOrgs();
+  if (data && data.msg) orgShowMsg('dept-new-msg', data.msg, true);
+}
+
+async function deptDelete(i) {
+  const d = deptsData[i];
+  if (!d) return;
+  if (!confirm(`Delete ${d.name}? No members are on it, so this removes it for good.`)) return;
+  const { error } = await sb.rpc('admin_dept_delete', { p_dept_id: d.id });
+  if (error) { alert('Could not delete: ' + error.message); return; }
   renderOrgs();
 }
 
