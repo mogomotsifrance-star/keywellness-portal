@@ -271,11 +271,19 @@ appear on the member's side and will not count in organisation utilisation
 reporting.
 
 **Onboarding a client company** starts on the admin **Organisations** tab (create
-the org + invite code), then **Roles & Access** (grant their HR manager), then
-share the invite code with the employer. Both tabs write through admin-gated
-`SECURITY DEFINER` RPCs — `organizations`, `admins` and `employers` stay
-SELECT-only under RLS. Companies/units inside an org (`org_units`) are still set
-up with SQL.
+the org + invite code, then build its companies/sites on the **Companies & Sites**
+sub-tab), then **Roles & Access** (grant their HR manager), then share the invite
+code with the employer. All of it writes through admin-gated `SECURITY DEFINER`
+RPCs — `organizations`, `admins` and `employers` stay SELECT-only under RLS.
+Departments inside a site (`unit_departments`) are still set up with SQL.
+
+**`org_units` is exactly two levels — company → site — and that is load-bearing.**
+`kwUnitLabel()` reads a leaf's parent as the company and the leaf as the site;
+members can only ever pick a leaf; a company with sites reports as a combined
+multi-site view and shows no departments; and an active site under a closed
+company is invisible in the picker. The `admin_unit_*` RPCs enforce all four.
+Do not write to `org_units` directly (its `org_units_admin_all` RLS policy
+predates the RPCs and bypasses every one of those guards).
 
 ---
 

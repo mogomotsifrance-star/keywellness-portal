@@ -329,6 +329,28 @@ tbody td{padding:12px 14px;vertical-align:middle}
   </div>
 </div>
 
+<!-- ══ COMPANY / SITE EDIT MODAL (admin-only; writes via admin_unit_update) ══ -->
+<div class="modal-overlay" id="unitEditModal">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Edit company or site</h3>
+      <button class="modal-close" onclick="closeUnitEditModal()">✕</button>
+    </div>
+    <div id="ue-error" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px"></div>
+    <input type="hidden" id="ue-id">
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Name *
+      <input id="ue-name" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:8px">Sits under
+      <select id="ue-parent" style="width:100%;padding:8px;margin-top:4px"></select>
+      <span style="font-weight:400;font-size:11px;color:var(--muted);display:block;margin-top:4px">Top level makes it a company; choosing a company makes it a site of that company. Members already placed here move with it.</span></label>
+    <div id="ue-note" style="display:none;font-size:11.5px;color:var(--orange);font-weight:600;line-height:1.5;margin-bottom:16px"></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-primary btn-sm" onclick="saveUnitEdit()">Save changes</button>
+      <button class="btn btn-outline btn-sm" onclick="closeUnitEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Batch 3: full-metadata webinar editor (admin-only; writes via content_items_admin_all RLS) -->
 <div class="modal-overlay" id="webinarEditModal">
   <div class="modal-box">
@@ -1255,7 +1277,10 @@ async function advAssign(userId) {
    SELECT-only under RLS, by design). Onboarding order is:
    create the organisation here → grant HR on Roles & Access →
    share the invite code with employees. */
-let orgsData = [];
+let orgsData   = [];
+let orgSubTab  = 'orgs';   // 'orgs' | 'units'
+let unitsOrgId = '';       // which organisation the Companies sub-tab is showing
+let unitsData  = [];
 
 async function renderOrgs() {
   const el = document.getElementById('page-content');
@@ -1270,9 +1295,36 @@ async function renderOrgs() {
   orgsData = data || [];
   // Keep the org pickers on the other tabs in step with what was just changed.
   allOrgs = orgsData.map(o => ({ id: o.id, name: o.name }));
-  el.innerHTML = orgsHtml();
+
+  if (orgSubTab === 'units') {
+    if (!unitsOrgId || !orgsData.some(o => o.id === unitsOrgId)) {
+      unitsOrgId = (orgsData[0] || {}).id || '';
+    }
+    const r = unitsOrgId
+      ? await sb.rpc('admin_units_overview', { p_org_id: unitsOrgId })
+      : { data: [], error: null };
+    if (r.error) {
+      el.innerHTML = orgSubTabsHtml() + `<div class="card"><div class="card-title">Companies unavailable</div>
+        <p style="font-size:13px;color:var(--muted);line-height:1.6">${escNar(r.error.message)}<br>
+        If the function does not exist yet, run <span class="mono">supabase_admin_units_rpcs.sql</span> in the Supabase SQL Editor, then reopen this tab.</p></div>`;
+      return;
+    }
+    unitsData = r.data || [];
+    el.innerHTML = orgSubTabsHtml() + unitsHtml();
+  } else {
+    el.innerHTML = orgSubTabsHtml() + orgsHtml();
+  }
   KW.reveal('.card, .stat-box');
 }
+
+function orgSubTabsHtml() {
+  return `<div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+    <button class="btn btn-sm ${orgSubTab==='orgs' ?'btn-primary':'btn-outline'}" onclick="orgSwitch('orgs')">Organisations</button>
+    <button class="btn btn-sm ${orgSubTab==='units'?'btn-primary':'btn-outline'}" onclick="orgSwitch('units')">Companies &amp; Sites</button>
+  </div>`;
+}
+
+function orgSwitch(t) { orgSubTab = t; renderOrgs(); }
 
 function orgsHtml() {
   const active = orgsData.filter(o => o.is_active).length;
@@ -1447,6 +1499,215 @@ async function saveOrgEdit() {
     return;
   }
   closeOrgEditModal();
+  renderOrgs();
+}
+
+/* ── Companies & Sites (org_units) ────────────────────────────
+   The sub-org structure inside one organisation, exactly two levels
+   deep: a COMPANY is top-level, a SITE sits under one company. That
+   depth is not cosmetic — index.html's kwUnitLabel() reads a leaf's
+   parent as the company and the leaf as the site, and members can only
+   ever pick a leaf. The admin_unit_* RPCs enforce it; this view mostly
+   makes the consequences visible before the click. */
+
+function unitParentOptions(selectedId, excludeId) {
+  return ['<option value="">— Top level (a company)</option>'].concat(
+    unitsData
+      .filter(u => !u.parent_unit_id && u.id !== excludeId)
+      .map(u => `<option value="${u.id}"${selectedId === u.id ? ' selected' : ''}>${escNar(u.name)}${u.is_active ? '' : ' (closed)'}</option>`)
+  ).join('');
+}
+
+function unitsHtml() {
+  const org = orgsData.find(o => o.id === unitsOrgId) || {};
+  const companies = unitsData.filter(u => !u.parent_unit_id).length;
+  const sites     = unitsData.filter(u =>  u.parent_unit_id).length;
+  const placed    = unitsData.reduce((s, u) => s + (u.member_count || 0), 0);
+
+  const orgOpts = orgsData.map(o =>
+    `<option value="${o.id}"${o.id === unitsOrgId ? ' selected' : ''}>${escNar(o.name)}</option>`).join('');
+
+  const rows = unitsData.map((u, i) => {
+    const site = !!u.parent_unit_id;
+    const leaf = (u.child_count || 0) === 0;
+    return `
+    <tr${u.is_active ? '' : ' style="opacity:.62"'}>
+      <td>${site ? '<span style="color:var(--muted)">↳&nbsp;&nbsp;</span>' : ''}<strong>${escNar(u.name)}</strong>
+          <br><span style="font-size:11px;color:var(--muted)">${site ? 'Site of ' + escNar(u.parent_name) : (leaf ? 'Company' : 'Company · ' + u.child_count + ' site(s)')}</span></td>
+      <td><span class="status-pill ${u.is_active ? 'status-confirmed' : 'status-cancelled'}">${u.is_active ? 'open' : 'closed'}</span>
+          ${leaf ? '' : '<br><span style="font-size:10.5px;color:var(--muted)">not member-selectable</span>'}</td>
+      <td class="mono">${u.member_count}</td>
+      <td class="mono">${leaf ? u.dept_count : '<span title="A company with sites reports as a combined multi-site view, so its departments do not appear in reports" style="color:var(--orange)">—</span>'}</td>
+      <td class="mono">${u.hr_scope_count || 0}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-outline btn-sm" style="padding:4px 9px" onclick="unitMove(${i},'up')" title="Move up">↑</button>
+        <button class="btn btn-outline btn-sm" style="padding:4px 9px" onclick="unitMove(${i},'down')" title="Move down">↓</button>
+        <button class="btn btn-outline btn-sm" onclick="openUnitEditModal(${i})">Edit</button>
+        <button class="btn btn-outline btn-sm" onclick="unitToggleActive(${i})">${u.is_active ? 'Close' : 'Reopen'}</button>
+        ${u.deletable
+          ? `<button class="btn btn-outline btn-sm" onclick="unitDelete(${i})">Delete</button>`
+          : '<button class="btn btn-outline btn-sm" disabled title="Members, sites, departments, an HR manager\'s scope or a published report still reference this — close it instead">Delete</button>'}
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Companies &amp; Sites</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <label style="font-size:12px;font-weight:600">Organisation
+          <select id="units-org" class="search-input" style="min-width:220px;margin-left:8px" onchange="unitsOrgChanged(this.value)">${orgOpts}</select>
+        </label>
+      </div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7;margin:0">
+        The structure inside <strong>${escNar(org.name || '—')}</strong>, two levels deep: a
+        <strong>company</strong> sits at the top, and a <strong>site</strong> sits under one company.
+        Members pick the lowest level available to them — a company with no sites, or a site.
+        Give a company its first site and the company itself stops being selectable, so add sites
+        before employees start signing up where you can.
+      </p>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${companies}</div><div class="stat-lbl">Companies</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${sites}</div><div class="stat-lbl">Sites</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${placed}</div><div class="stat-lbl">Members Placed</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Add a company or site</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <label style="font-size:12px;font-weight:600;flex:1;min-width:220px">Name *
+          <input id="unit-new-name" class="search-input" type="text" placeholder="e.g. Jwaneng" style="width:100%;margin-top:4px"></label>
+        <label style="font-size:12px;font-weight:600;flex:1;min-width:220px">Sits under
+          <select id="unit-new-parent" class="search-input" style="width:100%;margin-top:4px">${unitParentOptions(null, null)}</select></label>
+        <button class="btn btn-primary btn-sm" onclick="unitCreate()">+ Add</button>
+      </div>
+      <div id="unit-new-msg" style="display:none;margin-top:12px;font-size:12.5px;font-weight:600;line-height:1.6"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Structure (${unitsData.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Status</th><th>Members</th><th>Departments</th><th>HR scoped</th><th style="text-align:right"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No companies yet. An organisation with no companies simply skips the step — members join the organisation directly.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px">
+        Closing a company closes its sites too, because a site under a closed company is invisible
+        to members. Members already placed keep their company or site either way — closing only
+        stops new members choosing it. Departments inside a site are still set up in Supabase.
+      </p>
+    </div>`;
+}
+
+function unitsOrgChanged(id) { unitsOrgId = id; renderOrgs(); }
+
+/* Everything the RPC would tell you afterwards, said before the click. */
+function unitCreateWarning(parent) {
+  if (!parent || (parent.child_count || 0) > 0) return '';
+  const bits = [];
+  if (parent.member_count > 0)
+    bits.push(`${parent.member_count} member(s) are recorded directly against ${parent.name} — they keep it, but no new member will be able to choose it.`);
+  if (parent.dept_count > 0)
+    bits.push(`${parent.name} will report as a combined multi-site view, so its ${parent.dept_count} department(s) will stop appearing in reports.`);
+  return bits.length ? `This is the first site under ${parent.name}.\n\n${bits.join('\n\n')}\n\nAdd it anyway?` : '';
+}
+
+async function unitCreate() {
+  const name = (document.getElementById('unit-new-name').value || '').trim();
+  const parentId = document.getElementById('unit-new-parent').value || null;
+  if (name.length < 2) return orgShowMsg('unit-new-msg', 'Enter the company or site name.', false);
+
+  const warning = unitCreateWarning(unitsData.find(u => u.id === parentId));
+  if (warning && !confirm(warning)) return;
+
+  const { data, error } = await sb.rpc('admin_unit_create', {
+    p_org_id: unitsOrgId, p_name: name, p_parent_unit_id: parentId,
+  });
+  if (error) return orgShowMsg('unit-new-msg', 'Could not add: ' + error.message, false);
+  await renderOrgs();
+  orgShowMsg('unit-new-msg', (data && data.msg) || 'Added.', true);
+}
+
+async function unitMove(i, dir) {
+  const u = unitsData[i];
+  if (!u) return;
+  const { error } = await sb.rpc('admin_unit_move', { p_unit_id: u.id, p_direction: dir });
+  if (error) { alert('Could not move: ' + error.message); return; }
+  renderOrgs();
+}
+
+async function unitToggleActive(i) {
+  const u = unitsData[i];
+  if (!u) return;
+  let msg;
+  if (u.is_active) {
+    msg = `Close ${u.name}? New members will no longer be able to choose it.`;
+    if (u.child_count > 0) msg += ` Its ${u.child_count} site(s) close with it — a site under a closed company is invisible to members.`;
+    if (u.member_count > 0) msg += ` The ${u.member_count} member(s) already placed there keep it, and stay in reporting.`;
+    if (u.hr_scope_count > 0) msg += ` ${u.hr_scope_count} HR manager(s) are scoped to it and will see an empty scope.`;
+  } else {
+    msg = `Reopen ${u.name}? Members will be able to choose it again.`;
+  }
+  if (!confirm(msg)) return;
+  const { data, error } = await sb.rpc('admin_unit_set_active', { p_unit_id: u.id, p_is_active: !u.is_active });
+  if (error) { alert('Could not update: ' + error.message); return; }
+  await renderOrgs();
+  if (data && data.msg) showUnitToast(data.msg);
+}
+
+async function unitDelete(i) {
+  const u = unitsData[i];
+  if (!u) return;
+  if (!confirm(`Delete ${u.name}? Nothing references it, so this removes it for good. Close it instead if you only want to stop new members choosing it.`)) return;
+  const { error } = await sb.rpc('admin_unit_delete', { p_unit_id: u.id });
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  renderOrgs();
+}
+
+/* The set-active RPC reports cascades and leftovers; surface that rather
+   than letting the table quietly differ from what was clicked. */
+function showUnitToast(text) {
+  const el = document.getElementById('unit-new-msg');
+  if (el) orgShowMsg('unit-new-msg', text, true);
+}
+
+function openUnitEditModal(i) {
+  const u = unitsData[i];
+  if (!u) return;
+  document.getElementById('ue-id').value   = u.id;
+  document.getElementById('ue-name').value = u.name || '';
+  document.getElementById('ue-parent').innerHTML = unitParentOptions(u.parent_unit_id, u.id);
+  const note = document.getElementById('ue-note');
+  note.textContent = (u.child_count || 0) > 0
+    ? `${u.name} has ${u.child_count} site(s), so it cannot be moved under another company — move or remove its sites first.`
+    : '';
+  note.style.display = note.textContent ? 'block' : 'none';
+  document.getElementById('ue-parent').disabled = (u.child_count || 0) > 0;
+  document.getElementById('ue-error').style.display = 'none';
+  document.getElementById('unitEditModal').classList.add('open');
+}
+
+function closeUnitEditModal() {
+  document.getElementById('unitEditModal').classList.remove('open');
+}
+
+async function saveUnitEdit() {
+  const err = document.getElementById('ue-error');
+  const sel = document.getElementById('ue-parent');
+  const { error } = await sb.rpc('admin_unit_update', {
+    p_unit_id:        document.getElementById('ue-id').value,
+    p_name:           document.getElementById('ue-name').value.trim(),
+    p_parent_unit_id: (sel.disabled ? null : sel.value) || null,
+  });
+  if (error) {
+    err.textContent = 'Could not save: ' + error.message;
+    err.style.display = 'block';
+    return;
+  }
+  closeUnitEditModal();
   renderOrgs();
 }
 

@@ -439,3 +439,29 @@ rollback is complete. Any organisation created through the Organisations tab
 stays exactly as it is (it is an ordinary `organizations` row); remove those by
 hand if they were mistakes. After rollback the admin tab shows its "run the SQL"
 notice again and new organisations go back to an `insert` in the SQL Editor.
+
+
+## supabase_admin_units_rpcs.sql (Companies & Sites sub-tab in admin.html)
+
+```sql
+-- migrations/rollback-admin-units-rpcs.sql
+drop function if exists admin_units_overview(uuid);
+drop function if exists admin_unit_create(uuid, text, uuid);
+drop function if exists admin_unit_update(uuid, text, uuid);
+drop function if exists admin_unit_set_active(uuid, boolean);
+drop function if exists admin_unit_move(uuid, text);
+drop function if exists admin_unit_delete(uuid);
+drop function if exists admin_unit_has_dependents(uuid);
+```
+
+Purely additive — creates no tables and alters no existing object, so the
+rollback is complete. org_units rows, profiles.org_unit_id, unit_departments and
+hr_unit_scope are all untouched; undo any structural change by hand if it was a
+mistake.
+
+Note: `org_units` also carries an `org_units_admin_all` RLS policy that predates
+these functions, so after this rollback an admin can still write to the table
+directly — without the two-level, leaf-selectability and close-cascade guards the
+RPCs applied. Reordering also leaves `sort_order` renumbered in 10s within any
+sibling group that was moved; that is just a different set of integers and needs
+no undo.
