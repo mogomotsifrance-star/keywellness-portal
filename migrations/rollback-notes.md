@@ -419,3 +419,23 @@ Note: the DELETE above only removes the Psychology of Spending row itself
 their `content_progress` row for it is cascade-deleted too (unrecoverable
 for that one lesson; every other lesson's progress is untouched since
 this whole file only ever UPDATEs by matching on `id`-stable rows).
+
+
+## supabase_admin_orgs_rpcs.sql (Organisations tab in admin.html)
+
+```sql
+-- migrations/rollback-admin-orgs-rpcs.sql
+drop function if exists admin_orgs_overview();
+drop function if exists admin_org_suggest_code(text);
+drop function if exists admin_org_create(text, text, text, text);
+drop function if exists admin_org_update(uuid, text, text, text, text, boolean);
+drop function if exists admin_org_set_active(uuid, boolean);
+drop function if exists admin_org_delete(uuid);
+drop function if exists admin_org_has_dependents(uuid);
+```
+
+Purely additive — creates no tables and alters no existing object, so the
+rollback is complete. Any organisation created through the Organisations tab
+stays exactly as it is (it is an ordinary `organizations` row); remove those by
+hand if they were mistakes. After rollback the admin tab shows its "run the SQL"
+notice again and new organisations go back to an `insert` in the SQL Editor.

@@ -1,3 +1,80 @@
+# Organisations tab in admin.html — create a client org without touching Supabase (2026-08-19)
+
+Onboarding a new client company used to start with a hand-written
+`insert into organizations (name, invite_code) values (...)` in the Supabase SQL
+Editor. That step is now a form on a new **Organisations** tab in `admin.html`
+(sidebar, between Advisors and Roles & Access).
+
+## Why RPCs and not RLS
+
+`organizations` has **SELECT-only** policies (`orgs_admin_all`, `orgs_own` from
+`supabase_multitenancy.sql`) — there is no INSERT/UPDATE/DELETE path for anyone,
+by design: the table is the client roster. Rather than open it up, every write
+goes through a `SECURITY DEFINER` function guarded by `is_admin()`, exactly like
+`supabase_admin_roles_rpcs.sql` does for the Roles tab.
+
+## New SQL — `supabase_admin_orgs_rpcs.sql` (NOT YET APPLIED)
+
+| Function | Does |
+|---|---|
+| `admin_orgs_overview()` | The whole tab in one call — every org plus member / HR / company counts and a `deletable` flag |
+| `admin_org_suggest_code(name)` | `SEDI-4821`-shaped code, retried until free — so the admin never invents or checks one |
+| `admin_org_create(name, code, program_name, logo)` | Blank code = generated. New orgs start active |
+| `admin_org_update(id, …)` | Full replace of the editable columns, incl. `is_active` |
+| `admin_org_set_active(id, bool)` | The table's Deactivate / Reactivate button |
+| `admin_org_delete(id)` | Only when **nothing** references the org — the "typo, caught immediately" case |
+| `admin_org_has_dependents(id)` | Internal probe over all 10 FK children; owner-only, never granted |
+
+**Invite-code case handling is the subtle bit.** Both readers —
+`handle_new_user()` (the signup trigger) and `verify_invite_code()` — match on
+`upper(invite_code)`. The table's own unique constraint is on the raw text, so
+`test-1234` and `TEST-1234` could both exist and one would shadow the other at
+signup. The RPCs therefore store codes **uppercased** and enforce uniqueness on
+`upper(invite_code)`, which is stricter than the constraint.
+
+**Deleting vs deactivating.** Deactivating flips `is_active`, which is what
+`handle_new_user()` checks — new employees can no longer join with the code,
+while everyone already enrolled keeps their account, their data and their
+reporting. Deletion is refused outright when anything points at the org
+(profiles, employers, org_units, hr_unit_scope, org_reports,
+org_headcount_reports, program_activities, content_items, advisor_clients,
+reward_fulfilments), so no history is ever silently destroyed. The tab greys out
+the Delete button in that case rather than letting the click fail.
+
+## Verification already done
+
+The whole migration was applied, exercised and **rolled back inside a single
+transaction** against the live project (16 checks: code suggestion, create with
+generated and manual codes, duplicate-name / duplicate-code / bad-format /
+non-https-logo refusals, `verify_invite_code()` seeing a freshly created code,
+update, deactivate closing signup, overview shape, delete-when-empty, and the
+delete guard refusing Sedimosa). Confirmed afterwards that nothing leaked:
+`is_admin()` is untouched, no `admin_org*` functions exist, org count still 2.
+
+**So the SQL still has to be applied by hand in the Supabase SQL Editor.** It is
+additive and admin-gated, so applying it early is safe — it is inert until the
+`dev` frontend ships.
+
+## Frontend — `admin.html`
+
+- Sidebar item + `TAB_TITLES` + `showTab` branch for `orgs`.
+- `renderOrgs()` / `orgsHtml()`: three stat boxes, an "Add an organisation" card
+  (name, invite code + **Suggest** button, programme name, programme logo), and a
+  table with Copy-code, Edit, Deactivate/Reactivate and Delete.
+- `#orgEditModal` follows the existing `webinarEditModal` markup pattern.
+- `renderOrgs()` refreshes the module-level `allOrgs`, so the org pickers on
+  Webinars / Reports / Activities pick up a new organisation without a reload.
+- Missing-RPC path degrades the same way the Roles tab does: a card telling you
+  to run `supabase_admin_orgs_rpcs.sql`.
+
+## Still Supabase-only
+
+**Companies / units** (`org_units`) inside an organisation. The tab shows the
+count per org and says so in the footnote. That is the obvious next tab if the
+same "no SQL Editor" treatment is wanted for the Sedimosa-style company split.
+
+---
+
 # Live subdomain `portal.keywellness.co.bw` + github.io redirect (2026-08-03)
 
 `https://portal.keywellness.co.bw` is **now LIVE** and is the canonical production
