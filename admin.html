@@ -212,6 +212,7 @@ tbody td{padding:12px 14px;vertical-align:middle}
     <div class="sb-item active" data-tab="users" onclick="showTab('users')"><span>👥</span> Users</div>
     <div class="sb-item" data-tab="bookings" onclick="showTab('bookings')"><span>📅</span> Appointments</div>
     <div class="sb-item" data-tab="advisors" onclick="showTab('advisors')"><span>🧭</span> Advisors</div>
+    <div class="sb-item" data-tab="orgs" onclick="showTab('orgs')"><span>🏢</span> Organisations</div>
     <div class="sb-item" data-tab="roles" onclick="showTab('roles')"><span>🛡️</span> Roles &amp; Access</div>
     <div class="sb-item" data-tab="reports" onclick="showTab('reports')"><span>📊</span> Reports</div>
     <div class="sb-item" data-tab="activities" onclick="showTab('activities')"><span>📋</span> Activities</div>
@@ -297,6 +298,34 @@ tbody td{padding:12px 14px;vertical-align:middle}
       <button class="modal-close" onclick="closeCalDayModal()">✕</button>
     </div>
     <div id="cal-day-modal-body"></div>
+  </div>
+</div>
+
+<!-- ══ ORGANISATION EDIT MODAL (admin-only; writes via admin_org_update) ══ -->
+<div class="modal-overlay" id="orgEditModal">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Edit organisation</h3>
+      <button class="modal-close" onclick="closeOrgEditModal()">✕</button>
+    </div>
+    <div id="oe-error" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-bottom:12px"></div>
+    <input type="hidden" id="oe-id">
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Organisation name *
+      <input id="oe-name" type="text" style="width:100%;padding:8px;margin-top:4px"></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Invite code *
+      <input id="oe-code" type="text" class="mono" style="width:100%;padding:8px;margin-top:4px;text-transform:uppercase">
+      <span style="font-weight:400;font-size:11px;color:var(--muted);display:block;margin-top:4px">Only affects who can join from now on — members who already signed up stay with this organisation whatever the code says.</span></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Programme name
+      <input id="oe-prog" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="Blank = Key Wellness branding"></label>
+    <label style="font-size:12px;font-weight:600;display:block;margin-bottom:12px">Programme logo URL
+      <input id="oe-logo" type="text" style="width:100%;padding:8px;margin-top:4px" placeholder="https://… — shown on the members' Webinars header"></label>
+    <label style="font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:18px">
+      <input id="oe-active" type="checkbox" style="width:16px;height:16px"> Active — new members may join with the invite code
+    </label>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary btn-sm" onclick="saveOrgEdit()">Save changes</button>
+      <button class="btn btn-outline btn-sm" onclick="closeOrgEditModal()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -542,7 +571,7 @@ function buildStats() {
 }
 
 // ── Tab Router ──
-const TAB_TITLES = { users: 'Users', bookings: 'Appointments', advisors: 'Advisors', roles: 'Roles & Access', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
+const TAB_TITLES = { users: 'Users', bookings: 'Appointments', advisors: 'Advisors', orgs: 'Organisations', roles: 'Roles & Access', reports: 'Reports', activities: 'Programme Activities', webinars: 'Org Webinars', 'webinar-views': 'Webinar Views', account: 'Account' };
 
 function showTab(tab) {
   activeTab = tab;
@@ -553,6 +582,7 @@ function showTab(tab) {
   if (tab === 'users') renderUsers();
   else if (tab === 'bookings') renderBookings();
   else if (tab === 'advisors') renderAdvisors();
+  else if (tab === 'orgs') renderOrgs();
   else if (tab === 'roles') renderRoles();
   else if (tab === 'reports') renderReports();
   else if (tab === 'activities') renderActivities();
@@ -1214,6 +1244,210 @@ async function advAssign(userId) {
     '<div style="font-size:13px;color:var(--green);font-weight:700;padding:8px">✓ Assigned.</div>';
   const a = advisorRoster.find(x => x.id === _advAssignId);
   if (a) a.active_clients = Number(a.active_clients || 0) + 1;
+}
+
+/* ── Organisations ────────────────────────────────────────────
+   Creates and maintains the `organizations` rows that everything
+   else hangs off — the invite code members type at signup, the
+   audience a webinar is published to, the organisation an HR manager
+   is granted on Roles & Access, the subject of an org report.
+   Writes go through the admin_org_* RPCs (organizations itself is
+   SELECT-only under RLS, by design). Onboarding order is:
+   create the organisation here → grant HR on Roles & Access →
+   share the invite code with employees. */
+let orgsData = [];
+
+async function renderOrgs() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading organisations…</div>';
+  const { data, error } = await sb.rpc('admin_orgs_overview');
+  if (error) {
+    el.innerHTML = `<div class="card"><div class="card-title">Organisations unavailable</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6">${escNar(error.message)}<br>
+      If the function does not exist yet, run <span class="mono">supabase_admin_orgs_rpcs.sql</span> in the Supabase SQL Editor, then reopen this tab.</p></div>`;
+    return;
+  }
+  orgsData = data || [];
+  // Keep the org pickers on the other tabs in step with what was just changed.
+  allOrgs = orgsData.map(o => ({ id: o.id, name: o.name }));
+  el.innerHTML = orgsHtml();
+  KW.reveal('.card, .stat-box');
+}
+
+function orgsHtml() {
+  const active = orgsData.filter(o => o.is_active).length;
+  const members = orgsData.reduce((s, o) => s + (o.member_count || 0), 0);
+
+  const rows = orgsData.map((o, i) => `
+    <tr${o.is_active ? '' : ' style="opacity:.62"'}>
+      <td><strong>${escNar(o.name)}</strong>${o.program_name ? `<br><span style="font-size:11.5px;color:var(--muted)">Programme: ${escNar(o.program_name)}</span>` : ''}</td>
+      <td><span class="mono" style="font-size:12.5px">${escNar(o.invite_code)}</span>
+          <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;margin-left:6px" onclick="orgCopyCode(${i}, this)">Copy</button></td>
+      <td><span class="status-pill ${o.is_active ? 'status-confirmed' : 'status-cancelled'}">${o.is_active ? 'active' : 'closed'}</span></td>
+      <td class="mono">${o.member_count}</td>
+      <td class="mono">${o.hr_count}</td>
+      <td class="mono">${o.unit_count}</td>
+      <td>${fmtDate(o.created_at)}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="openOrgEditModal(${i})">Edit</button>
+        <button class="btn btn-outline btn-sm" onclick="orgToggleActive(${i})">${o.is_active ? 'Deactivate' : 'Reactivate'}</button>
+        ${o.deletable
+          ? `<button class="btn btn-outline btn-sm" onclick="orgDelete(${i})">Delete</button>`
+          : '<button class="btn btn-outline btn-sm" disabled title="Members, HR managers, companies or reports are attached — deactivate it instead">Delete</button>'}
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${orgsData.length}</div><div class="stat-lbl">Organisations</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${active}</div><div class="stat-lbl">Open to New Members</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${members}</div><div class="stat-lbl">Members Enrolled</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Add an organisation</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:14px">
+        This is the first step of onboarding a client company. The invite code is
+        what their employees type when they sign up — leave it blank and one is
+        generated for you. Afterwards, grant their HR manager access on
+        <a href="#" onclick="showTab('roles');return false" style="color:var(--green);font-weight:600">Roles &amp; Access</a>
+        and share the code with the employer.
+      </p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+        <label style="font-size:12px;font-weight:600">Organisation name *
+          <input id="org-new-name" class="search-input" type="text" placeholder="e.g. Sedimosa" style="width:100%;margin-top:4px"></label>
+        <label style="font-size:12px;font-weight:600">Invite code
+          <span style="display:flex;gap:8px;margin-top:4px">
+            <input id="org-new-code" class="search-input mono" type="text" placeholder="blank = generate" style="min-width:0;text-transform:uppercase">
+            <button class="btn btn-outline btn-sm" onclick="orgSuggestCode()" title="Suggest a free code from the name">Suggest</button>
+          </span></label>
+        <label style="font-size:12px;font-weight:600">Programme name
+          <input id="org-new-prog" class="search-input" type="text" placeholder="optional" style="width:100%;margin-top:4px"></label>
+        <label style="font-size:12px;font-weight:600">Programme logo URL
+          <input id="org-new-logo" class="search-input" type="text" placeholder="optional — https://…" style="width:100%;margin-top:4px"></label>
+      </div>
+      <div style="margin-top:14px">
+        <button class="btn btn-primary btn-sm" onclick="orgCreate()">+ Create Organisation</button>
+      </div>
+      <div id="org-new-msg" style="display:none;margin-top:12px;font-size:12.5px;font-weight:600"></div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:12px">
+        Programme name and logo only change what members of this organisation see on
+        their Webinars header — the rest of the portal stays Key Wellness throughout.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">All organisations (${orgsData.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Invite code</th><th>Status</th><th>Members</th><th>HR</th><th>Companies</th><th>Created</th><th style="text-align:right"></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px">No organisations yet — add the first one above.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px">
+        Deactivating an organisation stops new employees joining with its code.
+        Everyone already enrolled keeps their account, their data and their reporting.
+        Companies (units) inside an organisation are still set up in Supabase.
+      </p>
+    </div>`;
+}
+
+function orgShowMsg(id, text, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = 'block';
+  el.textContent = text;
+  el.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
+async function orgSuggestCode() {
+  const name = (document.getElementById('org-new-name').value || '').trim();
+  if (!name) return orgShowMsg('org-new-msg', 'Enter the organisation name first.', false);
+  const { data, error } = await sb.rpc('admin_org_suggest_code', { p_name: name });
+  if (error) return orgShowMsg('org-new-msg', 'Could not suggest a code: ' + error.message, false);
+  document.getElementById('org-new-code').value = data;
+}
+
+async function orgCreate() {
+  const name = (document.getElementById('org-new-name').value || '').trim();
+  const code = (document.getElementById('org-new-code').value || '').trim();
+  const prog = (document.getElementById('org-new-prog').value || '').trim();
+  const logo = (document.getElementById('org-new-logo').value || '').trim();
+  if (name.length < 2) return orgShowMsg('org-new-msg', 'Enter the organisation name.', false);
+  const { data, error } = await sb.rpc('admin_org_create', {
+    p_name: name, p_invite_code: code || null,
+    p_program_name: prog || null, p_program_logo_path: logo || null,
+  });
+  if (error) return orgShowMsg('org-new-msg', 'Could not create: ' + error.message, false);
+  await renderOrgs();
+  orgShowMsg('org-new-msg', (data && data.msg) || 'Organisation created.', true);
+}
+
+function orgCopyCode(i, btn) {
+  const o = orgsData[i];
+  if (!o) return;
+  navigator.clipboard.writeText(o.invite_code).then(() => {
+    const was = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = was; }, 1400);
+  }).catch(() => alert('Invite code: ' + o.invite_code));
+}
+
+async function orgToggleActive(i) {
+  const o = orgsData[i];
+  if (!o) return;
+  const msg = o.is_active
+    ? `Deactivate ${o.name}? New employees will no longer be able to join with the code ${o.invite_code}. The ${o.member_count} member(s) already enrolled keep their accounts, their data and their reporting.`
+    : `Reactivate ${o.name}? Employees will be able to join again with the code ${o.invite_code}.`;
+  if (!confirm(msg)) return;
+  const { error } = await sb.rpc('admin_org_set_active', { p_org_id: o.id, p_is_active: !o.is_active });
+  if (error) { alert('Could not update: ' + error.message); return; }
+  renderOrgs();
+}
+
+async function orgDelete(i) {
+  const o = orgsData[i];
+  if (!o) return;
+  if (!confirm(`Delete ${o.name}? Nothing is attached to it yet, so this removes the organisation and its invite code for good. Deactivate instead if you only want to stop new members joining.`)) return;
+  const { error } = await sb.rpc('admin_org_delete', { p_org_id: o.id });
+  if (error) { alert('Could not delete: ' + error.message); return; }
+  renderOrgs();
+}
+
+function openOrgEditModal(i) {
+  const o = orgsData[i];
+  if (!o) return;
+  document.getElementById('oe-id').value     = o.id;
+  document.getElementById('oe-name').value   = o.name || '';
+  document.getElementById('oe-code').value   = o.invite_code || '';
+  document.getElementById('oe-prog').value   = o.program_name || '';
+  document.getElementById('oe-logo').value   = o.program_logo_path || '';
+  document.getElementById('oe-active').checked = !!o.is_active;
+  document.getElementById('oe-error').style.display = 'none';
+  document.getElementById('orgEditModal').classList.add('open');
+}
+
+function closeOrgEditModal() {
+  document.getElementById('orgEditModal').classList.remove('open');
+}
+
+async function saveOrgEdit() {
+  const err = document.getElementById('oe-error');
+  const { error } = await sb.rpc('admin_org_update', {
+    p_org_id:            document.getElementById('oe-id').value,
+    p_name:              document.getElementById('oe-name').value.trim(),
+    p_invite_code:       document.getElementById('oe-code').value.trim(),
+    p_program_name:      document.getElementById('oe-prog').value.trim() || null,
+    p_program_logo_path: document.getElementById('oe-logo').value.trim() || null,
+    p_is_active:         document.getElementById('oe-active').checked,
+  });
+  if (error) {
+    err.textContent = 'Could not save: ' + error.message;
+    err.style.display = 'block';
+    return;
+  }
+  closeOrgEditModal();
+  renderOrgs();
 }
 
 /* ── Roles & Access ───────────────────────────────────────────

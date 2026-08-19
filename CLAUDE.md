@@ -49,7 +49,7 @@ git status
 ```
 keywellness-portal/
 ├── index.html                    ← Main portal (auth, dashboard, all core views)
-├── admin.html                    ← Key Wellness admin (users, bookings, advisors, org reports)
+├── admin.html                    ← Key Wellness admin (users, bookings, advisors, organisations, roles, org reports)
 ├── employer.html                 ← HR / employer organisation dashboard
 ├── advisor.html                  ← Advisor portal (clients, assessments, session diary)
 ├── wellness_assessment.html      ← 8-dimension financial wellness assessment
@@ -269,6 +269,13 @@ through, and plain members are never interrupted.
 session — member booking, advisor scheduling — must write there, or it will not
 appear on the member's side and will not count in organisation utilisation
 reporting.
+
+**Onboarding a client company** starts on the admin **Organisations** tab (create
+the org + invite code), then **Roles & Access** (grant their HR manager), then
+share the invite code with the employer. Both tabs write through admin-gated
+`SECURITY DEFINER` RPCs — `organizations`, `admins` and `employers` stay
+SELECT-only under RLS. Companies/units inside an org (`org_units`) are still set
+up with SQL.
 
 ---
 
