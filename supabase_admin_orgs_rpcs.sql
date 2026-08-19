@@ -21,6 +21,7 @@
 -- unique constraint on the raw text.
 --
 -- Run in the Supabase SQL Editor. Safe to re-run (CREATE OR REPLACE).
+-- APPLIED 2026-08-19 (production-live; dev frontend pushed the same day).
 -- PRODUCTION-LIVE on apply — but inert until admin.html ships, and
 -- every function is admin-gated, so applying early is safe.
 -- ROLLBACK: migrations/rollback-admin-orgs-rpcs.sql

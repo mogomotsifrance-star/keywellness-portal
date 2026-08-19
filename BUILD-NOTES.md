@@ -13,7 +13,7 @@ by design: the table is the client roster. Rather than open it up, every write
 goes through a `SECURITY DEFINER` function guarded by `is_admin()`, exactly like
 `supabase_admin_roles_rpcs.sql` does for the Roles tab.
 
-## New SQL — `supabase_admin_orgs_rpcs.sql` (NOT YET APPLIED)
+## New SQL — `supabase_admin_orgs_rpcs.sql` (**APPLIED 2026-08-19**, production-live)
 
 | Function | Does |
 |---|---|
@@ -41,19 +41,27 @@ org_headcount_reports, program_activities, content_items, advisor_clients,
 reward_fulfilments), so no history is ever silently destroyed. The tab greys out
 the Delete button in that case rather than letting the click fail.
 
-## Verification already done
+## Verification
 
-The whole migration was applied, exercised and **rolled back inside a single
-transaction** against the live project (16 checks: code suggestion, create with
-generated and manual codes, duplicate-name / duplicate-code / bad-format /
-non-https-logo refusals, `verify_invite_code()` seeing a freshly created code,
-update, deactivate closing signup, overview shape, delete-when-empty, and the
-delete guard refusing Sedimosa). Confirmed afterwards that nothing leaked:
-`is_admin()` is untouched, no `admin_org*` functions exist, org count still 2.
+**Before applying**, the whole migration was applied, exercised and **rolled back
+inside a single transaction** against the live project — 16 checks: code
+suggestion, create with generated and manual codes, duplicate-name /
+duplicate-code / bad-format / non-https-logo refusals, `verify_invite_code()`
+seeing a freshly created code, update, deactivate closing signup, overview shape,
+delete-when-empty, and the delete guard refusing Sedimosa. (The trick: inside the
+transaction, `create or replace is_admin() ... select true` so the `postgres`
+session can exercise the admin-gated functions, then roll the lot back.)
 
-**So the SQL still has to be applied by hand in the Supabase SQL Editor.** It is
-additive and admin-gated, so applying it early is safe — it is inert until the
-`dev` frontend ships.
+**After applying (2026-08-19):** all 7 functions present and `SECURITY DEFINER`;
+the 6 callable ones granted to `authenticated` only, `admin_org_has_dependents`
+granted to nobody (owner-only, called from inside the definer functions); `anon`
+and PUBLIC have no grant on any of them. As `postgres` — where `is_admin()` is
+false — `admin_orgs_overview`, `admin_org_create` and `admin_org_delete` all
+refuse with `not authorised`, which is the intended SQL-Editor behaviour. Nothing
+collateral changed: `is_admin()` still reads the `admins` table, org count still 2.
+
+The migration creates no tables and alters no existing object, so it was inert
+between apply and the `dev` frontend landing.
 
 ## Frontend — `admin.html`
 
