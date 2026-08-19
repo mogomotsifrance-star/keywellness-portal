@@ -1,3 +1,91 @@
+# Companies & Sites in admin.html — the org_units structure without SQL (2026-08-19)
+
+Second half of the "onboard a client without the Supabase editor" work
+(`supabase_admin_orgs_rpcs.sql` shipped the same day). The Organisations tab now
+has two sub-tabs — **Organisations** and **Companies & Sites** — following the
+Advisors tab's sub-tab pattern.
+
+## Why RPCs, when org_units already allows admin writes
+
+Unlike `organizations`, `org_units` has had an `org_units_admin_all` RLS policy
+since the Sedimosa batch, so an admin could always `insert` into it from the
+browser. The RPCs exist anyway, because the structure carries four rules RLS
+cannot express — and each is a live-breakage if violated:
+
+1. **Two levels only.** `kwUnitLabel()` in index.html reads a leaf's parent as
+   "the company" and the leaf as "the site". A third level stays navigable but is
+   mislabelled everywhere it is displayed. So a parent must itself be top-level,
+   and a unit with sites cannot be demoted into a site.
+
+2. **Members sit on leaves.** `kwRenderUnitPicker()` only lets a member choose a
+   leaf. Giving a company its first site therefore strands any member recorded
+   directly against that company — they keep their unit, but nobody new can be
+   placed there. Allowed (restructuring is legitimate) but never silently: the
+   RPC returns the stranded count, and the tab puts it in a confirm dialog
+   *before* the call.
+
+3. **A parent loses its department breakdown.** Per
+   `org_report_department_breakdown()`, a unit with active children is a combined
+   multi-site view and reports no departments. Adding a first site to a company
+   that has departments silently turns that reporting off — so the same warning
+   names the department count, and the table shows `—` under Departments for any
+   company with sites.
+
+4. **An inactive parent hides active children.** The member picker walks down
+   from active top-level units, so an active site under a closed company is
+   unreachable — invisible but still assignable in reporting. Closing therefore
+   cascades to sites; reopening a site under a closed company is refused; and
+   moving an active site under a closed company is refused.
+
+## New SQL — `supabase_admin_units_rpcs.sql` (**APPLIED 2026-08-19**, production-live)
+
+| Function | Does |
+|---|---|
+| `admin_units_overview(org)` | One organisation's whole structure, flat but in tree order, with member / site / department / HR-scope / report counts and `deletable` |
+| `admin_unit_create(org, name, parent)` | Company (parent null) or site. Returns the rule-2/3 warning text as `note` |
+| `admin_unit_update(unit, name, parent)` | Rename and/or move. `is_active` deliberately absent — cascade rules live in set_active |
+| `admin_unit_set_active(unit, bool)` | Closing cascades to sites; reopening under a closed company is refused |
+| `admin_unit_move(unit, 'up'\|'down')` | Reorders within the sibling group and renumbers it 10,20,30… so pre-existing ties resolve instead of no-opping |
+| `admin_unit_delete(unit)` | Only when nothing references it |
+| `admin_unit_has_dependents(unit)` | Internal probe over all 5 FK children; owner-only, never granted |
+
+## Verification
+
+**Pre-apply**, the migration ran and rolled back inside one transaction against
+the real Sedimosa tree — 14 checks: tree order, duplicate name, site-under-site,
+self-as-parent, demoting a unit that has sites, the first-site warning naming
+"1 member / 22 departments", create, move-up and the resulting sibling order,
+delete-with-members refused, delete-empty allowed, closing Debswana cascading to
+3 sites, reopening Jwaneng under a closed Debswana refused, and reopening
+Debswana reporting 3 sites still closed. A second pass verified two message-
+punctuation fixes and the new closed-parent move guard.
+
+**Post-apply:** 7 functions present, 6 granted to `authenticated`, 0 to
+anon/PUBLIC, `admin_unit_has_dependents` granted to nobody; all three write paths
+refuse with `not authorised` from the SQL Editor; org_units still 11 rows and
+`is_admin()` untouched.
+
+## Frontend
+
+`orgSubTab` switches the Organisations tab between `orgsHtml()` and `unitsHtml()`.
+The structure table indents sites under their company, marks a company with sites
+"not member-selectable", and greys out Delete when anything references the row.
+Confirm dialogs restate the consequence in the specific numbers for that row.
+
+Interaction paths were exercised in a browser against a stubbed `sb.rpc` seeded
+with the real Sedimosa shape: create (warning text + RPC args), edit modal on a
+company with sites (parent locked + explanatory note) and on a site (parent
+preselected, only top-level companies offered, self excluded), close-with-cascade
+confirm, move, delete confirm, and the empty-organisation state for Test Co.
+
+## Still Supabase-only
+
+**Departments** (`unit_departments`, ~22 per site). Same shape as this work — an
+obvious third pass if wanted. The tab shows each unit's department count and says
+so in the footnote.
+
+---
+
 # Organisations tab in admin.html — create a client org without touching Supabase (2026-08-19)
 
 Onboarding a new client company used to start with a hand-written
