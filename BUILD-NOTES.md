@@ -1,3 +1,84 @@
+# Departments in admin.html — the last leg off the SQL editor (2026-08-19)
+
+Completes the trio: organisations -> companies/sites -> **departments**. The
+admin Organisations tab now has three sub-tabs, and nothing about onboarding a
+client organisation needs the Supabase SQL Editor any more.
+
+## What the data actually looks like (this drove the API)
+
+`unit_departments` rows belong to ONE unit, so the same department name is
+repeated per site rather than shared. Live: **161 rows spanning only 38 distinct
+names**, because the Sedimosa seed applied one shared list of 22 names across 6
+units. Adding departments one at a time was never the real operation. So:
+
+- `admin_dept_add(unit, text[])` takes an **array** — the UI is a textarea, one
+  per line. It trims, drops blanks, de-duplicates within the pasted list AND
+  against what the unit already has, then reports what it added and what it
+  skipped instead of failing the whole batch.
+- `admin_dept_copy_from(target, source)` reproduces what the seed did by hand:
+  copy another unit's active list, keeping order, skipping names already there.
+
+Both duplicate checks are **case-insensitive**. The table's own
+`unique (unit_id, name)` is case-sensitive and would happily accept "Finance"
+beside "finance", which the member picker would then show twice.
+
+## Two reporting traps the UI now makes visible
+
+1. **A parent company reports no departments.** `org_report_department_breakdown()`
+   treats a unit with active sites as a combined multi-site view and returns no
+   departments at all. Adding departments there looks like it worked and is
+   invisible in every report. The RPC appends a note, and the sub-tab shows a
+   standing orange banner while such a unit is selected.
+
+2. **Closing a department strands its members.** `_dept_metrics()` enumerates
+   ACTIVE departments plus an "Unassigned" bucket of members whose
+   `department_id IS NULL`. A member sitting on a *deactivated* department
+   matches neither — they drop out of the department breakdown entirely while
+   staying in the unit totals. So the close confirm spells that out with the
+   member count, the table flags such rows with an orange warning, and
+   `admin_dept_reassign_members()` exists to move them somewhere real —
+   including to Unassigned, which IS reported. Its destination must be in the
+   same unit, or a member would land on a department their own site lacks.
+
+## Bugs the pre-apply test caught
+
+Both found by running the migration inside a rolled-back transaction against
+real data, before it ever reached production:
+
+- `admin_dept_delete` used `%s` in a `RAISE` format string. plpgsql's `RAISE`
+  only understands `%`, so the message would have rendered "— 3s member(s)".
+- `admin_dept_reassign_members` read `v_to.name` for the Unassigned case, where
+  the record is never assigned — Postgres raises 55000 "record is not assigned
+  yet". Moving members to Unassigned, the single most likely use, would have
+  failed outright. Fixed with a plain `v_to_name text := 'Unassigned'`.
+
+## Verification
+
+**Pre-apply:** 16 checks in a rolled-back transaction — overview count, add with
+trim/blank/in-list-dupe/existing-name, adding to a parent company (warning),
+copying 22 departments to an empty unit, copying again (all 22 skipped), copying
+from self, rename, rename onto an existing name, move, delete unused, closing a
+department that has members, delete refused while members are on it, reassign
+across units refused, reassign to Unassigned, and delete once empty.
+
+**Post-apply:** 8 functions, 8 granted to `authenticated`, 0 to anon/PUBLIC; all
+three write paths refuse with `not authorised` from the SQL Editor;
+unit_departments still 161 rows, 7 members still hold a department, `is_admin()`
+untouched.
+
+**UI**, against a stub seeded with the real shape: the paste box splitting
+` Finance 
+
+Robotics
+  Safety  ` into three clean names, the close-with-members
+confirm, the Move-members menu (Unassigned plus this unit's other departments,
+self excluded), the copy dropdown excluding the current unit and any unit with
+zero departments, the parent-company banner, the empty state, Delete disabled
+exactly where members exist, and switching organisation resetting the unit
+selection rather than carrying a stale one.
+
+---
+
 # Companies & Sites in admin.html — the org_units structure without SQL (2026-08-19)
 
 Second half of the "onboard a client without the Supabase editor" work

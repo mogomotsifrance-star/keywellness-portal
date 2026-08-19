@@ -270,12 +270,13 @@ session — member booking, advisor scheduling — must write there, or it will 
 appear on the member's side and will not count in organisation utilisation
 reporting.
 
-**Onboarding a client company** starts on the admin **Organisations** tab (create
-the org + invite code, then build its companies/sites on the **Companies & Sites**
-sub-tab), then **Roles & Access** (grant their HR manager), then share the invite
-code with the employer. All of it writes through admin-gated `SECURITY DEFINER`
-RPCs — `organizations`, `admins` and `employers` stay SELECT-only under RLS.
-Departments inside a site (`unit_departments`) are still set up with SQL.
+**Onboarding a client company** is now entirely in the admin dashboard — no SQL
+editor. The **Organisations** tab has three sub-tabs: *Organisations* (create the
+org + invite code), *Companies & Sites* (the `org_units` tree), *Departments*
+(each unit's `unit_departments` list, pasted or copied from another unit). Then
+**Roles & Access** grants their HR manager, and the invite code goes to the
+employer. All of it writes through admin-gated `SECURITY DEFINER` RPCs —
+`organizations`, `admins` and `employers` stay SELECT-only under RLS.
 
 **`org_units` is exactly two levels — company → site — and that is load-bearing.**
 `kwUnitLabel()` reads a leaf's parent as the company and the leaf as the site;
@@ -284,6 +285,14 @@ multi-site view and shows no departments; and an active site under a closed
 company is invisible in the picker. The `admin_unit_*` RPCs enforce all four.
 Do not write to `org_units` directly (its `org_units_admin_all` RLS policy
 predates the RPCs and bypasses every one of those guards).
+
+**Departments belong to one unit, and closing one strands its members.**
+`_dept_metrics()` counts members of *active* departments plus an Unassigned
+bucket of `department_id IS NULL` — a member on a *deactivated* department is in
+neither and vanishes from the department breakdown. Use
+`admin_dept_reassign_members()` before closing. Same warning as `org_units`:
+`unit_departments_admin_all` lets you write to the table directly and skip every
+guard, so go through the `admin_dept_*` RPCs.
 
 ---
 
