@@ -198,6 +198,9 @@ tbody td{padding:12px 14px;vertical-align:middle}
 .rs-btn:hover:not(:disabled){background:rgba(255,255,255,.14)}
 .rs-btn.active{background:var(--kw-green);border-color:var(--kw-green);color:#fff;cursor:default}
 .rs-btn span{font-size:14px}
+.lead-pill{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.link-count{background:none;border:none;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:var(--kw-green-deep);cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:3px}
+.link-count:hover{color:var(--kw-green)}
 </style>
 </head>
 <body>
@@ -1133,11 +1136,16 @@ function advRosterHtml() {
       <td>${escNar(a.email)}${a.phone ? `<div style="font-size:11px;color:var(--muted)">${escNar(a.phone)}</div>` : ''}</td>
       <td>${a.has_logged_in
             ? '<span class="status-pill status-confirmed">Active account</span>'
-            : '<span class="status-pill status-pending" title="They have an advisor record but have not signed in yet">Not signed in</span>'}</td>
-      <td class="mono">${a.active_clients}</td>
+            : '<span class="status-pill status-pending" title="They have an advisor record but have not signed in yet">Not signed in</span>'}
+          ${a.is_team_lead ? '<div style="margin-top:4px"><span class="status-pill lead-pill">Team Lead</span></div>' : ''}</td>
+      <td class="mono">
+        <button class="link-count" onclick="advViewClients('${a.id}')" title="Open this advisor's clients in the advisor portal">${a.active_clients}</button>
+      </td>
       <td class="mono">${a.sessions_attended} / ${a.sessions_booked}</td>
       <td style="white-space:nowrap">
+        <button class="btn btn-primary btn-sm" onclick="advViewClients('${a.id}')">View clients</button>
         <button class="btn btn-outline btn-sm" onclick="advOpenAssign('${a.id}')">Assign member</button>
+        <button class="btn btn-outline btn-sm" onclick="advToggleLead('${a.id}', ${a.is_team_lead ? 'false' : 'true'})">${a.is_team_lead ? 'Remove lead' : 'Make team lead'}</button>
         <button class="btn btn-outline btn-sm" onclick="advToggleActive('${a.id}', ${a.is_active ? 'false' : 'true'})">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
       </td>
     </tr>`).join('');
@@ -1147,6 +1155,20 @@ function advRosterHtml() {
       <div class="stat-box green"><div class="stat-lbl">Active advisors</div><div class="stat-val mono">${active}</div></div>
       <div class="stat-box"><div class="stat-lbl">Total on roster</div><div class="stat-val mono">${advisorRoster.length}</div></div>
       <div class="stat-box gold"><div class="stat-lbl">Assigned clients</div><div class="stat-val mono">${advisorRoster.reduce((s,a)=>s+Number(a.active_clients||0),0)}</div></div>
+      <div class="stat-box"><div class="stat-lbl">Team leads</div><div class="stat-val mono">${advisorRoster.filter(a=>a.is_team_lead).length}</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <span>Client caseloads</span>
+        <button class="btn btn-outline btn-sm" onclick="advViewAllClients()">Open all clients →</button>
+      </div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin:0">
+        Click any advisor's client count, or <strong>View clients</strong>, to open their
+        caseload in the advisor portal — the full assessment, diagnostics and session
+        diary, not a read-only copy. This requires your account to be a team lead
+        (or the advisor themselves); the database re-checks on every request.
+      </p>
     </div>
 
     <div class="card">
@@ -1207,6 +1229,30 @@ async function advCreate() {
       : 'Could not add the advisor: ' + error.message, false);
   }
   show('Advisor added.', true);
+  renderAdvisors();
+}
+
+/* Deep-links into the advisor portal scoped to one advisor. The portal
+   re-validates the scope server-side, so this is a convenience, not the
+   access control. */
+function advViewClients(advisorId){
+  try { sessionStorage.setItem('kw_interface', 'advisor'); } catch(_) {}
+  window.location.href = 'advisor.html?advisor=' + encodeURIComponent(advisorId);
+}
+function advViewAllClients(){
+  try { sessionStorage.setItem('kw_interface', 'advisor'); } catch(_) {}
+  window.location.href = 'advisor.html?scope=all';
+}
+
+async function advToggleLead(id, makeLead){
+  const on = makeLead === true || makeLead === 'true';
+  const a = advisorRoster.find(x => x.id === id);
+  const who = a ? a.full_name : 'this advisor';
+  if(on && !confirm(who + ' will be able to see and work EVERY advisor\'s clients, including their members\' financial data where consent has been given. Continue?')) return;
+  if(!on && !confirm('Remove team lead from ' + who + '? They keep their own caseload and lose access to everyone else\'s.')) return;
+  const { error } = await sb.from('advisors')
+    .update({ is_team_lead: on, updated_at: new Date().toISOString() }).eq('id', id);
+  if(error){ alert('Could not update: ' + error.message); return; }
   renderAdvisors();
 }
 
