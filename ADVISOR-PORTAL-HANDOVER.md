@@ -300,3 +300,181 @@ records (compound detection fires on the distressed profile at 100/90/90, every
 ranked area carries actions, no NaN or undefined in the rendered panels);
 panelReport() still renders; the page boots to the auth gate with no console
 errors. The standalone build's own headless-browser suite was not re-run here.
+
+### Testing at merge time (third + fourth pass)
+Same fork hazard as the second pass, and it bit again: the standalone build for
+the Team Lead and UX passes was forked before `cae4dc0`, so it was missing the
+HR-role fixes (`ROLES.employer`, the parallel `Promise.all` role probe, and the
+HR Dashboard entry in both the sidebar switcher and the mobile More sheet).
+Those were re-applied on top of this merge rather than the file being copied
+over wholesale, and a dedicated regression suite (`smoke6.js`, 12 checks) now
+guards them. **If a future pass forks `advisor.html` again, diff the removed
+lines before copying — `diff <(git show origin/dev:advisor.html) advisor.html |
+grep '^<'` should contain nothing you did not intend to replace.**
+
+Verified at merge: the inline script parses; all five existing headless suites
+pass unchanged (172 checks); the new role-regression suite passes (12 checks);
+`index.html` carries only the consent-wording change on top of `origin/dev`.
+
+
+## 11. Advisory Team Lead (third pass)
+
+A Team Lead for Financial Advisory who can see and work every advisor's
+caseload, so they can supervise and step into advisory.
+
+### Deploy
+
+Run **`supabase_advisor_team_lead.sql`** in the Supabase SQL Editor, after the
+first two SQL files. Then appoint the lead — either from **Admin → Advisors →
+Make team lead**, or directly:
+
+```sql
+update advisors set is_team_lead = true, updated_at = now()
+ where lower(email) = lower('teamlead@keywealth.co.bw');
+```
+
+Files changed: `advisor.html`, `admin.html`, `index.html` (consent wording only).
+Rollback: `migrations/rollback-advisor-team-lead.sql`, then re-run
+`supabase_advisor_rpcs.sql` to restore the original function bodies.
+
+### The model
+
+A Team Lead **is an advisor** — `advisors.is_team_lead` — not a separate role.
+They keep their own caseload and gain scope over everyone else's. That keeps
+them inside the advisory relationship the member consented to, which a
+standalone management role would not be.
+
+- **Full edit rights**, attributed to them. Sessions they book carry *their*
+  `advisor_id`, and notes they write carry *their* `advisor_id`, so the record
+  shows who actually did the work. `advisor_book_session()` returns
+  `on_behalf_of` when the client belongs to someone else.
+- **The consent gate is unchanged.** A Team Lead sees a member's financial data
+  only where that member has switched on advisor data sharing — exactly like the
+  owning advisor. Verified by test.
+- **Deleting** a colleague's client is withheld in the UI; that stays with the
+  owning advisor.
+
+### Where it shows up
+
+**Advisor portal** — a scope bar for team leads only: *My clients* / *All
+clients* / pick an advisor. Working outside your own caseload turns the bar
+amber and says so, because quietly editing a colleague's client is the obvious
+failure mode. An Advisor column appears once you look beyond your own book, and
+the client record carries an "Advisor: <name>" chip.
+
+**Admin → Advisors** — a Team Lead badge, a Make/Remove team lead control, and
+**View clients** on each row (the client count is clickable too), which
+deep-links to `advisor.html?advisor=<id>`. There is also *Open all clients*.
+Reusing the advisor portal means the full assessment, diagnostics and
+robo-advisor come along rather than being rebuilt read-only in admin.
+
+The URL is a convenience, not the access control: `can_manage_advisor()`
+re-checks server-side on every call, so a hand-edited `?advisor=` from an
+ordinary advisor returns an authorisation error and the UI falls back to their
+own caseload with an explanation. Tested.
+
+### Two pre-existing bugs fixed along the way
+
+Both were found by testing co-advisory and would have bitten with or without a
+Team Lead:
+
+1. **An advisor could not see a booking made on their own non-member client by
+   anyone else.** The old `bookings_advisor_select` policy matched on
+   `bookings.user_id`, which is NULL for a client with no portal account. Now it
+   also matches `advisor_client_id`.
+2. **An advisor could not see notes another advisor wrote on their own client.**
+   The old policy only matched the note's author. A new
+   `advisor_notes_on_my_client` policy fixes it, and notes now carry an author
+   name and an `is_mine` flag.
+
+### Consent wording changed — read this
+
+Because the Team Lead now sees the same financial data, the consent text in
+**My Profile → Privacy** was updated from "my advisor" to "my advisory team",
+with a sentence naming who that includes. **Do not widen advisor access again
+without a matching wording change**, or the consent stops being honest about
+what the member agreed to.
+
+### Testing
+
+13 database tests with RLS enforced — scope isolation, ordinary advisors blocked
+from colleagues' caseloads and clients, the consent gate holding for the lead,
+correct attribution, the owning advisor seeing co-advisory work, revocation
+taking effect immediately, members still shut out — plus a clean rollback.
+37 browser checks across the lead view, the deep link, the ordinary advisor, a
+hand-edited URL and the admin screen. All passing.
+
+---
+
+## 12. UX pass (fourth pass)
+
+Run **`supabase_advisor_ux.sql`** after the other three SQL files.
+Files changed: `advisor.html` only.
+Rollback: `migrations/rollback-advisor-ux.sql`.
+
+### The advisor portal now works on a phone
+
+It previously did not. Below 900px the sidebar is hidden and **nothing replaced
+it** — no navigation, no Sign Out, no interface switcher, no team-lead scope bar,
+and the page scrolled sideways. An advisor on a phone could see the client list
+and was then stuck.
+
+Added: a bottom navigation bar (Clients · Appts · Activity · Tools · More), a
+More sheet carrying the Advisory Framework, the interface switcher and Sign Out,
+a stacked page header, horizontally scrollable tabs, and a stacked scope bar.
+Desktop is untouched — verified at 1400px in the same test run.
+
+### Notes are one attributed timeline
+
+There were two note stores. `advisor_notes` held session notes and anything a
+team lead wrote, and **nothing rendered it**. The Notes tab read
+`consultationNotes` inside the assessment JSON, which had no author at all — so
+with two people on a case you could not tell who wrote what.
+
+Now: one timeline in `advisor_notes`, every entry showing author, timestamp and
+origin (*Session note*, *Earlier note*, *Case history*). Old `consultationNotes`
+are **migrated automatically** by a block in the SQL, credited to the advisor who
+owned the case and keeping their original timestamps, then the array is cleared.
+The migration is idempotent — running the file twice does not duplicate.
+
+You may edit and delete **only your own** notes. A team lead sees everything and
+adds their own, but cannot rewrite a colleague's record of a consultation —
+that would destroy the point of attributing it. Enforced in
+`advisor_note_update()` / `advisor_note_delete()`, not just hidden in the UI.
+
+Two other places read the old array and would have silently shown zero after the
+migration; both were repointed: the printed **Report** (now shows the author
+against each note) and the **Activity Report** (now counts via
+`advisor_note_counts()`, scoped like the client list).
+
+### Reassigning a client
+
+Team leads and admins get a **Reassign** control on the client record. The
+assessment, notes and sessions move with the client, and the move is written to
+the note timeline as case history — *"Case reassigned from A to B by C. Reason:
+…"* — so the file explains itself a year later.
+
+Past sessions deliberately keep the advisor who delivered them; reassignment
+changes who holds the case, not who did the work. Reassigning to an inactive
+advisor is refused.
+
+### Declines and reschedule requests are surfaced
+
+`advisor_seen_response` existed from the first build but nothing ever wrote it,
+so a member declining a session sat in the data with no way for the advisor to
+notice. There is now an amber panel on Clients and Appointments listing unseen
+responses with the member's own words, a **Got it** button that marks them seen,
+and the count folded into the appointments badge — so one number means "needs
+your attention". A team lead sees the whole team's.
+
+### Testing
+
+37 browser checks for this pass (mobile navigation at 390px, desktop unchanged at
+1400px, the note timeline and its edit rules, reassignment, and the pending-
+response flow), plus 6 database security tests: author-only edit, unrelated
+advisors blocked from adding notes, reassignment restricted to team leads, the
+previous advisor losing access and the new one gaining it, inactive advisors
+refused as a target, and the seen-flag clearing correctly.
+
+**Across all four passes: 172 browser checks and 40 database tests, plus a full
+rollback chain that unwinds to zero leftover objects.**

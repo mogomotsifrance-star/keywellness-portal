@@ -163,6 +163,7 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13.5px;background:var(--white);outline:none;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease);color:var(--text)}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
 .field textarea{resize:vertical;min-height:80px;line-height:1.5;font-size:13px}
+.page-header .ph-title{flex:1}
 .derived-tag{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--kw-green-deep);background:var(--kw-green-tint);padding:2px 6px;border-radius:999px;margin-left:6px;vertical-align:middle}
 .field input[readonly]{background:var(--kw-surface);color:var(--muted);cursor:default}
 .derived-note{font-size:12px;color:var(--muted);line-height:1.6;margin:0}
@@ -311,6 +312,79 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .diag-card.st-grey{border-top-color:var(--border)}
 @media (min-width:1100px){ .diag-grid{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))} }
 
+
+/* ── Team-lead scope ── */
+.scope-bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px}
+.scope-bar.scope-away{border-color:var(--kw-yellow);background:var(--kw-yellow-tint)}
+.scope-left{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;min-width:200px}
+.scope-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.scope-left strong{font-size:14px;color:var(--navy)}
+.scope-warn{flex-basis:100%;font-size:11.5px;color:var(--kw-yellow-ink);line-height:1.5}
+.scope-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.scope-select{padding:7px 11px;border:1px solid var(--border);border-radius:999px;background:var(--white);font-family:inherit;font-size:12.5px;font-weight:600;color:var(--navy);cursor:pointer;outline:none}
+.owner-me{font-size:12px;font-weight:700;color:var(--kw-green-deep)}
+.owner-other{font-size:12px;color:var(--muted)}
+.lead-badge{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--kw-navy);background:var(--kw-yellow);padding:2px 7px;border-radius:999px;margin-top:5px}
+
+
+/* ── Mobile navigation (below 900px the sidebar is hidden) ── */
+#bottom-nav{display:none}
+.sheet-overlay{display:none;position:fixed;inset:0;background:rgba(35,38,31,.45);z-index:600}
+.sheet-overlay.show{display:block}
+.sheet{display:none;position:fixed;left:0;right:0;bottom:0;background:var(--white);border-radius:18px 18px 0 0;z-index:601;padding:10px 16px calc(16px + env(safe-area-inset-bottom));max-height:78vh;overflow-y:auto;box-shadow:0 -8px 32px rgba(0,0,0,.18)}
+.sheet.show{display:block}
+.sheet-grip{width:38px;height:4px;border-radius:999px;background:var(--border);margin:4px auto 12px}
+.sheet-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:0 4px 8px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.sheet-item{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;font-family:inherit;font-size:14.5px;font-weight:600;color:var(--navy);padding:14px 6px;cursor:pointer;text-align:left;border-bottom:1px solid var(--border)}
+.sheet-item:last-child{border-bottom:none}
+.sheet-item .si-ic{font-size:18px;width:24px;text-align:center}
+.sheet-item.danger{color:var(--red)}
+.sheet-sep{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:14px 6px 6px}
+
+@media (max-width:900px){
+  #bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:500;background:var(--white);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 12px rgba(35,38,31,.07)}
+  .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:none;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--muted);padding:9px 2px 7px;cursor:pointer;min-height:56px}
+  .bn-item .bn-ic{font-size:18px;line-height:1}
+  .bn-item.active{color:var(--kw-green-deep)}
+  .bn-badge{position:absolute;transform:translate(14px,-8px);background:var(--red);color:#fff;font-size:9px;font-weight:800;min-width:16px;height:16px;line-height:16px;border-radius:999px;padding:0 4px;text-align:center}
+  #main{padding-bottom:72px}
+  .page-header{flex-wrap:wrap;gap:10px}
+  /* Title takes the full width so it is not squeezed into a column by
+     the action buttons; the buttons then share the row below it. */
+  .page-header .ph-title{flex:1 1 100%}
+  .page-header .btn{flex:1 1 auto;justify-content:center;white-space:nowrap}
+  .page-header .save-flag{order:99}
+  .page-header h2{font-size:19px}
+  .scope-bar{flex-direction:column;align-items:stretch}
+  .scope-right{justify-content:stretch}
+  .scope-right .btn{flex:1}
+  .scope-select{width:100%}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
+  .tabs .tab{white-space:nowrap}
+  .client-hero{flex-wrap:wrap}
+}
+@media (max-width:520px){
+  .page-content{padding:16px 14px}
+  .page-header{padding:14px}
+  .stat-grid{grid-template-columns:1fr 1fr}
+}
+
+
+.note-card{border-left:3px solid var(--border)}
+.note-card.note-mine{border-left-color:var(--kw-green)}
+.note-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.note-author{font-size:13px;font-weight:800;color:var(--navy)}
+.note-you{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--kw-green-deep);background:var(--kw-green-tint);padding:1px 6px;border-radius:999px;vertical-align:middle}
+.note-meta{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+.note-body{font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;margin:0}
+
+
+.pending-card{background:#fffaf3;border:1px solid var(--orange);border-radius:var(--radius);padding:16px 18px;margin-bottom:18px}
+.pending-head{font-size:13.5px;font-weight:800;color:var(--orange);margin-bottom:10px}
+.pending-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 0;border-top:1px solid #f2e3cd;font-size:12.5px;line-height:1.6;color:var(--text)}
+.pending-row:first-of-type{border-top:none}
+.pending-note{font-size:12px;color:var(--muted);font-style:italic;margin-top:3px}
+
 @media print{
   #sidebar,.page-header,.tabs,.no-print{display:none!important}
   #main{margin-left:0!important}
@@ -346,10 +420,23 @@ tbody td{padding:10px 12px;vertical-align:middle}
   </div>
 </nav>
 
+<!-- ══ MOBILE NAV ══
+     The sidebar is hidden below 900px. Without this the advisor portal
+     had no navigation at all on a phone — no way to reach Appointments,
+     no Sign Out, and no interface switcher. ══ -->
+<nav id="bottom-nav" aria-label="Main navigation"></nav>
+
+<div class="sheet-overlay" id="moreOverlay" onclick="closeMoreSheet()"></div>
+<div class="sheet" id="moreSheet" role="dialog" aria-label="More">
+  <div class="sheet-grip"></div>
+  <div class="sheet-title" id="sheetAdvisorName">Advisor</div>
+  <div id="sheetItems"></div>
+</div>
+
 <!-- ══ MAIN ══ -->
 <div id="main">
   <div class="page-header">
-    <div style="flex:1">
+    <div class="ph-title">
       <h2 id="page-title">Clients</h2>
       <div class="sub" id="page-sub">Financial assessments captured during consultations</div>
     </div>
@@ -414,6 +501,35 @@ tbody td{padding:10px 12px;vertical-align:middle}
       <input type="text" id="fm-query" placeholder="At least 3 characters" oninput="searchMembers(this.value)">
     </div>
     <div id="fm-results" style="max-height:280px;overflow:auto"></div>
+  </div>
+</div>
+
+
+<!-- ══ REASSIGN CLIENT MODAL ══ -->
+<div class="modal-overlay" id="reassignModal">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header">
+      <h3>Reassign this client</h3>
+      <button class="modal-close" onclick="closeModal('reassignModal')">✕</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:16px">
+      Moves <strong id="ra-name"></strong> to another advisor's caseload. The
+      assessment, notes and sessions move with them, and the change is written
+      to the client's note timeline. Past sessions keep the advisor who
+      delivered them.
+    </p>
+    <div class="field" style="margin-bottom:14px">
+      <label>Move to</label>
+      <select id="ra-advisor"></select>
+    </div>
+    <div class="field" style="margin-bottom:20px">
+      <label>Reason (optional)</label>
+      <input type="text" id="ra-reason" placeholder="e.g. caseload rebalance, client request">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('reassignModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmReassign(this)">Reassign</button>
+    </div>
   </div>
 </div>
 
@@ -519,9 +635,39 @@ let clients = [];
 let currentClientId = null;
 let currentTab = 'personal';
 let pendingDeleteId = null;
-let ADVISOR = null;              // { id, full_name, email, title }
+let ADVISOR = null;              // { id, full_name, email, title, is_team_lead }
 let CURRENT_USER = null;
 let ROLES = { advisor:false, admin:false, member:false, employer:false };
+
+/* ── Caseload scope ───────────────────────────────────────────
+   An ordinary advisor only ever sees their own clients, so VIEW stays
+   on 'mine'. A Team Lead for Financial Advisory can also open one
+   colleague's caseload or the whole team's book, because they supervise
+   and step into advisory.
+
+   The admin Advisors screen deep-links here with ?advisor=<id>, which
+   is why the scope is read from the URL rather than only from the UI.
+   The server re-checks the scope on every call — can_manage_advisor()
+   in supabase_advisor_team_lead.sql — so a hand-edited URL gets an
+   authorisation error, not someone else's clients. ── */
+let VIEW = { mode:'mine', advisorId:null, advisorName:null };
+let TEAM = [];                  // caseload summary, team leads only
+
+function readScopeFromUrl(){
+  const q = new URLSearchParams(window.location.search);
+  const a = q.get('advisor');
+  if(q.get('scope') === 'all') return { mode:'all', advisorId:null, advisorName:null };
+  if(a) return { mode:'advisor', advisorId:a, advisorName:null };
+  return { mode:'mine', advisorId:null, advisorName:null };
+}
+
+function scopeArg(){
+  if(VIEW.mode === 'all') return null;                 // lead: whole book
+  if(VIEW.mode === 'advisor') return VIEW.advisorId;
+  return ADVISOR ? ADVISOR.id : null;
+}
+
+function isLead(){ return !!(ADVISOR && ADVISOR.is_team_lead); }
 
 /* ── Boot: authenticate, confirm advisor, load ─────────────── */
 function bootError(msg, showLogin){
@@ -572,7 +718,30 @@ async function bootAdvisor(){
   ROLES.employer = !!empRes.data;
 
   const nameEl = document.getElementById('sb-advisor-name');
-  if (nameEl) nameEl.textContent = ADVISOR.full_name || CURRENT_USER.email;
+  if (nameEl) {
+    nameEl.innerHTML = (ADVISOR.full_name || CURRENT_USER.email) +
+      (isLead() ? '<div class="lead-badge">Team Lead</div>' : '');
+  }
+
+  // Scope: honour ?advisor= / ?scope=all, but only for a team lead.
+  const wanted = readScopeFromUrl();
+  if (wanted.mode !== 'mine' && !isLead()) {
+    showBanner('Only the advisory team lead can view another advisor\'s clients.');
+  } else {
+    VIEW = wanted;
+  }
+
+  if (isLead()) {
+    const { data, error } = await sb.rpc('advisor_caseload_summary');
+    if (!error) {
+      TEAM = data || [];
+      const me = TEAM.find(x => x.advisor_id === VIEW.advisorId);
+      if (me) VIEW.advisorName = me.full_name;
+    } else {
+      console.warn('caseload summary unavailable:', error.message);
+    }
+  }
+
   renderRoleSwitcher();
   return true;
 }
@@ -638,12 +807,18 @@ function normalizeClient(row){
     lastSessionDate: row.last_session_date || null
   };
   c._memberUserId = row.member_user_id || null;
+  c._owner = { advisorId: row.advisor_id || null,
+               advisorName: row.advisor_name || null,
+               isMine: row.is_mine !== false };
   c.appointments = [];   // filled by syncBookings()
   return c;
 }
 
 async function loadClients(){
-  const { data, error } = await sb.rpc('advisor_clients_list', { p_include_archived: false });
+  const { data, error } = await sb.rpc('advisor_clients_list', {
+    p_include_archived: false,
+    p_advisor_id: scopeArg()
+  });
   if (error) { console.error('advisor_clients_list failed:', error); showBanner('Could not load your clients. ' + error.message); clients = []; return; }
   clients = (data || []).map(normalizeClient);
   await syncBookings();
@@ -768,14 +943,16 @@ function showBanner(msg){
 
 // Sidebar badge: overdue + due-today Scheduled appointments across all clients.
 function refreshApptBadge(){
-  const el = document.getElementById('apptBadge');
-  if(!el || typeof daysUntil !== 'function') return;
+  if(typeof daysUntil !== 'function') return;
   let count = 0;
   clients.forEach(c=> (c.appointments||[]).forEach(a=>{
     if(a.status==='Scheduled' && daysUntil(a.date)<=0) count++;
   }));
-  el.style.display = count>0 ? 'inline-flex' : 'none';
-  el.textContent = count;
+  count += (typeof PENDING !== 'undefined' ? PENDING.length : 0);
+  const el = document.getElementById('apptBadge');
+  if(el){ el.style.display = count>0 ? 'inline-flex' : 'none'; el.textContent = count; }
+  const bn = document.getElementById('bnApptBadge');
+  if(bn){ bn.style.display = count>0 ? 'block' : 'none'; bn.textContent = count; }
 }
 function flashSaved(){
   const el = document.getElementById('saveFlag');
@@ -857,11 +1034,72 @@ function blankClient(name, surname){
   };
 }
 
+/* ══════════════════════════════════════════════════════════════
+   MOBILE NAVIGATION
+   The sidebar is display:none below 900px. Everything reachable from it
+   — the five views, the interface switcher and Sign Out — has to be
+   reachable here too, or the portal is a dead end on a phone.
+   ══════════════════════════════════════════════════════════════ */
+const MOBILE_NAV = [
+  { id:'clients',      icon:'👥', label:'Clients' },
+  { id:'appointments', icon:'📅', label:'Appts' },
+  { id:'activity',     icon:'📊', label:'Activity' },
+  { id:'tools',        icon:'🛠️', label:'Tools' },
+  { id:'more',         icon:'⋯',  label:'More' }
+];
+
+function buildMobileNav(current){
+  const el = document.getElementById('bottom-nav');
+  if(!el) return;
+  el.innerHTML = MOBILE_NAV.map(function(n){
+    const active = n.id === current;
+    const badge = n.id === 'appointments' ? '<span class="bn-badge" id="bnApptBadge" style="display:none"></span>' : '';
+    return '<button class="bn-item' + (active ? ' active' : '') + '"' +
+           ' onclick="' + (n.id === 'more' ? 'openMoreSheet()' : "go('" + n.id + "')") + '"' +
+           ' aria-current="' + (active ? 'page' : 'false') + '">' +
+           '<span class="bn-ic" aria-hidden="true">' + n.icon + badge + '</span>' + n.label +
+           '</button>';
+  }).join('');
+  refreshApptBadge();
+}
+
+function openMoreSheet(){
+  const items = [];
+  items.push('<button class="sheet-item" onclick="closeMoreSheet();go(\'framework\')"><span class="si-ic">🧭</span>Advisory Framework</button>');
+
+  const others = [];
+  if(ROLES.member)   others.push(['member','👤','My Portal']);
+  if(ROLES.admin)    others.push(['admin','⚙️','Admin']);
+  if(ROLES.employer) others.push(['employer','🏢','HR Dashboard']);
+  if(others.length){
+    items.push('<div class="sheet-sep">Switch interface</div>');
+    others.forEach(function(o){
+      items.push('<button class="sheet-item" onclick="kwGoToInterface(\'' + o[0] + '\')"><span class="si-ic">' + o[1] + '</span>' + o[2] + '</button>');
+    });
+  }
+  items.push('<div class="sheet-sep">Account</div>');
+  items.push('<button class="sheet-item danger" onclick="doLogout()"><span class="si-ic">↩</span>Sign Out</button>');
+
+  const nameEl = document.getElementById('sheetAdvisorName');
+  if(nameEl) nameEl.textContent = (ADVISOR && ADVISOR.full_name ? ADVISOR.full_name : 'Advisor') + (isLead() ? ' · Team Lead' : '');
+  document.getElementById('sheetItems').innerHTML = items.join('');
+  document.getElementById('moreOverlay').classList.add('show');
+  document.getElementById('moreSheet').classList.add('show');
+}
+
+function closeMoreSheet(){
+  document.getElementById('moreOverlay').classList.remove('show');
+  document.getElementById('moreSheet').classList.remove('show');
+}
+document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMoreSheet(); });
+
 /* ================================================================
    ROUTING / SHELL
    ================================================================ */
 function go(view){
+  closeMoreSheet();
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.toggle('active', el.dataset.view===view));
+  buildMobileNav(view);
   document.getElementById('newClientBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
   document.getElementById('findMemberBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
   document.getElementById('importClientBtn').style.display = view==='clients' ? 'inline-flex' : 'none';
@@ -894,14 +1132,122 @@ function go(view){
 /* ================================================================
    CLIENTS LIST
    ================================================================ */
+/* ── Team-lead scope bar ──────────────────────────────────────
+   Only rendered for a team lead. Makes it unmistakable whose clients
+   are on screen — working in a colleague's caseload without realising
+   it is the obvious failure mode of this feature. ── */
+/* ── Member responses the advisor has not seen ────────────────
+   advisor_seen_response existed from the first build but nothing wrote
+   it, so a decline or a reschedule request sat in the data with no way
+   for the advisor to notice. This surfaces them and marks them read
+   once actually opened. ── */
+let PENDING = [];
+
+async function loadPendingResponses(){
+  const { data, error } = await sb.rpc('advisor_pending_responses');
+  if(error){ console.warn('pending responses unavailable:', error.message); PENDING = []; return; }
+  PENDING = data || [];
+  renderPendingBadge();
+}
+
+/* The appointment badge counts overdue sessions; unseen member responses
+   are added to it so a single number means "needs your attention". */
+function renderPendingBadge(){ refreshApptBadge(); }
+
+function pendingBanner(){
+  if(!PENDING.length) return '';
+  const rows = PENDING.slice(0, 6).map(function(r){
+    const what = r.member_response === 'declined' ? 'declined' : 'asked to move';
+    return `<div class="pending-row">
+      <div>
+        <strong>${esc(r.client_name || 'A client')}</strong> ${what}
+        ${esc(r.service || 'a session')}${r.requested_date ? ' on ' + fmtApptDate(r.requested_date) : ''}
+        ${r.is_mine ? '' : '<span class="status-pill status-grey" style="margin-left:6px">another advisor\'s client</span>'}
+        ${r.member_response_note ? `<div class="pending-note">“${esc(r.member_response_note)}”</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;white-space:nowrap">
+        <button class="btn btn-outline btn-sm" onclick="openClient('${r.client_id}');switchTab('appointments')">Open</button>
+        <button class="btn btn-outline btn-sm" onclick="dismissResponse('${r.booking_id}')">Got it</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="pending-card">
+    <div class="pending-head">⚠️ ${PENDING.length} session${PENDING.length===1?'':'s'} need${PENDING.length===1?'s':''} your attention</div>
+    ${rows}
+  </div>`;
+}
+
+async function dismissResponse(bookingId){
+  const { error } = await sb.rpc('advisor_mark_response_seen', { p_booking_id: bookingId });
+  if(error){ showBanner(error.message); return; }
+  PENDING = PENDING.filter(r => r.booking_id !== bookingId);
+  refreshApptBadge();
+  if(currentClientId) renderClientEditor(); else go(document.querySelector('.sb-item.active')?.dataset.view || 'clients');
+}
+
+function scopeBar(){
+  if(!isLead()) return '';
+  const opts = TEAM.filter(x => x.advisor_id !== ADVISOR.id)
+    .map(x => `<option value="${x.advisor_id}"${VIEW.advisorId===x.advisor_id?' selected':''}>${esc(x.full_name)} (${x.active_clients})</option>`)
+    .join('');
+  const viewing = VIEW.mode === 'all'
+      ? 'Every advisor\'s clients'
+      : VIEW.mode === 'advisor'
+        ? esc(VIEW.advisorName || 'another advisor') + '\'s clients'
+        : 'Your own clients';
+  return `
+    <div class="scope-bar${VIEW.mode!=='mine'?' scope-away':''}">
+      <div class="scope-left">
+        <span class="scope-lbl">Viewing</span>
+        <strong>${viewing}</strong>
+        ${VIEW.mode!=='mine' ? '<span class="scope-warn">You are working outside your own caseload — anything you record is attributed to you.</span>' : ''}
+      </div>
+      <div class="scope-right">
+        <button class="btn btn-sm ${VIEW.mode==='mine'?'btn-primary':'btn-outline'}" onclick="setScope('mine')">My clients</button>
+        <button class="btn btn-sm ${VIEW.mode==='all'?'btn-primary':'btn-outline'}" onclick="setScope('all')">All clients</button>
+        <select class="scope-select" onchange="setScope('advisor', this.value)">
+          <option value="">Open an advisor…</option>
+          ${opts}
+        </select>
+      </div>
+    </div>`;
+}
+
+async function setScope(mode, advisorId){
+  if(!isLead()) return;
+  if(mode === 'advisor' && !advisorId) return;
+  await saveNow();
+  const found = TEAM.find(x => x.advisor_id === advisorId);
+  VIEW = { mode: mode,
+           advisorId: mode==='advisor' ? advisorId : null,
+           advisorName: found ? found.full_name : null };
+
+  // Keep the address bar honest so the view survives a refresh or a
+  // link pasted to a colleague.
+  const url = new URL(window.location.href);
+  url.searchParams.delete('advisor'); url.searchParams.delete('scope');
+  if(mode === 'advisor') url.searchParams.set('advisor', advisorId);
+  if(mode === 'all')     url.searchParams.set('scope', 'all');
+  history.replaceState({}, '', url);
+
+  currentClientId = null;
+  _portalCache = {};
+  _notesCache = {};
+  _noteCounts = {};
+  await loadClients();
+  await loadPendingResponses();
+  go('clients');
+}
+
 function renderClientsList(){
   const wrap = document.getElementById('page-content');
   if(clients.length===0){
     wrap.innerHTML = `
+      ${scopeBar()}
       <div class="card">
         <div class="empty-state">
           <div class="ic">📋</div>
-          <h3>No client assessments yet</h3>
+          <h3>${VIEW.mode==='mine' ? 'No client assessments yet' : 'No clients in this view'}</h3>
           <p>Capture a client's income, expenses, debt and assets during a consultation to get an instant Income / Expense / Debt / Lifestyle diagnostic.</p>
           <button class="btn btn-primary" onclick="openNewClientModal()">+ New Client Assessment</button>
           <button class="btn btn-outline" style="margin-left:8px" onclick="openFindMemberModal()">🔍 Add Portal Member</button>
@@ -909,17 +1255,22 @@ function renderClientsList(){
       </div>`;
     return;
   }
+  const showOwner = VIEW.mode !== 'mine';
   const rows = clients.map(c=>{
     const t = calcTotals(c);
     const dti = diagDebt(t);
+    const own = c._owner || {};
     return `<tr>
       <td><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--muted)">${c.personal.age?c.personal.age+' yrs · ':''}Updated ${fmtDate(c.updatedAt)}</div></td>
+      ${showOwner ? `<td>${own.isMine
+          ? '<span class="owner-me">You</span>'
+          : `<span class="owner-other">${esc(own.advisorName||'—')}</span>`}</td>` : ''}
       <td class="mono">${fmt(t.totalIncome)}/mo</td>
       <td class="mono">${fmt(t.netWorth)}</td>
       <td><span class="status-pill status-${dti.color}">${dti.label}</span></td>
       <td style="white-space:nowrap">
         <button class="btn btn-outline btn-sm" onclick="openClient('${c.id}')">Open</button>
-        <button class="btn btn-red btn-sm" onclick="askDelete('${c.id}')">Delete</button>
+        ${own.isMine ? `<button class="btn btn-red btn-sm" onclick="askDelete('${c.id}')">Delete</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -929,8 +1280,10 @@ function renderClientsList(){
   const avgNetWorth = clients.reduce((s,c)=>s+calcTotals(c).netWorth,0)/totalClients;
 
   wrap.innerHTML = `
+    ${scopeBar()}
+    ${pendingBanner()}
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">Clients</div></div>
+      <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">${VIEW.mode==='mine'?'Clients':'Clients in view'}</div></div>
       <div class="stat-box ${flagged>0?'red':'green'}"><div class="stat-val">${flagged}</div><div class="stat-lbl">Flagged Debt Risk</div></div>
       <div class="stat-box gold"><div class="stat-val">${fmt(avgNetWorth)}</div><div class="stat-lbl">Avg. Net Worth</div></div>
     </div>
@@ -940,7 +1293,7 @@ function renderClientsList(){
     <div class="card" style="padding:0">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Client</th><th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th></th></tr></thead>
+          <thead><tr><th>Client</th>${showOwner?'<th style="width:150px">Advisor</th>':''}<th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th style="width:150px"></th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -973,9 +1326,18 @@ async function createClientRecord(){
   const phone   = (document.getElementById('nc-phone').value || '').trim();
   if(!name){ alert('A first name is required.'); return; }
 
+  // A new client belongs to whichever caseload is open. In the "all
+  // clients" view there is no single owner to pick, so creation is
+  // blocked rather than silently filed under the team lead.
+  if(VIEW.mode === 'all'){
+    showBanner('Choose a specific advisor before adding a client.');
+    return;
+  }
+  const ownerId = VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id;
+
   const draft = blankClient(name, surname);
   const { data, error } = await sb.from('advisor_clients').insert({
-    advisor_id: ADVISOR.id,
+    advisor_id: ownerId,
     first_name: name,
     last_name:  surname || null,
     email:      email || null,
@@ -1034,11 +1396,60 @@ function searchMembers(q){
 }
 
 async function addMemberAsClient(userId){
+  if(VIEW.mode !== 'mine' && isLead()){
+    // Assign to the advisor whose caseload is open, not to the team lead.
+    if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor first.'); return; }
+    const { data: newId, error: aErr } = await sb.rpc('admin_assign_client', {
+      p_advisor_id: VIEW.advisorId, p_member_user_id: userId });
+    if(aErr){ showBanner('Could not assign: ' + aErr.message); return; }
+    closeModal('findMemberModal');
+    await loadClients();
+    openClient(newId);
+    return;
+  }
   const { data, error } = await sb.rpc('advisor_add_member_client', { p_member_user_id: userId });
   if(error){ showBanner('Could not add: ' + error.message); return; }
   closeModal('findMemberModal');
   await loadClients();
   openClient(data);
+}
+
+/* ── Reassigning a case ───────────────────────────────────────
+   Team lead (or admin) only — enforced in advisor_reassign_client().
+   The move is recorded on the note timeline so the case history stays
+   legible after the fact. ── */
+let _reassignId = null;
+
+function openReassign(clientId){
+  if(!isLead()) return;
+  _reassignId = clientId;
+  const c = clients.find(x => x.id === clientId);
+  document.getElementById('ra-name').textContent = c ? fullName(c) : 'this client';
+  document.getElementById('ra-reason').value = '';
+  const current = c && c._owner ? c._owner.advisorId : null;
+  document.getElementById('ra-advisor').innerHTML =
+    TEAM.filter(a => a.is_active && a.advisor_id !== current)
+        .map(a => `<option value="${a.advisor_id}">${esc(a.full_name)} — ${a.active_clients} client${a.active_clients===1?'':'s'}</option>`)
+        .join('') || '<option value="">No other active advisor</option>';
+  document.getElementById('reassignModal').classList.add('open');
+}
+
+async function confirmReassign(btn){
+  const to = document.getElementById('ra-advisor').value;
+  if(!to){ showBanner('Pick an advisor to move this client to.'); return; }
+  const reason = document.getElementById('ra-reason').value.trim();
+  if(btn){ btn.disabled = true; btn.textContent = 'Moving…'; }
+  const { data, error } = await sb.rpc('advisor_reassign_client', {
+    p_client_id: _reassignId, p_to_advisor_id: to, p_reason: reason || null
+  });
+  if(btn){ btn.disabled = false; btn.textContent = 'Reassign'; }
+  if(error){ showBanner('Could not reassign: ' + error.message); return; }
+  closeModal('reassignModal');
+  showBanner('Moved from ' + (data.from || 'their advisor') + ' to ' + data.to + '.');
+  _notesCache = {}; _portalCache = {};
+  await loadClients();
+  // The client may no longer be in view — fall back to the list.
+  if(clients.some(x => x.id === _reassignId)) { openClient(_reassignId); } else { go('clients'); }
 }
 
 function askDelete(id){
@@ -1089,8 +1500,9 @@ function importClientFile(file){
       const surname = (imported.personal.surname||'').trim();
       delete imported.id; delete imported._link; delete imported._memberUserId;
       delete imported.appointments;   // sessions live in `bookings`, not in a file
+      if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor before importing a client.'); return; }
       const { error } = await sb.from('advisor_clients').insert({
-        advisor_id: ADVISOR.id,
+        advisor_id: VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id,
         first_name: name,
         last_name:  surname || null,
         email:      (imported.email||'').trim() || null,
@@ -1133,13 +1545,16 @@ const CLIENT_TABS = [
 function openClient(id){
   if(currentClientId && currentClientId !== id) saveNow();
   _portalCache = {};
+  _notesCache = {};
   currentClientId = id;
+  loadNotes(id);
   currentTab = 'personal';
   document.getElementById('newClientBtn').style.display = 'none';
   document.getElementById('findMemberBtn').style.display = 'none';
   document.getElementById('importClientBtn').style.display = 'none';
   document.getElementById('exportClientBtn').style.display = 'inline-flex';
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
+  buildMobileNav('clients');
   renderClientEditor();
 }
 function getClient(){ return clients.find(c=>c.id===currentClientId); }
@@ -1176,7 +1591,8 @@ function renderClientEditor(){
         <h2>${esc(fullName(c))}</h2>
         <div class="meta">${c.personal.age?c.personal.age+' years old · ':''}Assessment started ${fmtDate(c.createdAt)}${c._link&&c._link.orgName?' · '+esc(c._link.orgName):''}</div>
       </div>
-      ${linkChip(c)}
+      ${ownerChip(c)}${linkChip(c)}
+      ${isLead() ? `<button class="btn btn-outline btn-sm no-print" style="margin-left:8px" onclick="openReassign('${c.id}')">Reassign</button>` : ''}
     </div>
     <div class="tabs no-print">${tabsHtml}</div>
     <div id="tab-panel">${panel}</div>`;
@@ -1192,6 +1608,13 @@ function renderClientEditor(){
                      to share their own financial data with an advisor
      member, consent — their portal data is available below
    ── */
+/* Whose case is this? Silent when it is your own. */
+function ownerChip(c){
+  const o = c._owner || {};
+  if(o.isMine !== false) return '';
+  return `<span class="status-pill status-gold" style="margin-right:6px" title="You are assisting on another advisor's client">Advisor: ${esc(o.advisorName||'—')}</span>`;
+}
+
 function linkChip(c){
   const L = c._link || {};
   if(!L.isMember) return '<span class="status-pill status-grey" title="No portal account found for this email">Not on portal</span>';
@@ -1223,7 +1646,7 @@ function panelPortal(c){
       <div class="card">
         <div class="card-title">Waiting on the client's consent</div>
         <div class="notice notice-gold">This client has a Key Wellness account, but has not turned on
-          <strong>“Share my financial data with my advisor”</strong> in their profile.</div>
+          <strong>“Let my Key Wellness advisory team see my financial data”</strong> in their profile.</div>
         <p style="font-size:13px;color:var(--text);line-height:1.7;margin-top:12px">
           Until they do, you can see their contact details and the sessions you have
           together — but not their budget, assessment scores or check-ins. Ask them to
@@ -1898,51 +2321,102 @@ function fmtDateTime(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) + ', ' + d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
 }
+/* ══════════════════════════════════════════════════════════════
+   NOTES — one attributed timeline
+   Notes live in the advisor_notes table, not in the assessment blob, so
+   every entry carries an author and a timestamp. That matters as soon as
+   two people work one case: a team lead covering a session, or a client
+   moving between advisors, should leave a legible trail.
+
+   Anyone who may work the case reads the whole timeline. You may only
+   edit or delete your OWN notes — rewriting a colleague's record of a
+   consultation would destroy the point of attributing it. Enforced in
+   advisor_note_update() / advisor_note_delete(), not just here.
+   ══════════════════════════════════════════════════════════════ */
+let _notesCache = {};
+
+const NOTE_ORIGIN = {
+  session:  { label:'Session note', cls:'status-gold'  },
+  migrated: { label:'Earlier note', cls:'status-grey'  },
+  system:   { label:'Case history', cls:'status-grey'  }
+};
+
 function panelNotes(c){
-  const notes = (c.consultationNotes||[]).slice().sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
-  const rows = notes.map(n=>`
-    <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:11.5px;color:var(--muted);font-weight:700">${fmtDateTime(n.createdAt)}${n.updatedAt && n.updatedAt!==n.createdAt ? ' · edited '+fmtDateTime(n.updatedAt) : ''}</div>
-        <button class="rt-del" onclick="removeConsultationNote('${n.id}')">✕</button>
+  const cached = _notesCache[c.id];
+  if(!cached){
+    loadNotes(c.id);
+    return '<div class="card"><div class="empty-state" style="padding:30px 20px"><div class="ic">⏳</div><h3>Loading notes…</h3></div></div>';
+  }
+
+  const rows = cached.map(function(n){
+    const o = NOTE_ORIGIN[n.origin];
+    const edited = n.updated_at && n.updated_at !== n.created_at;
+    return `
+    <div class="card note-card${n.is_mine ? ' note-mine' : ''}" style="margin-bottom:14px">
+      <div class="note-head">
+        <div>
+          <span class="note-author">${esc(n.author || 'Unknown')}${n.is_mine ? ' <span class="note-you">you</span>' : ''}</span>
+          <div class="note-meta">${fmtDateTime(n.created_at)}${edited ? ' · edited ' + fmtDateTime(n.updated_at) : ''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${o ? `<span class="status-pill ${o.cls}">${o.label}</span>` : ''}
+          ${n.is_mine && n.origin !== 'system' ? `<button class="rt-del" onclick="deleteNote('${n.id}')" title="Delete your note">✕</button>` : ''}
+        </div>
       </div>
-      <div class="field"><textarea style="min-height:80px" oninput="updateConsultationNote('${n.id}', this.value)">${esc(n.text)}</textarea></div>
-    </div>`).join('');
+      ${n.booking_service ? `<div class="note-meta" style="margin-bottom:6px">Attached to ${esc(n.booking_service)}${n.booking_date ? ' on ' + fmtApptDate(n.booking_date) : ''}</div>` : ''}
+      ${n.is_mine && n.origin !== 'system'
+        ? `<div class="field"><textarea style="min-height:80px" onchange="saveNote('${n.id}', this.value)">${esc(n.body)}</textarea></div>`
+        : `<p class="note-body">${esc(n.body)}</p>`}
+    </div>`;
+  }).join('');
+
   return `
     <div class="card">
       <div class="card-title">Add a Note</div>
-      <div class="card-hint">Capture anything from the consultation — context, quotes, follow-ups — as its own dated entry, separate from the category notes on the Diagnostics tab.</div>
+      <div class="card-hint">Anything from the consultation — context, quotes, follow-ups — as its own dated entry, separate from the category notes on the Diagnostics tab. It will be recorded against your name.</div>
       <div class="field"><textarea id="newNoteText" placeholder="What came up in this session…" style="min-height:100px"></textarea></div>
-      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addConsultationNote()">+ Add Note</button>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="addNote(this)">+ Add Note</button>
     </div>
-    ${notes.length ? rows : `<div class="card"><div class="empty-state" style="padding:30px 20px"><div class="ic">📝</div><h3>No notes yet</h3><p>Notes added here build a dated history for this client across consultations.</p></div></div>`}`;
+    ${cached.length ? rows : `<div class="card"><div class="empty-state" style="padding:30px 20px"><div class="ic">📝</div><h3>No notes yet</h3><p>Notes build a dated, attributed history for this client across consultations.</p></div></div>`}`;
 }
-function addConsultationNote(){
-  const c = getClient();
-  const text = (document.getElementById('newNoteText')?.value||'').trim();
-  if(!text) return;
-  const now = new Date().toISOString();
-  c.consultationNotes = c.consultationNotes || [];
-  c.consultationNotes.push({ id:uid(), createdAt:now, updatedAt:now, text });
-  c.updatedAt = now;
-  persistClients();
-  renderClientEditor();
+
+async function loadNotes(clientId){
+  const { data, error } = await sb.rpc('advisor_client_notes', { p_client_id: clientId });
+  if(error){ showBanner('Could not load notes: ' + error.message); _notesCache[clientId] = []; }
+  else _notesCache[clientId] = data || [];
+  if(currentClientId === clientId && currentTab === 'notes') renderClientEditor();
 }
-function updateConsultationNote(id, text){
+
+async function addNote(btn){
   const c = getClient();
-  const n = (c.consultationNotes||[]).find(x=>x.id===id);
-  if(!n) return;
-  n.text = text;
-  n.updatedAt = new Date().toISOString();
-  c.updatedAt = n.updatedAt;
-  persistClients();
+  const el = document.getElementById('newNoteText');
+  const body = (el.value || '').trim();
+  if(!body){ el.focus(); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  const { error } = await sb.rpc('advisor_note_add', { p_client_id: c.id, p_body: body });
+  if(btn){ btn.disabled = false; btn.textContent = '+ Add Note'; }
+  if(error){ showBanner('Could not save the note: ' + error.message); return; }
+  el.value = '';
+  delete _notesCache[c.id];
+  await loadNotes(c.id);
+  flashSaved();
 }
-function removeConsultationNote(id){
+
+async function saveNote(id, body){
+  if(!(body || '').trim()) return;
+  const { error } = await sb.rpc('advisor_note_update', { p_note_id: id, p_body: body });
+  if(error){ showBanner(error.message); return; }
   const c = getClient();
-  c.consultationNotes = (c.consultationNotes||[]).filter(x=>x.id!==id);
-  c.updatedAt = new Date().toISOString();
-  persistClients();
-  renderClientEditor();
+  if(c){ delete _notesCache[c.id]; loadNotes(c.id); }
+  flashSaved();
+}
+
+async function deleteNote(id){
+  if(!confirm('Delete this note? It cannot be recovered.')) return;
+  const { error } = await sb.rpc('advisor_note_delete', { p_note_id: id });
+  if(error){ showBanner(error.message); return; }
+  const c = getClient();
+  if(c){ delete _notesCache[c.id]; await loadNotes(c.id); }
 }
 
 /* ---------- APPOINTMENTS ----------
@@ -2153,6 +2627,7 @@ function renderAppointmentsView(){
     </tr>`).join('');
 
   document.getElementById('page-content').innerHTML = `
+    ${pendingBanner()}
     ${banner}
     <div class="card" style="padding:0">
       <div class="table-wrap">
@@ -2468,8 +2943,12 @@ function panelReport(c){
     noteBlock('Personal Finance Advisory — Overall Summary & Next Steps', c.notes.general),
   ].join('');
 
-  const consultNotes = (c.consultationNotes||[]).slice().sort((a,b)=> new Date(a.createdAt) - new Date(b.createdAt));
-  const consultNotesHtml = consultNotes.map(n=>`<h4>${fmtDateTime(n.createdAt)}</h4><p>${esc(n.text)}</p>`).join('');
+  // Notes now come from the attributed timeline. openClient() preloads
+  // them, so they are in cache by the time the report is rendered.
+  const consultNotes = (_notesCache[c.id] || []).filter(n=>n.origin!=='system')
+    .slice().sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+  const consultNotesHtml = consultNotes.map(n=>
+    `<h4>${fmtDateTime(n.created_at)} — ${esc(n.author||'Advisor')}</h4><p>${esc(n.body)}</p>`).join('');
 
   return `
     <div style="margin-bottom:14px" class="no-print"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
@@ -2926,6 +3405,15 @@ function currentYYYYMM(){
   const d = new Date();
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
+let _noteCounts = {};   // { 'YYYY-MM': { clientId: count } }
+
+async function loadNoteCounts(ym){
+  const { data, error } = await sb.rpc('advisor_note_counts', { p_month: ym, p_advisor_id: scopeArg() });
+  _noteCounts[ym] = error ? {} : (data || {});
+  if(error) console.warn('note counts unavailable:', error.message);
+  if(typeof renderActivityBody === 'function' && activityMonth === ym) renderActivityBody();
+}
+
 let activityMonth = currentYYYYMM();
 function inMonth(dateStr, ym){ return !!dateStr && dateStr.slice(0,7)===ym; }
 function renderActivityView(){
@@ -2940,13 +3428,22 @@ function renderActivityBody(){
   const ym = activityMonth;
   const monthLabel = new Date(Number(ym.slice(0,4)), Number(ym.slice(5,7))-1, 1).toLocaleDateString('en-GB',{month:'long',year:'numeric'});
 
+  // Note counts are per month and per caseload, so they are fetched
+  // rather than derived from the already-loaded client list.
+  if(!_noteCounts[ym]){
+    loadNoteCounts(ym);
+    document.getElementById('activityBody').innerHTML =
+      '<div class="card"><div class="empty-state" style="padding:30px 20px"><div class="ic">⏳</div><h3>Loading activity…</h3></div></div>';
+    return;
+  }
+
   const seen = [];
   let totalSessions = 0;
   const issueCounts = {income:0, expense:0, debt:0, lifestyle:0};
   const flagged = (d)=> d.color!=='green' && d.color!=='grey';
 
   clients.forEach(c=>{
-    const noteSessions = (c.consultationNotes||[]).filter(n=>inMonth(n.createdAt, ym)).length;
+    const noteSessions = Number((_noteCounts[ym] || {})[c.id] || 0);
     const apptSessions = (c.appointments||[]).filter(a=>a.status==='Completed' && inMonth(a.date, ym)).length;
     const sessions = noteSessions + apptSessions;
     if(sessions>0){
@@ -3288,6 +3785,8 @@ function toolRestructuringCalculator(){
   const ok = await bootAdvisor();
   if(!ok) return;
   await loadClients();
+  await loadPendingResponses();
+  buildMobileNav('clients');
   go('clients');
   refreshApptBadge();
 })();
