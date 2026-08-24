@@ -198,3 +198,52 @@ begin
   returning id into v_id;
   return v_id;
 end $$;
+
+-- ── Added for Phase 1: the tables the indicator library reads ──
+create table assessments (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id),
+  score int,
+  cat_scores jsonb,
+  answers jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table emergency_fund (
+  user_id uuid primary key references auth.users(id),
+  monthly numeric,
+  current_savings numeric,
+  contribution numeric,
+  target_months int,
+  updated_at timestamptz default now()
+);
+
+create table stress_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id),
+  level int,
+  tags text[],
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+alter table profiles
+  add column if not exists monthly_expenses numeric,
+  add column if not exists essential_expenses numeric,
+  add column if not exists monthly_savings numeric,
+  add column if not exists total_assets numeric,
+  add column if not exists total_liabilities numeric,
+  add column if not exists will_status text,
+  add column if not exists live_cat_scores jsonb,
+  add column if not exists live_score_at timestamptz;
+
+-- The org_units tree walk, as it stands live.
+create or replace function unit_descendants(p_unit_id uuid)
+returns table(id uuid) language sql stable set search_path to 'public' as $$
+  with recursive tree as (
+    select ou.id from org_units ou where ou.id = p_unit_id
+    union all
+    select c.id from org_units c join tree t on c.parent_unit_id = t.id
+  )
+  select id from tree;
+$$;
