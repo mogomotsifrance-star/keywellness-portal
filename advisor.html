@@ -469,13 +469,35 @@ tbody td{padding:10px 12px;vertical-align:middle}
       <label>Email <span style="font-weight:600;color:var(--muted)">— links this client to their portal account</span></label>
       <input type="email" id="nc-email" placeholder="name@example.com">
     </div>
-    <div class="field" style="margin-bottom:8px">
+    <div class="field" style="margin-bottom:14px">
       <label>Phone</label>
       <input type="tel" id="nc-phone" placeholder="+267 ...">
     </div>
+
+    <!-- Organisation is required by the database (advisor_clients_org_required):
+         either an organisation, or "private client" said out loud. Options come
+         from advisor_org_options() because advisors have no RLS read on
+         organizations or org_units. -->
+    <div class="field" style="margin-bottom:14px">
+      <label>Organisation <span style="font-weight:600;color:var(--muted)">— which company programme this client is seen under</span></label>
+      <select id="nc-org" onchange="ncOrgChanged()">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:14px" id="nc-unit-wrap" hidden>
+      <label>Company / Site</label>
+      <select id="nc-unit"></select>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;
+                  color:var(--text);margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="nc-noorg" onchange="ncNoOrgChanged()" style="margin-top:2px">
+      <span>Private client — not under a company programme</span>
+    </label>
+
     <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-bottom:20px">
       The client does not need a portal account. If they sign up later using this
-      email address, their record links to it automatically.
+      email address, their record links to it automatically — and if they join a
+      company programme, the organisation fills itself in.
     </p>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeModal('newClientModal')">Cancel</button>
@@ -1311,12 +1333,89 @@ function fmtDate(iso){
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
 }
 
+/* ── Organisation picker ──────────────────────────────────────
+   The database requires every client to carry an organisation or to be
+   declared a private client. Advisors cannot read `organizations` or
+   `org_units` directly — org_units_read grants the member's own org, the
+   employer's own org, or admin, and an advisor is none of those — so the
+   options come from advisor_org_options(), which applies the same rules
+   the member picker uses: active orgs only, leaf sites only, and no site
+   under a closed company. ── */
+let ORG_OPTIONS = null;          // cached for the session
+let pendingImport = null;        // an imported file waiting for an organisation
+
+async function loadOrgOptions(){
+  if(ORG_OPTIONS) return ORG_OPTIONS;
+  const { data, error } = await sb.rpc('advisor_org_options');
+  if(error){
+    console.warn('organisation options unavailable:', error.message);
+    ORG_OPTIONS = [];
+    showBanner('Could not load the organisation list: ' + error.message
+      + ' — you can still add the client as a private client.');
+    return ORG_OPTIONS;
+  }
+  ORG_OPTIONS = data || [];
+  return ORG_OPTIONS;
+}
+
+async function fillOrgPicker(){
+  const orgSel = document.getElementById('nc-org');
+  const opts   = await loadOrgOptions();
+  orgSel.innerHTML =
+    '<option value="">— choose an organisation —</option>' +
+    opts.map(function(o){
+      return '<option value="'+o.org_id+'">'+esc(o.name)+'</option>';
+    }).join('');
+  ncOrgChanged();
+}
+
+function ncOrgChanged(){
+  const orgId = document.getElementById('nc-org').value;
+  const wrap  = document.getElementById('nc-unit-wrap');
+  const sel   = document.getElementById('nc-unit');
+  const org   = (ORG_OPTIONS || []).find(function(o){ return o.org_id === orgId; });
+  const units = (org && org.units) || [];
+
+  // An organisation with no companies or sites is attributed at
+  // organisation level; showing an empty picker would only confuse.
+  if(!orgId || !units.length){
+    wrap.hidden = true;
+    sel.innerHTML = '';
+    return;
+  }
+  wrap.hidden = false;
+  sel.innerHTML =
+    '<option value="">— whole organisation —</option>' +
+    units.map(function(u){
+      return '<option value="'+u.id+'">'+esc(u.label)+'</option>';
+    }).join('');
+}
+
+// "Private client" and an organisation are mutually exclusive, so the
+// form says so rather than letting the database say it in SQL.
+function ncNoOrgChanged(){
+  const off = document.getElementById('nc-noorg').checked;
+  const orgSel = document.getElementById('nc-org');
+  orgSel.disabled = off;
+  document.getElementById('nc-unit').disabled = off;
+  if(off){
+    orgSel.value = '';
+    ncOrgChanged();
+  }
+}
+
 function openNewClientModal(){
+  pendingImport = null;
   document.getElementById('nc-name').value='';
   document.getElementById('nc-surname').value='';
   document.getElementById('nc-email').value='';
   document.getElementById('nc-phone').value='';
+  document.getElementById('nc-noorg').checked = false;
+  document.getElementById('nc-org').disabled  = false;
+  document.getElementById('nc-unit').disabled = false;
+  document.querySelector('#newClientModal .modal-header h3').textContent = 'New Client Assessment';
   document.getElementById('newClientModal').classList.add('open');
+  fillOrgPicker();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 async function createClientRecord(){
@@ -1335,28 +1434,58 @@ async function createClientRecord(){
   }
   const ownerId = VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id;
 
-  const draft = blankClient(name, surname);
-  const { data, error } = await sb.from('advisor_clients').insert({
-    advisor_id: ownerId,
-    first_name: name,
-    last_name:  surname || null,
-    email:      email || null,
-    phone:      phone || null,
-    assessment: assessmentPayload(draft),
-    created_by: CURRENT_USER.id
-  }).select('id, member_user_id').single();
+  // Attribution. The database will refuse a client that is neither under
+  // an organisation nor declared private, so catch it here where the
+  // message can be useful.
+  const noOrg  = document.getElementById('nc-noorg').checked;
+  const orgId  = document.getElementById('nc-org').value || null;
+  const unitId = document.getElementById('nc-unit').value || null;
 
-  if(error){
-    // The unique index on (advisor_id, lower(email)) is the usual cause.
-    showBanner(error.code === '23505'
-      ? 'You already have a client with that email address.'
-      : 'Could not create the client: ' + error.message);
+  if(!noOrg && !orgId){
+    showBanner('Choose the organisation this client is seen under, or tick '
+             + '"Private client" if they are not on a company programme.');
     return;
   }
+
+  const draft = pendingImport || blankClient(name, surname);
+  const { data, error } = await sb.from('advisor_clients').insert({
+    advisor_id:  ownerId,
+    first_name:  name,
+    last_name:   surname || null,
+    email:       email || null,
+    phone:       phone || null,
+    org_id:      noOrg ? null : orgId,
+    org_unit_id: noOrg ? null : unitId,
+    no_org:      noOrg,
+    assessment:  assessmentPayload(draft),
+    created_by:  CURRENT_USER.id
+  }).select('id, member_user_id, org_id').single();
+
+  if(error){
+    // 23505 = the unique index on (advisor_id, lower(email)).
+    // 23514 = a check constraint; attribution is the only one that can
+    //         realistically fire from this form.
+    showBanner(
+      error.code === '23505' ? 'You already have a client with that email address.'
+    : error.code === '23514' ? 'That client needs an organisation, or to be marked as a private client.'
+    : 'Could not create the client: ' + error.message);
+    return;
+  }
+
+  const wasImport = !!pendingImport;
+  pendingImport = null;
   closeModal('newClientModal');
   await loadClients();
+
+  // If the email matched a portal member, the link trigger may also have
+  // inherited that member's organisation over what was picked here.
   if(data.member_user_id){
-    showBanner('Linked to an existing portal member with that email.');
+    showBanner(!noOrg && orgId && data.org_id && data.org_id !== orgId
+      ? 'Linked to an existing portal member. Their profile says a different '
+        + 'organisation, so this record is flagged for review.'
+      : 'Linked to an existing portal member with that email.');
+  } else if(wasImport){
+    showBanner('Client file imported.');
   }
   openClient(data.id);
 }
@@ -1501,18 +1630,23 @@ function importClientFile(file){
       delete imported.id; delete imported._link; delete imported._memberUserId;
       delete imported.appointments;   // sessions live in `bookings`, not in a file
       if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor before importing a client.'); return; }
-      const { error } = await sb.from('advisor_clients').insert({
-        advisor_id: VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id,
-        first_name: name,
-        last_name:  surname || null,
-        email:      (imported.email||'').trim() || null,
-        phone:      (imported.phone||'').trim() || null,
-        assessment: imported,
-        created_by: CURRENT_USER.id
-      });
-      if(error){ showBanner('Could not import: ' + error.message); return; }
-      await loadClients();
-      renderClientsList();
+
+      // An imported client needs an organisation like any other. Rather
+      // than a second attribution path that could drift from the first,
+      // the file is held and the same New Client form is opened over it,
+      // pre-filled. createClientRecord() then does the single insert.
+      pendingImport = imported;
+      document.getElementById('nc-name').value    = name;
+      document.getElementById('nc-surname').value = surname;
+      document.getElementById('nc-email').value   = (imported.email||'').trim();
+      document.getElementById('nc-phone').value   = (imported.phone||'').trim();
+      document.getElementById('nc-noorg').checked = false;
+      document.getElementById('nc-org').disabled  = false;
+      document.getElementById('nc-unit').disabled = false;
+      document.querySelector('#newClientModal .modal-header h3').textContent =
+        'Import Client — choose the organisation';
+      document.getElementById('newClientModal').classList.add('open');
+      await fillOrgPicker();
     } catch(e){
       alert('Could not read that file — make sure it\'s a client file exported from this portal.');
     } finally {
