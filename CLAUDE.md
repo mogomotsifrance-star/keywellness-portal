@@ -294,6 +294,46 @@ neither and vanishes from the department breakdown. Use
 `unit_departments_admin_all` lets you write to the table directly and skip every
 guard, so go through the `admin_dept_*` RPCs.
 
+**A new function is callable by everyone until you REVOKE it.** Postgres grants
+`EXECUTE` on every new function to `PUBLIC`, so `anon` and `authenticated` can
+call it whether or not you wrote a `GRANT`. Declining to write one locks
+nothing. This matters because `SECURITY DEFINER` runs as `postgres` and
+therefore bypasses RLS — an ungated helper is a public read of the whole table.
+
+Phase 1 shipped `_org_indicator_counts()` commented as "internal helper: not
+granted to authenticated". It was reachable by `anon`, and returned a named
+organisation's indicator counts — bases below the suppression threshold
+included — to anyone holding the published anon key. Fixed 2026-08-24 by
+`supabase_org_account_phase1a_lock_internal_helpers.sql`.
+
+So: **every `_`-prefixed `SECURITY DEFINER` helper needs an explicit
+`revoke execute ... from public, anon, authenticated;` in the same migration
+that creates it.** The gated RPC that calls it still works — it is
+`SECURITY DEFINER` owned by `postgres` and reaches the helper as its owner,
+regardless of the caller. `_dept_metrics` and the Phase 1 helpers are the
+reference: their ACL should read `postgres=X/postgres | service_role=X/postgres`
+and nothing more.
+
+Two things this rule does *not* cover. Pure helpers with no data access
+(`kw_dti_band`, `kw_threshold`) are fine left public. And a top-level RPC is
+gated by the check *inside* it (`is_admin()`, `is_team_lead()`,
+`current_advisor_id()`, `hr_unit_in_scope()`), not by its grant — those are
+deliberately granted to `authenticated`. A full sweep on 2026-08-24 found no
+other ungated helper; re-run it after adding any phase:
+
+```sql
+-- SECURITY DEFINER functions reachable by anon/authenticated with no gate
+select p.proname, pg_get_function_identity_arguments(p.oid) as args
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.prokind = 'f' and p.prosecdef
+   and pg_get_function_result(p.oid) <> 'trigger'
+   and (has_function_privilege('anon', p.oid, 'EXECUTE')
+     or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+   and not (p.prosrc ~* '\mis_admin\M|\mis_team_lead\M|\memployer_org\M|\mis_advisor\M|\mcurrent_advisor_id\M|\mhr_unit_in_scope\M|\mcan_manage_advisor\M'
+         or p.prosrc ~* 'auth\.uid\(\)|auth\.jwt\(\)')
+ order by p.proname;
+```
+
 ---
 
 ## What NOT to Do
@@ -305,5 +345,6 @@ guard, so go through the `admin_dept_*` RPCs.
 - Do not break the existing auth flow in index.html
 - Do not reintroduce `window.location.replace()` role redirects in index.html — use `kwRouteByRole()`
 - Do not give advisors direct RLS read access to `profiles` / `assessments` / `checkins` — member financial data goes through the consent-gated RPCs only
+- Do not assume an internal SQL helper is private because you did not `GRANT` it — Postgres gives `EXECUTE` to `PUBLIC` by default. Every `SECURITY DEFINER` helper needs an explicit `REVOKE` (see Roles & Interfaces)
 - Do not create a separate table for advisor sessions — they belong in `bookings`
 - Do not use `localStorage` for new features — use Supabase instead
