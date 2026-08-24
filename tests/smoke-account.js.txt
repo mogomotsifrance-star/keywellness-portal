@@ -1,0 +1,264 @@
+/* Key Wellness — headless checks for the organisation account file
+   (Phase 2 shell + presenting-issues panel).
+
+   Loads the real admin.html in Chromium with a stubbed Supabase client
+   and drives the drill-in the way an admin would: click an organisation,
+   read the panel, change the period and the site scope, and switch the
+   client-safe view on.
+
+   The fixture mirrors the shape admin_org_indicators() returns, including
+   a suppressed indicator, a low-base indicator, an indicator with
+   movement, and one with movement_note instead — so the rendering of
+   every case is exercised.
+
+   Usage:  node tests/smoke-account.js
+*/
+const { chromium } = require('playwright');
+const path = require('path');
+
+let pass = 0, fail = 0;
+function check(name, ok, detail) {
+  if (ok) { pass++; console.log('PASS  ' + name); }
+  else    { fail++; console.log('FAIL  ' + name + (detail ? '  → ' + detail : '')); }
+}
+
+const ORGS = [
+  { id: 'org-test', name: 'Test Co',  invite_code: 'TEST-1234', is_active: true,
+    program_name: 'Financial Wellbeing', member_count: 21, hr_count: 1, unit_count: 0, deletable: false },
+  { id: 'org-sed',  name: 'Sedimosa', invite_code: 'S3DI-M185', is_active: true,
+    program_name: null, member_count: 8, hr_count: 1, unit_count: 11, deletable: false }
+];
+
+const UNITS = [
+  { id: 'unit-hq',   name: 'Head Office Co', parent_name: null,            parent_unit_id: null,      is_active: true,  member_count: 8, child_count: 2 },
+  { id: 'unit-gabs', name: 'Gaborone',       parent_name: 'Head Office Co', parent_unit_id: 'unit-hq', is_active: true,  member_count: 5, child_count: 0 },
+  { id: 'unit-old',  name: 'Lobatse',        parent_name: 'Head Office Co', parent_unit_id: 'unit-hq', is_active: false, member_count: 1, child_count: 0 }
+];
+
+function indicators(opts) {
+  opts = opts || {};
+  const safe = !!opts.client_safe;
+  const mk = (key, label, placement, count, base, extra) => Object.assign({
+    key: key, label: label, placement: placement,
+    definition: label + ' definition', source: 'assessment',
+    count: count, base: base,
+    pct: base ? Math.round(1000 * count / base) / 10 : null,
+    low_base: base < 5,
+    movement: null, movement_note: null,
+    suppressed: false
+  }, extra || {});
+
+  const head = [
+    mk('over_indebted',        'Over-indebted',        'row_1', 2, 10,
+       { source: 'profile', movement_note: 'No history: this is a current profile value, so it cannot be re-computed as at a past date.' }),
+    mk('no_emergency_buffer',  'No emergency buffer',  'row_1', 7, 13,
+       { movement: { previous_count: 2, previous_base: 8, previous_pct: 25.0, delta_pct: 28.8 } }),
+    mk('living_beyond_means',  'Living beyond means',  'row_1', 2, 13,
+       { movement: { previous_count: 4, previous_base: 8, previous_pct: 50.0, delta_pct: -34.6 } }),
+    mk('retirement_shortfall', 'Retirement shortfall', 'row_2', 6, 13,
+       { movement: { previous_count: 4, previous_base: 8, previous_pct: 50.0, delta_pct: -3.8 } }),
+    mk('cover_gap',            'Cover gap',            'row_2', 3, 13, {}),
+    mk('not_building_wealth',  'Not building wealth',  'row_2', 8, 13, {})
+  ];
+
+  // A deliberately tiny base, so low-base marking and client-safe
+  // suppression can both be checked on the same indicator.
+  const lib = [
+    mk('no_will',                'No will in place',                  'library', 3, 4,
+       { source: 'profile', movement_note: 'No history: this is a current profile value, so it cannot be re-computed as at a past date.' }),
+    mk('single_income_reliance', 'Reliance on a single income source','library', 5, 13, {}),
+    mk('high_financial_stress',  'High financial stress',             'library', 2, 5, {})
+  ];
+
+  if (safe) {
+    lib.forEach(r => { if (r.low_base) { r.count = null; r.pct = null; r.movement = null; r.suppressed = true; } });
+    head.forEach(r => { if (r.low_base) { r.count = null; r.pct = null; r.movement = null; r.suppressed = true; } });
+  }
+
+  return {
+    org_id: opts.org_id, org_name: 'Test Co',
+    unit_id: opts.unit_id || null,
+    unit_label: opts.unit_id ? 'Head Office Co — Gaborone' : null,
+    period_start: opts.start, period_end: opts.end,
+    client_safe: safe, suppressed: false,
+    cohort: { registered: opts.unit_id ? 5 : 21, assessed: opts.unit_id ? 3 : 13,
+              registered_before: 18, low_base_threshold: 5 },
+    headline: head, library: lib,
+    note: 'Prevalence among the population each figure can be computed for.'
+  };
+}
+
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+
+  await page.addInitScript(({ orgs, units }) => {
+    window.__rpc = [];
+    window.__orgs = orgs;
+    window.__units = units;
+    window.__indicatorFn = null;      // installed from Node below
+    const q = () => {
+      const chain = {
+        eq: () => chain, or: () => chain, order: () => chain, limit: () => chain,
+        maybeSingle: async () => ({ data: { email: 'admin@keywellness.co.bw' }, error: null }),
+        single: async () => ({ data: null, error: null }),
+        then: (res) => res({ data: [], error: null })
+      };
+      return chain;
+    };
+    const fakeSb = {
+      from: () => ({ select: q, insert: q, update: q, delete: q }),
+      rpc: async (fn, args) => {
+        window.__rpc.push({ fn: fn, args: args });
+        if (fn === 'admin_orgs_overview')   return { data: window.__orgs,  error: null };
+        if (fn === 'admin_units_overview')  return { data: window.__units, error: null };
+        if (fn === 'admin_org_indicators')  return { data: window.__makeIndicators(args), error: null };
+        return { data: [], error: null };
+      },
+      auth: {
+        getSession: async () => ({ data: { session: {
+          user: { id: 'admin-1', email: 'admin@keywellness.co.bw' } } } }),
+        getUser: async () => ({ data: { user: { id: 'admin-1', email: 'admin@keywellness.co.bw' } } }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe(){} } } }),
+        signOut: async () => ({ error: null })
+      }
+    };
+    window.supabase = { createClient: () => fakeSb };
+  }, { orgs: ORGS, units: UNITS });
+
+  // The indicator builder lives in Node so the fixture stays in one place.
+  await page.addInitScript('window.__makeIndicators = ' + (function (mk) {
+    return function (args) {
+      return mk({
+        org_id: args.p_org_id, start: args.p_start, end: args.p_end,
+        unit_id: args.p_unit_id, client_safe: args.p_client_safe
+      });
+    };
+  }).toString() + '(' + indicators.toString() + ');');
+
+  await page.goto('file://' + path.resolve(__dirname, '..', 'admin.html'));
+  await page.waitForTimeout(700);
+
+  // ── Drill in from the organisations list ────────────────────
+  await page.evaluate(() => { window.showTab('orgs'); });
+  await page.waitForTimeout(400);
+
+  const linkText = await page.evaluate(() => {
+    const a = Array.from(document.querySelectorAll('a')).find(x => /openOrgAccount/.test(x.getAttribute('onclick') || ''));
+    return a ? a.textContent.trim() : null;
+  });
+  check('the organisation name is a link into the account file', linkText === 'Test Co', String(linkText));
+
+  await page.evaluate(() => { window.openOrgAccount(0); });
+  await page.waitForTimeout(500);
+
+  const body = () => page.evaluate(() => document.getElementById('page-content').innerText);
+
+  let txt = await body();
+  check('the account file opens on the chosen organisation', /Test Co/.test(txt));
+  check('the header strip shows the cohort', /21/.test(txt) && /registered members/i.test(txt));
+  check('and the participation share', /62%/.test(txt), txt.slice(0, 200));
+
+  // ── The six, in two named rows ──────────────────────────────
+  check('pressure-now row is present',    /pressure now/i.test(txt));
+  check('future-exposure row is present', /future exposure/i.test(txt));
+  const tiles = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.card .stat-grid .stat-box')).length);
+  check('exactly six headline tiles render', tiles === 6, 'tiles=' + tiles);
+
+  check('a tile shows the share', /53\.8%/.test(txt), 'expected 7 of 13 = 53.8%');
+  check('and its denominator, never a bare number', /7 of 13/.test(txt));
+
+  // ── Movement rendering ──────────────────────────────────────
+  check('a worsening indicator shows a rise', /▲\s*28\.8 pts/.test(txt), txt.match(/▲[^\n]*/g));
+  check('an improving indicator shows a fall', /▼\s*34\.6 pts/.test(txt));
+  check('a profile indicator says movement is unavailable rather than showing zero',
+    /Movement not available/.test(txt));
+
+  // ── Low base ────────────────────────────────────────────────
+  check('a low-base figure is marked, not hidden, on the internal view',
+    /low base/i.test(txt) && /No will in place/.test(txt));
+
+  // ── Library table ───────────────────────────────────────────
+  check('the library lists the wider set', /wider library/i.test(txt));
+  check('the income dimension is relabelled, not called an income problem',
+    /Reliance on a single income source/.test(txt) && !/income problem/i.test(txt));
+
+  // ── Period change re-queries ────────────────────────────────
+  const beforeCalls = await page.evaluate(() => window.__rpc.filter(r => r.fn === 'admin_org_indicators').length);
+  await page.evaluate(() => { acctStart = '2026-01-01'; return window.renderOrgAccount(); });
+  await page.waitForTimeout(400);
+  const afterCalls = await page.evaluate(() => window.__rpc.filter(r => r.fn === 'admin_org_indicators').length);
+  check('changing the period re-queries rather than filtering stale data', afterCalls > beforeCalls);
+  const sentStart = await page.evaluate(() => {
+    const c = window.__rpc.filter(r => r.fn === 'admin_org_indicators');
+    return c[c.length - 1].args.p_start;
+  });
+  check('and sends the chosen start date', sentStart === '2026-01-01', sentStart);
+
+  // ── Site scoping ────────────────────────────────────────────
+  const unitOptions = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('select option')).map(o => o.textContent));
+  check('the site picker offers the whole organisation first',
+    unitOptions[0] === 'Whole organisation', JSON.stringify(unitOptions));
+  check('sites read as company — site',
+    unitOptions.includes('Head Office Co — Gaborone'), JSON.stringify(unitOptions));
+  check('a closed site is still listed, and marked closed',
+    unitOptions.some(o => /Lobatse \(closed\)/.test(o)), JSON.stringify(unitOptions));
+  check('a company with sites is selectable here (unlike the advisor picker)',
+    unitOptions.includes('Head Office Co'), JSON.stringify(unitOptions));
+
+  await page.evaluate(() => { acctUnitId = 'unit-gabs'; return window.renderOrgAccount(); });
+  await page.waitForTimeout(400);
+  txt = await body();
+  check('scoping to a site narrows the cohort shown', /\b5\b/.test(txt) && /Registered members/i.test(txt));
+  const sentUnit = await page.evaluate(() => {
+    const c = window.__rpc.filter(r => r.fn === 'admin_org_indicators');
+    return c[c.length - 1].args.p_unit_id;
+  });
+  check('and passes the unit to the RPC', sentUnit === 'unit-gabs', String(sentUnit));
+
+  // ── Client-safe ─────────────────────────────────────────────
+  await page.evaluate(() => { acctUnitId = ''; acctSafe = true; return window.renderOrgAccount(); });
+  await page.waitForTimeout(400);
+  txt = await body();
+  const sentSafe = await page.evaluate(() => {
+    const c = window.__rpc.filter(r => r.fn === 'admin_org_indicators');
+    return c[c.length - 1].args.p_client_safe;
+  });
+  check('the client-safe toggle reaches the RPC', sentSafe === true);
+  check('a suppressed indicator says so instead of showing a count',
+    /too small to report/i.test(txt));
+
+  // ── The copy summary carries denominators and a warning ─────
+  const summary = await page.evaluate(async () => {
+    let captured = null;
+    navigator.clipboard.writeText = async (t) => { captured = t; };
+    acctSafe = false;
+    await window.renderOrgAccount();
+    await new Promise(r => setTimeout(r, 300));
+    window.acctCopySummary();
+    await new Promise(r => setTimeout(r, 100));
+    return captured;
+  });
+  check('the copied summary states every denominator',
+    /7 of 13/.test(summary || ''), (summary || '').slice(0, 160));
+  check('and warns loudly when it is the internal, unsuppressed view',
+    /INTERNAL view/.test(summary || ''));
+
+  // ── Back out ────────────────────────────────────────────────
+  await page.evaluate(() => window.orgSwitch('orgs'));
+  await page.waitForTimeout(400);
+  txt = await body();
+  check('the back button returns to the organisations list',
+    /Add an organisation/.test(txt));
+
+  check('no uncaught JavaScript errors from the account file',
+    errors.filter(e => /acct|OrgAccount|indicator/i.test(e)).length === 0, errors.join(' | '));
+
+  await browser.close();
+  console.log('\n  ' + pass + ' passed, ' + fail + ' failed.\n');
+  process.exit(fail ? 1 : 0);
+})();
