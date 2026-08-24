@@ -469,13 +469,35 @@ tbody td{padding:10px 12px;vertical-align:middle}
       <label>Email <span style="font-weight:600;color:var(--muted)">— links this client to their portal account</span></label>
       <input type="email" id="nc-email" placeholder="name@example.com">
     </div>
-    <div class="field" style="margin-bottom:8px">
+    <div class="field" style="margin-bottom:14px">
       <label>Phone</label>
       <input type="tel" id="nc-phone" placeholder="+267 ...">
     </div>
+
+    <!-- Organisation is required by the database (advisor_clients_org_required):
+         either an organisation, or "private client" said out loud. Options come
+         from advisor_org_options() because advisors have no RLS read on
+         organizations or org_units. -->
+    <div class="field" style="margin-bottom:14px">
+      <label>Organisation <span style="font-weight:600;color:var(--muted)">— which company programme this client is seen under</span></label>
+      <select id="nc-org" onchange="ncOrgChanged()">
+        <option value="">Loading…</option>
+      </select>
+    </div>
+    <div class="field" style="margin-bottom:14px" id="nc-unit-wrap" hidden>
+      <label>Company / Site</label>
+      <select id="nc-unit"></select>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;
+                  color:var(--text);margin-bottom:8px;cursor:pointer">
+      <input type="checkbox" id="nc-noorg" onchange="ncNoOrgChanged()" style="margin-top:2px">
+      <span>Private client — not under a company programme</span>
+    </label>
+
     <p style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-bottom:20px">
       The client does not need a portal account. If they sign up later using this
-      email address, their record links to it automatically.
+      email address, their record links to it automatically — and if they join a
+      company programme, the organisation fills itself in.
     </p>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-outline" onclick="closeModal('newClientModal')">Cancel</button>
@@ -698,6 +720,11 @@ async function bootAdvisor(){
     return false;
   }
   ADVISOR = me;
+
+  // Indicator thresholds, so the DTI banding on this screen matches the
+  // organisation figures. Failure is non-fatal — kwDtiCfg() falls back to
+  // the same numbers.
+  await loadThresholds();
 
   // Which other interfaces can this person switch into? Run together rather
   // than one after another, and include the HR role — the switcher used to omit
@@ -1276,7 +1303,10 @@ function renderClientsList(){
   }).join('');
 
   const totalClients = clients.length;
-  const flagged = clients.filter(c=>{ const t=calcTotals(c); return diagDebt(t).color==='red' || diagDebt(t).color==='orange'; }).length;
+  // "Flagged" means over-indebted, the same test the organisation
+  // figures use — previously this counted anyone above 50% while the
+  // activity report counted anyone above 35%, so the two disagreed.
+  const flagged = clients.filter(c=>{ const t=calcTotals(c); return kwIsOverIndebted(t.dti); }).length;
   const avgNetWorth = clients.reduce((s,c)=>s+calcTotals(c).netWorth,0)/totalClients;
 
   wrap.innerHTML = `
@@ -1288,35 +1318,210 @@ function renderClientsList(){
       <div class="stat-box gold"><div class="stat-val">${fmt(avgNetWorth)}</div><div class="stat-lbl">Avg. Net Worth</div></div>
     </div>
     <div class="search-row">
-      <input type="text" class="search-input" id="clientSearch" placeholder="Search clients by name…" oninput="renderClientsList()">
+      <input type="text" class="search-input" id="clientSearch" placeholder="Search clients by name…" value="${esc(clientQuery)}" oninput="filterClientsList(this.value)">
     </div>
     <div class="card" style="padding:0">
       <div class="table-wrap">
         <table>
           <thead><tr><th>Client</th>${showOwner?'<th style="width:150px">Advisor</th>':''}<th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th style="width:150px"></th></tr></thead>
-          <tbody>${rows}</tbody>
+          <tbody id="clientsTableBody">${rows}</tbody>
         </table>
       </div>
     </div>`;
 
-  const q = (document.getElementById('clientSearch')?.value||'').toLowerCase();
-  if(q){
-    document.querySelectorAll('tbody tr').forEach(tr=>{
-      tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-  }
+  applyClientFilter();
+}
+
+/* -- Client search ----------------------------------------------
+   The search box lives inside #page-content, so calling renderClientsList()
+   from its own `oninput` rewrote the element being typed into: focus was
+   lost after every character, and because the replacement <input> carried
+   no value the filter it then read was always empty -- the search did
+   nothing at all. Rows are hidden in place now, and the query is held here
+   so a re-render (scope change, a client added) keeps it. -- */
+let clientQuery = '';
+
+function filterClientsList(q){
+  clientQuery = q || '';
+  applyClientFilter();
+}
+
+function applyClientFilter(){
+  const q = clientQuery.trim().toLowerCase();
+  const body = document.getElementById('clientsTableBody');
+  if(!body) return;
+  body.querySelectorAll('tr').forEach(function(tr){
+    tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
 }
 function fmtDate(iso){
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
 }
 
+/* ── Organisation picker ──────────────────────────────────────
+   The database requires every client to carry an organisation or to be
+   declared a private client. Advisors cannot read `organizations` or
+   `org_units` directly — org_units_read grants the member's own org, the
+   employer's own org, or admin, and an advisor is none of those — so the
+   options come from advisor_org_options(), which applies the same rules
+   the member picker uses: active orgs only, leaf sites only, and no site
+   under a closed company. ── */
+let ORG_OPTIONS = null;          // last fetch, read by ncOrgChanged()
+let pendingImport = null;        // an imported file waiting for an organisation
+
+/* ── DTI banding ──────────────────────────────────────────────
+   One definition of "over-indebted", held in threshold_config and read
+   by every surface: this portal, the organisation RPCs, and HR's
+   figures. Hard-coding it here again is what let the advisor screen and
+   the HR dashboard disagree about the same client.
+
+   `max` is an EXCLUSIVE upper bound — a band matches when dti < max — so
+   exactly 45.0 is over-indebted. That matches kw_dti_band() in SQL and
+   org_financial_indicators(), and therefore every figure already
+   published. Do not "fix" it to <=.
+
+   The fallback is the same set, so a failed fetch degrades to correct
+   numbers rather than to a blank diagnostic. ── */
+let KW_DTI = null;
+const KW_DTI_FALLBACK = {
+  flag_band: 'over_indebted',
+  bands: [
+    { key:'healthy',       max:20,   label:'Healthy (under 20%)'   },
+    { key:'manageable',    max:35,   label:'Manageable (20–34.9%)' },
+    { key:'strained',      max:45,   label:'Strained (35–44.9%)'   },
+    { key:'over_indebted', max:null, label:'Over-indebted (45%+)'  }
+  ]
+};
+
+async function loadThresholds(){
+  const { data, error } = await sb.from('threshold_config')
+    .select('value').eq('key','indicator.dti').maybeSingle();
+  if(error || !data || !data.value){
+    console.warn('DTI thresholds unavailable, using built-in defaults',
+                 error ? error.message : '');
+    KW_DTI = KW_DTI_FALLBACK;
+    return;
+  }
+  KW_DTI = data.value;
+}
+
+function kwDtiCfg(){ return KW_DTI || KW_DTI_FALLBACK; }
+
+function kwDtiBand(dti){
+  if(dti === null || dti === undefined || isNaN(dti)) return null;
+  const bands = kwDtiCfg().bands || [];
+  for(let i = 0; i < bands.length; i++){
+    const max = bands[i].max;
+    if(max === null || max === undefined || Number(dti) < Number(max)) return bands[i].key;
+  }
+  return null;
+}
+
+// The canonical "flagged for debt" test. Same answer as
+// kw_is_over_indebted() in SQL.
+function kwIsOverIndebted(dti){
+  return kwDtiBand(dti) === (kwDtiCfg().flag_band || 'over_indebted');
+}
+
+function kwBandDef(key){
+  const bands = kwDtiCfg().bands || [];
+  for(let i = 0; i < bands.length; i++){ if(bands[i].key === key) return bands[i]; }
+  return {};
+}
+
+// Config labels carry their range for HR-facing output ("Strained
+// (35–44.9%)"); the pill wants just the word.
+function kwBandLabel(key){
+  const raw = kwBandDef(key).label || key || '';
+  return String(raw).replace(/\s*\(.*\)\s*$/, '') || 'Unknown';
+}
+
+// The ceiling of the "manageable" band is the lending norm quoted to
+// clients, so it follows the config rather than being written twice.
+function kwLendingNorm(){
+  const m = kwBandDef('manageable').max;
+  return (m === null || m === undefined) ? 35 : Number(m);
+}
+
+// Fetched every time the form opens, deliberately NOT cached. An advisor
+// with the portal open when a new client company is onboarded would
+// otherwise not see it until they refreshed — and the likely response to
+// a missing organisation is to tick "Private client", which is exactly
+// the unattributed record the attribution work exists to prevent. The
+// payload is a few hundred bytes and the form opens a handful of times a
+// day; there is nothing here worth caching.
+async function loadOrgOptions(){
+  const { data, error } = await sb.rpc('advisor_org_options');
+  if(error){
+    console.warn('organisation options unavailable:', error.message);
+    ORG_OPTIONS = [];
+    showBanner('Could not load the organisation list: ' + error.message
+      + ' — you can still add the client as a private client.');
+    return ORG_OPTIONS;
+  }
+  ORG_OPTIONS = data || [];
+  return ORG_OPTIONS;
+}
+
+async function fillOrgPicker(){
+  const orgSel = document.getElementById('nc-org');
+  const opts   = await loadOrgOptions();
+  orgSel.innerHTML =
+    '<option value="">— choose an organisation —</option>' +
+    opts.map(function(o){
+      return '<option value="'+o.org_id+'">'+esc(o.name)+'</option>';
+    }).join('');
+  ncOrgChanged();
+}
+
+function ncOrgChanged(){
+  const orgId = document.getElementById('nc-org').value;
+  const wrap  = document.getElementById('nc-unit-wrap');
+  const sel   = document.getElementById('nc-unit');
+  const org   = (ORG_OPTIONS || []).find(function(o){ return o.org_id === orgId; });
+  const units = (org && org.units) || [];
+
+  // An organisation with no companies or sites is attributed at
+  // organisation level; showing an empty picker would only confuse.
+  if(!orgId || !units.length){
+    wrap.hidden = true;
+    sel.innerHTML = '';
+    return;
+  }
+  wrap.hidden = false;
+  sel.innerHTML =
+    '<option value="">— whole organisation —</option>' +
+    units.map(function(u){
+      return '<option value="'+u.id+'">'+esc(u.label)+'</option>';
+    }).join('');
+}
+
+// "Private client" and an organisation are mutually exclusive, so the
+// form says so rather than letting the database say it in SQL.
+function ncNoOrgChanged(){
+  const off = document.getElementById('nc-noorg').checked;
+  const orgSel = document.getElementById('nc-org');
+  orgSel.disabled = off;
+  document.getElementById('nc-unit').disabled = off;
+  if(off){
+    orgSel.value = '';
+    ncOrgChanged();
+  }
+}
+
 function openNewClientModal(){
+  pendingImport = null;
   document.getElementById('nc-name').value='';
   document.getElementById('nc-surname').value='';
   document.getElementById('nc-email').value='';
   document.getElementById('nc-phone').value='';
+  document.getElementById('nc-noorg').checked = false;
+  document.getElementById('nc-org').disabled  = false;
+  document.getElementById('nc-unit').disabled = false;
+  document.querySelector('#newClientModal .modal-header h3').textContent = 'New Client Assessment';
   document.getElementById('newClientModal').classList.add('open');
+  fillOrgPicker();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 async function createClientRecord(){
@@ -1335,28 +1540,58 @@ async function createClientRecord(){
   }
   const ownerId = VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id;
 
-  const draft = blankClient(name, surname);
-  const { data, error } = await sb.from('advisor_clients').insert({
-    advisor_id: ownerId,
-    first_name: name,
-    last_name:  surname || null,
-    email:      email || null,
-    phone:      phone || null,
-    assessment: assessmentPayload(draft),
-    created_by: CURRENT_USER.id
-  }).select('id, member_user_id').single();
+  // Attribution. The database will refuse a client that is neither under
+  // an organisation nor declared private, so catch it here where the
+  // message can be useful.
+  const noOrg  = document.getElementById('nc-noorg').checked;
+  const orgId  = document.getElementById('nc-org').value || null;
+  const unitId = document.getElementById('nc-unit').value || null;
 
-  if(error){
-    // The unique index on (advisor_id, lower(email)) is the usual cause.
-    showBanner(error.code === '23505'
-      ? 'You already have a client with that email address.'
-      : 'Could not create the client: ' + error.message);
+  if(!noOrg && !orgId){
+    showBanner('Choose the organisation this client is seen under, or tick '
+             + '"Private client" if they are not on a company programme.');
     return;
   }
+
+  const draft = pendingImport || blankClient(name, surname);
+  const { data, error } = await sb.from('advisor_clients').insert({
+    advisor_id:  ownerId,
+    first_name:  name,
+    last_name:   surname || null,
+    email:       email || null,
+    phone:       phone || null,
+    org_id:      noOrg ? null : orgId,
+    org_unit_id: noOrg ? null : unitId,
+    no_org:      noOrg,
+    assessment:  assessmentPayload(draft),
+    created_by:  CURRENT_USER.id
+  }).select('id, member_user_id, org_id').single();
+
+  if(error){
+    // 23505 = the unique index on (advisor_id, lower(email)).
+    // 23514 = a check constraint; attribution is the only one that can
+    //         realistically fire from this form.
+    showBanner(
+      error.code === '23505' ? 'You already have a client with that email address.'
+    : error.code === '23514' ? 'That client needs an organisation, or to be marked as a private client.'
+    : 'Could not create the client: ' + error.message);
+    return;
+  }
+
+  const wasImport = !!pendingImport;
+  pendingImport = null;
   closeModal('newClientModal');
   await loadClients();
+
+  // If the email matched a portal member, the link trigger may also have
+  // inherited that member's organisation over what was picked here.
   if(data.member_user_id){
-    showBanner('Linked to an existing portal member with that email.');
+    showBanner(!noOrg && orgId && data.org_id && data.org_id !== orgId
+      ? 'Linked to an existing portal member. Their profile says a different '
+        + 'organisation, so this record is flagged for review.'
+      : 'Linked to an existing portal member with that email.');
+  } else if(wasImport){
+    showBanner('Client file imported.');
   }
   openClient(data.id);
 }
@@ -1501,18 +1736,23 @@ function importClientFile(file){
       delete imported.id; delete imported._link; delete imported._memberUserId;
       delete imported.appointments;   // sessions live in `bookings`, not in a file
       if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor before importing a client.'); return; }
-      const { error } = await sb.from('advisor_clients').insert({
-        advisor_id: VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id,
-        first_name: name,
-        last_name:  surname || null,
-        email:      (imported.email||'').trim() || null,
-        phone:      (imported.phone||'').trim() || null,
-        assessment: imported,
-        created_by: CURRENT_USER.id
-      });
-      if(error){ showBanner('Could not import: ' + error.message); return; }
-      await loadClients();
-      renderClientsList();
+
+      // An imported client needs an organisation like any other. Rather
+      // than a second attribution path that could drift from the first,
+      // the file is held and the same New Client form is opened over it,
+      // pre-filled. createClientRecord() then does the single insert.
+      pendingImport = imported;
+      document.getElementById('nc-name').value    = name;
+      document.getElementById('nc-surname').value = surname;
+      document.getElementById('nc-email').value   = (imported.email||'').trim();
+      document.getElementById('nc-phone').value   = (imported.phone||'').trim();
+      document.getElementById('nc-noorg').checked = false;
+      document.getElementById('nc-org').disabled  = false;
+      document.getElementById('nc-unit').disabled = false;
+      document.querySelector('#newClientModal .modal-header h3').textContent =
+        'Import Client — choose the organisation';
+      document.getElementById('newClientModal').classList.add('open');
+      await fillOrgPicker();
     } catch(e){
       alert('Could not read that file — make sure it\'s a client file exported from this portal.');
     } finally {
@@ -1954,8 +2194,8 @@ function panelAssets(c){
   const rows = c.assets.map((r,i)=>`
     <tr>
       <td><input type="text" value="${esc(r.name)}" oninput="saveRow('assets',${i},'name',this.value)" placeholder="Asset name"></td>
-      <td><input type="text" inputmode="decimal" value="${r.value?Number(r.value).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('assets',${i},'value',this.value,true)" placeholder="0"></td>
-      <td><select onchange="saveRow('assets',${i},'status',this.value)">
+      <td><input type="text" inputmode="decimal" value="${r.value?Number(r.value).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('assets',${i},'value',this.value,true); refreshAssetsStat()" placeholder="0"></td>
+      <td><select onchange="saveRow('assets',${i},'status',this.value); refreshAssetsStat()">
             <option value="Income-Generating" ${r.status==='Income-Generating'?'selected':''}>Income-Generating</option>
             <option value="Personal Use" ${r.status==='Personal Use'?'selected':''}>Personal Use</option>
           </select></td>
@@ -1975,7 +2215,6 @@ function panelAssets(c){
       <td><button class="rt-del" onclick="removeRow('savings',${i})">✕</button></td>
     </tr>`).join('');
 
-  const t = calcTotals(c);
   return `
     <div class="card">
       <div class="card-title">Assets</div>
@@ -1987,10 +2226,7 @@ function panelAssets(c){
         </table>
       </div>
       <button class="btn btn-outline btn-sm" onclick="addRow('assets',{name:'',value:0,status:'Personal Use',size:'',monthlyIncome:0,potentialIncome:0})">+ Add asset</button>
-      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
-        <div class="stat-box"><div class="stat-val">${fmt(t.totalAssets)}</div><div class="stat-lbl">Total Asset Value</div></div>
-        <div class="stat-box ${t.assetIncomePct>=70?'green':'orange'}"><div class="stat-val">${t.assetIncomePct.toFixed(2)}%</div><div class="stat-lbl">Income-Generating (target 70%)</div></div>
-      </div>
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="assetsStat">${assetsStatHtml(c)}</div>
     </div>
     <div class="card">
       <div class="card-title">Savings & Investments</div>
@@ -2005,6 +2241,12 @@ function panelAssets(c){
       <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="savingsStat">${savingsStatHtml(c)}</div>
     </div>`;
 }
+function assetsStatHtml(c){
+  const t = calcTotals(c);
+  return `<div class="stat-box"><div class="stat-val">${fmt(t.totalAssets)}</div><div class="stat-lbl">Total Asset Value</div></div>
+    <div class="stat-box ${t.assetIncomePct>=70?'green':'orange'}"><div class="stat-val">${t.assetIncomePct.toFixed(2)}%</div><div class="stat-lbl">Income-Generating (target 70%)</div></div>`;
+}
+function refreshAssetsStat(){ const el=document.getElementById('assetsStat'); if(el) el.innerHTML = assetsStatHtml(getClient()); }
 function savingsStatHtml(c){
   const t = calcTotals(c);
   return `<div class="stat-box gold"><div class="stat-val">${fmt(t.totalSavingsBalance)}</div><div class="stat-lbl">Total Savings & Investments Balance</div></div>`;
@@ -2089,7 +2331,7 @@ function panelBudget(c){
     return `<div class="cat-group">
       <div class="cat-group-header" style="background:${g.color}18;" onclick="this.parentElement.querySelector('.cat-group-body').classList.toggle('hide')">
         <span>${g.icon}</span><span class="cat-group-name" style="color:${g.color}">${g.name}</span>
-        <span class="cat-group-badge" style="background:${g.color}22;color:${g.color}">${fmt(groupTotal)}</span>
+        <span class="cat-group-badge" id="bud-total-${g.id}" style="background:${g.color}22;color:${g.color}">${fmt(groupTotal)}</span>
       </div>
       <div class="cat-group-body">
         ${g.cats.map(cat=>`
@@ -2165,6 +2407,21 @@ function saveBudget(catId, value){
   persistClients();
   const bars = document.getElementById('budgetBars');
   if(bars) bars.innerHTML = budgetBarsHtml(c);
+  refreshBudgetGroupTotals(c);
+}
+
+// The collapsed-group badge is the only place an advisor can see a group
+// total, so it has to follow the typing rather than wait for a re-render.
+function refreshBudgetGroupTotals(c){
+  EXPENSE_GROUPS.forEach(function(g){
+    const el = document.getElementById('bud-total-' + g.id);
+    if(!el) return;
+    let total = g.cats.reduce(function(s,cat){ return s + pf(c.budget[cat.id]); }, 0);
+    if(g.id === 'other'){
+      total += (c.budgetOtherCustom||[]).reduce(function(s,cat){ return s + pf(c.budget[cat.id]); }, 0);
+    }
+    el.textContent = fmt(total);
+  });
 }
 function wireBudgetGroups(c){ /* groups render open by default; toggle handled inline */ }
 
@@ -2685,8 +2942,8 @@ function updateRobo(clientId, key, value, isMoney){
   }, 180);
 }
 
-/* Tidy the money field once the advisor leaves it, never while typing. */
-function roboFormatMoney(el){
+/* Tidy a money field once the advisor leaves it, never while typing. */
+function formatMoneyField(el){
   const n = pf(el.value);
   el.value = n ? n.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
 }
@@ -2767,7 +3024,7 @@ function panelRobo(c){
     <div class="card">
       <div class="card-title">Payoff Budget</div>
       <div class="card-hint">Extra beyond the current minimums, if the client can find room in their budget — this feeds both simulations below.</div>
-      <div class="field" style="max-width:260px"><label>Extra Monthly Payment</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${rs.extra?Number(rs.extra).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="updateRobo('${c.id}','extra',this.value,true)" onblur="roboFormatMoney(this)"></div></div>
+      <div class="field" style="max-width:260px"><label>Extra Monthly Payment</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${rs.extra?Number(rs.extra).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="updateRobo('${c.id}','extra',this.value,true)" onblur="formatMoneyField(this)"></div></div>
     </div>
 
     <div id="robo-payoff">
@@ -3042,11 +3299,15 @@ function calcTotals(c){
   const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
   const savingsPct = totalIncome>0 ? savingsAmt/totalIncome*100 : 0;
 
-  const capacity35 = Math.max(0, totalIncome*0.35 - totalDebtInstalment);
+  // Headroom to the lending norm. Fixed at 35% before, while the wording
+  // around it quotes kwLendingNorm() from threshold_config -- so a change to
+  // the config produced "capacity at the 40% threshold" over a figure still
+  // worked out at 35%.
+  const debtCapacity = Math.max(0, totalIncome*(kwLendingNorm()/100) - totalDebtInstalment);
 
   return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, totalDebtInstalment, totalLiabilityBalance, dti,
     totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
-    needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, capacity35 };
+    needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, debtCapacity };
 }
 
 function diagIncome(t){
@@ -3079,11 +3340,31 @@ function diagDebt(t){
     return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture income and liabilities to run this diagnostic.']};
   }
   const points = [`Debt-to-income (DTI) is <strong>${t.dti.toFixed(2)}%</strong> of gross monthly income.`];
-  let color, label;
-  if(t.dti<=35){ color='green'; label='Healthy'; points.push('Within Botswana lending norms (≤35%) — strong borrowing capacity.'); points.push(`Remaining capacity at the 35% threshold: ${fmt(t.capacity35)}/mo.`); }
-  else if(t.dti<=50){ color='gold'; label='Acceptable'; points.push('Approaching the upper limit most lenders accept — reduce before taking on new credit.'); }
-  else if(t.dti<=65){ color='orange'; label='High Risk'; points.push('Elevated DTI — some lenders may decline applications. Prioritise debt reduction.'); }
-  else { color='red'; label='Critical'; points.push('Exceeds safe lending thresholds — most lenders would decline. Immediate debt-reduction priority.'); }
+
+  // Bands come from threshold_config (see kwDtiBand). Colour is the
+  // portal's own reading of them: healthy and manageable are both within
+  // the lending norm, so both stay green — which keeps the activity
+  // report's "not green" flag on the same 35% line it has always used.
+  const band  = kwDtiBand(t.dti);
+  const label = kwBandLabel(band);
+  const norm  = kwLendingNorm();
+  let color;
+  switch(band){
+    case 'healthy':
+    case 'manageable':    color = 'green';  break;
+    case 'strained':      color = 'orange'; break;
+    case 'over_indebted': color = 'red';    break;
+    default:              color = 'grey';
+  }
+
+  if(band === 'healthy' || band === 'manageable'){
+    points.push(`Within Botswana lending norms (≤${norm}%) — borrowing capacity intact.`);
+    points.push(`Remaining capacity at the ${norm}% threshold: ${fmt(t.debtCapacity)}/mo.`);
+  } else if(band === 'strained'){
+    points.push(`Above the ${norm}% lending norm — new credit will be difficult. Reduce before applying.`);
+  } else if(band === 'over_indebted'){
+    points.push('Past the 45% affordability line — most lenders would decline, and restructuring is the realistic route.');
+  }
   return {title:'Debt Problem', color, label, points};
 }
 function diagLifestyle(t){
@@ -3095,7 +3376,7 @@ function diagLifestyle(t){
   if(t.wantsPct>30 && t.savingsPct<20){ color='red'; label='At Risk'; points.push(`Wants spending (${t.wantsPct.toFixed(2)}%) is outpacing savings (${t.savingsPct.toFixed(2)}%) — classic lifestyle-inflation pattern.`); }
   else if(t.wantsPct>30 || t.savingsPct<20){ color='orange'; label='Caution'; points.push('Discretionary spending or savings rate is drifting away from a sustainable balance.'); }
   else { points.push('Discretionary spending and savings rate are in a healthy balance.'); }
-  points.push(`Can comfortably afford up to ${fmt(t.capacity35)}/mo of new debt before hitting the 35% DTI threshold.`);
+  points.push(`Can comfortably afford up to ${fmt(t.debtCapacity)}/mo of new debt before hitting the ${kwLendingNorm()}% DTI threshold.`);
   if(t.totalAssets>0 && t.assetIncomePct<70){ if(color==='green') color='gold'; points.push(`Only ${t.assetIncomePct.toFixed(2)}% of assets are income-generating — target is 70%.`); }
   return {title:'Lifestyle Inflation & Affordability', color, label, points};
 }
@@ -3273,9 +3554,9 @@ function analyseDebt(t, c){
     score += 22;
     ind.push({ label:'DTI above lending threshold', detail:`DTI is ${t.dti.toFixed(1)}%, above the 35% Botswana lending norm. New credit will be difficult.` });
   }
-  if(t.capacity35 <= 0 && t.dti > 35){
+  if(t.debtCapacity <= 0 && t.dti > kwLendingNorm()){
     score += 8;
-    ind.push({ label:'No borrowing headroom', detail:'There is no room for further credit at the 35% threshold — any new obligation worsens the position.' });
+    ind.push({ label:'No borrowing headroom', detail:`There is no room for further credit at the ${kwLendingNorm()}% threshold — any new obligation worsens the position.` });
   }
   if(t.netWorth < 0){
     score += 18;
@@ -3590,23 +3871,59 @@ const toolState = {
   consolidation:{ clientId:'', debts:[{name:'Debt 1', balance:0, rate:0, payment:0}], newRate:16, newTerm:48 },
   restructuring:{ clientId:'', balance:100000, rate:16, remainingMonths:36, newRate:16, newTerm:60 },
 };
+function toolPanelHtml(){
+  if(toolsCurrentTab==='loan')          return toolLoanCalculator();
+  if(toolsCurrentTab==='retirement')    return toolRetirementCalculator();
+  if(toolsCurrentTab==='consolidation') return toolConsolidationCalculator();
+  if(toolsCurrentTab==='restructuring') return toolRestructuringCalculator();
+  return '';
+}
 function renderToolsView(){
   const tabsHtml = TOOLS_TABS.map(t=>`<button class="tab ${toolsCurrentTab===t.id?'active':''}" onclick="switchToolsTab('${t.id}')">${t.label}</button>`).join('');
-  let panel = '';
-  if(toolsCurrentTab==='loan')          panel = toolLoanCalculator();
-  if(toolsCurrentTab==='retirement')    panel = toolRetirementCalculator();
-  if(toolsCurrentTab==='consolidation') panel = toolConsolidationCalculator();
-  if(toolsCurrentTab==='restructuring') panel = toolRestructuringCalculator();
-  document.getElementById('page-content').innerHTML = `<div class="tabs no-print">${tabsHtml}</div><div id="tools-panel">${panel}</div>`;
+  document.getElementById('page-content').innerHTML = `<div class="tabs no-print">${tabsHtml}</div><div id="tools-panel">${toolPanelHtml()}</div>`;
 }
 function switchToolsTab(id){ toolsCurrentTab = id; renderToolsView(); }
+
+/* -- Refreshing results without eating the keystroke ----------
+   Same rule as the robo panel. `oninput` used to re-render the whole
+   tools panel, which destroyed the element being typed into: focus was
+   lost after one character, the money fields re-formatted "1" to "1.00"
+   mid-word, and a decimal point could never be typed at all because
+   pf('14.') round-trips to '14'. That is why figures could not be
+   entered into any of these four calculators.
+
+   Only the derived result regions are swapped now, so the inputs and the
+   "load debts from a client" picker survive. Structural changes -- a debt
+   row added or removed, a client's debts loaded -- still need the whole
+   panel, and go through rebuildToolsPanel(). -- */
+const TOOL_RESULT_REGIONS = [
+  'tool-loan-stats', 'tool-loan-schedule',
+  'tool-ret-stats',
+  'tool-cons-stats', 'tool-cons-verdict',
+  'tool-restr-stats', 'tool-restr-verdict'
+];
+let _toolsTimer = null;
+
 function refreshToolsPanel(){
+  clearTimeout(_toolsTimer);
+  _toolsTimer = setTimeout(function(){
+    if(!document.getElementById('tools-panel')) return;
+    const staged = document.createElement('div');
+    staged.innerHTML = toolPanelHtml();
+    TOOL_RESULT_REGIONS.forEach(function(id){
+      const fresh = staged.querySelector('#' + id);
+      const live  = document.getElementById(id);
+      if(fresh && live) live.innerHTML = fresh.innerHTML;
+    });
+  }, 180);
+}
+
+// A full re-render, for changes that alter the shape of the panel rather
+// than just its numbers.
+function rebuildToolsPanel(){
+  clearTimeout(_toolsTimer);
   const el = document.getElementById('tools-panel');
-  if(!el) return;
-  if(toolsCurrentTab==='loan')          el.innerHTML = toolLoanCalculator();
-  if(toolsCurrentTab==='retirement')    el.innerHTML = toolRetirementCalculator();
-  if(toolsCurrentTab==='consolidation') el.innerHTML = toolConsolidationCalculator();
-  if(toolsCurrentTab==='restructuring') el.innerHTML = toolRestructuringCalculator();
+  if(el) el.innerHTML = toolPanelHtml();
 }
 
 /* ---- Loan Calculator ---- */
@@ -3619,11 +3936,11 @@ function toolLoanCalculator(){
     <div class="card">
       <div class="card-title">Loan Calculator</div>
       <div class="form-grid cols-3">
-        <div class="field"><label>Loan Amount</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.amount?Number(s.amount).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.loan.amount=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Loan Amount</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.amount?Number(s.amount).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.loan.amount=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></div></div>
         <div class="field"><label>Annual Interest Rate (%)</label><input type="text" inputmode="decimal" value="${s.rate}" oninput="toolState.loan.rate=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>Term (months)</label><input type="text" inputmode="decimal" value="${s.months}" oninput="toolState.loan.months=pf(this.value);refreshToolsPanel()"></div>
       </div>
-      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="tool-loan-stats">
         <div class="stat-box"><div class="stat-val">${fmt(r.monthly)}</div><div class="stat-lbl">Monthly Payment</div></div>
         <div class="stat-box gold"><div class="stat-val">${fmt(r.interest)}</div><div class="stat-lbl">Total Interest</div></div>
         <div class="stat-box"><div class="stat-val">${fmt(r.total)}</div><div class="stat-lbl">Total Repayment</div></div>
@@ -3631,7 +3948,7 @@ function toolLoanCalculator(){
     </div>
     <div class="card">
       <div class="card-title">Year-by-Year Breakdown</div>
-      ${rpTable(['Year','Paid That Year','Interest That Year','Balance Remaining'], rows)}
+      <div id="tool-loan-schedule">${rpTable(['Year','Paid That Year','Interest That Year','Balance Remaining'], rows)}</div>
     </div>`;
 }
 
@@ -3652,10 +3969,10 @@ function toolRetirementCalculator(){
         <div class="field"><label>Current Age</label><input type="text" inputmode="decimal" value="${s.currentAge}" oninput="toolState.retirement.currentAge=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>Retirement Age</label><input type="text" inputmode="decimal" value="${s.retireAge}" oninput="toolState.retirement.retireAge=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>Expected Annual Return (%)</label><input type="text" inputmode="decimal" value="${s.returnRate}" oninput="toolState.retirement.returnRate=pf(this.value);refreshToolsPanel()"></div>
-        <div class="field"><label>Current Savings</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.currentSavings?Number(s.currentSavings).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.currentSavings=pf(this.value);refreshToolsPanel()"></div></div>
-        <div class="field"><label>Monthly Contribution</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.monthlyContribution?Number(s.monthlyContribution).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.monthlyContribution=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Current Savings</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.currentSavings?Number(s.currentSavings).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.currentSavings=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></div></div>
+        <div class="field"><label>Monthly Contribution</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.monthlyContribution?Number(s.monthlyContribution).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.retirement.monthlyContribution=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></div></div>
       </div>
-      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="tool-ret-stats">
         <div class="stat-box"><div class="stat-val">${(monthsToGo/12).toFixed(2)}</div><div class="stat-lbl">Years to Retirement</div></div>
         <div class="stat-box green"><div class="stat-val">${fmt(fv)}</div><div class="stat-lbl">Projected Savings at Retirement</div></div>
         <div class="stat-box gold"><div class="stat-val">${fmt(monthlyIncome4pct)}</div><div class="stat-lbl">Est. Monthly Income (4% rule)</div></div>
@@ -3679,16 +3996,16 @@ function loadClientDebtsIntoTool(section, clientId){
       toolState.restructuring.rate = debts[0].rate;
     }
   }
-  refreshToolsPanel();
+  rebuildToolsPanel();
 }
 function toolConsolidationCalculator(){
   const s = toolState.consolidation;
   const debtRows = s.debts.map((d,i)=>`
     <tr>
       <td><input type="text" value="${esc(d.name)}" oninput="toolState.consolidation.debts[${i}].name=this.value"></td>
-      <td><input type="text" inputmode="decimal" value="${d.balance?Number(d.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].balance=pf(this.value);refreshToolsPanel()"></td>
+      <td><input type="text" inputmode="decimal" value="${d.balance?Number(d.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].balance=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></td>
       <td><input type="text" inputmode="decimal" value="${d.rate||''}" oninput="toolState.consolidation.debts[${i}].rate=pf(this.value);refreshToolsPanel()"></td>
-      <td><input type="text" inputmode="decimal" value="${d.payment?Number(d.payment).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].payment=pf(this.value);refreshToolsPanel()"></td>
+      <td><input type="text" inputmode="decimal" value="${d.payment?Number(d.payment).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.consolidation.debts[${i}].payment=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></td>
       <td><button class="rt-del" onclick="removeToolDebt('consolidation',${i})">✕</button></td>
     </tr>`).join('');
 
@@ -3725,23 +4042,23 @@ function toolConsolidationCalculator(){
         <div class="field"><label>New Consolidated Rate (%)</label><input type="text" inputmode="decimal" value="${s.newRate}" oninput="toolState.consolidation.newRate=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>New Term (months)</label><input type="text" inputmode="decimal" value="${s.newTerm}" oninput="toolState.consolidation.newTerm=pf(this.value);refreshToolsPanel()"></div>
       </div>
-      <div class="stat-grid" style="margin-top:14px;margin-bottom:0">
+      <div class="stat-grid" style="margin-top:14px;margin-bottom:0" id="tool-cons-stats">
         <div class="stat-box"><div class="stat-val">${fmt(currentTotalPayment)}</div><div class="stat-lbl">Current Total Monthly Payment</div></div>
         <div class="stat-box ${monthlySaving>0?'green':'red'}"><div class="stat-val">${fmt(nl.monthly)}</div><div class="stat-lbl">New Consolidated Payment</div></div>
         <div class="stat-box"><div class="stat-val">${anyInfeasible?'—':fmt(currentTotalInterest)}</div><div class="stat-lbl">Current Est. Total Interest</div></div>
         <div class="stat-box gold"><div class="stat-val">${fmt(nl.interest)}</div><div class="stat-lbl">New Total Interest</div></div>
       </div>
-      <div class="notice ${anyInfeasible||nl.monthly<currentTotalPayment?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div>
+      <div id="tool-cons-verdict"><div class="notice ${anyInfeasible||nl.monthly<currentTotalPayment?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div></div>
     </div>`;
 }
 function addToolDebt(section){
   toolState[section].debts.push({name:'Debt '+(toolState[section].debts.length+1), balance:0, rate:0, payment:0});
-  refreshToolsPanel();
+  rebuildToolsPanel();
 }
 function removeToolDebt(section, idx){
   toolState[section].debts.splice(idx,1);
   if(!toolState[section].debts.length) toolState[section].debts.push({name:'Debt 1', balance:0, rate:0, payment:0});
-  refreshToolsPanel();
+  rebuildToolsPanel();
 }
 
 /* ---- Loan Restructuring Calculator ---- */
@@ -3760,19 +4077,19 @@ function toolRestructuringCalculator(){
       <div class="card-hint">Compares the current loan against a restructured (extended/re-priced) version — the classic move when a client's instalment no longer fits their budget.</div>
       ${toolClientPicker('restructuring')}
       <div class="form-grid cols-3" style="margin-top:14px">
-        <div class="field"><label>Current Balance</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.balance?Number(s.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.restructuring.balance=pf(this.value);refreshToolsPanel()"></div></div>
+        <div class="field"><label>Current Balance</label><div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" value="${s.balance?Number(s.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="toolState.restructuring.balance=pf(this.value);refreshToolsPanel()" onblur="formatMoneyField(this)"></div></div>
         <div class="field"><label>Current Rate (%)</label><input type="text" inputmode="decimal" value="${s.rate}" oninput="toolState.restructuring.rate=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>Current Remaining Term (months)</label><input type="text" inputmode="decimal" value="${s.remainingMonths}" oninput="toolState.restructuring.remainingMonths=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>New Rate (%)</label><input type="text" inputmode="decimal" value="${s.newRate}" oninput="toolState.restructuring.newRate=pf(this.value);refreshToolsPanel()"></div>
         <div class="field"><label>New Term (months)</label><input type="text" inputmode="decimal" value="${s.newTerm}" oninput="toolState.restructuring.newTerm=pf(this.value);refreshToolsPanel()"></div>
       </div>
-      <div class="stat-grid" style="margin-top:18px;margin-bottom:0">
+      <div class="stat-grid" style="margin-top:18px;margin-bottom:0" id="tool-restr-stats">
         <div class="stat-box"><div class="stat-val">${fmt(current.monthly)}</div><div class="stat-lbl">Current Monthly Payment</div></div>
         <div class="stat-box ${monthlyChange>0?'green':'red'}"><div class="stat-val">${fmt(restructured.monthly)}</div><div class="stat-lbl">Restructured Monthly Payment</div></div>
         <div class="stat-box"><div class="stat-val">${fmt(current.interest)}</div><div class="stat-lbl">Current Total Interest</div></div>
         <div class="stat-box gold"><div class="stat-val">${fmt(restructured.interest)}</div><div class="stat-lbl">Restructured Total Interest</div></div>
       </div>
-      <div class="notice ${monthlyChange>0?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div>
+      <div id="tool-restr-verdict"><div class="notice ${monthlyChange>0?'notice-green':'notice-orange'}" style="margin-top:16px;margin-bottom:0">${verdict}</div></div>
     </div>`;
 }
 
