@@ -176,6 +176,18 @@ function indicators(opts) {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
 
+  /* admin.html loads supabase-js from jsdelivr in <head>. addInitScript runs
+     before page scripts, so the stub below is installed first — and then the
+     CDN library lands and overwrites window.supabase. The page then builds a
+     REAL client, finds no session, and redirects to index.html; every
+     assertion after that fails with "window.showTab is not a function".
+
+     That means the suite only passed when the CDN happened to be unreachable.
+     Blocking it makes the stub authoritative and the run deterministic on or
+     offline. Chart.js is left alone — the account file degrades without it and
+     nothing here asserts on a canvas. */
+  await page.route('**cdn.jsdelivr.net/npm/@supabase/**', route => route.abort());
+
   await page.addInitScript(({ orgs, units }) => {
     window.__rpc = [];
     window.__orgs = orgs;

@@ -138,13 +138,28 @@ after adding any phase.
 
 ### 3.4 Browser checks
 
-Extend the existing smoke suites — `tests/smoke-account.js`, `tests/smoke-picker.js`
-— rather than starting a new framework. They drive the real page in Chromium via
-Playwright against a stubbed Supabase client, loaded over `file://`.
+Extend the existing smoke suites — `tests/smoke-account.js` (95 assertions) and
+`tests/smoke-picker.js` (37) — rather than starting a new framework. They drive the
+real page in Chromium via Playwright against a stubbed Supabase client, loaded over
+`file://`.
 
-**Caveat:** there is no `package.json` and Playwright is not installed. The suites
-cannot run on a clean clone until that is fixed. See `docs/build/00-codebase-map.md`
-§5.
+```bash
+npm install && npm test
+```
+
+**When you write a new suite, block the CDN.** Every role page loads supabase-js
+from jsdelivr in `<head>`. `addInitScript` installs the stub *before* page scripts,
+but the CDN library lands *after* and overwrites `window.supabase` — the page then
+builds a real client, finds no session, and redirects to `index.html`, so every
+assertion fails with "`window.showTab` is not a function". Both suites now abort
+that request:
+
+```js
+await page.route('**cdn.jsdelivr.net/npm/@supabase/**', route => route.abort());
+```
+
+Without it a suite passes only when the network happens to be down. Chart.js is
+left reachable — the pages degrade without it and nothing asserts on a canvas.
 
 ### 3.5 Build records
 

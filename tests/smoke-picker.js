@@ -48,6 +48,13 @@ const ORG_FIXTURE = [
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
 
+  /* advisor.html loads supabase-js from jsdelivr in <head>. The stub below is
+     installed by addInitScript before page scripts run, but the CDN library
+     lands afterwards and overwrites window.supabase — the page then builds a
+     REAL client and bounces to index.html. The suite only passed when the CDN
+     was unreachable. Block it so the stub is authoritative either way. */
+  await page.route('**cdn.jsdelivr.net/npm/@supabase/**', route => route.abort());
+
   // Stub the Supabase client before any page script runs, and capture
   // every insert so the payload can be asserted.
   await page.addInitScript(({ orgs, dti }) => {

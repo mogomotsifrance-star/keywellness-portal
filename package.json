@@ -1,0 +1,18 @@
+{
+  "name": "keywellness-portal",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Key Wellness portal — static HTML site. This manifest exists only to run the headless browser test suites; the site itself has no build step and ships no npm dependencies.",
+  "scripts": {
+    "test": "node tests/smoke-account.js && node tests/smoke-picker.js",
+    "test:account": "node tests/smoke-account.js",
+    "test:picker": "node tests/smoke-picker.js",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
