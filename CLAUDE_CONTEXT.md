@@ -118,8 +118,14 @@ Every migration is **one idempotent SQL file in the repo root**, named
 
 - a rollback in `migrations/rollback-<phase>.sql` that leaves **zero** leftover
   objects, and
-- tests in `tests/<phase>-tests.sql` run locally against **PostgreSQL 16 with RLS
-  enforced** — `tests/run-phase0.sh` is the harness and the model to copy.
+- tests in `tests/<phase>-tests.sql` run locally **with RLS enforced** —
+  `tests/run-phase0.sh` is the harness and the model to copy.
+
+**Version, corrected 25 Aug 2026:** the build pack says PostgreSQL 16 and
+`run-phase0.sh` targets 16, but **production is PostgreSQL 17.6.1**
+(`docs/build/00-live-schema-snapshot.md` §11, F1). Testing a migration on 16 and
+applying it to 17 is a gap worth closing before M1 — it is a one-line change to the
+harness's `initdb` step.
 
 **Nothing is applied to the live Supabase project by Claude.** Deliver files and a
 deploy note; Tshenolo applies through the SQL editor. The project is shared
@@ -189,9 +195,23 @@ row-level boundary is proven.
 
 ---
 
-## 5. Before you start: read the codebase map
+## 5. Before you start: two reference files
 
-`docs/build/00-codebase-map.md` inventories every page, every SQL file, every test
-suite, and — importantly — **lists where the repo contradicts
-`docs/data-model-and-impact.md`**. Several of those contradictions change what a
-task should do. Read it.
+**`docs/build/00-live-schema-snapshot.md`** — the live database as of 25 Aug 2026:
+38 tables with columns and row counts, 111 functions with signatures and ACLs, all
+77 RLS policies with predicates, triggers, extensions. Re-runnable read-only from
+`tests/live-schema-snapshot.sql`. Its §10 says which repo SQL files are actually
+applied, and its §11 lists four things that change the build:
+
+- production is **PostgreSQL 17.6**, the tests target 16;
+- **`pg_cron` is not installed** — M5's reminders and M4's invoice rows need a
+  decision, not a preference;
+- `tests/phase0-fixture.sql` defines `bookings` with 10 columns where live has 24,
+  **missing both columns M1 migrates**;
+- **permissive RLS policies OR together**, so M3 cannot exclude France from
+  psychosocial rows by rewriting one policy — `bookings_admin` and
+  `bookings_admin_all` must be *replaced*, in the same transaction.
+
+**`docs/build/00-codebase-map.md`** — every page, every SQL file, every test suite,
+and the fourteen points where the repo contradicted the governing documents, with
+what happened to each.

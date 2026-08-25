@@ -13,6 +13,12 @@ the one to read if you read only one.
 
 ## 1. How to read the "applied?" column
 
+> **Superseded by [`00-live-schema-snapshot.md`](00-live-schema-snapshot.md) §10.**
+> That file was taken read-only against the live project on 25 Aug 2026 and states
+> per-file fact rather than inference. Where the two disagree, the snapshot wins.
+> The graded scale below is kept because it records how the survey was done before
+> live access, and because the snapshot's §10 uses the same vocabulary.
+
 The repo has **no migration ledger**. Migrations are applied by hand in the Supabase
 SQL editor against a shared dev/prod project; nothing records which ran or when.
 There is no `supabase/migrations/` directory and no `schema_migrations` equivalent.
@@ -312,15 +318,15 @@ what happened to it — the finding is the evidence, the resolution is the decis
 | C1 | Bookings policies *are* partly in the repo | **Resolved** — data model corrected; Prompt 7 now starts from `supabase_advisor_team_lead.sql:108-123` |
 | C2 | `smoke6.js` never existed | **Resolved** — Prompt 3 now builds `tests/smoke-routing.js` fresh |
 | C3 | No `package.json`; Playwright unresolvable | **Resolved by Prompt 0b** — Task B adds it |
-| C4 | Core tables have no DDL in the repo | **Mitigated** — Prompt 1 now builds the M1 fixture from the live snapshot, not `phase0-fixture.sql` |
-| C5 | Applied state unrecorded | **Resolved by Prompt 0b** — Task A replaces the inference in §4 |
-| C6 | Five repo versions of `org_report_data()` | **Mitigated** — Prompt 8 targets live signatures from the snapshot |
+| C4 | Core tables have no DDL in the repo | **Confirmed serious, then mitigated.** The fixture defines `bookings` with 10 columns; live has 24, and **both columns M1 migrates are missing from it**. Prompt 1 builds the fixture from the snapshot instead (snapshot §11, F3) |
+| C5 | Applied state unrecorded | **Resolved** — snapshot §10 states it per file. One file, `supabase_cleanup_policies.sql`, was never applied |
+| C6 | Five repo versions of `org_report_data()` | **Resolved** — only **two** overloads are live; the five files are a version history. M2 actually has **eight** signatures to extend (snapshot §5) |
 | C7 | "The four organisations" | **Resolved** — three orgs (BOPEU, Sedimosa, Test Co); the four reports are all Test Co's |
 | C8 | Design language had no source document | **Resolved** — `docs/design-directions.md` supplied; charter rev 1 §5 withdrawn |
 | C9 | Charter §6 vs data model on `session_type` | **Resolved** — charter rev 2 drops the rev-1 sketch |
 | C10 | Stale file sizes | **Resolved** — data model now records 246 KB / 518 KB |
 | C11 | Charter's Phase A prototype gate skipped | **Accepted deliberately** — pack rev 2 records the choice |
-| C12 | `supabase_cleanup_policies.sql` state unknown | **Open** — Prompt 7 checks it against the snapshot first |
+| C12 | `supabase_cleanup_policies.sql` state unknown | **Resolved — it was never applied.** All four duplicate `bookings` policies are still live, predicates captured in snapshot §6 |
 | C13 | Data model §2.5 still says "`smoke6.js` extends to guard it" | **Open** — residual staleness; the pack is correct, the doc is not |
 | C14 | `docs/build/org-account-phase2b.md` does not exist | **Open** — the preamble's build-record style reference has no referent |
 
@@ -535,18 +541,24 @@ batch sections of `BUILD-NOTES.md` and `docs/build/RUNBOOK-SEDIMOSA-PHASE2.md`.
 
 ---
 
-## 7. What this map could not determine
+## 7. What this map could not determine — all now answered
 
-- **Which SQL files are applied**, beyond the inference in §1. Needs C5.
-- **The live definitions of the four legacy bookings policies** — the repo records
-  their predicates in prose only.
-- **Whether `tests/phase0-fixture.sql` matches the live schema column-for-column.**
-- **Live row counts** other than those `docs/data-model-and-impact.md` states
-  (`organizations` 3, `org_units` 11, `unit_departments` 161, `org_reports` 4,
-  `program_activities` 1, `bookings` 22, webinar `content_items` 10).
-- **The ~115 functions** the doc counts — no per-function inventory exists anywhere.
+Every item below was open when this map was written and is settled in
+[`00-live-schema-snapshot.md`](00-live-schema-snapshot.md):
 
-All five are answered by one read-only pass against live. Recommended before M1.
+| Was unknown | Now |
+|---|---|
+| Which SQL files are applied | Snapshot §10. One was not: `supabase_cleanup_policies.sql` |
+| The four legacy `bookings` policy predicates | Snapshot §6, captured verbatim |
+| Whether `phase0-fixture.sql` matches live | It does not — 10 columns vs 24 on `bookings` (§11, F3) |
+| Live row counts | Snapshot §2, all 38 tables |
+| The function inventory | 111 functions with signatures, `SECURITY DEFINER` flag and ACLs (§5) |
+
+The pass also turned up four things nobody had asked about: production runs
+**PostgreSQL 17.6** while the tests target 16; **`pg_cron` is not installed**, which
+constrains M5 and M4; **permissive policies OR together**, so M3 cannot exclude France
+by rewriting one policy; and the `SECURITY DEFINER` sweep returns five rows rather
+than the expected zero, one of which touches a table. See snapshot §11.
 
 ---
 
