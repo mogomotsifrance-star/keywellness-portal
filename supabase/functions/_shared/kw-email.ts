@@ -24,7 +24,7 @@ export const KW_REPLY_TO = "wellness@keywellness.co.bw";
 // `portal.keywellness.co.bw`, not yet live. Until that DNS is live, every
 // absolute portal link in this file must point at the real deployed portal,
 // GitHub Pages. Swap this one constant (and nothing else) once the
-// subdomain goes live. See BATCH-0-FINDINGS.md and BUILD-NOTES.md.
+// subdomain goes live. See docs/build/BATCH-0-FINDINGS.md and BUILD-NOTES.md.
 export const KW_PORTAL_URL = "https://mogomotsifrance-star.github.io/keywellness-portal";
 
 export const KW_LOGO_URL = `${KW_PORTAL_URL}/assets/img/kw-logo-horizontal.png`;

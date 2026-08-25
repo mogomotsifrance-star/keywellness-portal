@@ -242,7 +242,7 @@ git checkout dev
 2. **Admin dashboard** — for Key Wellness team to see all users and their wellness scores
 3. **Push notifications / email reminders** — monthly check-in reminders
 4. **Video content** — replace placeholder "Coming Soon" videos with real content
-5. ~~**Advisor portal**~~ — ✅ built. See `ADVISOR-PORTAL-HANDOVER.md`
+5. ~~**Advisor portal**~~ — ✅ built. See `docs/build/ADVISOR-PORTAL-HANDOVER.md`
 
 ---
 

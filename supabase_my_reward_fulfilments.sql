@@ -7,7 +7,7 @@
 -- Rollback (recorded in BUILD-NOTES.md before this file was run):
 --   drop function if exists my_reward_fulfilments();
 --
--- Why this is needed (full detail in BATCH-0-FINDINGS.md, section 0.4.3):
+-- Why this is needed (full detail in docs/build/BATCH-0-FINDINGS.md, section 0.4.3):
 -- reward_fulfilments (supabase_reward_fulfilment.sql) has NO RLS policies
 -- for `authenticated` at all — every existing read path
 -- (org_reward_history()) is employer-only. There was previously no way

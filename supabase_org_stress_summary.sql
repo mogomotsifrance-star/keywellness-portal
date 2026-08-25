@@ -7,11 +7,11 @@
 -- Rollback (recorded in BUILD-NOTES.md before this file was run):
 --   drop function if exists org_stress_summary(int);
 --
--- Schema notes (full detail in BATCH-0-FINDINGS.md):
+-- Schema notes (full detail in docs/build/BATCH-0-FINDINGS.md):
 --   • Source is `stress_logs` (user_id, level, tags, notes, created_at) — fed by the
 --     fortnightly Check-in flow in index.html (VIEWS['checkin']), NOT the
 --     `financial_stress_tracker` tool's tool_data blob (a different, unrelated
---     stress signal on the OPPOSITE numeric scale — see BATCH-0-FINDINGS.md).
+--     stress signal on the OPPOSITE numeric scale — see docs/build/BATCH-0-FINDINGS.md).
 --   • level is 1-10 where LOWER = MORE stressed (1 = "Barely coping", 10 =
 --     "Completely at ease" — index.html's stressLabel array). This RPC's bands
 --     use the corrected direction: level <=3 = High, 4-6 = Moderate, >=7 = Low.

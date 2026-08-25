@@ -10,7 +10,7 @@
 -- (written and committed BEFORE this file, per project rule).
 --
 -- Batch 0 findings this file is shaped by
--- (BATCH-0-WEBINARS-THRESHOLDS-FINDINGS.md):
+-- (docs/build/BATCH-0-WEBINARS-THRESHOLDS-FINDINGS.md):
 --   • Org table is `organizations`; members link via profiles.org_id.
 --   • content_items already exists as the LMS lessons table — EXTENDED
 --     here (kind/org_id/description/published), not duplicated. The
