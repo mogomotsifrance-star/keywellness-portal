@@ -1344,6 +1344,10 @@ async function renderOrgs() {
   // Keep the org pickers on the other tabs in step with what was just changed.
   allOrgs = orgsData.map(o => ({ id: o.id, name: o.name }));
 
+  // The account file is a drill-in rather than a sibling sub-tab: it needs
+  // orgsData loaded, so it hands off here once the list is in hand.
+  if (orgSubTab === 'account' && acctOrgId) { renderOrgAccount(); return; }
+
   if (orgSubTab === 'units' || orgSubTab === 'depts') {
     if (!unitsOrgId || !orgsData.some(o => o.id === unitsOrgId)) {
       unitsOrgId = (orgsData[0] || {}).id || '';
@@ -1394,13 +1398,813 @@ function orgSubTabsHtml() {
 
 function orgSwitch(t) { orgSubTab = t; renderOrgs(); }
 
+
+/* ══════════════════════════════════════════════════════════════
+   ORGANISATION ACCOUNT FILE — Phase 2 shell + presenting issues
+   --------------------------------------------------------------
+   Clicking an organisation opens its account file. This pass carries
+   the shell (header strip, period and site selectors) and Panel 3,
+   the presenting-issues panel, over admin_org_indicators().
+
+   Delivery and Wellbeing (Panels 1 and 2) come next; the RPCs they
+   need already exist, so they are UI work rather than new SQL.
+
+   ON COLOUR. The tiles are deliberately NOT traffic-lighted by
+   percentage. There is no agreed threshold at which "38% have no
+   emergency buffer" becomes amber rather than red, and inventing one
+   here would recreate exactly the problem Phase 0 existed to fix —
+   a number that means one thing on this screen and another
+   everywhere else. The share, the base, the movement and the
+   low-base marker carry the signal instead.
+   ══════════════════════════════════════════════════════════════ */
+
+let acctOrgId  = null;
+let acctUnitId = '';
+let acctStart  = null;
+let acctEnd    = null;
+let acctSafe   = false;
+let acctUnits  = [];
+let acctData   = null;   // admin_org_indicators      (Panel 3)
+let acctRep    = null;   // org_report_data           (Panels 1 and 2)
+let acctFin    = null;   // org_financial_indicators  (Panel 2)
+let acctSess   = null;   // advisor_session_breakdown (Panel 1)
+let acctPanel  = 'issues';
+
+/* Panel order. The spec numbers Delivery first, but presenting issues is
+   the question this whole view exists to answer, so that is the tab that
+   opens. Delivery and Wellbeing sit behind it in spec order. */
+const ACCT_PANELS = [
+  { id: 'issues',    label: 'Presenting issues' },
+  { id: 'delivery',  label: 'Delivery' },
+  { id: 'wellbeing', label: 'Wellbeing' }
+];
+
+/* ── A caveat that has to travel with Panels 1 and 2 ──────────
+   org_report_data() and org_financial_indicators() were written to
+   serve HR, so they apply the client-facing suppression rules
+   internally: an organisation under five members returns nothing, and
+   any count of one or two is nulled. Panel 3 does not do that — the
+   agreed decision was no floor on the internal view — so the two halves
+   of this page follow different rules and the page has to say so rather
+   than let someone assume otherwise.
+
+   org_financial_indicators() also takes neither a period nor a unit: it
+   is always the whole organisation, as it stands today. Showing it
+   beneath a period selector without saying that would be misleading. ── */
+const ACCT_SUPPRESSION_NOTE =
+  'These figures come from the HR reporting functions, which apply the ' +
+  'client-facing suppression rules even here: an organisation under five ' +
+  'members returns nothing, and counts of one or two are hidden. The ' +
+  'presenting-issues panel does not suppress internally, so the two can ' +
+  'legitimately disagree.';
+
+function acctDefaultPeriod() {
+  const end   = new Date();
+  const start = new Date(); start.setDate(start.getDate() - 90);
+  const iso = d => d.toISOString().slice(0, 10);
+  return { start: iso(start), end: iso(end) };
+}
+
+function openOrgAccount(i) {
+  const o = orgsData[i];
+  if (!o) return;
+  acctOrgId  = o.id;
+  acctUnitId = '';
+  acctSafe   = false;
+  const p = acctDefaultPeriod();
+  acctStart = p.start; acctEnd = p.end;
+  orgSubTab = 'account';
+  renderOrgAccount();
+}
+
+async function renderOrgAccount() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div class="spinner"><div class="spin"></div> Loading account file…</div>';
+
+  // Sites for the scope picker. Failure here is not fatal — the
+  // account file still works at organisation level.
+  const u = await sb.rpc('admin_units_overview', { p_org_id: acctOrgId });
+  acctUnits = u.error ? [] : (u.data || []);
+
+  // All four in parallel. A failure in one panel must not blank the
+  // others — Delivery and Wellbeing need admin, while presenting issues
+  // also allows the advisory team lead, so a team-lead-only user gets
+  // Panel 3 and a clear note on the other two rather than an error page.
+  const safeCall = (fn, args) =>
+    sb.rpc(fn, args).then(r => r, e => ({ data: null, error: e }));
+
+  const [ind, rep, fin, sess] = await Promise.all([
+    safeCall('admin_org_indicators', {
+      p_org_id:      acctOrgId,
+      p_start:       acctStart,
+      p_end:         acctEnd,
+      p_unit_id:     acctUnitId || null,
+      p_client_safe: acctSafe
+    }),
+    safeCall('org_report_data', {
+      p_org_id: acctOrgId, p_start: acctStart, p_end: acctEnd,
+      p_unit_id: acctUnitId || null
+    }),
+    safeCall('org_financial_indicators', { target_org: acctOrgId }),
+    safeCall('advisor_session_breakdown', {
+      p_org_id: acctOrgId, p_start: acctStart, p_end: acctEnd
+    })
+  ]);
+
+  acctData = ind.error  ? null : ind.data;
+  acctRep  = rep.error  ? null : rep.data;
+  acctFin  = fin.error  ? null : fin.data;
+  acctSess = sess.error ? null : sess.data;
+
+  try {
+    const panelBody =
+        acctPanel === 'delivery'  ? acctDeliveryHtml(sess.error, rep.error)
+      : acctPanel === 'wellbeing' ? acctWellbeingHtml(rep.error, fin.error)
+      : (ind.error ? acctErrorCard('Indicators unavailable', ind.error.message,
+          'If the function does not exist yet, run supabase_org_account_phase1_indicators.sql '
+          + 'in the Supabase SQL Editor, then reopen this page.')
+         : acctIndicatorsHtml(acctData));
+
+    el.innerHTML = acctHeaderHtml(acctData, ind.error) + acctPanelTabsHtml() + panelBody;
+  } catch (e) {
+    console.error('account file render failed', e);
+    el.innerHTML = acctErrorCard('This view could not be drawn', String(e && e.message || e),
+      'The data loaded, so this is a rendering fault rather than a permissions or '
+      + 'migration problem. The console has the stack.');
+  }
+  KW.reveal('.card, .stat-box');
+}
+
+function acctErrorCard(title, msg, hint) {
+  return `<div class="card"><div class="card-title">${escNar(title)}</div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.6">${escNar(msg || '')}
+    ${hint ? '<br>' + escNar(hint) : ''}</p></div>`;
+}
+
+function acctPanelTabsHtml() {
+  return `<div style="display:flex;gap:6px;margin:18px 0;flex-wrap:wrap">
+    ${ACCT_PANELS.map(p => `<button class="btn btn-sm ${acctPanel===p.id?'btn-primary':'btn-outline'}"
+        onclick="acctPanel='${p.id}';renderOrgAccount()">${p.label}</button>`).join('')}
+  </div>`;
+}
+
+/* ── Reading the HR reporting payloads ────────────────────────
+   org_report_data() does NOT return plain numbers for anything that
+   counts people. Every such cell is a jsonb object:
+
+       { "value": 7,    "suppressed": false }   a real count
+       { "value": null, "suppressed": true  }   1 or 2 people, withheld
+       { "value": 0,    "suppressed": false }   genuinely nobody
+
+   Reading .value straight off one of these gives [object Object] on the
+   page and NaN in any arithmetic, and — far worse — a withheld cell
+   stops being distinguishable from a real one. Everything derived from
+   acctRep therefore goes through acctCell() first. The rest of this file
+   does the same thing through KWReportCharts.cellValue(); this is the
+   same contract, written locally so the account file does not depend on
+   the chart module having loaded.
+
+   Which fields are wrapped is not guessable, so do not assume:
+     wrapped   engagement_funnel (except registered / bookings_unconfirmed),
+               sessions.mode_split, sessions.monthly_trend.*,
+               assessment_categories.*, demographics.age_bands.*,
+               learning.*, session_intensity.*, client_type_split.*,
+               kpi_summary.participation_rate / attendance_rate,
+               data_coverage.assessment_completion_pct
+     plain     engagement_funnel.registered, sessions.total_booked /
+               total_attended / attendance_confirmation_coverage_pct,
+               kpi_summary.total_reach / total_touchpoints,
+               data_coverage.attendance_confirmation_pct,
+               everything under program_activities, and everything from
+               advisor_session_breakdown()                              ── */
+function acctCell(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'object' && 'suppressed' in v) return v.suppressed ? null : v.value;
+  return v;
+}
+
+/* null means WITHHELD and must never render as 0.
+   Note that a genuine zero from org_report_data() usually arrives
+   WITHHELD too: _suppress_count() tests v < 3, and 0 < 3. A cell only
+   comes back as a real zero when the underlying count was SQL NULL. So
+   "—" on these panels means "under three, which includes none" — it does
+   not mean the number exists and is being kept from you. */
+function acctNum(v) {
+  const x = acctCell(v);
+  return (x === null || x === undefined) ? '—' : x;
+}
+
+// Rates carry their own unit, so the % has to sit inside the formatter —
+// otherwise a null rate renders as the nonsense "—%".
+function acctPct(v) {
+  const x = acctCell(v);
+  return (x === null || x === undefined) ? '—' : x + '%';
+}
+
+/* Hiding one part of a partition whose total is on the same page hides
+   nothing: the missing number is a subtraction away. Every one of these
+   is an exact partition of a figure this view also displays —
+
+     session_intensity 1 / 2 / 3_plus      sum to kpi_summary.total_reach
+     client_type_split member / dependent  sum to kpi_summary.total_reach
+     assessment_categories band_under_50 / 50_69 / 70_plus
+                                           sum to assessed_count, same row
+     sessions.monthly_trend, sessions.mode_split
+                                           sum to the session tiles
+     program_activities.activities_list    sums to total_attendees
+     advisor_sourced / self_booked         sum to total_booked
+
+   — so if any part is hidden, all of them are. Only on the client-safe
+   view: internally, small counts are shown by agreement, and the whole
+   point of the internal view is that nothing is held back. */
+function acctPartition(cells) {
+  const vals = cells.map(acctSafeCount);
+  if (!acctSafe) return vals;
+  return vals.some(v => v === null || v === undefined) ? vals.map(() => null) : vals;
+}
+
+/* advisor_session_breakdown() applies NO suppression of any kind — it has
+   no five-member floor and no small-cell nulling, because it was written
+   for internal caseload review. On the client-safe view that is not good
+   enough, so the same <3 rule is applied here before anything renders. */
+function acctSafeCount(v) {
+  const x = acctCell(v);
+  if (!acctSafe) return x;
+  return (typeof x === 'number' && x > 0 && x < 3) ? null : x;
+}
+
+function acctBar(label, count, base) {
+  const c = acctCell(count), b = acctCell(base);
+  const pct = (b && c !== null && c !== undefined) ? Math.round(100 * c / b) : null;
+  const shown = Number.isFinite(pct) ? pct : null;
+  return `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px">
+        <span>${escNar(label)}</span>
+        <span class="mono" style="color:var(--muted)">${acctNum(count)}${b ? ' of ' + b : ''}${shown !== null ? ' · ' + shown + '%' : ''}</span>
+      </div>
+      <div style="height:8px;background:var(--kw-border,#e7e9e3);border-radius:99px;overflow:hidden">
+        <div style="width:${shown === null ? 0 : shown}%;height:100%;background:var(--kw-green,#2d8a4e)"></div>
+      </div>
+    </div>`;
+}
+
+/* ── PANEL 1 — Delivery ──────────────────────────────────────
+   Two sources with different rules, so they are rendered as two
+   separate blocks and each one owns its own failure and its own
+   caveat. Neither is allowed to blank the other, and neither is
+   allowed to borrow the other's suppression promise. */
+function acctDeliveryHtml(sessErr, repErr) {
+  const s   = acctSess || {};
+  const t   = s.totals || {};
+  const rep = acctRep  || {};
+  const insufficient = rep.insufficient_cohort === true;
+  const ses = rep.sessions || {};
+  const kpi = rep.kpi_summary || {};
+  const si  = rep.session_intensity || {};
+  const cts = rep.client_type_split || {};
+  const pa  = rep.program_activities || {};
+
+  // Two different attendance denominators live on this panel. Naming
+  // them differently is the only thing stopping "40%" and "89%" from
+  // reading as a contradiction.
+  const booked   = acctSafeCount(t.total_booked);
+  const attended = acctSafeCount(t.total_attended);
+  const ofBooked = (typeof booked === 'number' && booked > 0 && typeof attended === 'number')
+    ? Math.round(100 * attended / booked) + '%'
+    : (booked === 0 ? '0%' : '—');
+
+  const advisorRows = (s.by_advisor || []).map(a => `
+    <tr>
+      <td><strong>${escNar(a.advisor_name)}</strong>${a.advisor_active ? '' : ' <span class="status-pill status-cancelled">inactive</span>'}</td>
+      <td class="mono">${a.booked}</td>
+      <td class="mono">${a.attended}</td>
+      <td class="mono">${a.no_show}</td>
+      <td class="mono">${a.unconfirmed}</td>
+      <td class="mono">${a.unique_clients}</td>
+      <td class="mono">${a.attendance_rate === null ? '—' : a.attendance_rate + '%'}</td>
+    </tr>`).join('');
+
+  const modeKeys = Object.keys(ses.mode_split || {});
+  const modeVals = acctPartition(modeKeys.map(k => ses.mode_split[k]));
+  const modeRows = modeKeys.map((k, n) =>
+    `<tr><td>${escNar(k)}</td><td class="mono">${acctNum(modeVals[n])}</td></tr>`).join('');
+
+  const trend      = ses.monthly_trend || [];
+  const trendBook  = acctPartition(trend.map(m => m.booked));
+  const trendAtt   = acctPartition(trend.map(m => m.attended));
+  const trendRows  = trend.map((m, n) =>
+    `<tr><td class="mono">${escNar(m.month)}</td><td class="mono">${acctNum(trendBook[n])}</td>
+         <td class="mono">${acctNum(trendAtt[n])}</td></tr>`).join('');
+
+  const acts     = pa.activities_list || [];
+  const actHeads = acctPartition(acts.map(a => a.attendee_count));
+  const actRows  = acts.map((a, n) =>
+    `<tr><td>${escNar(a.title)}</td><td class="mono">${escNar(String(a.activity_date))}</td>
+         <td>${escNar(a.activity_type)}</td><td>${escNar(a.delivery_mode || '')}</td>
+         <td class="mono">${acctNum(actHeads[n])}</td></tr>`).join('');
+
+  const reach = acctSafeCount(kpi.total_reach);
+
+  const tiles = `
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${sessErr ? '—' : acctNum(booked)}</div><div class="stat-lbl">Sessions booked</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${sessErr ? '—' : acctNum(attended)}</div><div class="stat-lbl">Attended</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${sessErr ? '—' : ofBooked}</div><div class="stat-lbl">Attended, of all booked</div></div>
+      <div class="stat-box navy"><div class="stat-val mono">${repErr ? '—' : acctNum(reach)}</div><div class="stat-lbl">People reached</div></div>
+    </div>`;
+
+  // ── Block A: advisor_session_breakdown() ──
+  const blockA = sessErr
+    ? acctErrorCard('Session breakdown unavailable', sessErr.message,
+        'Delivery needs admin access — the advisory team lead sees presenting issues only. '
+        + 'The figures below this card, where present, come from a different function and are unaffected.')
+    : `
+    <div class="card">
+      <div class="card-title">Who booked the work</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+        Advisor-sourced sessions are ones we went out and arranged. A high self-booked
+        share means the portal is pulling its weight; a high advisor-sourced share means
+        the caseload is being driven by us.
+      </p>
+      ${(() => {
+        const [a, b] = acctPartition([t.advisor_sourced, t.self_booked]);
+        return acctBar('Advisor-sourced', a, booked)
+             + acctBar('Self-booked',     b, booked);
+      })()}
+      <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px">
+        <span>Declined by member: <strong class="mono">${acctNum(acctSafeCount(t.declined_by_member))}</strong></span>
+        <span>Awaiting a response: <strong class="mono">${acctNum(acctSafeCount(t.awaiting_response))}</strong></span>
+      </div>
+    </div>
+
+    ${acctSafe ? `
+    <div class="card">
+      <div class="card-title">Per advisor</div>
+      <p style="font-size:12.5px;color:var(--muted);line-height:1.6">
+        Hidden on the client-safe view. The per-advisor table names Key Wellness staff
+        and reports caseloads that are often under three people — internal management
+        information, not something to put in front of a client.
+      </p>
+    </div>` : `
+    <div class="card">
+      <div class="card-title">Per advisor</div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Advisor</th><th>Booked</th><th>Attended</th><th>No-show</th>
+                     <th>Unconfirmed</th><th>Clients</th><th>Attended, of confirmed</th></tr></thead>
+          <tbody>${advisorRows || '<tr><td colspan="7" style="color:var(--muted)">No sessions in this period.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+        Two different denominators sit on this panel. The tile above divides by
+        <em>everything booked</em>, including sessions nobody has confirmed yet; this
+        column divides only by sessions whose attendance was actually recorded, so it
+        reads higher. Neither is wrong — they answer different questions.
+        <br>This breakdown is also organisation-wide: it does not narrow to the selected
+        company or site, because <span class="mono">advisor_session_breakdown()</span>
+        takes no unit argument. It applies no suppression of its own either.
+      </p>
+    </div>`}`;
+
+  // ── Block B: org_report_data() ──
+  const blockB = repErr
+    ? acctErrorCard('Engagement detail unavailable', repErr.message,
+        'This is the HR reporting function. The session figures above come from a '
+        + 'different function and are unaffected — the gap here is not a claim that '
+        + 'there were no sessions.')
+    : insufficient
+      ? acctErrorCard('Session detail withheld',
+          'This organisation is below the five-member floor, so the HR reporting function '
+          + 'returns nothing for it. The advisor breakdown above is still shown: it comes '
+          + 'from a different function, which applies no floor at all.',
+          ACCT_SUPPRESSION_NOTE)
+      : `
+    <div class="card">
+      <div class="card-title">How often people came back</div>
+      ${(() => {
+        const [a, b, c] = acctPartition([si['1'], si['2'], si['3_plus']]);
+        return acctBar('Seen once',                a, reach)
+             + acctBar('Seen twice',               b, reach)
+             + acctBar('Seen three times or more', c, reach);
+      })()}
+      <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px">
+        ${(() => {
+          const [m, d] = acctPartition([cts.member, cts.dependent]);
+          return `<span>Members: <strong class="mono">${acctNum(m)}</strong></span>
+                  <span>Dependants: <strong class="mono">${acctNum(d)}</strong></span>`;
+        })()}
+        <span>Attendance confirmed on: <strong class="mono">${acctPct(ses.attendance_confirmation_coverage_pct)}</strong> of bookings</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Mode and monthly trend</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
+        <div>
+          <table><thead><tr><th>Mode</th><th>Attended</th></tr></thead>
+            <tbody>${modeRows || '<tr><td colspan="2" style="color:var(--muted)">No mode recorded.</td></tr>'}</tbody></table>
+        </div>
+        <div>
+          <table><thead><tr><th>Month</th><th>Booked</th><th>Attended</th></tr></thead>
+            <tbody>${trendRows || '<tr><td colspan="3" style="color:var(--muted)">No sessions in this period.</td></tr>'}</tbody></table>
+        </div>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+        ${escNar(ACCT_SUPPRESSION_NOTE)}
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Group and programme activity</div>
+      ${pa.unit_scoped_note
+        ? `<p style="font-size:12.5px;color:var(--muted);line-height:1.6">${escNar(pa.unit_scoped_note)}</p>`
+        : `<div style="display:flex;gap:20px;flex-wrap:wrap;font-size:12.5px;margin-bottom:12px">
+             <span>Activities: <strong class="mono">${acctNum(pa.total_activities)}</strong></span>
+             <span>Attendees: <strong class="mono">${acctNum(acctSafeCount(pa.total_attendees))}</strong></span>
+           </div>
+           <div style="overflow-x:auto"><table>
+             <thead><tr><th>Title</th><th>Date</th><th>Type</th><th>Mode</th><th>Attendees</th></tr></thead>
+             <tbody>${actRows || '<tr><td colspan="5" style="color:var(--muted)">Nothing recorded for this period.</td></tr>'}</tbody>
+           </table></div>
+           <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+             Head counts only. What was actually raised in these rooms is not captured
+             anywhere yet — that is the group-themes work in a later phase.
+           </p>`}
+    </div>`;
+
+  return tiles + blockA + blockB;
+}
+
+
+/* ── PANEL 2 — Wellbeing ─────────────────────────────────────
+   Same two-source split: the engagement and dimension cards come from
+   org_report_data(), the financial position from
+   org_financial_indicators(). One failing must not silently empty the
+   other, and the financial card must never render empty under a
+   footnote asserting the numbers agree with everything else. */
+function acctWellbeingHtml(repErr, finErr) {
+  const rep = acctRep || {};
+  const fin = acctFin || {};
+  const insufficient = rep.insufficient_cohort === true;
+  const fun = rep.engagement_funnel || {};
+  const cat = rep.assessment_categories || {};
+  const dem = (rep.demographics || {}).age_bands || {};
+  const lea = rep.learning || {};
+  const cov = rep.data_coverage || {};
+
+  const bandRow = (name, b) => {
+    b = b || {};
+    const [lo, mid, hi] = acctPartition([b.band_under_50, b.band_50_69, b.band_70_plus]);
+    return `
+    <tr>
+      <td><strong>${escNar(name)}</strong></td>
+      <td class="mono">${acctNum(b.assessed_count)}</td>
+      <td class="mono">${acctNum(lo)}</td>
+      <td class="mono">${acctNum(mid)}</td>
+      <td class="mono">${acctNum(hi)}</td>
+    </tr>`;
+  };
+  const catRows = Object.keys(cat).sort().map(k => bandRow(k, cat[k])).join('');
+
+  const finBands = (title, obj, extra) => {
+    if (!obj) return '';
+    const bands = obj.bands || [];
+    const rows = bands.map(b =>
+      `<tr><td>${escNar(b.label)}</td>
+           <td class="mono">${b.suppressed ? '—' : acctNum(b.count)}</td></tr>`).join('');
+
+    // org_financial_indicators() suppresses band counts of one or two but
+    // never the median. With one person reporting, every band reads "—"
+    // while the median is that person's own number — the suppression
+    // undone by the line above it. On the client-safe view, hide it.
+    const visible = bands.reduce((a, b) =>
+      a + (b.suppressed ? 0 : (Number(b.count) || 0)), 0);
+    // retirement carries no reported_count (see supabase_financial_indicators.sql),
+    // so the visible-count fallback has to cover an empty band list too.
+    const thin = (typeof obj.reported_count === 'number' && obj.reported_count < 3)
+              || visible < 3;
+    const hasMedian = obj.median !== null && obj.median !== undefined;
+    const median = (!hasMedian || (acctSafe && thin))
+      ? 'Median —'
+      : 'Median ' + obj.median + (extra || '');
+
+    return `
+      <div>
+        <div style="font-size:12.5px;font-weight:700;margin-bottom:6px">${escNar(title)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${escNar(median)}</div>
+        <table><tbody>${rows || '<tr><td style="color:var(--muted)">No data.</td></tr>'}</tbody></table>
+      </div>`;
+  };
+
+  // ── Block A: org_report_data() ──
+  const blockA = repErr
+    ? acctErrorCard('Engagement and dimensions unavailable', repErr.message,
+        'This is the HR reporting function, which needs admin access. The financial '
+        + 'position below comes from a different function and may still be shown.')
+    : insufficient
+      ? acctErrorCard('Wellbeing detail withheld',
+          'This organisation is below the five-member floor, so the HR reporting function '
+          + 'returns nothing for it.', ACCT_SUPPRESSION_NOTE)
+      : `
+    <div class="card">
+      <div class="card-title">Engagement funnel</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px">
+        How far the registered cohort got in this period. Each step is people, not events.
+      </p>
+      ${acctBar('Registered',           fun.registered,           fun.registered)}
+      ${acctBar('Completed assessment', fun.completed_assessment, fun.registered)}
+      ${acctBar('Used a tool',          fun.used_tool,            fun.registered)}
+      ${acctBar('Booked a session',     fun.booked_session,       fun.registered)}
+      ${acctBar('Attended a session',   fun.attended_session,     fun.registered)}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Where the workforce scores</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        Each wellness dimension split into bands. Under 50 is the group worth talking about.
+      </p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Dimension</th><th>Assessed</th><th>Under 50</th><th>50–69</th><th>70+</th></tr></thead>
+          <tbody>${catRows || '<tr><td colspan="5" style="color:var(--muted)">No assessments in this period.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Age and learning</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px">
+        <div>
+          ${acctBar('18–29', dem['18_29'],   fun.registered)}
+          ${acctBar('30–39', dem['30_39'],   fun.registered)}
+          ${acctBar('40–49', dem['40_49'],   fun.registered)}
+          ${acctBar('50+',   dem['50_plus'], fun.registered)}
+        </div>
+        <div style="font-size:12.5px;line-height:2">
+          <div>Read an article: <strong class="mono">${acctNum(lea.articles_read)}</strong></div>
+          <div>Watched a video: <strong class="mono">${acctNum(lea.videos_watched)}</strong></div>
+          <div>Passed a quiz: <strong class="mono">${acctNum(lea.quizzes_passed)}</strong></div>
+        </div>
+      </div>
+    </div>`;
+
+  // ── Block B: org_financial_indicators() ──
+  const blockB = finErr
+    ? acctErrorCard('Financial position unavailable', finErr.message,
+        'Needs admin access. Presenting issues computes over-indebtedness from the same '
+        + 'shared threshold, so that panel still answers the debt question.')
+    : `
+    <div class="card">
+      <div class="card-title">Financial position</div>
+      ${fin.eligible === false
+        ? `<p style="font-size:13px;color:var(--muted);line-height:1.6">
+             Not enough assessed members yet${acctSafe ? '' : ` — ${acctNum(fin.assessed_count)} so far`}.
+             Presenting issues computes over-indebtedness from the same shared threshold
+             and has no floor, so that panel still answers the debt question.</p>`
+        : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px">
+             ${finBands('Debt-to-income', fin.dti, '%')}
+             ${finBands('Retirement readiness', fin.retirement, '')}
+             ${finBands('Financial stress', fin.stress, ' out of 10')}
+           </div>
+           <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:14px 0 0">
+             <strong>Whole organisation, as it stands today.</strong> These three ignore the
+             period and the company/site selectors above —
+             <span class="mono">org_financial_indicators()</span> takes neither. The DTI bands
+             are the shared definition, so they agree with the advisor portal and with
+             presenting issues.
+           </p>`}
+    </div>`;
+
+  const blockC = (repErr || insufficient) ? '' : `
+    <div class="card">
+      <div class="card-title">How much to trust this</div>
+      <div style="font-size:12.5px;line-height:2">
+        <div>Attendance confirmed on <strong class="mono">${acctPct(cov.attendance_confirmation_pct)}</strong> of bookings</div>
+        <div>Assessment completion <strong class="mono">${acctPct(cov.assessment_completion_pct)}</strong> of the cohort</div>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+        ${escNar(cov.statement || '')} ${escNar(ACCT_SUPPRESSION_NOTE)}
+      </p>
+    </div>`;
+
+  return blockA + blockB + blockC;
+}
+
+function acctHeaderHtml(d, indErr) {
+  const org = (orgsData.find(o => o.id === acctOrgId) || {});
+  const c   = (d && d.cohort) || {};
+  // org_financial_indicators() withholds its assessed count below five,
+  // and the wellbeing panel honours that. This is the same population,
+  // so printing it raw here would defeat the guard on the same screen.
+  const reg      = acctSafeCount(c.registered);
+  const assessed = acctSafeCount(c.assessed);
+  const part = (reg && assessed != null)
+    ? Math.round(100 * assessed / reg) + '%' : '—';
+
+  // Companies and sites both appear. Unlike the advisor client picker,
+  // a company IS selectable here: admin_org_indicators scopes through
+  // unit_descendants, so picking a company gives the combined
+  // multi-site view the org_units design intends. Closed units stay in
+  // the list — their members' history still belongs to the account.
+  const unitOpts = ['<option value="">Whole organisation</option>']
+    .concat(acctUnits.map(x => {
+      const label = (x.parent_name ? x.parent_name + ' — ' : '') + x.name
+                  + (x.is_active ? '' : ' (closed)');
+      return `<option value="${escAttr(x.id)}"${acctUnitId === x.id ? ' selected' : ''}>${escNar(label)}</option>`;
+    }))
+    .join('');
+
+  return `
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="orgSwitch('orgs')">← Organisations</button>
+      <strong style="font-size:16px">${escNar(org.name || 'Organisation')}</strong>
+      ${org.program_name ? `<span style="font-size:12px;color:var(--muted)">${escNar(org.program_name)}</span>` : ''}
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end">
+        <label style="font-size:12px;font-weight:600">Period from
+          <input type="date" value="${acctStart}" onchange="acctStart=this.value;renderOrgAccount()"></label>
+        <label style="font-size:12px;font-weight:600">to
+          <input type="date" value="${acctEnd}" onchange="acctEnd=this.value;renderOrgAccount()"></label>
+        <label style="font-size:12px;font-weight:600">Company / site
+          <select onchange="acctUnitId=this.value;renderOrgAccount()">${unitOpts}</select></label>
+        <label style="font-size:12px;font-weight:600;display:flex;gap:8px;align-items:center;padding-bottom:8px">
+          <input type="checkbox" ${acctSafe ? 'checked' : ''}
+                 onchange="acctSafe=this.checked;renderOrgAccount()">
+          Client-safe view</label>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+        Client-safe applies the same suppression the HR reports use — small groups are
+        hidden rather than shown. Leave it off for internal reading; turn it on before
+        anything leaves the building.
+        <br>It reaches presenting issues through the RPC itself. Delivery and Wellbeing
+        already come back suppressed; the advisor breakdown does not, so on this view
+        its small counts are hidden here and the per-advisor table, which names staff,
+        is withheld entirely.
+      </p>
+    </div>
+
+    ${(indErr && acctPanel !== 'issues') ? acctErrorCard('Cohort figures unavailable', indErr.message,
+        'The three boxes below come from admin_org_indicators(), which did not return. '
+        + 'If the function does not exist yet, run supabase_org_account_phase1_indicators.sql '
+        + 'in the Supabase SQL Editor. The dashes below are a missing call, not a cohort of nobody.') : ''}
+
+    <div class="stat-grid">
+      <div class="stat-box navy"><div class="stat-val mono">${acctNum(reg)}</div>
+        <div class="stat-lbl">Registered members</div></div>
+      <div class="stat-box gold"><div class="stat-val mono">${acctNum(assessed)}</div>
+        <div class="stat-lbl">Have assessed</div></div>
+      <div class="stat-box green"><div class="stat-val mono">${part}</div>
+        <div class="stat-lbl">Assessment participation</div></div>
+    </div>`;
+}
+
+function acctTile(r) {
+  const suppressed = r.suppressed === true;
+  const pct   = (r.pct === null || r.pct === undefined) ? null : r.pct;
+  const value = suppressed ? '—'
+              : (pct === null ? '—' : pct + '%');
+  const sub   = suppressed
+    ? 'Hidden — group too small to report'
+    : `${r.count} of ${r.base}`;
+
+  let move = '';
+  if (r.movement) {
+    const d = Number(r.movement.delta_pct);
+    if (!isNaN(d) && d !== 0) {
+      // A rise in any of these indicators is a worsening.
+      const worse = d > 0;
+      move = `<div style="font-size:11px;font-weight:700;margin-top:6px;
+                    color:${worse ? 'var(--red)' : 'var(--green)'}">
+                ${worse ? '▲' : '▼'} ${Math.abs(d).toFixed(1)} pts since ${escNar(acctStart)}
+              </div>`;
+    } else if (!isNaN(d)) {
+      move = `<div style="font-size:11px;color:var(--muted);margin-top:6px">No change over the period</div>`;
+    }
+  } else if (r.movement_note) {
+    move = `<div style="font-size:11px;color:var(--muted);margin-top:6px" title="${escAttr(r.movement_note)}">
+              Movement not available
+            </div>`;
+  }
+
+  return `
+    <div class="stat-box navy" style="text-align:left">
+      <div class="stat-lbl" style="margin-bottom:6px">${escNar(r.label)}</div>
+      <div class="stat-val mono">${value}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${escNar(sub)}</div>
+      ${r.low_base && !suppressed
+        ? '<div style="font-size:11px;font-weight:700;color:var(--kw-yellow-ink);margin-top:6px">Low base — do not quote as a rate</div>'
+        : ''}
+      ${move}
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">${escNar(r.definition || '')}</div>
+    </div>`;
+}
+
+function acctIndicatorsHtml(d) {
+  d = d || {};
+  if (d.suppressed) {
+    return `<div class="card"><div class="card-title">Not enough data yet</div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.7">${escNar(d.message || '')}</p></div>`;
+  }
+
+  const head = d.headline || [];
+  const row1 = head.filter(r => r.placement === 'row_1');
+  const row2 = head.filter(r => r.placement === 'row_2');
+  const lib  = d.library || [];
+
+  const libRows = lib.map(r => `
+    <tr>
+      <td><strong>${escNar(r.label)}</strong>
+          <br><span style="font-size:11.5px;color:var(--muted)">${escNar(r.definition || '')}</span></td>
+      <td class="mono">${r.suppressed ? '—' : r.count}</td>
+      <td class="mono">${r.base}</td>
+      <td class="mono">${r.suppressed || r.pct === null ? '—' : r.pct + '%'}</td>
+      <td>${r.suppressed
+              ? '<span class="status-pill status-cancelled">hidden — group too small to report</span>'
+              : (r.low_base ? '<span class="status-pill status-cancelled">low base</span>' : '')}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-title">Presenting issues — pressure now</div>
+      <div class="stat-grid">${row1.map(acctTile).join('')}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Presenting issues — future exposure</div>
+      <div class="stat-grid">${row2.map(acctTile).join('')}</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">The wider library</div>
+      <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+        Ranked by prevalence. Everything here is computed from portal data — no advisor
+        tagging involved. The informal and high-cost credit picture, which comes from
+        one-on-one consultation records, arrives in a later phase.
+      </p>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Indicator</th><th>Affected</th><th>Base</th><th>Share</th><th></th></tr></thead>
+          <tbody>${libRows || '<tr><td colspan="5" style="color:var(--muted)">Nothing to show for this period.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="acctCopySummary()">Copy summary</button>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);line-height:1.6;margin:12px 0 0">
+        ${escNar(d.note || '')}
+      </p>
+    </div>`;
+}
+
+// Formats exactly what is on screen, denominators included, so the
+// figures that reach a client report are the ones that were checked.
+function acctCopySummary() {
+  const d = acctData;
+  if (!d) return;
+  const org = (orgsData.find(o => o.id === acctOrgId) || {}).name || 'Organisation';
+  // The screen guards a null pct in two places; this path is the one
+  // whose output gets pasted into a document, so it has to guard it too.
+  const line = r => {
+    if (r.suppressed) return `- ${r.label}: hidden (group too small)`;
+    const pct = (r.pct === null || r.pct === undefined) ? null : r.pct + '%';
+    return `- ${r.label}: ${acctNum(r.count)} of ${acctNum(r.base)}`
+         + (pct ? ` (${pct})` : ' (no rate — nothing to compute it over)')
+         + (r.low_base ? ' — low base' : '');
+  };
+
+  const txt = [
+    `${org}${d.unit_label ? ' — ' + d.unit_label : ''}`,
+    `${d.period_start} to ${d.period_end}`,
+    `${d.cohort.registered} registered, ${d.cohort.assessed} assessed`,
+    '',
+    'Presenting issues:',
+    ...(d.headline || []).map(line),
+    '',
+    'Wider library:',
+    ...(d.library || []).map(line),
+    '',
+    d.client_safe ? '(Client-safe view — small groups suppressed.)'
+                  : '(INTERNAL view — not suppressed. Switch on Client-safe before sharing.)'
+  ].join('\n');
+
+  navigator.clipboard.writeText(txt).then(
+    () => showUnitToast('Summary copied'),
+    () => showUnitToast('Could not copy — select the text manually')
+  );
+}
+
 function orgsHtml() {
   const active = orgsData.filter(o => o.is_active).length;
   const members = orgsData.reduce((s, o) => s + (o.member_count || 0), 0);
 
   const rows = orgsData.map((o, i) => `
     <tr${o.is_active ? '' : ' style="opacity:.62"'}>
-      <td><strong>${escNar(o.name)}</strong>${o.program_name ? `<br><span style="font-size:11.5px;color:var(--muted)">Programme: ${escNar(o.program_name)}</span>` : ''}</td>
+      <td><a href="#" onclick="openOrgAccount(${i});return false"
+             style="color:var(--kw-green);font-weight:700;text-decoration:none"
+             title="Open the account file">${escNar(o.name)}</a>${o.program_name ? `<br><span style="font-size:11.5px;color:var(--muted)">Programme: ${escNar(o.program_name)}</span>` : ''}</td>
       <td><span class="mono" style="font-size:12.5px">${escNar(o.invite_code)}</span>
           <button class="btn btn-outline btn-sm" style="padding:2px 8px;font-size:11px;margin-left:6px" onclick="orgCopyCode(${i}, this)">Copy</button></td>
       <td><span class="status-pill ${o.is_active ? 'status-confirmed' : 'status-cancelled'}">${o.is_active ? 'active' : 'closed'}</span></td>
@@ -3232,6 +4036,13 @@ function fmtRate(cell) {
 
 function escNar(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// escNar does not touch quotes, so it is only safe in text content. Anything
+// going into an attribute value needs the quotes escaped too, or the next
+// field routed through here breaks out of the attribute.
+function escAttr(s) {
+  return escNar(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 const SEVERITIES = ['low','medium','high'];

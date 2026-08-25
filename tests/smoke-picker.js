@@ -23,6 +23,17 @@ function check(name, ok, detail) {
 // Mirrors what advisor_org_options() returns: two orgs, one with sites,
 // one without. The closed company and orphan site are already excluded
 // server-side, which the SQL suite asserts separately.
+// The bands exactly as supabase_org_account_phase0.sql seeds them.
+const DTI_FIXTURE = {
+  flag_band: 'over_indebted',
+  bands: [
+    { key:'healthy',       max:20,   label:'Healthy (under 20%)'   },
+    { key:'manageable',    max:35,   label:'Manageable (20–34.9%)' },
+    { key:'strained',      max:45,   label:'Strained (35–44.9%)'   },
+    { key:'over_indebted', max:null, label:'Over-indebted (45%+)'  }
+  ]
+};
+
 const ORG_FIXTURE = [
   { org_id: 'org-bopeu', name: 'BOPEU', units: [] },
   { org_id: 'org-sed',   name: 'Sedimosa', units: [
@@ -39,8 +50,10 @@ const ORG_FIXTURE = [
 
   // Stub the Supabase client before any page script runs, and capture
   // every insert so the payload can be asserted.
-  await page.addInitScript(({ orgs }) => {
+  await page.addInitScript(({ orgs, dti }) => {
     window.__inserted = [];
+    window.__dtiConfig = dti;
+    window.__rpcCalls = [];
     const table = () => ({
       insert(payload) {
         window.__inserted.push(payload);
@@ -55,6 +68,7 @@ const ORG_FIXTURE = [
       },
       select: () => {
         const q = {
+          __table: null,
           eq: () => q, or: () => q,
           maybeSingle: async () => ({ data: null, error: null }),
           single: async () => ({ data: null, error: null }),
@@ -66,9 +80,20 @@ const ORG_FIXTURE = [
       delete: () => ({ eq: async () => ({ error: null }) })
     });
     const fakeSb = {
-      from: table,
+      from: (name) => {
+        const t = table();
+        if (name === 'threshold_config') {
+          t.select = () => ({
+            eq: () => ({
+              maybeSingle: async () => ({ data: { value: window.__dtiConfig }, error: null })
+            })
+          });
+        }
+        return t;
+      },
       rpc: async (fn) => {
-        if (fn === 'advisor_org_options') return { data: orgs, error: null };
+        window.__rpcCalls.push(fn);
+        if (fn === 'advisor_org_options') return { data: window.__orgs || orgs, error: null };
         if (fn === 'advisor_me') return { data: {
           id: 'advisor-1', full_name: 'Test Advisor',
           email: 'adv@keywealth.co.bw', title: 'Advisor', is_team_lead: false
@@ -86,7 +111,7 @@ const ORG_FIXTURE = [
       }
     };
     window.supabase = { createClient: () => fakeSb };
-  }, { orgs: ORG_FIXTURE });
+  }, { orgs: ORG_FIXTURE, dti: DTI_FIXTURE });
 
   await page.goto('file://' + path.resolve(__dirname, '..', 'advisor.html'));
   await page.waitForTimeout(700);
@@ -217,8 +242,77 @@ const ORG_FIXTURE = [
   check('reopening the form clears the previous client',
     reset.name === '' && reset.org === '' && reset.noorg === false, JSON.stringify(reset));
 
+  // ── The picker is not cached, so a new company appears ──────
+  const refetch = await page.evaluate(async () => {
+    window.__orgs = [
+      { org_id: 'org-bopeu', name: 'BOPEU', units: [] },
+      { org_id: 'org-sed',   name: 'Sedimosa', units: [
+          { id: 'unit-gabs', label: 'Head Office Co — Gaborone' }] },
+      { org_id: 'org-new',   name: 'Newly Onboarded Co', units: [] }
+    ];
+    window.openNewClientModal();
+    await new Promise(r => setTimeout(r, 200));
+    return Array.from(document.querySelectorAll('#nc-org option')).map(o => o.textContent);
+  });
+  check('an organisation added mid-session appears without a page reload',
+    refetch.includes('Newly Onboarded Co'), JSON.stringify(refetch));
+
+  const rpcCount = await page.evaluate(() =>
+    window.__rpcCalls.filter(f => f === 'advisor_org_options').length);
+  check('the options are re-fetched each time the form opens, not cached once',
+    rpcCount > 1, 'advisor_org_options called ' + rpcCount + ' time(s)');
+
+  // ── DTI bands come from threshold_config ────────────────────
+  const bands = await page.evaluate(() =>
+    [12, 19.9, 20, 34.9, 35, 44.9, 45, 50, 81.3].map(d => ({
+      dti: d, band: window.kwDtiBand(d), flagged: window.kwIsOverIndebted(d)
+    })));
+  const bandOf = d => (bands.find(b => b.dti === d) || {}).band;
+  check('12% bands healthy',                 bandOf(12)   === 'healthy');
+  check('20% bands manageable',              bandOf(20)   === 'manageable');
+  check('34.9% is still manageable',         bandOf(34.9) === 'manageable');
+  check('35% bands strained',                bandOf(35)   === 'strained');
+  check('44.9% is still strained',           bandOf(44.9) === 'strained');
+  check('45% bands over-indebted (inclusive boundary, matches SQL)',
+    bandOf(45) === 'over_indebted');
+  check('81.3% bands over-indebted',         bandOf(81.3) === 'over_indebted');
+
+  const flags = d => (bands.find(b => b.dti === d) || {}).flagged;
+  check('44.9% is not flagged for debt', flags(44.9) === false);
+  check('45% is flagged for debt',       flags(45)   === true);
+  check('50% is flagged — the reading that changes for advisors',
+    flags(50) === true);
+
+  // ── diagDebt renders from those bands ───────────────────────
+  const diag = await page.evaluate(() =>
+    [25, 40, 50].map(dti => {
+      const d = window.diagDebt({ dti: dti, totalIncome: 30000, capacity35: 1000 });
+      return { dti: dti, color: d.color, label: d.label };
+    }));
+  check('25% shows green Manageable',
+    diag[0].color === 'green'  && diag[0].label === 'Manageable', JSON.stringify(diag[0]));
+  check('40% shows orange Strained',
+    diag[1].color === 'orange' && diag[1].label === 'Strained',   JSON.stringify(diag[1]));
+  check('50% shows red Over-indebted (was gold "Acceptable")',
+    diag[2].color === 'red'    && diag[2].label === 'Over-indebted', JSON.stringify(diag[2]));
+
+  // The activity report flags anything not green; that line must stay at 35%.
+  check('the activity-report flag line stays at 35%',
+    diag[0].color === 'green' && diag[1].color !== 'green');
+
+  // ── A failed threshold fetch must not blank the diagnostic ──
+  const fallback = await page.evaluate(() => {
+    const saved = window.KW_DTI;
+    window.KW_DTI = null;                       // simulate the fetch failing
+    const d = window.diagDebt({ dti: 50, totalIncome: 30000, capacity35: 1000 });
+    window.KW_DTI = saved;
+    return { color: d.color, label: d.label };
+  });
+  check('a failed threshold fetch degrades to the same numbers, not a blank',
+    fallback.color === 'red' && fallback.label === 'Over-indebted', JSON.stringify(fallback));
+
   check('no uncaught JavaScript errors from the picker',
-    errors.filter(e => /nc-|ncOrg|ncNoOrg|OrgPicker|createClientRecord/.test(e)).length === 0,
+    errors.filter(e => /nc-|ncOrg|ncNoOrg|OrgPicker|createClientRecord|kwDti|diagDebt|loadThresholds/.test(e)).length === 0,
     errors.join(' | '));
 
   await browser.close();

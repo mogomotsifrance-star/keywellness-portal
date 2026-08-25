@@ -2,7 +2,7 @@
 # Key Wellness — Phase 0 database tests against a local PostgreSQL 16.
 #
 # Runs: fixture -> migration -> migration again (idempotency) -> 47 assertions
-#       -> Phase 0a -> its assertions
+#       -> Phase 0a -> its assertions -> Phase 1 -> its assertions
 #       -> rollback -> rollback again -> clean-slate verification.
 #
 # Needs postgresql-16 binaries on PATH and a running local cluster. From a
@@ -39,9 +39,21 @@ echo "  phase 0a re-run   ok (idempotent)"
 $PSQL -d kwtest -f "$HERE/phase0a-tests.sql" 2>&1 \
   | grep -E "PASS|FAIL|ERROR|passed" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
 
-$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0.sql" >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/supabase_org_account_phase1_indicators.sql" >/dev/null 2>&1
+echo "  phase 1           ok"
+$PSQL -d kwtest -f "$ROOT/supabase_org_account_phase1_indicators.sql" >/dev/null 2>&1
+echo "  phase 1 re-run    ok (idempotent)"
+
+$PSQL -d kwtest -f "$HERE/phase1-tests.sql" 2>&1 \
+  | grep -E "PASS|FAIL|ERROR|passed" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
+
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase1-indicators.sql" >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0a-picker.sql"     >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0.sql"             >/dev/null 2>&1
 echo "  rollback          ok"
-$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0.sql" >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase1-indicators.sql" >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0a-picker.sql"     >/dev/null 2>&1
+$PSQL -d kwtest -f "$ROOT/migrations/rollback-org-account-phase0.sql"             >/dev/null 2>&1
 echo "  rollback re-run   ok (idempotent)"
 
 LEFT=$($PSQL -d kwtest -t -A -c "
@@ -51,7 +63,9 @@ LEFT=$($PSQL -d kwtest -t -A -c "
        + (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
            where n.nspname='public' and p.proname in
              ('kw_threshold','kw_dti_band','kw_is_over_indebted','kw_unit_label',
-              'kw_validate_client_unit','kw_sync_advisor_client_org','admin_attribution_queue'))
+              'kw_validate_client_unit','kw_sync_advisor_client_org','admin_attribution_queue',
+              'advisor_org_options','admin_org_indicators','_org_indicator_counts',
+              '_org_indicator_catalogue','_jsonb_array_pos'))
        + (select count(*) from pg_constraint
            where conname in ('advisor_clients_org_required','advisor_clients_unit_needs_org'))
        + (select count(*) from pg_trigger
