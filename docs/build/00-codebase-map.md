@@ -285,11 +285,15 @@ both ways, and a rollback-cleanliness gate that fails the run.
 | `tests/smoke-account.js` (44 KB) | The org account file in the real `admin.html`: drill-in, all four panels, period and site scope, client-safe view. Stubs four RPCs and can fail each independently (`__indFail`, `__repFail`, `__finFail`, `__adminOnly`) |
 | `tests/smoke-picker.js` (15 KB) | The advisor add-client org picker in the real `advisor.html` |
 
-Both load the page over `file://` — no dev server needed. `smoke-account.js` carries
-a long comment explaining that an earlier fixture used plain numbers where
-`org_report_data()` returns `{value, suppressed}` jsonb, so every panel assertion
-passed while the page rendered `[object Object]`. **Copy that lesson into any new
-fixture.**
+Both load the page over `file://` — no dev server needed, and both now abort the
+jsdelivr supabase-js request so the stub is not overwritten (see §6, C3). Run them
+with `npm install && npm test`.
+
+`smoke-account.js` carries a long comment explaining that an earlier fixture used
+plain numbers where `org_report_data()` returns `{value, suppressed}` jsonb, so every
+panel assertion passed while the page rendered `[object Object]`. **Copy that lesson
+into any new fixture** — and note that the CDN bug is the same class of failure: a
+suite that reports success while testing something other than what it claims.
 
 `.claude/static-server.js` exists locally but `.claude/` is gitignored in full, so it
 is not available on a clean clone. Neither smoke suite needs it.
@@ -362,8 +366,34 @@ There is no `package.json` and no `node_modules`. Both suites `require('playwrig
 and it does not resolve. The build preamble's rule 5 ("extend the existing smoke
 suites") assumes a working harness.
 
-Needs a decision before Prompt 3: add a minimal `package.json` with Playwright as a
-devDependency, or document a global install as a prerequisite.
+**Resolved by Prompt 0b — and it uncovered something worse.** Adding the manifest
+made the suites runnable, at which point both *failed*, crashing on
+`window.showTab is not a function`.
+
+Cause: every role page loads supabase-js from jsdelivr in `<head>`.
+`page.addInitScript()` installs the stub before page scripts run — but the CDN
+library lands *after* and overwrites `window.supabase`. The page then builds a real
+client against production, finds no session, and redirects to `index.html`. Every
+subsequent assertion fails, because the suite is no longer on the page it thinks it
+is. Proven by loading `admin.html` twice, once with the CDN reachable and once with
+it aborted:
+
+| | `window.supabase` is the stub | lands on | `typeof showTab` |
+|---|---|---|---|
+| CDN reachable | false | `index.html` | `undefined` |
+| CDN blocked | true | `admin.html` | `function` |
+
+So the suites only ever passed **when the network happened to be down**. Both now
+abort that one request:
+
+```js
+await page.route('**cdn.jsdelivr.net/npm/@supabase/**', route => route.abort());
+```
+
+Chart.js is deliberately left reachable — the pages degrade without it and nothing
+asserts on a canvas. Verified on a fresh `git clone` → `npm install` → `npm test`:
+95 + 37 assertions, zero failures, exit 0. **Any new suite must block the CDN the
+same way.**
 
 ### C4 — Core tables have no DDL anywhere in the repo
 
