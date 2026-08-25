@@ -2710,21 +2710,18 @@ async function updateBookingStatus(id, status) {
   // Best-effort: the booking status is already saved, so a send failure is logged
   // visibly rather than blocking or rolling back the status change.
   if (status === 'confirmed') {
-    const b = allBookings.find(x => x.id === id);
-    if (b && b.user_email) {
-      const { error: emailErr } = await sb.functions.invoke('send-booking-email', {
-        body: {
-          type: 'confirmed',
-          firstName: b.user_name || '',
-          email: b.user_email,
-          service: b.service || '',
-          dateStr: b.requested_date || '',
-          user_id: b.user_id || null,
-        }
-      });
-      if (emailErr) {
-        console.error('Booking-confirmed email failed to send:', emailErr);
-      }
+    // Send the booking id only. Recipient, name, service and date are
+    // resolved server-side from the row — the function used to take the
+    // `to:` address from here, which let anyone with the public anon key
+    // send Key Wellness branded mail anywhere. No user_email check either:
+    // the function decides whether there is a routable address, and writes
+    // the in-app notification regardless, which is what phone-only members
+    // rely on.
+    const { error: emailErr } = await sb.functions.invoke('send-booking-email', {
+      body: { type: 'confirmed', booking_id: id }
+    });
+    if (emailErr) {
+      console.error('Booking-confirmed email failed to send:', emailErr);
     }
   }
 }
