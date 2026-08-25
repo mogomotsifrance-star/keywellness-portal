@@ -2795,23 +2795,22 @@ async function addAppointment(btn){
   if(error){ showBanner('Could not schedule: ' + error.message); return; }
 
   // Tell the client, reusing the portal's existing booking email function.
-  if(data && data.notify_email){
+  // Only the booking id and the covering note go up — recipient, name,
+  // service, date and time are resolved server-side from the booking row.
+  // Passing `email: data.notify_email` from here is what made the function
+  // an open relay for anyone holding the (public) anon key.
+  //
+  // The notify_email guard is gone too: the function decides whether there
+  // is a routable address, and writes the in-app notification either way,
+  // which is how a phone-only client learns about the session at all.
+  if(data && data.booking_id){
     try {
       await sb.functions.invoke('send-booking-email', {
         body: {
-          firstName: c.personal.name || '',
-          lastName:  c.personal.surname || '',
-          email:     data.notify_email,
-          phone:     c.phone || '',
-          service:   type,
-          sessionType: mode === 'virtual' ? 'Virtual' : 'In person',
-          dateStr:   date,
-          time:      time,
-          message:   'This session was scheduled for you by your Key Wellness advisor'
-                     + (ADVISOR && ADVISOR.full_name ? ', ' + ADVISOR.full_name : '')
-                     + '. You can accept, decline or ask to move it from My Bookings in your portal.',
-          user_id:   c._memberUserId || null,
-          booked_by: 'advisor'
+          booking_id: data.booking_id,
+          message: 'This session was scheduled for you by your Key Wellness advisor'
+                   + (ADVISOR && ADVISOR.full_name ? ', ' + ADVISOR.full_name : '')
+                   + '. You can accept, decline or ask to move it from My Bookings in your portal.'
         }
       });
     } catch(e){ console.warn('booking email failed (session was still created):', e); }

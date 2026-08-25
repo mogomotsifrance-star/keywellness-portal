@@ -6444,10 +6444,18 @@ window.submitBooking = async function () {
   // ── 3) Send emails via Supabase Edge Function → Resend API. ──
   //     The Edge Function holds the API key server-side; the browser never sees it.
   //     sb.functions.invoke() forwards the user's JWT automatically (verify_jwt is enabled).
+  // No row means no notification to send: the function resolves the recipient
+  // from the booking, and without a signed-in user there is no JWT to send.
   try {
-    const { error: emailErr } = await sb.functions.invoke('send-booking-email', {
-      body: { firstName: first, lastName: last, email, phone, service, sessionType, dateStr, time, message: msg, user_id: currentUser?.id }
-    });
+    // Only the booking id and the member's own note go up. Recipient, name,
+    // service, date and time are resolved server-side from the booking row —
+    // the function used to accept a `to:` address from here, which made it an
+    // open relay for anyone holding the (public) anon key.
+    const { error: emailErr } = _bookingId == null
+      ? { error: null }
+      : await sb.functions.invoke('send-booking-email', {
+          body: { booking_id: _bookingId, message: msg }
+        });
     if (emailErr) {
       // Email failed — booking is already saved to DB so we warn rather than block.
       console.error('Email send failed (booking still saved):', emailErr);

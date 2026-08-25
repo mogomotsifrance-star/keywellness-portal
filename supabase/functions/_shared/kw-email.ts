@@ -53,7 +53,10 @@ export function renderLedger(rows: LedgerRow[]): string {
     </table>`;
 }
 
-function escapeHtml(s: string): string {
+// Exported so callers can escape values they interpolate into `bodyHtml`,
+// which renderEmail() inserts raw. Before this was available, send-booking-email
+// built bodyHtml from unescaped request data.
+export function escapeHtml(s: string): string {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
