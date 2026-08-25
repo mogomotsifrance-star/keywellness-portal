@@ -1,11 +1,17 @@
 #!/bin/bash
-# Key Wellness — Phase 0 database tests against a local PostgreSQL 16.
+# Key Wellness — Phase 0 database tests against a local PostgreSQL 17.
 #
 # Runs: fixture -> migration -> migration again (idempotency) -> 47 assertions
 #       -> Phase 0a -> its assertions -> Phase 1 -> its assertions
 #       -> rollback -> rollback again -> clean-slate verification.
 #
-# Needs postgresql-16 binaries on PATH and a running local cluster. From a
+# VERSION: production is PostgreSQL 17.6 (docs/build/00-live-schema-snapshot.md).
+# This harness targeted 16 until 25 Aug 2026, which meant every migration was
+# validated on a different major version from the one it landed on. It now
+# refuses to run on anything below 17 rather than passing quietly on the wrong
+# engine — see PG_MIN below.
+#
+# Needs postgresql-17 binaries on PATH and a running local cluster. From a
 # clean container:
 #   initdb -D /tmp/pgdata -A trust -U "$USER"
 #   pg_ctl -D /tmp/pgdata -o '-k /tmp/pgrun -p 5433' -l /tmp/pg.log start
@@ -17,6 +23,17 @@ PORT="${2:-5433}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$HERE")"
 PSQL="psql -h $HOST -p $PORT -U $USER -v ON_ERROR_STOP=1 -q"
+
+# ── Server version guard ─────────────────────────────────────
+PG_MIN=17
+PG_NUM=$($PSQL -d postgres -t -A -c "show server_version_num" 2>/dev/null || echo 0)
+PG_MAJ=$(( PG_NUM / 10000 ))
+if [ "$PG_MAJ" -lt "$PG_MIN" ]; then
+  echo "  server version    FAILED — found PostgreSQL ${PG_MAJ:-unknown}, need >= $PG_MIN"
+  echo "                    Production is 17.6. A pass on an older major proves nothing."
+  exit 1
+fi
+echo "  server version    ok (PostgreSQL $PG_MAJ)"
 
 $PSQL -d postgres -c "drop database if exists kwtest" >/dev/null
 $PSQL -d postgres -c "create database kwtest"          >/dev/null
