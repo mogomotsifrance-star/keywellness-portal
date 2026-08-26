@@ -56,6 +56,17 @@ need migrate into it release by release, and `admin.html` is **retired** when th
 last one moves — not maintained in parallel. Its primary user is Lone, not Tshenolo
 or France.
 
+**Admins land on `ops.html`, not `admin.html`.** `kwRouteByRole()` offers
+`ops` where it used to offer `admin`, and a stored `kw_interface` of `'admin'`
+maps forward to `'ops'` so live sessions do not land on the page being retired.
+`admin.html` is reachable only from the "Other interfaces" link inside ops.
+
+**Known inconsistency, fixed in Prompt 11:** `admin.html` and `employer.html`
+keep their own role switchers, which still point at `admin.html`. They also
+still lack the CDN-failure guard that `index.html` and `advisor.html` have —
+if jsdelivr fails they render blank with no explanation. Neither is fixed in
+Prompt 3; both go when those pages are rebuilt.
+
 **The work plan is the spine.** Per client, per period, a list of activities each
 tagged financial or psychosocial, each with a state (planned → scheduled →
 delivered → reported → cancelled). Tuesday walks the work plans. Utilisation,
@@ -92,6 +103,32 @@ Decisions already taken (25 Aug 2026), not open for re-litigation:
 - Invoices are **prepared by the system, produced by Laone**. Nothing is sent
   automatically.
 - Flyers go to the organisation's HR contact by default.
+
+### Not every client is on retainer — this shapes M4
+
+Recorded 26 Aug 2026, ahead of M4. The pack and the operating model both read
+as though every client is on a monthly retainer. **They are not.** Some are
+incidental, billed **per session or per engagement**.
+
+- `org_contracts` gains **`contract_kind ('retainer' | 'per_engagement')`**.
+- Per-engagement prices are **known in advance**, so each contract carries a
+  **rate card**: `format × service_line → amount`. That is part of M4, not a
+  later addition.
+- **Engagement invoices are created when a per-engagement activity is marked
+  `delivered`** — not on the first of the month. The monthly job stays, but it
+  only sweeps `contract_kind = 'retainer'`.
+
+Consequences worth seeing now: "retainer position (delivered vs expected)"
+means nothing for a per-engagement client, so the Tuesday review's *Retainer*
+section needs a second shape; and `contract_position()` from Prompt 5 has to
+branch on `contract_kind` rather than assuming a period allowance.
+
+### No Clinical Lead
+
+Still true, and load-bearing for M3: **`is_clinical_lead` stays false for
+everyone.** Counselling notes are author-only until France appoints one, and a
+risk flag creates a content-free action for Lone. Do not seed a clinical lead
+to make a test pass — invert the test instead.
 
 ---
 

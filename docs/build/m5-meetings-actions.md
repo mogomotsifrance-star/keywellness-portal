@@ -192,27 +192,26 @@ Checked against live on 26 Aug 2026:
 | Person | In `admins`? | Account? | Can own an action? |
 |---|---|---|---|
 | **Lone** | yes | yes | yes |
-| **Michelle** | **NO — not in `admins` at all** | — | **no, and she cannot open ops either** |
+| **Michelle** | **yes — granted 26 Aug 2026** | yes | yes |
 | **Laone** | no | not found | **no** |
 | France | yes (×2 emails) | yes | yes |
 | `kramontshonyana@debswana.bw` (advisor) | — | **no account** | **no** |
 
-**Michelle is the one to look at.** The pack says throughout that "psychosocial
-admin is done by Lone and Michelle" and Prompt 4 is built around "Lone and
-Michelle must be able to…". She currently holds no role in the database at
-all: not `admins`, not `advisors`. `is_staff()` is false for her, so she cannot
-read a meeting, an action, or the Tuesday review. This is not something M5 can
-fix — it is a grant, made through `admin_role_grant_admin()` in the Roles &
-Access screen.
+**Michelle — resolved 26 Aug 2026.** She previously held no role in the
+database at all, so `is_staff()` was false and the workspace built for her was
+invisible to her. Granted admin through the dashboard. Recorded because the
+audit that found it is the kind worth repeating: the pack asserted a role the
+database did not have.
 
-Before M5 is useful:
+Still outstanding:
 
-1. **Grant Michelle admin** (or whatever role is decided) — otherwise the
-   workspace built for her is invisible to her.
-2. **Create an account for Laone**, or accept that M4's invoice actions have
-   no owner.
-3. Decide whether `kramontshonyana@debswana.bw` needs an account or should be
-   deactivated.
+
+
+1. **Lone and Laone accounts** — Tshenolo's, treated as deploy preconditions.
+   Laone especially: without an account she cannot own M4's invoice actions or
+   receive a reminder about one.
+2. Decide whether `kramontshonyana@debswana.bw` needs an account or should be
+   deactivated. Today that advisor cannot own an action.
 
 ---
 
