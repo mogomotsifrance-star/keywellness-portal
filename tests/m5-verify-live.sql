@@ -42,8 +42,11 @@ select 'pg_cron                    : ' ||
 -- ── V2 · The deploy precondition: who can own an action? ────
 -- actions.owner references auth.users, because notifications.user_id does.
 -- Anyone listed as "no account" cannot own an action or receive a reminder.
--- Lone, Michelle and Laone must all appear with an account before M5 is
--- useful; Laone especially, since M4 gives her the invoice actions.
+-- Lone and Michelle must appear with an account before M5 is useful.
+-- LAONE DOES NOT NEED ONE. An earlier draft of M4 gave her the invoice
+-- actions; she does not use the platform at all, and M4 as built owns the
+-- invoice pack with an ops admin instead. See docs/build/
+-- m4-contracts-workplans-invoices.md §2.
 select 'admin  ' || a.email || '  ' ||
        case when u.id is null then '<-- NO ACCOUNT' else 'ok' end as line
   from admins a left join auth.users u on lower(u.email) = lower(a.email)

@@ -1,10 +1,11 @@
-# Deploy note — M1, M5, M5a and `ops.html`
+# Deploy note — M1, M5, M5a, member support, `ops.html` and M4
 
-**Written 26 Aug 2026. Nothing in this set has been applied to Supabase.**
+**Written 26 Aug 2026, revised the same day. Nothing in this set has been
+applied to Supabase.**
 
-Four pieces of work have accumulated on `dev` since the last deploy. They are
-one deploy, not four: `ops.html` is inert without all three migrations, and the
-migrations depend on each other in order.
+Six pieces of work have accumulated on `dev` since the last deploy. They are
+one deploy, not six: `ops.html` is inert without the first three migrations,
+and the migrations depend on each other in order.
 
 | | What | Depends on |
 |---|---|---|
@@ -12,28 +13,41 @@ migrations depend on each other in order.
 | M5 | meetings, actions, reminders, `is_test`, `is_staff()` | — |
 | M5a | `ops_timeline()` | M1 (`service_line`), M5 (`is_staff()`, `is_test`) |
 | — | `ops.html`, `kw-session.js`, routing change | all three |
+| support | member reset links and resends, `is_ops_admin()` | M5 (`is_staff()`) |
+| M4 | contracts, rate card, work plans, invoice packs | M1, M5, `is_ops_admin()` |
+
+M4 has **no user interface** and can be applied last or held back entirely —
+nothing on any page calls it yet. It is in this deploy so the schema is in place
+before the first month it needs to bill.
 
 Every migration is idempotent and has a rollback that leaves zero objects.
 Local test state at the time of writing, on PostgreSQL 17.6:
 
 ```
-phase0 / 0a / 1   all passed        M1    22 passed, 0 failed
-M5    45 passed, 0 failed           M5a   29 passed, 0 failed
+phase0 / 0a / 1   all passed        M1       22 passed, 0 failed
+M5      45 passed, 0 failed         M5a      29 passed, 0 failed
+support 28 passed, 0 failed         M4       50 passed, 0 failed
 browser: 95 account · 37 picker · 19 routing · 38 ops
+M4 regression: org_report_data 9 of 9 payloads byte-identical
 ```
 
 ---
 
 ## Before you start
 
-**Two accounts are still missing.** `actions.owner` references `auth.users`
-because `notifications.user_id` does — you cannot remind a person who does not
-exist.
+**One account matters.** `actions.owner` references `auth.users` because
+`notifications.user_id` does — you cannot remind a person who does not exist.
 
-- **Laone** has no account. Without one she cannot own M4's invoice actions or
-  receive a reminder about one. M5 works without her; M4 does not.
 - **Lone** — confirm her account is the one in `admins`
-  (`lone@keywellness.co.bw` is present and resolves).
+  (`lone@keywellness.co.bw` is present and resolves). M4's invoice pack is
+  owned by the first ops admin by email, which is her; V4 of
+  `tests/m4-verify-live.sql` resolves it and prints the address before you
+  apply anything.
+- **Laone does not need an account.** An earlier draft of this note said she
+  did, because an earlier draft of M4 gave her the invoice actions. She does not
+  use the platform at all — no account, owns nothing, uploads nothing — and M4
+  as built has no accountant user anywhere in it. See
+  `docs/build/m4-contracts-workplans-invoices.md` section 2.
 - Michelle was granted admin on 26 Aug. Nothing further needed.
 - `kramontshonyana@debswana.bw` is an active advisor with **no account** and
   therefore cannot own an action. Decide whether to create one or deactivate
@@ -114,7 +128,54 @@ V4–V6 set `request.jwt.claims` with `set_config(..., true)` — transaction-lo
 discarded at commit, writes nothing. Without it the SQL editor has no JWT,
 `is_staff()` is false, and every call raises `not authorised`.
 
-### 4 · The front end
+### 4 · The member support work
+
+```
+tests/support-verify-live.sql       run it, SAVE THE OUTPUT
+supabase_support_audit.sql          apply
+supabase functions deploy admin-support
+tests/support-verify-live.sql       run again
+```
+
+`is_ops_admin()` ships here and is defined as *"`is_admin()` until M3 replaces
+it"*. France's admin account therefore holds this capability today and **loses
+it when M3 lands** — that is intended, and recorded in
+`docs/build/admin-support.md`.
+
+### 5 · M4 — contracts, work plans, invoices
+
+Optional in this deploy: nothing calls it. Apply it if you want the schema in
+place before the first month it bills.
+
+```
+tests/m4-verify-live.sql                        run it, SAVE THE OUTPUT
+supabase_m4_contracts_workplans_invoices.sql    apply
+tests/m4-verify-live.sql                        run again, diff
+```
+
+If `pg_cron` was enabled during step 2, **re-run the migration once** — its
+schedule block is a guarded no-op until the extension exists, so without the
+second run no invoice pack is ever prepared. V8 reports which case you are in.
+
+Expect: V1 and V2 all `PRESENT`; **V3's three counts identical** — M4 adds
+columns to `program_activities` and must add no rows; V4 resolving the owner to
+`lone@keywellness.co.bw`; V5 listing ten policies with `invoices_read` reading
+`is_ops_admin()` and nothing else; V6 showing four ACLs of
+`postgres=X/postgres` and **no `UNGATED` line**; V7 `transition-guarded`; V9
+`(none)` for both lines, which is correct because M4 creates no contracts; V10
+private.
+
+Nothing else needs doing after the apply. M4 creates no contracts, no rates and
+no invoices — the first pack appears on the 25th of the first month a retainer
+contract exists, and **Lone marks it handed over herself**, through the SQL
+editor until M7 gives her a button:
+
+```sql
+select invoice_pack('<invoice-uuid>');        -- read it; it is live
+select invoice_hand_over('<invoice-uuid>');   -- freeze it
+```
+
+### 6 · The front end
 
 ```bash
 git checkout dev && git pull && git push origin dev
@@ -142,9 +203,11 @@ until the test site has been walked.**
 
 ## If something is wrong
 
-Roll back in reverse order — M5a, then M5, then M1:
+Roll back in reverse order — M4, then support, then M5a, M5, M1:
 
 ```
+migrations/rollback-m4-contracts-workplans-invoices.sql
+migrations/rollback-support-audit.sql
 migrations/rollback-m5a-ops-timeline.sql
 migrations/rollback-m5-meetings-actions.sql
 migrations/rollback-m1-service-line.sql
@@ -158,6 +221,12 @@ Each verifies itself and raises if anything survives. Two things to know:
 - The **M1 rollback restores `session_mode` from its backup table.** Rolling
   back M1 after weeks of new bookings restores only the 18 rows M1 touched;
   anything written since is untouched, which is correct.
+- The **M4 rollback deletes contracts, work plans and invoices.** There is no
+  backup table — unlike M1's `session_mode` these are whole rows, not an
+  overwritten column. Export first:
+  `select * from org_contracts; select * from invoices; select * from work_plans;`
+  It keeps every `program_activities` row (it drops the columns M4 added, not
+  the rows) and keeps the `invoice-scans` bucket if it holds any file.
 
 `ops.html` degrades rather than breaking if the migrations are absent: it
 loads, gates correctly, and its RPC calls fail.
@@ -172,8 +241,10 @@ loads, gates correctly, and its RPC calls fail.
   `docs/build/m5a-ops-timeline.md` §4.
 - **`admin.html` is unchanged** and still reachable from the "Other interfaces"
   link inside ops. Its own switcher still points at itself; Prompt 11 retires it.
-- **No work plans, contracts, retainer position, capacity or invoices** — M4
-  and M7. Those sections render their label and say what is missing.
+- **No work-plan, contract, retainer-position, capacity or invoice screens.**
+  M4 ships the schema in this deploy; **M7 builds the interface**. Those
+  sections of `ops.html` render their label and say what is missing, and every
+  M4 RPC is callable only from the SQL editor.
 - **The daily view has no designed mobile layout yet.** It stacks below 900px,
   which is a reflow rather than a design; charter §9 asks for better and it is
   recorded as owed.

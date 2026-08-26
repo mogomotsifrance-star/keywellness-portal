@@ -46,9 +46,14 @@ drop function if exists activity_upsert(uuid, text, uuid, uuid, text, text, text
 drop function if exists work_plan_upsert(uuid, text, date, date, uuid, uuid, text, text);
 drop function if exists org_work_plan(uuid);
 drop function if exists contract_position(uuid, date);
-drop function if exists invoices_run_monthly(date);
+drop function if exists invoice_mark_paid(uuid);
+drop function if exists invoice_mark_invoiced(uuid, text);
+drop function if exists invoice_hand_over(uuid);
+drop function if exists invoice_pack(uuid);
+drop function if exists invoices_run_monthly(date, boolean);
 drop function if exists _invoice_for_activity(uuid);
-drop function if exists _invoice_action_owner();
+drop function if exists _pack_contents(uuid, timestamptz, timestamptz);
+drop function if exists _invoice_owner();
 drop function if exists _invoice_period(date);
 
 
@@ -56,17 +61,24 @@ drop function if exists _invoice_period(date);
 -- invoices first: it references org_contracts, program_activities and actions.
 drop table if exists invoices;
 drop table if exists contract_rates;
-drop table if exists work_plans;      -- program_activities.work_plan_id is dropped below
+
+-- work_plans cannot go while program_activities.work_plan_id still references
+-- it. A referencing COLUMN pins its parent table exactly as a policy pins the
+-- function it calls (the M5 rollback lesson), and DROP ... CASCADE is the wrong
+-- answer here: it would silently take the column with it and leave the rest of
+-- section 5 looking like it had done the work.
+alter table program_activities drop column if exists work_plan_id;
+
+drop table if exists work_plans;
 drop table if exists org_contracts;
 drop table if exists org_contacts;
 
 
--- ── 5. The columns M4 added ─────────────────────────────────
--- The ROWS stay. Only the columns go.
+-- ── 5. The remaining columns M4 added ───────────────────────
+-- The ROWS stay. Only the columns go. (work_plan_id went above, with its
+-- parent table.)
 
 alter table bookings drop column if exists activity_id;
-
-alter table program_activities drop column if exists work_plan_id;
 alter table program_activities drop column if exists format;
 alter table program_activities drop column if exists planned_month;
 alter table program_activities drop column if exists planned_date;
@@ -81,7 +93,8 @@ alter table program_activities drop column if exists notes;
 
 
 -- ── 6. Configuration ────────────────────────────────────────
-delete from threshold_config where key in ('invoice.accountant_user_id', 'invoice.due_days');
+delete from threshold_config
+ where key in ('invoice.prepared_by_user_id', 'invoice.prepare_day', 'invoice.due_days');
 
 
 -- ── 7. The bucket ───────────────────────────────────────────
@@ -118,8 +131,10 @@ begin
                           'work_plans','invoices'))
     + (select count(*) from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace
         where ns.nspname='public'
-          and p.proname in ('_invoice_period','_invoice_action_owner','_invoice_for_activity',
-                            'kw_booking_drives_activity','invoices_run_monthly',
+          and p.proname in ('_invoice_period','_invoice_owner','_pack_contents',
+                            '_invoice_for_activity','kw_booking_drives_activity',
+                            'invoices_run_monthly','invoice_pack','invoice_hand_over',
+                            'invoice_mark_invoiced','invoice_mark_paid',
                             'contract_position','org_work_plan','work_plan_upsert',
                             'activity_upsert'))
     + (select count(*) from pg_trigger where tgname='trg_booking_drives_activity')
@@ -131,7 +146,7 @@ begin
     + (select count(*) from information_schema.columns
         where table_schema='public' and table_name='bookings' and column_name='activity_id')
     + (select count(*) from threshold_config
-        where key in ('invoice.accountant_user_id','invoice.due_days'))
+        where key in ('invoice.prepared_by_user_id','invoice.prepare_day','invoice.due_days'))
     into n;
 
   if n <> 0 then

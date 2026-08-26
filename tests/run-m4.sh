@@ -53,17 +53,26 @@ $PSQL -d kwm4 -f "$HERE/m4-tests.sql" 2>&1 \
   | grep -E "PASS|FAIL|passed|REGRESSION|STATE" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
 
 $PSQL -d kwm4 -c "drop table if exists m4_baseline; drop table if exists m4_counts" >/dev/null
-$PSQL -d kwm4 -f "$ROOT/migrations/rollback-m4-contracts-workplans-invoices.sql" >/dev/null 2>&1
+# NOT redirected to /dev/null: a rollback that errors here used to vanish, and
+# `set -e` stopped the run without printing why. NOTICEs are filtered, errors
+# are not.
+run_rollback() {
+  if ! $PSQL -d kwm4 -f "$ROOT/migrations/rollback-m4-contracts-workplans-invoices.sql"        2>&1 | grep -vE "NOTICE:|^$"; then :; fi
+  return "${PIPESTATUS[0]}"
+}
+run_rollback || { echo "  rollback          FAILED"; exit 1; }
 echo "  rollback          ok"
-$PSQL -d kwm4 -f "$ROOT/migrations/rollback-m4-contracts-workplans-invoices.sql" >/dev/null 2>&1
+run_rollback || { echo "  rollback re-run   FAILED"; exit 1; }
 echo "  rollback re-run   ok (idempotent)"
 
 LEFT=$($PSQL -d kwm4 -t -A -c "
   select (select count(*) from pg_tables where schemaname='public'
            and tablename in ('org_contracts','contract_rates','org_contacts','work_plans','invoices'))
        + (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-           where n.nspname='public' and p.proname in ('_invoice_period','_invoice_action_owner',
-             '_invoice_for_activity','kw_booking_drives_activity','invoices_run_monthly',
+           where n.nspname='public' and p.proname in ('_invoice_period','_invoice_owner',
+             '_pack_contents','_invoice_for_activity','kw_booking_drives_activity',
+             'invoices_run_monthly','invoice_pack','invoice_hand_over',
+             'invoice_mark_invoiced','invoice_mark_paid',
              'contract_position','org_work_plan','work_plan_upsert','activity_upsert'))
        + (select count(*) from information_schema.columns where table_schema='public'
            and table_name='program_activities' and column_name in ('work_plan_id','format','state'))

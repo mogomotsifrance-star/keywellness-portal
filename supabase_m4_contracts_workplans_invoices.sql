@@ -27,14 +27,28 @@
 --     values); the eight M4 values live in a NEW `format` column that nothing
 --     reads yet.
 --
--- (c) RETAINER INVOICES ARE BILLED IN ARREARS — the 1st-of-month job invoices
---     the month just ended, and the narrative is that month's delivered
---     activities. The alternative (billing the month ahead at the fixed
---     amount, with the previous month's delivery attaching to the REPORT
---     rather than the invoice) is recorded in the build record. The whole
---     difference is _invoice_period(); nothing else changes.
+-- (c) THE INVOICE PACK IS PREPARED IN THE LAST WEEK OF THE MONTH IT COVERS.
+--     Arrears here means WITHIN-MONTH, not previous-month: _invoice_period()
+--     returns the CURRENT month, and the job fires on invoice.prepare_day
+--     (default 25). Lone hands the numbers to accounts; the system never sends
+--     anything and nobody inside it does either.
 --
--- (d) OVERDUE IS DERIVED, never stored: state = 'sent' and due_date < today.
+--     THE PACK IS LIVE, NOT A SNAPSHOT. Work delivered between the prepare day
+--     and month end must still be counted, so the contents RECOMPUTE ON READ
+--     until Lone marks the pack handed over. Marking it freezes the contents
+--     at that moment and the next period starts from there — nothing dropped,
+--     nothing double-counted. That is what invoices.covers_from is for: a pack
+--     covers (previous handover, this handover], not a calendar month, and the
+--     calendar month is only its label.
+--
+-- (c2) THERE IS NO ACCOUNTANT IN THIS SYSTEM. Laone does not use the platform:
+--     no account, owns nothing, uploads nothing. The pack is owned by an OPS
+--     ADMIN — configurable through invoice.prepared_by_user_id, defaulting to
+--     the first ops admin, which is Lone. Handing the numbers to accounts is
+--     her job today and remains her job. An earlier draft had an accountant
+--     user and a missing-accountant fallback; both are gone.
+--
+-- (d) OVERDUE IS DERIVED, never stored: state = 'invoiced' and due_date < today.
 --     A stored overdue needs a job to maintain it and is wrong between runs.
 --     Same reasoning as M5's carried label.
 --
@@ -269,10 +283,16 @@ create table if not exists invoices (
   amount       numeric(12,2),
   currency     text not null default 'BWP',
   due_date     date,
-  state        text not null default 'to_produce',
-  produced_by  uuid references auth.users(id),
+  state        text not null default 'to_prepare',
+  prepared_by  uuid references auth.users(id),
+  -- Optional evidence attached by Lone at the invoiced step. NOT a state
+  -- trigger: uploading a scan records what happened, it does not decide it.
   scan_path    text,
-  sent_at      timestamptz,
+  -- A pack covers (covers_from, handed_at] — the previous handover to this
+  -- one. The calendar month is only its label. See header note (c).
+  covers_from  timestamptz not null default now(),
+  handed_at    timestamptz,
+  invoiced_at  timestamptz,
   paid_at      timestamptz,
   action_id    uuid references actions(id) on delete set null,
   narrative    jsonb not null default '{}'::jsonb,
@@ -288,7 +308,12 @@ begin
   end if;
   if not exists (select 1 from pg_constraint where conname='invoices_state_check') then
     alter table invoices add constraint invoices_state_check
-      check (state in ('to_produce','sent','paid','cancelled'));
+      check (state in ('to_prepare','handed_to_accounts','invoiced','paid','cancelled'));
+  end if;
+  -- A handed-over pack has frozen contents and a moment it was frozen at.
+  if not exists (select 1 from pg_constraint where conname='invoices_handed_at_agrees_with_state') then
+    alter table invoices add constraint invoices_handed_at_agrees_with_state
+      check (state = 'to_prepare' or state = 'cancelled' or handed_at is not null);
   end if;
   -- A retainer invoice covers a period; an engagement invoice covers one
   -- activity. Neither shape makes sense as the other.
@@ -310,12 +335,20 @@ create index if not exists invoices_state_idx on invoices (state, due_date);
 create index if not exists invoices_org_idx   on invoices (org_id, created_at desc);
 
 
--- ── 7. Who the accountant is ────────────────────────────────
--- A config key rather than a role table: there is exactly one accountant, and
--- threshold_config already exists for precisely this kind of setting.
+-- ── 7. Who prepares the pack ────────────────────────────────
+-- An ops admin, configurable. threshold_config already exists for exactly
+-- this kind of setting and needs no new table.
 
+-- Who prepares the pack. Null means "the first ops admin", which is Lone.
+-- Set explicitly in the deploy note; this migration names no person.
 insert into threshold_config (key, value)
-values ('invoice.accountant_user_id', 'null'::jsonb)
+values ('invoice.prepared_by_user_id', 'null'::jsonb)
+on conflict (key) do nothing;
+
+-- The day of the month the pack is prepared. Last week of the month, for that
+-- same month. Configurable without touching the cron schedule — see the job.
+insert into threshold_config (key, value)
+values ('invoice.prepare_day', '25'::jsonb)
 on conflict (key) do nothing;
 
 insert into threshold_config (key, value)
@@ -355,14 +388,14 @@ drop policy if exists work_plans_admin_write on work_plans;
 create policy work_plans_admin_write on work_plans for all
   using (is_ops_admin()) with check (is_ops_admin());
 
--- The Laone clause, restated. She owns the to_produce action and is not
--- staff; a plain is_ops_admin() read would send her an action about an
--- invoice she cannot open. Exactly the M5 actions_staff_read lesson.
+-- Ops admins only. An earlier draft carried an action-owner arm for the
+-- accountant, but there is no accountant user: the pack is owned by an ops
+-- admin by construction, so that arm protected nobody. A policy clause that
+-- protects nobody is a claim about the system that is not true, so it is gone.
+-- M5's actions_staff_read keeps the real version of that idea, where the owner
+-- genuinely can be someone who is not staff.
 drop policy if exists invoices_read on invoices;
-create policy invoices_read on invoices for select using (
-  is_ops_admin()
-  or exists (select 1 from actions a where a.id = invoices.action_id and a.owner = auth.uid())
-);
+create policy invoices_read on invoices for select using (is_ops_admin());
 drop policy if exists invoices_admin_write on invoices;
 create policy invoices_admin_write on invoices for all
   using (is_ops_admin()) with check (is_ops_admin());
@@ -373,17 +406,17 @@ create policy invoices_admin_write on invoices for all
 
 
 -- ── 9. The billing period ───────────────────────────────────
--- ARREARS. Changing to advance billing means changing THIS FUNCTION and
--- nothing else. See note (c) and the build record.
+-- THE CURRENT MONTH. The pack is prepared in the last week of the month it
+-- covers — arrears means within-month here, not previous-month. See note (c).
 
 create or replace function _invoice_period(p_run_date date)
 returns table (period_start date, period_end date)
 language sql
 immutable
 as $$
-  -- The month just ended, relative to the run date.
-  select (date_trunc('month', p_run_date::timestamp) - interval '1 month')::date,
-         (date_trunc('month', p_run_date::timestamp) - interval '1 day')::date;
+  select date_trunc('month', p_run_date::timestamp)::date,
+         (date_trunc('month', p_run_date::timestamp)
+          + interval '1 month' - interval '1 day')::date;
 $$;
 
 revoke all on function _invoice_period(date) from public, anon, authenticated;
@@ -393,34 +426,62 @@ revoke all on function _invoice_period(date) from public, anon, authenticated;
 -- Never skip an invoice and never fail the job. If the accountant is unset or
 -- their account is gone, an ops admin gets the action with a title saying so.
 
-create or replace function _invoice_action_owner()
-returns table (owner uuid, needs_reassigning boolean)
+-- The pack is owned by an ops admin. If the key is unset, the first ops admin
+-- by email — deterministic, so the same person gets it every month rather than
+-- a different one. There is no accountant user and no fallback for one.
+create or replace function _invoice_owner()
+returns uuid
 language plpgsql
 stable
 security definer
 set search_path = public, auth
 as $$
-declare
-  v_id uuid;
+declare v_id uuid;
 begin
   select nullif(value #>> '{}', '')::uuid into v_id
-    from threshold_config where key = 'invoice.accountant_user_id';
+    from threshold_config where key = 'invoice.prepared_by_user_id';
 
   if v_id is not null and exists (select 1 from auth.users u where u.id = v_id) then
-    return query select v_id, false;
-    return;
+    return v_id;
   end if;
 
-  -- Fall back to any admin with an account. Deterministic so the same person
-  -- gets it each run rather than a different one each month.
-  return query
-    select u.id, true
-      from admins a join auth.users u on lower(u.email) = lower(a.email)
-     order by u.email
-     limit 1;
+  select u.id into v_id
+    from admins a join auth.users u on lower(u.email) = lower(a.email)
+   order by u.email limit 1;
+
+  return v_id;   -- may be null only if no admin has an account at all
 end $$;
 
-revoke all on function _invoice_action_owner() from public, anon, authenticated;
+revoke all on function _invoice_owner() from public, anon, authenticated;
+
+
+-- ── 10a. The pack contents ──────────────────────────────────
+-- Everything delivered in (p_from, p_to]. Pre-M4 rows carry no delivered_at,
+-- so activity_date stands in for them.
+
+create or replace function _pack_contents(p_org_id uuid, p_from timestamptz, p_to timestamptz)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, auth
+as $$
+  select jsonb_build_object(
+    'from', p_from, 'to', p_to,
+    'count', count(*),
+    'delivered', coalesce(jsonb_agg(jsonb_build_object(
+        'id', pa.id, 'title', pa.title, 'on', pa.activity_date,
+        'format', pa.format, 'service_line', pa.service_line,
+        'attendees', pa.attendee_count) order by pa.activity_date), '[]'::jsonb))
+    from program_activities pa
+   where pa.org_id = p_org_id
+     and pa.state in ('delivered','reported')
+     and coalesce(pa.delivered_at, pa.activity_date::timestamptz) >  p_from
+     and coalesce(pa.delivered_at, pa.activity_date::timestamptz) <= p_to;
+$$;
+
+revoke all on function _pack_contents(uuid, timestamptz, timestamptz)
+  from public, anon, authenticated;
 
 
 -- ── 11. The engagement invoice ──────────────────────────────
@@ -440,7 +501,6 @@ declare
   c          record;
   v_amount   numeric(12,2);
   v_owner    uuid;
-  v_reassign boolean;
   v_due      int;
   v_invoice  uuid;
   v_action   uuid;
@@ -464,14 +524,17 @@ begin
      and format = coalesce(a.format, '')
      and service_line = a.service_line;
 
-  select owner, needs_reassigning into v_owner, v_reassign from _invoice_action_owner();
+  v_owner := _invoice_owner();
   select coalesce((value #>> '{}')::int, 30) into v_due
     from threshold_config where key = 'invoice.due_days';
 
+  -- An engagement pack is one activity. There is nothing to recompute, so its
+  -- contents are written once and invoice_pack() returns them as stored.
   insert into invoices (contract_id, org_id, kind, activity_id, amount, currency,
-                        due_date, state, narrative)
+                        due_date, state, covers_from, narrative)
   values (c.id, a.org_id, 'engagement', a.id, v_amount, c.currency,
-          (current_date + coalesce(v_due, 30)), 'to_produce',
+          (current_date + coalesce(v_due, 30)), 'to_prepare',
+          coalesce(a.delivered_at, a.activity_date::timestamptz),
           jsonb_build_object('activity', a.title, 'format', a.format,
                              'service_line', a.service_line,
                              'delivered_on', a.activity_date))
@@ -480,12 +543,9 @@ begin
 
   if v_invoice is null then return null; end if;  -- already invoiced
 
-  v_title := 'Produce invoice: ' || coalesce(a.title, 'engagement');
+  v_title := 'Hand to accounts: ' || coalesce(a.title, 'engagement');
   if v_amount is null then
     v_title := v_title || ' — no rate on file for ' || coalesce(a.format, '(no format)');
-  end if;
-  if v_reassign then
-    v_title := v_title || ' — needs reassigning, no accountant is set';
   end if;
 
   if v_owner is not null then
@@ -494,7 +554,7 @@ begin
             a.org_id, a.id, v_owner)
     returning id into v_action;
 
-    update invoices set action_id = v_action where id = v_invoice;
+    update invoices set action_id = v_action, prepared_by = v_owner where id = v_invoice;
   end if;
 
   return v_invoice;
@@ -557,28 +617,41 @@ create trigger trg_booking_drives_activity
 
 -- ── 13. The monthly retainer job ────────────────────────────
 
-create or replace function invoices_run_monthly(p_run_date date default null)
+create or replace function invoices_run_monthly(
+  p_run_date            date default null,
+  p_respect_prepare_day boolean default false
+)
 returns jsonb
 language plpgsql
 security definer
 set search_path = public, auth
 as $$
 declare
-  v_run      date := coalesce(p_run_date, (now() at time zone 'Africa/Gaborone')::date);
-  v_start    date;
-  v_end      date;
-  v_owner    uuid;
-  v_reassign boolean;
-  v_due      int;
-  c          record;
-  v_invoice  uuid;
-  v_action   uuid;
-  v_created  int := 0;
-  v_skipped  int := 0;
-  v_title    text;
+  v_run     date := coalesce(p_run_date, (now() at time zone 'Africa/Gaborone')::date);
+  v_start   date;
+  v_end     date;
+  v_day     int;
+  v_owner   uuid;
+  v_due     int;
+  c         record;
+  v_from    timestamptz;
+  v_invoice uuid;
+  v_action  uuid;
+  v_created int := 0;
+  v_skipped int := 0;
 begin
+  select coalesce((value #>> '{}')::int, 25) into v_day
+    from threshold_config where key = 'invoice.prepare_day';
+
+  -- cron calls this DAILY with p_respect_prepare_day := true, so the day stays
+  -- configurable through threshold_config without rescheduling the job.
+  if p_respect_prepare_day and extract(day from v_run)::int <> v_day then
+    return jsonb_build_object('run_date', v_run, 'skipped', true,
+                              'reason', 'not the prepare day (' || v_day || ')');
+  end if;
+
   select period_start, period_end into v_start, v_end from _invoice_period(v_run);
-  select owner, needs_reassigning into v_owner, v_reassign from _invoice_action_owner();
+  v_owner := _invoice_owner();
   select coalesce((value #>> '{}')::int, 30) into v_due
     from threshold_config where key = 'invoice.due_days';
 
@@ -590,22 +663,22 @@ begin
        and start_date <= v_end
        and (end_date is null or end_date >= v_start)
   loop
+    -- The pack starts where the LAST ONE WAS HANDED OVER, not at the month
+    -- boundary. Work delivered after the previous handover still belongs to
+    -- somebody, and this is the somebody. Nothing dropped, nothing counted twice.
+    select coalesce(max(i.handed_at), v_start::timestamptz) into v_from
+      from invoices i where i.contract_id = c.id and i.kind = 'retainer';
+
     insert into invoices (contract_id, org_id, kind, period_start, period_end,
-                          amount, currency, due_date, state, narrative)
+                          amount, currency, due_date, state, covers_from,
+                          prepared_by, narrative)
     values (c.id, c.org_id, 'retainer', v_start, v_end,
-            c.retainer_amount, c.currency, (v_run + coalesce(v_due, 30)), 'to_produce',
-            -- The narrative is the month's delivered work. In arrears, that is
-            -- the period being invoiced; see note (c).
-            jsonb_build_object(
-              'period', to_char(v_start, 'Mon YYYY'),
-              'delivered', coalesce((
-                select jsonb_agg(jsonb_build_object('title', pa.title, 'on', pa.activity_date,
-                                                    'attendees', pa.attendee_count)
-                                  order by pa.activity_date)
-                  from program_activities pa
-                 where pa.org_id = c.org_id
-                   and pa.state in ('delivered','reported')
-                   and pa.activity_date between v_start and v_end), '[]'::jsonb)))
+            c.retainer_amount, c.currency, (v_run + coalesce(v_due, 30)),
+            'to_prepare', v_from, v_owner,
+            -- Deliberately EMPTY at creation. The pack is live: its contents
+            -- come from invoice_pack(), which recomputes until it is handed
+            -- over. Storing them now would freeze work that has not happened.
+            '{}'::jsonb)
     on conflict (contract_id, period_start) where kind = 'retainer' do nothing
     returning id into v_invoice;
 
@@ -614,14 +687,10 @@ begin
       continue;
     end if;
 
-    v_title := 'Produce ' || to_char(v_start, 'Mon YYYY') || ' invoice';
-    if v_reassign then
-      v_title := v_title || ' — needs reassigning, no accountant is set';
-    end if;
-
     if v_owner is not null then
       insert into actions (title, owner, due_date, state, org_id, created_by)
-      values (v_title, v_owner, (v_run + coalesce(v_due, 30)), 'open', c.org_id, v_owner)
+      values ('Hand ' || to_char(v_start, 'Mon YYYY') || ' invoice pack to accounts',
+              v_owner, (v_run + coalesce(v_due, 30)), 'open', c.org_id, v_owner)
       returning id into v_action;
       update invoices set action_id = v_action where id = v_invoice;
     end if;
@@ -629,12 +698,139 @@ begin
     v_created := v_created + 1;
   end loop;
 
-  return jsonb_build_object('run_date', v_run, 'period_start', v_start, 'period_end', v_end,
+  return jsonb_build_object('run_date', v_run, 'period_start', v_start,
+                            'period_end', v_end, 'prepare_day', v_day,
                             'created', v_created, 'already_present', v_skipped,
-                            'owner_needs_reassigning', v_reassign);
+                            'owner_unresolved', v_owner is null);
 end $$;
 
-revoke all on function invoices_run_monthly(date) from public, anon, authenticated;
+revoke all on function invoices_run_monthly(date, boolean) from public, anon, authenticated;
+
+
+-- ── 13a. The pack: live until handed over ───────────────────
+
+create or replace function invoice_pack(p_invoice_id uuid)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, auth
+as $$
+declare i invoices%rowtype;
+begin
+  if not is_staff() then raise exception 'not authorised'; end if;
+  select * into i from invoices where id = p_invoice_id;
+  if not found then raise exception 'no such invoice'; end if;
+
+  -- An engagement pack is one activity: nothing to recompute, ever.
+  -- A retainer pack recomputes until it is frozen, so work delivered between
+  -- the prepare day and the handover is still counted.
+  if i.kind = 'engagement' or i.state <> 'to_prepare' then
+    return jsonb_build_object('id', i.id, 'kind', i.kind, 'state', i.state,
+                              'live', false, 'amount', i.amount,
+                              'contents', i.narrative);
+  end if;
+
+  return jsonb_build_object('id', i.id, 'kind', i.kind, 'state', i.state,
+                            'live', true, 'amount', i.amount,
+                            'contents', _pack_contents(i.org_id, i.covers_from, now()));
+end $$;
+
+grant execute on function invoice_pack(uuid) to authenticated;
+
+
+-- ── 13b. Handing it over freezes it ─────────────────────────
+-- Lone marks this herself. The moment she does the contents stop moving, and
+-- the next pack starts from here.
+
+create or replace function invoice_hand_over(p_invoice_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare i invoices%rowtype; v_contents jsonb; v_now timestamptz := now();
+begin
+  if not is_ops_admin() then raise exception 'not authorised'; end if;
+  select * into i from invoices where id = p_invoice_id;
+  if not found then raise exception 'no such invoice'; end if;
+  if i.state <> 'to_prepare' then
+    raise exception 'this pack has already been handed over';
+  end if;
+
+  v_contents := case when i.kind = 'engagement' then i.narrative
+                     else _pack_contents(i.org_id, i.covers_from, v_now) end;
+
+  update invoices
+     set state = 'handed_to_accounts', handed_at = v_now,
+         narrative = v_contents, updated_at = v_now
+   where id = p_invoice_id;
+
+  -- The action that asked for it is done.
+  update actions set state = 'done', done_at = v_now
+   where id = i.action_id and state = 'open';
+
+  return jsonb_build_object('id', p_invoice_id, 'state', 'handed_to_accounts',
+                            'handed_at', v_now, 'contents', v_contents);
+end $$;
+
+grant execute on function invoice_hand_over(uuid) to authenticated;
+
+
+-- ── 13c. Invoiced, and paid ─────────────────────────────────
+-- The scan is OPTIONAL EVIDENCE attached at the invoiced step, never a state
+-- trigger. Uploading it records what happened; it does not decide it.
+
+create or replace function invoice_mark_invoiced(p_invoice_id uuid, p_scan_path text default null)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+declare i invoices%rowtype;
+begin
+  if not is_ops_admin() then raise exception 'not authorised'; end if;
+  select * into i from invoices where id = p_invoice_id;
+  if not found then raise exception 'no such invoice'; end if;
+  if i.state not in ('handed_to_accounts', 'invoiced') then
+    raise exception 'a pack must be handed to accounts before it is invoiced';
+  end if;
+
+  -- Called again on a pack that is already invoiced, this ATTACHES THE SCAN and
+  -- nothing else. The scan is evidence, not a trigger: Lone should be able to
+  -- file it the day the paperwork reaches her, which is rarely the same day she
+  -- marks the pack invoiced. invoiced_at is the moment it was invoiced and does
+  -- not move.
+  update invoices
+     set state       = 'invoiced',
+         invoiced_at = coalesce(invoiced_at, now()),
+         scan_path   = coalesce(p_scan_path, scan_path),
+         updated_at  = now()
+   where id = p_invoice_id;
+
+  return jsonb_build_object('id', p_invoice_id, 'state', 'invoiced',
+                            'was_already_invoiced', i.state = 'invoiced',
+                            'scan_attached', coalesce(p_scan_path, i.scan_path) is not null);
+end $$;
+
+grant execute on function invoice_mark_invoiced(uuid, text) to authenticated;
+
+
+create or replace function invoice_mark_paid(p_invoice_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if not is_ops_admin() then raise exception 'not authorised'; end if;
+  update invoices set state = 'paid', paid_at = now(), updated_at = now()
+   where id = p_invoice_id and state = 'invoiced';
+  if not found then raise exception 'only an invoiced pack can be marked paid'; end if;
+  return jsonb_build_object('id', p_invoice_id, 'state', 'paid');
+end $$;
+
+grant execute on function invoice_mark_paid(uuid) to authenticated;
 
 
 -- ── 14. The RPCs the screens need ───────────────────────────
@@ -884,11 +1080,14 @@ end $$;
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    -- DAILY, and the function decides whether today is the prepare day. That
+    -- keeps invoice.prepare_day configurable without rescheduling cron.
     execute $c$
-      select cron.schedule('kw-monthly-invoices', '0 3 1 * *',
-                           $j$ select invoices_run_monthly() $j$)
+      select cron.schedule('kw-monthly-invoices', '0 3 * * *',
+                           $j$ select invoices_run_monthly(null, true) $j$)
     $c$;
-    raise notice 'M4: pg_cron job kw-monthly-invoices scheduled for 03:00 UTC on the 1st.';
+    raise notice 'M4: pg_cron job kw-monthly-invoices runs daily; the prepare day '
+                 'comes from threshold_config (invoice.prepare_day, default 25).';
   else
     raise notice 'M4: pg_cron is NOT installed — no invoice will be raised. '
                  'Enable it in Database -> Extensions, then re-run this file.';
@@ -919,6 +1118,9 @@ begin
     raise exception 'M4: an org_report_data() input column was lost (found % of 5)', n;
   end if;
 
-  raise notice 'M4 applied. Retainer billing is IN ARREARS — see note (c). '
-               'M3 must gate org_work_plan() and contract_position().';
+  raise notice 'M4 applied. The pack is prepared on day % of the month it '
+               'covers and stays LIVE until handed over. '
+               'M3 must gate org_work_plan() and contract_position().',
+    (select coalesce((value #>> '{}')::int, 25) from threshold_config
+      where key = 'invoice.prepare_day');
 end $$;
