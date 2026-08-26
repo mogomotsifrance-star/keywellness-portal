@@ -182,30 +182,54 @@ select _chk('18 no booking gained or lost',
 -- moves by design. Asserting byte-equality would either fail or force the
 -- test to be weakened somewhere less visible. See docs/build/m1-service-line.md.
 
+-- mode_split occurs TWICE in the payload: org_report_data returns
+-- `v_current || {previous_period: v_previous}`, and both halves carry a
+-- sessions.mode_split. Both move, so both are excluded in 19 and both are
+-- checked in 20 and 21. An earlier version of 19 stripped only the current
+-- half and failed on Sedimosa/Q3 for the previous half — the criterion has
+-- to cover every occurrence, not the first one.
 create temporary table _after as
 select b.org_name, b.period_label, b.payload as before_payload,
        org_report_data(b.org_id, b.period_start, b.period_end) as after_payload
   from m1_baseline b;
 
+create temporary table _splits as
+select a.org_name, a.period_label, p.loc,
+       coalesce(a.before_payload #> p.path, '{}'::jsonb) as before_ms,
+       coalesce(a.after_payload  #> p.path, '{}'::jsonb) as after_ms
+  from _after a
+ cross join (values
+   ('current',  array['sessions','mode_split']),
+   ('previous', array['previous_period','sessions','mode_split'])
+ ) as p(loc, path);
+
 select _chk('19 everything outside mode_split is identical',
   (select count(*) from _after
-    where (before_payload #- '{sessions,mode_split}')
-       is distinct from (after_payload #- '{sessions,mode_split}')) = 0,
+    where (before_payload #- '{sessions,mode_split}' #- '{previous_period,sessions,mode_split}')
+       is distinct from
+          (after_payload  #- '{sessions,mode_split}' #- '{previous_period,sessions,mode_split}')) = 0,
   (select string_agg(org_name || '/' || period_label, ', ') from _after
-    where (before_payload #- '{sessions,mode_split}')
-       is distinct from (after_payload #- '{sessions,mode_split}')));
+    where (before_payload #- '{sessions,mode_split}' #- '{previous_period,sessions,mode_split}')
+       is distinct from
+          (after_payload  #- '{sessions,mode_split}' #- '{previous_period,sessions,mode_split}')));
 
 select _chk('20 mode_split only ever gains keys, never loses or changes one',
-  (select count(*) from _after a,
-     lateral (select key, value from jsonb_each(coalesce(a.before_payload #> '{sessions,mode_split}', '{}'::jsonb))) b
-    where coalesce(a.after_payload #> '{sessions,mode_split}', '{}'::jsonb) -> b.key
-       is distinct from b.value) = 0);
+  (select count(*) from _splits s,
+     lateral (select key, value from jsonb_each(s.before_ms)) b
+    where s.after_ms -> b.key is distinct from b.value) = 0,
+  (select string_agg(distinct s.org_name || '/' || s.period_label || '/' || s.loc, ', ')
+     from _splits s, lateral (select key, value from jsonb_each(s.before_ms)) b
+    where s.after_ms -> b.key is distinct from b.value));
 
 select _chk('21 every key mode_split gained is withheld, not a number',
-  (select count(*) from _after a,
-     lateral (select key, value from jsonb_each(coalesce(a.after_payload #> '{sessions,mode_split}', '{}'::jsonb))) x
-    where coalesce(a.before_payload #> '{sessions,mode_split}', '{}'::jsonb) -> x.key is null
-      and (x.value ->> 'suppressed') is distinct from 'true') = 0);
+  (select count(*) from _splits s,
+     lateral (select key, value from jsonb_each(s.after_ms)) x
+    where s.before_ms -> x.key is null
+      and (x.value ->> 'suppressed') is distinct from 'true') = 0,
+  (select string_agg(distinct s.org_name || '/' || s.period_label || '/' || s.loc || ':' || x.key, ', ')
+     from _splits s, lateral (select key, value from jsonb_each(s.after_ms)) x
+    where s.before_ms -> x.key is null
+      and (x.value ->> 'suppressed') is distinct from 'true'));
 
 
 -- ── 22 · idempotency left the data alone ────────────────────

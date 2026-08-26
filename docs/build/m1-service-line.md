@@ -4,11 +4,11 @@
 Migration M1 from `docs/data-model-and-impact.md` §2.3 and §4 — the first
 schema change of the two-service-line build.
 
-> **Not applied to Supabase. Not yet executed locally either** — this machine
-> has no PostgreSQL and no Docker, so `tests/run-m1.sh` has never been run.
-> See *Verification status* below before deploying. Everything that could be
-> verified without a local server has been, against the live database,
-> read-only.
+> **Tests green on PostgreSQL 17.6 — the same minor as production.
+> Not applied to Supabase.** Phase 0, Phase 0a, Phase 1 and M1's 22 assertions
+> all pass locally, and the rollback restores the reporting figures
+> byte-for-byte. §5 has the run, the three bugs it exposed, and the deploy
+> steps.
 
 ---
 
@@ -67,19 +67,37 @@ The first two are modes and move. `Individual` is a format and carries no mode,
 so those rows keep `session_mode` null unless they already had one — and two of
 them did. Assertion 14 pins this.
 
-### 2.4 The fixture does not mirror live, deliberately
+### 2.4 The fixture is a reconstruction, not a copy of production
 
-Live is a poor regression bed: BOPEU has 2 members so every period returns
-`insufficient_cohort`, and three of the four issued Test Co report periods
-return it too. A before/after comparison over those is vacuous — null equals
-null proves nothing.
+**Stated plainly because it bounds what these tests prove.**
+`tests/m1-fixture.sql` is a hand-written stand-in: 12 tables of the 38 that
+exist live, and only the columns the reporting path under test actually reads.
+`profiles` carries 12 of its 45 live columns; the others are irrelevant to M1.
+Table definitions and constraints are transcribed from
+`docs/build/00-live-schema-snapshot.md`, which is itself a point-in-time
+reading of 25 Aug 2026. **If live drifts, the fixture does not follow.**
 
-The fixture therefore gives each organisation 8 members created well before the
-earliest period, so every period computes real figures. What it **does** mirror
-exactly is the shape M1 acts on: the live `session_type` × `session_mode`
-distribution (12 In-Person/null, 6 Virtual/null, 2 In-Person/physical,
-2 Individual/physical) and exactly one `attended = true` row on a `Virtual`
-booking.
+It also does not mirror live *data*, deliberately. Live is a poor regression
+bed: BOPEU has 2 members so every period returns `insufficient_cohort`, and
+three of the four issued Test Co report periods return it too. A before/after
+comparison over those is vacuous — null equals null proves nothing. The fixture
+therefore gives each organisation 8 members created well before the earliest
+period, so every period computes real figures and assertions 19–21 have
+something to bite on.
+
+What it **does** mirror exactly is the shape M1 acts on: the live
+`session_type` × `session_mode` distribution (12 In-Person/null, 6
+Virtual/null, 2 In-Person/physical, 2 Individual/physical) and exactly one
+`attended = true` row on a `Virtual` booking.
+
+**What that means for confidence.** A green local run proves the migration's
+logic, its idempotency, and that the rollback is complete and lossless. It does
+**not** prove the migration meets the real schema — nothing local can, because
+the fixture is the thing being trusted. `tests/m1-verify-live.sql` closes that
+gap at deploy time by diffing the real database before against after.
+
+**Testing against a real schema copy** — a Supabase branch — was considered and
+**deferred to M3** (see §5).
 
 ### 2.5 The live verification does not write, at all
 
@@ -134,6 +152,14 @@ byte-identical throughout.
 **No issued report changes.** The one published report (Test Co Q3) was frozen
 into `org_reports.data_snapshot` by `publish_org_report()`, and
 `org_reports_hr_read` serves HR the snapshot. The other three are drafts.
+
+### The accepted criterion
+
+**Decision (Tshenolo, 26 Aug 2026): the `mode_split` handling and assertions
+19–21 are the acceptance criterion for M1, in place of "identical figures".**
+Prompt 1's wording stands for everything else; where it and assertions 19–21
+differ, 19–21 govern. Any later change that moves a reporting figure must be
+measured and stated the same way rather than assumed benign.
 
 ### Why the tests do not assert byte-equality
 
@@ -195,47 +221,119 @@ false, and otherwise the first is. `points_events` also has
 
 ---
 
-## 5. Verification status — read before deploying
+## 5. Verification status — green on PostgreSQL 17.6
 
-**Executed and passing:**
+### The environment
 
-- `tests/m1-verify-live.sql` blocks **V1–V5**, run read-only against the live
-  project through the Supabase MCP connection. V1 had a real bug on the first
-  attempt — `select count(*) from _m1_session_mode_backup` inside a `CASE`
-  fails before M1 is applied, because PostgreSQL resolves relation names at
-  parse time, not when it evaluates the branch. Fixed (the count moved to V6,
-  which reaches it through `EXECUTE`) and re-run clean.
-- The before-figures in §3, captured by calling the real
-  `_org_report_period_data()` on live data.
-- Live baseline counts: `bookings` 22, `points_events` 177 (1 of type
-  `session_attended`), `attended` 1 true / 1 false / 20 null,
-  `session_type × session_mode` = 12 In-Person/null, 6 Virtual/null,
-  2 In-Person/physical, 2 Individual/physical → **18 rows to normalise**.
+PostgreSQL **17.6** — the same minor as production — installed locally on
+26 Aug 2026 as portable binaries: no installer, no admin rights, nothing added
+to PATH, the registry or Windows services.
 
-**NOT executed:**
+| | |
+|---|---|
+| Binaries | `C:\Users\Tshenolo M\pgsql17\pgsql\bin` (EDB zip, 17.6-1 win-x64) |
+| Cluster | `C:\Users\Tshenolo M\pgdata17` — trust auth, superuser `postgres`, UTF8 |
+| Listening | `127.0.0.1:5433` |
+| Installer zip | `C:\Users\Tshenolo M\pg17dl\pg17.zip` — deletable |
 
-- `tests/run-m1.sh` and all 22 assertions.
-- `tests/run-phase0.sh` on 17 — Prompt 1 asks for the existing phase0/phase1
-  suites to be re-run on 17 and the result recorded. That has not happened.
+Start it, then run both suites:
 
-**Why:** this machine has neither PostgreSQL nor Docker. The SQL harness has
-never been runnable in this environment; `run-phase0.sh` has only ever been run
-elsewhere. Shipping SQL that has not been executed is exactly what the
-migration discipline exists to prevent, so **this is a gap, not a formality.**
+```bash
+export PATH="/c/Users/Tshenolo M/pgsql17/pgsql/bin:$PATH"
+pg_ctl -D "C:/Users/Tshenolo M/pgdata17" -o "-p 5433 -h 127.0.0.1" -l "C:/Users/Tshenolo M/pgdata17/pg.log" start
+PGUSER=postgres bash tests/run-phase0.sh 127.0.0.1 5433
+PGUSER=postgres bash tests/run-m1.sh     127.0.0.1 5433
+```
 
-**To close it,** one of:
+To remove it entirely: stop the server, delete those three directories.
 
-1. Install PostgreSQL 17 locally, then `tests/run-m1.sh` and
-   `tests/run-phase0.sh`. Cleanest, and it makes the discipline real for every
-   later migration.
-2. Run it in CI, or on any machine that already has 17.
-3. A Supabase branch — a real PG17 copy — then delete it. Costs money and
-   needs explicit approval; it is also the only option that tests against the
-   real schema rather than a fixture.
+### Results — 26 Aug 2026
 
-Until then, treat every assertion in §4 as *written but unproven*.
+```
+tests/run-phase0.sh                    tests/run-m1.sh
+  server version    ok (PG 17)           server version    ok (PostgreSQL 17)
+  fixture           ok                   fixture           ok
+  migration         ok                   reporting stack   ok (org_report_data v4)
+  migration re-run  ok (idempotent)      baseline captured ok (9 payloads)
+  All Phase 0 tests passed.               migration         ok
+  phase 0a          ok                   migration re-run  ok (idempotent)
+  phase 0a re-run   ok (idempotent)        22 passed, 0 failed.
+  All Phase 0a tests passed.              rollback          ok
+  phase 1           ok                   rollback re-run   ok (idempotent)
+  phase 1 re-run    ok (idempotent)      rollback clean    ok (zero leftover)
+  All Phase 1 tests passed.               session_mode      ok (restored, 4 kept)
+  rollback          ok                   report after r/b  ok (byte-identical)
+  rollback re-run   ok (idempotent)
+  rollback clean    ok (zero leftover)
+```
 
----
+Phase 0's 47 assertions, Phase 0a, Phase 1's 37 and M1's 22 — all green on the
+engine production actually runs.
+
+### Three bugs the run exposed
+
+None would have been found by reading the SQL.
+
+**1. Phase 0 and 0a failed on 17 — for an encoding reason, not a logic one.**
+Assertions `8b` and `9h` compare `kw_unit_label()` against
+`'Head Office Co — Gaborone'`. Both failed, and because the harness runs with
+`ON_ERROR_STOP=1`, phase 0 and 0a **aborted** at that point — the suites had
+not completed at all. An earlier reading of only the tail of the output missed
+this and reported them as passing; they were not.
+
+The stored label came back as `Head Office Co â€" Gaborone`: the UTF-8 em dash
+`E2 80 94` read as Windows-1252 and re-encoded. psql on Windows can take
+`client_encoding` from the console codepage, and every `.sql` file in this repo
+is UTF-8. Both harnesses now carry
+`export PGCLIENTENCODING="${PGCLIENTENCODING:-UTF8}"`, after which all three
+phase suites pass with nothing set by the caller.
+
+Two further Windows fixes went in alongside: `$USER` is empty in Git Bash and
+an empty `-U` swallows the next argument, so `PGUSER` now falls back to
+`whoami`; and the headers document the TCP recipe, because Windows builds have
+no Unix sockets.
+
+*A false lead worth recording.* A grep for `\x97` reported a "CP1252 em dash"
+in seven repo SQL files. That byte is the second half of UTF-8 `×` (`C3 97`).
+The files were always fine — the grep was wrong, not the repo.
+
+**2. Assertion 19 was under-specified, and only running it showed that.**
+It failed on Sedimosa/Q3. `org_report_data` returns
+`v_current || {previous_period: v_previous}`, so `sessions.mode_split` appears
+**twice** — once for the current period and once inside `previous_period`.
+Assertion 19 stripped only the first, so the previous period's `mode_split`
+change registered as a difference *outside* `mode_split`.
+
+Verified before changing anything: with both paths excluded the two payloads
+are identical, and the previous-period `mode_split` went `{}` →
+`{"physical": {"value": null, "suppressed": true}}` — a withheld key, exactly
+as §3 describes. Assertions 19, 20 and 21 now cover both occurrences.
+
+This **tightened** the criterion rather than loosening it: 20 and 21 previously
+did not examine the previous-period half at all, so two of the four affected
+`mode_split` cells were going unchecked.
+
+**3. A fixture gap.** `_org_report_period_data` reads
+`profiles.live_cat_scores` and `profiles.live_score_at`; the first draft of the
+fixture had neither. Caught immediately by `ON_ERROR_STOP`, fixed by adding the
+six `profiles` columns the reporting path reads.
+
+### The Supabase-branch question — deferred to M3
+
+A Supabase branch is an ephemeral copy of the **real** schema, which is the one
+thing a local fixture cannot be (§2.4). It was not needed here: M1 is additive,
+touches no function or policy, and its single behavioural consequence was
+measured directly against live, read-only.
+
+**M3 is a different proposition.** It rewrites the `bookings` RLS policies and
+carries the confidentiality boundary — France must not see who booked
+counselling — and permissive policies OR together, so the property under test
+is the *union* of nine live policies. A hand-written reconstruction of those
+nine is exactly the kind of artefact that can be subtly wrong in the direction
+of passing.
+
+**Decision: revisit the branch at M3, and budget for it.** Not needed for M1,
+M5 or M4.
 
 ## 6. What is NOT done
 

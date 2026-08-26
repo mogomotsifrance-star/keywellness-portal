@@ -106,15 +106,24 @@ create table advisor_clients (
   created_at     timestamptz not null default now()
 );
 
+-- The columns here are the ones supabase_org_report_data_v4.sql actually
+-- reads (id, org_id, org_unit_id, age, live_cat_scores, live_score_at) plus
+-- the few the department breakdown and the fixture's own seed need. Live
+-- profiles has 45 columns; the rest are irrelevant to M1 and to the reporting
+-- path under test.
 create table profiles (
-  id            uuid primary key references auth.users(id) on delete cascade,
-  org_id        uuid references organizations(id),
-  org_unit_id   uuid references org_units(id),
-  department_id uuid references unit_departments(id),
-  gender        text,
-  last_score    integer,
-  live_score    numeric,
-  joined_at     timestamptz default now()
+  id              uuid primary key references auth.users(id) on delete cascade,
+  org_id          uuid references organizations(id),
+  org_unit_id     uuid references org_units(id),
+  department_id   uuid references unit_departments(id),
+  gender          text,
+  age             integer,
+  last_score      integer,
+  last_cat_scores jsonb,
+  live_score      numeric,
+  live_cat_scores jsonb,
+  live_score_at   timestamptz,
+  joined_at       timestamptz default now()
 );
 
 -- bookings: all 24 live columns, in live order, with the live constraints.

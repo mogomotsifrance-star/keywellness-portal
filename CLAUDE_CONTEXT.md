@@ -121,11 +121,40 @@ Every migration is **one idempotent SQL file in the repo root**, named
 - tests in `tests/<phase>-tests.sql` run locally **with RLS enforced** —
   `tests/run-phase0.sh` is the harness and the model to copy.
 
-**Version, corrected 25 Aug 2026:** the build pack says PostgreSQL 16 and
-`run-phase0.sh` targets 16, but **production is PostgreSQL 17.6.1**
-(`docs/build/00-live-schema-snapshot.md` §11, F1). Testing a migration on 16 and
-applying it to 17 is a gap worth closing before M1 — it is a one-line change to the
-harness's `initdb` step.
+**Version: PostgreSQL 17.** Production is 17.6.1. Both harnesses now read
+`server_version_num` and **exit 1 below 17** rather than passing on the wrong
+major. A local 17.6 cluster is installed — binaries in
+`C:\Users\Tshenolo M\pgsql17\pgsql\bin`, data in `C:\Users\Tshenolo M\pgdata17`,
+listening on `127.0.0.1:5433`. Portable: nothing in PATH, the registry or
+Windows services, and deleting those directories removes it.
+
+```bash
+export PATH="/c/Users/Tshenolo M/pgsql17/pgsql/bin:$PATH"
+pg_ctl -D "C:/Users/Tshenolo M/pgdata17" -o "-p 5433 -h 127.0.0.1" -l "C:/Users/Tshenolo M/pgdata17/pg.log" start
+PGUSER=postgres bash tests/run-phase0.sh 127.0.0.1 5433
+PGUSER=postgres bash tests/run-m1.sh     127.0.0.1 5433
+```
+
+**Three Windows details**, all handled inside the harnesses — do the same in any
+new one:
+
+- `PGCLIENTENCODING=UTF8` is exported. Every `.sql` file here is UTF-8, and psql
+  on Windows otherwise takes `client_encoding` from the console codepage, which
+  re-encodes the em dash in `kw_unit_label()` and fails phase0 `8b` and phase0a
+  `9h` with a mojibake label.
+- `PGUSER` falls back to `whoami`: `$USER` is empty in Git Bash, and an empty
+  `-U` swallows the next argument.
+- Connect over TCP. Windows builds have no Unix sockets, so the `-k` socket
+  directory in the Linux recipe does not apply.
+
+**A fixture is a reconstruction, not the schema.** The `tests/*-fixture.sql`
+files are hand-written stand-ins built from `00-live-schema-snapshot.md` at a
+point in time. A green local run proves logic, idempotency and rollback
+completeness; it does **not** prove the migration meets the real schema. Close
+that at deploy time with a `*-verify-live.sql` before/after diff. For **M3** —
+which rewrites the `bookings` RLS policies and carries the confidentiality
+boundary — a Supabase branch (a real schema copy) is the right tool and is
+budgeted for; see `docs/build/m1-service-line.md` §5.
 
 **Nothing is applied to the live Supabase project by Claude.** Deliver files and a
 deploy note; Tshenolo applies through the SQL editor. The project is shared

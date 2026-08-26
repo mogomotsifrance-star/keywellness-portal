@@ -9,18 +9,24 @@
 # supabase_org_report_data_v4.sql, not a stand-in, so the regression check
 # exercises the function that actually ships.
 #
-# Needs postgresql-17 binaries on PATH and a running local cluster. From a
-# clean container:
-#   initdb -D /tmp/pgdata -A trust -U "$USER"
-#   pg_ctl -D /tmp/pgdata -o '-k /tmp/pgrun -p 5433' -l /tmp/pg.log start
+# Needs postgresql-17 binaries on PATH and a running local cluster. See the
+# header of tests/run-phase0.sh for the Linux/macOS and Windows recipes.
 #
-# Usage:  tests/run-m1.sh [host_dir] [port]
+#   Linux/macOS :  tests/run-m1.sh
+#   Windows      :  PGUSER=postgres tests/run-m1.sh 127.0.0.1 5433
+#
+# Usage:  tests/run-m1.sh [host_or_socket_dir] [port]
 set -e
 HOST="${1:-/tmp/pgrun}"
 PORT="${2:-5433}"
+# $USER is empty in Git Bash; an empty -U swallows the next argument.
+PGUSER="${PGUSER:-${USER:-$(whoami 2>/dev/null || echo postgres)}}"
+# See run-phase0.sh: the repo's SQL is UTF-8 and psql on Windows would
+# otherwise take client_encoding from the console codepage.
+export PGCLIENTENCODING="${PGCLIENTENCODING:-UTF8}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$HERE")"
-PSQL="psql -h $HOST -p $PORT -U $USER -v ON_ERROR_STOP=1 -q"
+PSQL="psql -h $HOST -p $PORT -U $PGUSER -v ON_ERROR_STOP=1 -q"
 
 # ── Server version guard ─────────────────────────────────────
 PG_MIN=17

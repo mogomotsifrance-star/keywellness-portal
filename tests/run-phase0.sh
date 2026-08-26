@@ -11,18 +11,33 @@
 # refuses to run on anything below 17 rather than passing quietly on the wrong
 # engine — see PG_MIN below.
 #
-# Needs postgresql-17 binaries on PATH and a running local cluster. From a
-# clean container:
+# Needs postgresql-17 binaries on PATH and a running local cluster.
+#
+# Linux / macOS — a Unix socket directory:
 #   initdb -D /tmp/pgdata -A trust -U "$USER"
 #   pg_ctl -D /tmp/pgdata -o '-k /tmp/pgrun -p 5433' -l /tmp/pg.log start
+#   tests/run-phase0.sh
 #
-# Usage:  tests/run-phase0.sh [host_dir] [port]
+# Windows (Git Bash) — TCP, because Windows builds have no Unix sockets, and
+# $USER is usually unset there:
+#   initdb -D /c/pgdata -A trust -U postgres -E UTF8
+#   pg_ctl -D /c/pgdata -o '-p 5433 -h 127.0.0.1' -l /c/pgdata/pg.log start
+#   PGUSER=postgres tests/run-phase0.sh 127.0.0.1 5433
+#
+# Usage:  tests/run-phase0.sh [host_or_socket_dir] [port]
 set -e
 HOST="${1:-/tmp/pgrun}"
 PORT="${2:-5433}"
+# $USER is empty in Git Bash; an empty -U swallows the next argument.
+PGUSER="${PGUSER:-${USER:-$(whoami 2>/dev/null || echo postgres)}}"
+# Every .sql file in this repo is UTF-8. Left unset, psql on Windows takes
+# client_encoding from the console codepage (WIN1252), which re-encodes the
+# em dash in kw_unit_label() and fails phase0 8b and phase0a 9h with a
+# mojibake label. Declare it rather than inherit it.
+export PGCLIENTENCODING="${PGCLIENTENCODING:-UTF8}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$HERE")"
-PSQL="psql -h $HOST -p $PORT -U $USER -v ON_ERROR_STOP=1 -q"
+PSQL="psql -h $HOST -p $PORT -U $PGUSER -v ON_ERROR_STOP=1 -q"
 
 # ── Server version guard ─────────────────────────────────────
 PG_MIN=17
