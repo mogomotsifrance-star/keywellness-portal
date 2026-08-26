@@ -100,8 +100,13 @@ Decisions already taken (25 Aug 2026), not open for re-litigation:
 - **No Clinical Lead is assigned.** `is_clinical_lead` is false for everyone;
   counselling notes are author-only until one exists, and a risk flag creates a
   content-free action for Lone.
-- Invoices are **prepared by the system, produced by Laone**. Nothing is sent
-  automatically.
+- Invoices are **prepared by the system and handed to accounts by Lone**.
+  Nothing is sent automatically, and nothing is sent by hand from inside the
+  platform either. **Superseded by M4 as built (26 Aug 2026):** the earlier
+  wording said "produced by Laone", which was true of the business and false of
+  the system — Laone does not use the platform, has no account, owns nothing
+  and uploads nothing. There is no accountant user anywhere in the schema. See
+  `docs/build/m4-contracts-workplans-invoices.md` section 2.
 - Flyers go to the organisation's HR contact by default.
 
 ### Not every client is on retainer — this shapes M4
@@ -122,6 +127,50 @@ Consequences worth seeing now: "retainer position (delivered vs expected)"
 means nothing for a per-engagement client, so the Tuesday review's *Retainer*
 section needs a second shape; and `contract_position()` from Prompt 5 has to
 branch on `contract_kind` rather than assuming a period allowance.
+
+### The fixture's `auth.jwt()` is not Supabase's
+
+Recorded 26 Aug 2026, writing the Prompt 6 seed. A second face of "a fixture is
+a reconstruction" (section 3.2), and one that bites files meant for the SQL
+editor rather than the harness.
+
+`tests/m1-fixture.sql` and `tests/phase0-fixture.sql` define `auth.jwt()` as a
+stand-in reading a `test.email` session setting, so a test can act as anyone.
+**Supabase's real `auth.jwt()` reads `request.jwt.claim` / `request.jwt.claims`
+and knows nothing about `test.email`.**
+
+So a file that authenticates the way live does —
+
+```sql
+perform set_config('request.jwt.claims',
+                   json_build_object('email', v_admin)::text, true);
+```
+
+— is correct on Supabase and **silently unauthenticated against the fixture**,
+which reports `is_admin() is false` for an address that is sitting in `admins`.
+It is not a bug in either place; the two mechanisms simply do not meet.
+
+Verify files (`*-verify-live.sql`) and seeds use the live mechanism, because
+that is where they run. To exercise one locally, give the scratch database the
+real shape first:
+
+```sql
+create or replace function auth.jwt() returns jsonb
+language sql stable as $j$
+  select coalesce(
+    nullif(current_setting('request.jwt.claim',  true), ''),
+    nullif(current_setting('request.jwt.claims', true), ''),
+    json_build_object('email', coalesce(current_setting('test.email', true), ''))::text
+  )::jsonb
+$j$;
+```
+
+That form honours both, so the existing suites keep passing.
+
+**And note the shape of the failure.** `is_admin()` is a check on *identity*,
+not privilege: being superuser in the SQL editor does not satisfy it, and
+`admin_org_create()` raises `not authorised` for the person who owns the
+database. Every admin-gated RPC behaves this way.
 
 ### No Clinical Lead
 
