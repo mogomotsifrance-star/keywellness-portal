@@ -73,9 +73,11 @@ create table employers (
 );
 
 create table profiles (
-  id        uuid primary key references auth.users(id) on delete cascade,
-  org_id    uuid references organizations(id),
-  joined_at timestamptz default now()
+  id         uuid primary key references auth.users(id) on delete cascade,
+  org_id     uuid references organizations(id),
+  first_name text,
+  last_name  text,
+  joined_at  timestamptz default now()
 );
 
 -- The live notifications table, with its RLS and its update guard, so the
@@ -195,8 +197,13 @@ insert into advisors (user_id, email, full_name, is_active, is_team_lead) values
 insert into employers (user_id, org_id, email) values
   ('00000000-0000-0000-0000-00000000000f', '0a000000-0000-0000-0000-0000000000b0', 'hr@bopeu.test');
 
-insert into profiles (id, org_id) values
-  ('00000000-0000-0000-0000-00000000000e', '0a000000-0000-0000-0000-0000000000b0');
+insert into profiles (id, org_id, first_name, last_name) values
+  ('00000000-0000-0000-0000-00000000000e', '0a000000-0000-0000-0000-0000000000b0',
+   'Boitumelo', 'Member'),
+  -- staff carry profiles too; support_lookup finds people by name as well as
+  -- address, so the fixture needs names to search for
+  ('00000000-0000-0000-0000-000000000009', null, 'Lone',    'Coordinator'),
+  ('00000000-0000-0000-0000-00000000000b', null, 'Kefilwe', 'Advisor');
 
 
 -- ── Privileges for the `authenticated` role ─────────────────

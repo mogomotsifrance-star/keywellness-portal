@@ -180,9 +180,9 @@ async function open(browser, opts) {
     const { page, errors } = await open(browser, { started: true });
     const txt = () => page.evaluate(() => document.body.innerText);
 
-    check('1  the top bar carries the four destinations',
+    check('1  the top bar carries the five destinations',
       await page.evaluate(() => Array.from(document.querySelectorAll('#dests .dest'))
-        .map(b => b.textContent).join(',')) === 'Review,Today,Organisations,Reports');
+        .map(b => b.textContent).join(',')) === 'Review,Today,Organisations,Reports,Support');
 
     check('2  the roll-call numbers the organisations in review order',
       await page.evaluate(() => Array.from(document.querySelectorAll('.rc .nm'))
@@ -416,6 +416,91 @@ async function open(browser, opts) {
       /Q3 2026/.test(await page.evaluate(() => document.body.innerText)));
 
     check('33 no uncaught JavaScript errors on either',
+      errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
+  /* ══ Support ══════════════════════════════════════════════ */
+  {
+    const { page, errors } = await open(browser, { started: true });
+    /* The Edge Function is stubbed at the network boundary — the page reaches
+       it with fetch(), not through the Supabase client. */
+    /* Route handlers run in NODE, not in the page — an earlier version wrote
+       window.__lastReset in here and threw ReferenceError. */
+    const posted = [];
+    await page.route('**/functions/v1/admin-support', async route => {
+      const body = JSON.parse(route.request().postData() || '{}');
+      posted.push(body);
+      const reply = (o) => route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify(o) });
+      if (body.action === 'list_recent') return reply({ ok: true, results: [
+        { id:'s1', at:'2026-08-26T08:00:00Z', actor:'lone@keywellness.co.bw',
+          action:'send_password_reset', target:'member@example.test', outcome:'ok' },
+        { id:'s2', at:'2026-08-26T07:00:00Z', actor:'lone@keywellness.co.bw',
+          action:'send_password_reset', target:'member@example.test', outcome:'denied' } ] });
+      if (body.action === 'lookup') return reply({ ok: true, results: [
+        { user_id:'u-1', email:'boitumelo@example.test', name:'Boitumelo Member',
+          roles:['member'] } ] });
+      if (body.action === 'send_password_reset') {
+        return reply({ ok: true, sent_to: 'boitumelo@example.test' });
+      }
+      return reply({ ok: false, error: 'unknown' });
+    });
+    await page.click('[data-dest="support"]');
+    await page.waitForTimeout(800);
+    const txt = () => page.evaluate(() => document.body.innerText);
+
+    check('34 the audit log is the left column, not a hidden table',
+      await page.evaluate(() => {
+        const l = document.querySelector('.col-left').innerText;
+        return /send password reset/i.test(l) && /lone@keywellness/.test(l);
+      }));
+
+    check('35 a denied attempt appears in the log, not only successes',
+      /denied/.test(await txt()));
+
+    check('36 a lookup shows the FULL address, not a masked one',
+      await (async () => {
+        await page.fill('#supQ', 'boitumelo');
+        await page.press('#supQ', 'Enter');
+        await page.waitForTimeout(600);
+        const t = await txt();
+        return /boitumelo@example\.test/.test(t) && !/•/.test(t);
+      })());
+
+    check('37 sending is two steps, and the confirm names the address',
+      await (async () => {
+        await page.click('button:has-text("Select")');
+        await page.waitForTimeout(400);
+        await page.click('button:has-text("Send password reset")');
+        await page.waitForTimeout(400);
+        const t = await txt();
+        /* Nothing has been sent yet — the first click only asks. */
+        return /Send a password-reset link to/.test(t)
+               && /boitumelo@example\.test/.test(t)
+               && !posted.some(p => p.action === 'send_password_reset');
+      })());
+
+    check('38 the confirmed call sends a user_id and never an address',
+      await (async () => {
+        await page.click('button:has-text("Confirm: send the link")');
+        await page.waitForTimeout(700);
+        const reset = posted.find(p => p.action === 'send_password_reset');
+        return !!reset && reset.user_id === 'u-1'
+               && !('email' in reset) && !('to' in reset) && !('recipient' in reset);
+      })());
+
+    check('39 no yellow anywhere on the support screen',
+      await page.evaluate(() => {
+        const yellow = /240,\s*201,\s*10/;
+        return !Array.from(document.querySelectorAll('#view *')).some(e => {
+          const c = getComputedStyle(e);
+          return yellow.test(c.backgroundColor) || yellow.test(c.color)
+              || yellow.test(c.borderBottomColor) || yellow.test(c.borderLeftColor);
+        });
+      }));
+
+    check('40 no uncaught JavaScript errors on the support screen',
       errors.length === 0, errors.join(' | '));
     await page.close();
   }

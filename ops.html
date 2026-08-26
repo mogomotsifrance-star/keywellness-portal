@@ -71,7 +71,8 @@ const DESTS = [
   { id:'review', label:'Review' },
   { id:'today',  label:'Today' },
   { id:'orgs',   label:'Organisations' },
-  { id:'reports',label:'Reports' }
+  { id:'reports',label:'Reports' },
+  { id:'support',label:'Support' }
 ];
 
 const esc = s => String(s == null ? '' : s)
@@ -138,6 +139,133 @@ function route() {
   if (SCREEN === 'today')   return renderToday();
   if (SCREEN === 'orgs')    return renderOrgs();
   if (SCREEN === 'reports') return renderReports();
+  if (SCREEN === 'support') return renderSupport();
+}
+
+/* ══ SUPPORT ══════════════════════════════════════════════════
+   Password-reset links and confirmation resends, for Lone and Michelle.
+
+   The audit log is the LEFT COLUMN, not a hidden table: a support tool
+   nobody can see the use of is a support tool nobody can hold to account.
+
+   No yellow anywhere on this screen. Yellow means "needs a decision", and
+   nothing here does. No red either — the palette has none.
+
+   Everything goes through the admin-support Edge Function. The body carries
+   a user_id that came from ITS OWN lookup, never an address; the recipient is
+   resolved server-side from auth.users. See the function's header. */
+
+const SUPPORT_FN = KW.url + '/functions/v1/admin-support';
+let SUP = { q:'', results:[], recent:[], picked:null, confirming:null, msg:'' };
+
+async function supportCall(payload) {
+  const { data: { session } } = await sb.auth.getSession();
+  const res = await fetch(SUPPORT_FN, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + (session ? session.access_token : ''),
+      'apikey': KW.anonKey
+    },
+    body: JSON.stringify(payload)
+  });
+  try { return await res.json(); } catch (_) { return { ok:false, error:'no response' }; }
+}
+
+async function renderSupport() {
+  const v = document.getElementById('view');
+  const recent = await supportCall({ action:'list_recent' });
+  SUP.recent = (recent && recent.ok) ? (recent.results || []) : [];
+
+  v.innerHTML = `<div class="board">
+    <div class="col-left">
+      <p class="label">Recent support actions</p><hr class="rule">
+      ${SUP.recent.length ? SUP.recent.map(r => `<div class="row" style="display:block">
+          <div>${esc(r.action.replace(/_/g,' '))}</div>
+          <div class="muted">${esc(fmtShort((r.at||'').slice(0,10)))} · ${esc(r.actor||'')}
+            ${r.target ? '· ' + esc(r.target) : ''}
+            ${r.outcome !== 'ok' ? '· ' + esc(r.outcome) : ''}</div>
+        </div>`).join('')
+        : '<p class="slot">Nothing yet.</p>'}
+    </div>
+
+    <div class="col-mid">
+      <p class="kicker">Member support</p>
+      <h1 class="client-name">Find someone</h1>
+      <input class="action-input" id="supQ" style="max-width:520px"
+             placeholder="Email or name, at least three characters…"
+             value="${esc(SUP.q)}" onkeydown="if(event.key==='Enter')supSearch()">
+      <p class="slot" id="supMsg">${esc(SUP.msg)}</p>
+
+      <p class="label">Results</p><hr class="rule">
+      ${SUP.results.length ? SUP.results.map(r => `<div class="row">
+          <span class="text"><strong>${esc(r.name || '(no name recorded)')}</strong>
+            · ${esc(r.email)}</span>
+          <span class="state">${esc((r.roles||[]).join(' · '))}</span>
+          <button class="dest" style="height:auto;line-height:1.4"
+                  onclick="supPick('${esc(r.user_id)}')">Select</button>
+        </div>`).join('')
+        : '<p class="slot">No one selected yet. Search above.</p>'}
+    </div>
+
+    <div class="col-right">
+      <p class="label">Selected</p><hr class="rule">
+      ${supPanel()}
+    </div>
+  </div>`;
+}
+
+function supPanel() {
+  if (!SUP.picked) return '<p class="slot">Choose someone from the results.</p>';
+  const p = SUP.picked;
+  /* Two steps, inline. Not a modal, and not a one-click send: the confirm
+     names the address the link will actually go to, which is the address on
+     file and not anything anyone typed. */
+  const confirming = SUP.confirming === 'reset';
+  return `<div class="action">
+      <div class="t">${esc(p.name || '(no name recorded)')}</div>
+      <div class="m">${esc(p.email)}</div>
+      <div class="m">${esc((p.roles||[]).join(' · '))}</div>
+    </div>
+    ${confirming
+      ? `<p class="slot">Send a password-reset link to <strong>${esc(p.email)}</strong>?</p>
+         <button class="start-btn" onclick="supReset()">Confirm: send the link</button>
+         <button class="dest" style="margin-left:14px" onclick="supCancel()">Cancel</button>`
+      : `<button class="start-btn" onclick="supConfirm('reset')">Send password reset</button>`}
+    <p class="label">Resend a confirmation</p><hr class="rule">
+    <p class="slot">Open the booking from Today or the review, then resend it
+       from there. A booking id is needed and this screen does not list them.</p>`;
+}
+
+async function supSearch() {
+  const q = (document.getElementById('supQ').value || '').trim();
+  SUP.q = q; SUP.msg = 'Searching…';
+  document.getElementById('supMsg').textContent = SUP.msg;
+  const r = await supportCall({ action:'lookup', q });
+  if (!r.ok) { SUP.msg = r.error || 'Could not search.'; SUP.results = []; }
+  else { SUP.results = r.results || []; SUP.msg = SUP.results.length ? '' : 'No one matches that.'; }
+  await renderSupport();
+}
+
+function supPick(id) {
+  SUP.picked = (SUP.results || []).find(r => r.user_id === id) || null;
+  SUP.confirming = null;
+  renderSupport();
+}
+function supConfirm(what) { SUP.confirming = what; renderSupport(); }
+function supCancel()      { SUP.confirming = null; renderSupport(); }
+
+async function supReset() {
+  if (!SUP.picked) return;
+  SUP.msg = 'Sending…';
+  /* user_id, never an address. The function refuses a body carrying one. */
+  const r = await supportCall({ action:'send_password_reset', user_id: SUP.picked.user_id });
+  SUP.msg = r.ok ? ('Link sent to ' + (r.sent_to || SUP.picked.email))
+                 : (r.error || 'Could not send the link.');
+  SUP.confirming = null;
+  await renderSupport();
+  const m = document.getElementById('supMsg');
+  if (m) m.textContent = SUP.msg;
 }
 
 /* ── Reminders ──────────────────────────────────────────────
