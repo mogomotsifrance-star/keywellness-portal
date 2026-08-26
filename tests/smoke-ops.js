@@ -420,6 +420,70 @@ async function open(browser, opts) {
     await page.close();
   }
 
+  /* ══ Resend, reached from a booking row ═══════════════════
+     There is no booking picker: the booking is selected where the user is
+     already looking at it, on Today or in the review. */
+  {
+    const { page, errors } = await open(browser, { started: true });
+    const posted = [];
+    await page.route('**/functions/v1/admin-support', route => {
+      posted.push(JSON.parse(route.request().postData() || '{}'));
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ ok: true, sent_to: 'member@example.test' }) });
+    });
+    await page.click('[data-dest="today"]');
+    await page.waitForTimeout(900);
+
+    check('41 selecting a booking row opens it in the right panel',
+      await (async () => {
+        await page.click('.col-mid .row:has-text("Counselling session")');
+        await page.waitForTimeout(500);
+        const t = await page.evaluate(() => document.querySelector('.col-right').innerText);
+        return /Counselling session/.test(t) && /Resend confirmation/.test(t);
+      })());
+
+    check('42 resending is two steps, and nothing is sent by the first click',
+      await (async () => {
+        await page.click('button:has-text("Resend confirmation")');
+        await page.waitForTimeout(400);
+        const t = await page.evaluate(() => document.querySelector('.col-right').innerText);
+        return /Resend the confirmation/.test(t)
+               && !posted.some(p => p.action === 'resend_booking_confirmation');
+      })());
+
+    check('43 the confirm sends a booking_id and never an address',
+      await (async () => {
+        await page.click('button:has-text("Confirm: resend it")');
+        await page.waitForTimeout(700);
+        const c = posted.find(p => p.action === 'resend_booking_confirmation');
+        return !!c && c.booking_id === 'b2'
+               && !('email' in c) && !('to' in c) && !('recipient' in c);
+      })());
+
+    check('44 an activity offers no resend — it has no member-facing mail',
+      await (async () => {
+        await page.click('.col-mid .row:has-text("Debt awareness talk")');
+        await page.waitForTimeout(500);
+        const t = await page.evaluate(() => document.querySelector('.col-right').innerText);
+        return /Only a session has a confirmation to resend/.test(t)
+               && !/Resend confirmation/.test(t);
+      })());
+
+    check('45 the same works on the review screen',
+      await (async () => {
+        await page.click('[data-dest="review"]');
+        await page.waitForTimeout(900);
+        await page.click('.col-mid .row:has-text("Budget Planning Session")');
+        await page.waitForTimeout(500);
+        const t = await page.evaluate(() => document.querySelector('.col-right').innerText);
+        return /Resend confirmation/.test(t);
+      })());
+
+    check('46 no uncaught JavaScript errors from the resend path',
+      errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
   /* ══ Support ══════════════════════════════════════════════ */
   {
     const { page, errors } = await open(browser, { started: true });

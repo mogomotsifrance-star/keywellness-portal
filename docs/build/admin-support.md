@@ -182,9 +182,14 @@ result first, then query.
 ## 6. What is NOT done
 
 - **The function is not deployed** — `supabase functions deploy admin-support`.
-- **Resend from the Support screen needs a booking id**, which that screen does
-  not list. The action works; reaching it from Today or the review is a wiring
-  job left for when someone actually needs it.
+- ~~Resend needs a booking id the Support screen does not list.~~ **Done
+  26 Aug.** There is no booking picker, deliberately: a booking is selected
+  where the user is already looking at it. Clicking a row in the centre column
+  of Today or the review opens it in the right panel with **Resend
+  confirmation**, as the same two-step inline confirm the Support screen uses,
+  calling `admin-support` with that `booking_id`. An activity or a webinar
+  offers no resend — neither has a member-facing mail, so the button would be
+  dead. Assertions 41–46 in `smoke-ops.js`.
 - **No flyer or invoice resend** — M6 and M4. The same shape, added when those
   exist; `support_actions_action_check` will need the new values.
 - **No account creation, deletion, email change, role change or

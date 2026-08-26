@@ -155,12 +155,39 @@ diff <(git show origin/dev:index.html) index.html | grep '^<'
 from none. Use `git diff` above, or normalise first:
 
 ```bash
-diff <(git show origin/dev:index.html | tr -d '') <(tr -d '' < index.html) | grep '^<'
+diff <(git show origin/dev:index.html | tr -d '
+') <(tr -d '
+' < index.html) | grep '^<'
 ```
 
 These four files are large and hand-maintained — `index.html` is 518 KB,
 `admin.html` 246 KB, `advisor.html` 236 KB, `employer.html` 99 KB. A regenerated
 file silently drops work.
+
+### 3.1a A function that writes must never appear in a predicate
+
+**PostgreSQL evaluates a volatile function once per row scanned.** A function
+that logs, inserts or sends therefore must never appear in a `WHERE` clause,
+a `JOIN` condition, a `CHECK`, or any other predicate — it will fire once per
+row the planner touches, not once.
+
+```sql
+-- WRONG: support_log() runs for every row scanned
+select actor from support_actions where id = support_log('lookup','ok');
+
+-- RIGHT: capture the result, then query
+v_id := support_log('lookup','ok');
+select actor into v_actor from support_actions where id = v_id;
+```
+
+**The incident.** `tests/support-tests.sql` had exactly the wrong form. It
+wrote one audit row per existing row, tripped the burst rate limit, and made
+**four later, unrelated rate-limit assertions fail** — so the visible symptom
+pointed at the rate limiter, not at the assertion that caused it. Recorded in
+`docs/build/admin-support.md` §5.
+
+The same trap applies to anything with a side effect: a notifier, a counter, a
+mailer. If it does something, put it on its own line.
 
 ### 3.2 Migration discipline
 

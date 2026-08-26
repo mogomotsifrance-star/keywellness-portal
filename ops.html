@@ -65,6 +65,11 @@ let MEETING = null;    // tuesday_review_open() result
 
 /* Daily state */
 let DAILY = null, SELECTED = null;
+/* A timeline item (booking, activity, webinar) picked from the centre column
+   of either screen. Bookings can have their confirmation resent from here —
+   the alternative was a booking picker on the Support screen, which would be
+   a second way to find something the user is already looking at. */
+let ITEM = null, ITEM_CONFIRM = false;
 let UNREAD = [];
 
 const DESTS = [
@@ -446,13 +451,62 @@ function showAction(id) {
 }
 
 function itemRow(i) {
-  return `<div class="row">
+  const on = ITEM && ITEM.id === i.id;
+  return `<div class="row${on ? ' selected' : ''}" style="cursor:pointer"
+      onclick='pickItem(${JSON.stringify(i).replace(/'/g, "&#39;")})'>
     <span class="date">${esc(fmtShort(i.on_date))}</span>
     ${slMark(i.service_line)}
     <span class="text">${esc(i.title)}${
       i.practitioner ? ' · ' + esc(i.practitioner)
                      : (i.kind === 'booking' ? ' · <span class="muted">no practitioner</span>' : '')}</span>
     <span class="state">${esc(i.state || '')}</span></div>`;
+}
+
+function pickItem(i) {
+  ITEM = (ITEM && ITEM.id === i.id) ? null : i;
+  ITEM_CONFIRM = false;
+  return SCREEN === 'today' ? renderToday() : renderReview();
+}
+
+/* Only a booking has a confirmation to resend. An activity or a webinar has
+   no member-facing mail, so offering it there would be a dead button. */
+function itemPanel() {
+  if (!ITEM) return '';
+  const resendable = ITEM.kind === 'booking';
+  return `<p class="label">Selected</p><hr class="rule">
+    <div class="action">
+      <div class="t">${esc(ITEM.title)}</div>
+      <div class="m">${esc(fmtShort(ITEM.on_date))} · ${esc(ITEM.kind)}
+        ${ITEM.org_name ? '· ' + esc(ITEM.org_name) : ''}
+        ${ITEM.practitioner ? '· ' + esc(ITEM.practitioner) : ''}</div>
+      <div class="m">${esc(ITEM.state || '')}</div>
+    </div>
+    ${!resendable
+      ? '<p class="slot">Only a session has a confirmation to resend.</p>'
+      : ITEM_CONFIRM
+        ? `<p class="slot">Resend the confirmation for this session to the member
+             it was booked for?</p>
+           <button class="start-btn" onclick="doResend()">Confirm: resend it</button>
+           <button class="dest" style="margin-left:14px" onclick="cancelResend()">Cancel</button>`
+        : `<button class="start-btn" onclick="askResend()">Resend confirmation</button>`}
+    <p class="slot" id="resendMsg"></p>`;
+}
+
+function askResend()    { ITEM_CONFIRM = true;  return SCREEN === 'today' ? renderToday() : renderReview(); }
+function cancelResend() { ITEM_CONFIRM = false; return SCREEN === 'today' ? renderToday() : renderReview(); }
+
+async function doResend() {
+  if (!ITEM) return;
+  const msg = document.getElementById('resendMsg');
+  if (msg) msg.textContent = 'Sending…';
+  /* booking_id, never an address — the same rule the Support screen follows.
+     admin-support reads the booking as the caller, so its own gate applies. */
+  const r = await supportCall({ action:'resend_booking_confirmation', booking_id: ITEM.id });
+  ITEM_CONFIRM = false;
+  await (SCREEN === 'today' ? renderToday() : renderReview());
+  const m = document.getElementById('resendMsg');
+  if (m) m.textContent = r.ok ? ('Confirmation resent to ' + (r.sent_to || 'the member'))
+                              : (r.error || 'Could not resend it.');
 }
 
 function actionRow(a) {
@@ -473,7 +527,8 @@ function panel(orgs) {
   const open = (o.open_now || []);
   const passed = orgs.slice(0, RC);
 
-  return `<p class="label">Actions · ${esc(o.name)}</p><hr class="rule">
+  return `${itemPanel()}
+    <p class="label">Actions · ${esc(o.name)}</p><hr class="rule">
     ${open.length ? open.map(a => `<div class="action" id="act-${a.id}">
         <div class="t">${esc(a.title)}</div>
         <div class="m">${esc(shortOwner(a.owner))} · due ${esc(fmtShort(a.due_date))}
@@ -577,8 +632,7 @@ async function renderToday() {
     </div>
 
     <div class="col-right">
-      <p class="label">Selected</p><hr class="rule">
-      ${selectedPanel()}
+      ${ITEM ? itemPanel() : '<p class="label">Selected</p><hr class="rule">' + selectedPanel()}
       <p class="label">Capacity · this fortnight</p><hr class="rule">
       <p class="slot">Practitioner ceilings are not recorded yet.</p>
       <p class="label">This month</p><hr class="rule">
@@ -616,7 +670,8 @@ function flatten(tl) {
 
 function section(list) {
   if (!list.length) return '<p class="slot">Nothing.</p>';
-  return list.map(i => `<div class="row">
+  return list.map(i => `<div class="row${ITEM && ITEM.id === i.id ? ' selected' : ''}"
+      style="cursor:pointer" onclick='pickItem(${JSON.stringify(i).replace(/'/g, "&#39;")})'>
     <span class="date">${esc(fmtShort(i.on_date))}</span>
     ${slMark(i.service_line)}
     <span class="text">${esc(i.title)}${
