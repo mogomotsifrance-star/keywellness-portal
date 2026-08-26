@@ -83,7 +83,7 @@ revoke all on function _ops_as_date(text) from public, anon, authenticated;
 create or replace function ops_timeline(p_from date, p_to date)
 returns jsonb
 language plpgsql
-stable
+stable   -- current_date is stable within a statement
 security definer
 set search_path = public, auth
 as $$
@@ -111,9 +111,15 @@ begin
            coalesce(ad.full_name, '')               as practitioner,
            b.session_mode                           as mode,
            b.session_format                         as format,
-           case when b.attended is true  then 'attended'
+           /* The state column carries DELIVERY states only. b.status is a
+              booking-workflow value and leaks words like 'confirmed' that mean
+              nothing to someone reading a Tuesday roll-call. */
+           case when lower(coalesce(b.status,'')) = 'cancelled' then 'cancelled'
+                when b.attended is true  then 'attended'
                 when b.attended is false then 'did not attend'
-                else coalesce(b.status, 'pending') end as state,
+                when coalesce(_ops_as_date(b.requested_date), b.created_at::date)
+                     > current_date then 'scheduled'
+                else 'pending' end as state,
            null::int                                as attendee_count
       from bookings b
       left join profiles p  on p.id  = b.user_id
@@ -147,7 +153,12 @@ begin
            '',
            null,
            'webinar',
-           case when c.published then 'published' else 'draft' end,
+           /* 'published' is an EDITORIAL state, not a delivery one. A webinar
+              is scheduled until its date passes and delivered after it. Whether
+              it is published is a content question and belongs on the content
+              screen, not in this column. */
+           case when c.webinar_date > current_date then 'scheduled'
+                else 'delivered' end,
            null::int
       from content_items c
      where c.kind = 'webinar' and c.webinar_date is not null

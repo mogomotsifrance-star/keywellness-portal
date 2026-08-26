@@ -10,6 +10,9 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <link rel="stylesheet" href="css/kw-pathways.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Shared session, role probe and interface routing. After the CDN script:
+     it reads window.supabase.createClient. -->
+<script src="js/kw-session.js"></script>
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="js/certificate-template.js"></script>
@@ -982,22 +985,14 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 // ══════════════════════════════════════════════════
 //  SUPABASE INIT
 // ══════════════════════════════════════════════════
-const SUPABASE_URL = 'https://tarmpqxsabbehgjaonfz.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRhcm1wcXhzYWJiZWhnamFvbmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1MjA2MjQsImV4cCI6MjA5NzA5NjYyNH0.Em-NvJVY_geHk6UOTxnpINgUw669V8W_9YvAi_koX9U';
-// Guard against the Supabase CDN script failing to load (offline / CDN outage /
-// blocked): without this the next line throws at parse time and the whole page
-// renders blank with no explanation.
-if (!window.supabase || !window.supabase.createClient) {
-  document.body.innerHTML = '<div style="max-width:420px;margin:80px auto;padding:32px;font-family:sans-serif;text-align:center;color:#23261f">'
-    + '<h2 style="margin-bottom:10px">Couldn\'t load Key Wellness</h2>'
-    + '<p style="color:#4b4e48;margin-bottom:20px">We couldn\'t reach a required service. Please check your internet connection and try again.</p>'
-    + '<button onclick="location.reload()" style="background:#397e2b;color:#fff;border:none;border-radius:999px;padding:11px 22px;font-weight:700;cursor:pointer">Retry</button>'
-    + '</div>';
-  throw new Error('Supabase JS SDK failed to load');
-}
-const { createClient } = window.supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
-window._kwSb = sb; // shared client — kw-badges.js and tool pages reuse this
+/* URL, key, CDN guard and client now live in js/kw-session.js — they were
+   written out four times across index/admin/advisor/employer. The two
+   constants stay because the Ask Key edge-function call and its apikey
+   header still read them. */
+const SUPABASE_URL = KW.url;
+const SUPABASE_KEY = KW.anonKey;
+KW.guard();
+const sb = KW.sb();   // also sets window._kwSb, as before
 
 // ══════════════════════════════════════════════════
 //  STATE
@@ -1177,6 +1172,15 @@ async function loadAllData() {
   window._isAdmin        = !!adminRes.data;
   window._employerOrgId  = empRes.data?.org_id || null;
   window._advisor        = advRes.data || null;
+  /* Mirror into the shared module so KW.interfaces() and KW.resolveRoute()
+     have roles without a second probe. ops.html calls KW.detectRoles()
+     directly; this page keeps its own fetch because it is woven into the
+     boot sequence above. Prompt 11 converges them. */
+  KW.roles = { member: true, admin: window._isAdmin,
+               advisor: !!window._advisor, advisorRecord: window._advisor,
+               employer: !!window._employerOrgId,
+               employerOrgId: window._employerOrgId,
+               staff: window._isAdmin || !!window._advisor };
 }
 
 async function saveUser() {
@@ -1943,69 +1947,41 @@ function closeSidebar() {
    The choice lives in sessionStorage, so it lasts for the browsing
    session and resets on the next sign-in.
    ══════════════════════════════════════════════════════════════ */
-const KW_INTERFACE_KEY = 'kw_interface';
+/* The interface list and the routing rule now live in js/kw-session.js.
+   These wrappers stay so the inline onclick handlers and the mobile More
+   sheet keep working untouched — the logic is single-sourced, the call
+   sites are not disturbed. */
+const KW_INTERFACE_KEY = KW.interfaceKey;
 
-function kwAvailableInterfaces() {
-  const out = [{
-    id: 'member', icon: '👤', title: 'My Portal',
-    desc: 'Your own wellness dashboard, tools, assessment and bookings.',
-    href: 'index.html'
-  }];
-  if (window._advisor) out.push({
-    id: 'advisor', icon: '🧭', title: 'Advisor Portal',
-    desc: 'Your clients, consultation assessments and session diary.',
-    href: 'advisor.html'
-  });
-  if (window._isAdmin) out.push({
-    id: 'admin', icon: '⚙️', title: 'Admin',
-    desc: 'All members, bookings, advisors and organisation reporting.',
-    href: 'admin.html'
-  });
-  if (window._employerOrgId) out.push({
-    id: 'employer', icon: '🏢', title: 'HR Dashboard',
-    desc: 'Your organisation’s aggregate wellness reporting.',
-    href: 'employer.html'
-  });
-  return out;
+function kwRolesNow() {
+  return KW.roles || { member: true, admin: !!window._isAdmin,
+                       advisor: !!window._advisor,
+                       employer: !!window._employerOrgId,
+                       employerOrgId: window._employerOrgId || null };
 }
 
-function kwGetInterface() {
-  try { return sessionStorage.getItem(KW_INTERFACE_KEY); } catch (_) { return null; }
-}
-function kwSetInterface(id) {
-  try { sessionStorage.setItem(KW_INTERFACE_KEY, id); } catch (_) {}
-}
+function kwAvailableInterfaces() { return KW.interfaces(kwRolesNow()); }
+function kwGetInterface() { return KW.getInterface(); }
+function kwSetInterface(id) { KW.setInterface(id); }
 function kwGoToInterface(id) {
-  kwSetInterface(id);
+  KW.setInterface(id);
   const match = kwAvailableInterfaces().find(i => i.id === id);
   window.location.href = match ? match.href : 'index.html';
 }
 
-/* Returns true when the caller should stop — we are navigating away. */
+/* Returns true when the caller should stop — we are navigating away.
+   Admins now resolve to ops.html; a stored 'admin' maps forward to 'ops'
+   inside KW.getInterface(), so a live session does not land on the page
+   being retired. */
 function kwRouteByRole() {
-  const options = kwAvailableInterfaces();
-
-  // Plain member: nothing to choose, nothing to do.
-  if (options.length === 1) return false;
-
-  const chosen = kwGetInterface();
-  if (chosen) {
-    if (chosen === 'member') return false;                     // they asked to be here
-    const match = options.find(i => i.id === chosen);
-    if (match) { window.location.replace(match.href); return true; }
-    // Stale choice for a role they no longer hold — fall through to the chooser.
-  }
-
-  // Exactly one staff hat and no member expectation: preserve the old
-  // straight-through behaviour so nothing changes for existing HR/admin users.
-  const staff = options.filter(i => i.id !== 'member');
-  if (staff.length === 1) {
-    kwSetInterface(staff[0].id);
-    window.location.replace(staff[0].href);
+  const verdict = KW.resolveRoute(kwRolesNow(), KW.getInterface());
+  if (verdict.action === 'stay') return false;
+  if (verdict.action === 'go') {
+    if (verdict.remember) KW.setInterface(verdict.id);
+    window.location.replace(verdict.href);
     return true;
   }
-
-  kwShowInterfaceChooser(options);
+  kwShowInterfaceChooser(verdict.options);
   return true;
 }
 

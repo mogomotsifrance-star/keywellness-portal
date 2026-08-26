@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ops — Key Wellness</title>
+<link rel="icon" href="assets/img/kw-icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;700;800&display=swap" rel="stylesheet">
+<!-- The ops language. Deliberately NOT css/kw-theme.css — that is the
+     financial portal's navy and gold, and the two would fight. -->
+<link rel="stylesheet" href="css/kw-ops.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- After the CDN script: kw-session.js reads window.supabase.createClient. -->
+<script src="js/kw-session.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="wordmark">Key Wellness</span>
+  <nav class="dests" id="dests" aria-label="Destinations"></nav>
+  <div class="topbar-right">
+    <button class="reminders" id="reminders" data-unread="0" onclick="go('today')">Reminders · 0</button>
+    <button class="dest" id="otherIf" onclick="toggleOther()" aria-haspopup="true">Other interfaces</button>
+    <span class="kbd" title="Search">Ctrl-K</span>
+    <span id="who" class="mono"></span>
+  </div>
+</header>
+
+<div id="otherMenu" style="display:none;position:absolute;right:24px;top:52px;background:var(--paper);border:1px solid var(--ink);z-index:30;min-width:200px"></div>
+
+<main id="view" aria-live="polite"></main>
+
+<div class="kdim" id="kdim" onclick="closeK()"></div>
+<div class="kbox" id="kbox" role="dialog" aria-label="Search">
+  <input id="kinput" type="text" placeholder="Find an organisation or an open action…" autocomplete="off">
+  <div class="kres" id="kres"></div>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   Key Wellness — ops workspace.
+
+   Two screens this release: the Tuesday review in meeting mode
+   (docs/design-directions.md §4.1, direction C) and Lone's daily view (§4.2).
+   Organisations and Reports are thin but real, so the four destinations in
+   the top bar all lead somewhere honest.
+
+   Everything the page reads comes from M1 + M5 + M5a. Work plans, contracts,
+   retainer position, capacity and invoices DO NOT EXIST YET — those sections
+   render their label, their rule, and one plain line saying so. Hiding them
+   would make the review look finished when it is not.
+   ══════════════════════════════════════════════════════════════ */
+
+const sb = KW.sb();
+let ME = null, ROLES = null;
+let SCREEN = 'review';
+
+/* Review state */
+let PACK = null;       // tuesday_review_pack()
+let TIMELINE = {};     // ops_timeline() by window
+let RC = 0;            // roll-call position
+let MEETING = null;    // tuesday_review_open() result
+
+/* Daily state */
+let DAILY = null, SELECTED = null;
+let UNREAD = [];
+
+const DESTS = [
+  { id:'review', label:'Review' },
+  { id:'today',  label:'Today' },
+  { id:'orgs',   label:'Organisations' },
+  { id:'reports',label:'Reports' }
+];
+
+const esc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+
+/* Gaborone, not UTC. A date shown to Lone must be her date. */
+const today = () => new Date(new Date().toLocaleString('en-US', { timeZone:'Africa/Gaborone' }));
+const iso = d => d.toISOString().slice(0,10);
+const addDays = (d,n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
+const fmtDay  = d => d.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+const fmtShort= s => s ? new Date(s + 'T00:00:00').toLocaleDateString('en-GB',
+                        { day:'2-digit', month:'short' }) : '';
+
+/* "contract, work plan or capacity" — a spoken list, not a comma-joined
+   one. These lines get read aloud on a Tuesday. */
+const list = a => a.length < 2 ? (a[0] || '')
+  : a.slice(0, -1).join(', ') + ' or ' + a[a.length - 1];
+
+/* The 9px square. Never a pill, never a colour beyond the two. */
+const slMark = line =>
+  `<span class="sl sl-${line === 'psychosocial' ? 'psychosocial' : 'financial'}" title="${
+     line === 'psychosocial' ? 'Psychosocial' : 'Financial'}"></span>`;
+
+/* ── Boot ──────────────────────────────────────────────────── */
+(async function boot() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { location.replace('index.html'); return; }
+  ME = session.user;
+  ROLES = await KW.detectRoles(sb, ME);
+
+  /* is_staff() in SQL is admin OR advisor; the page gate must agree with the
+     RPC gate or someone gets a screen full of "not authorised". */
+  if (!ROLES.staff) {
+    document.getElementById('view').innerHTML =
+      '<div class="col-mid"><h1 class="client-name">Not your workspace</h1>'
+      + '<p class="notice">This is the Key Wellness staff workspace. Your account '
+      + 'does not hold a staff role. If that is wrong, ask Lone to grant it.</p>'
+      + '<p class="notice" style="margin-top:18px"><a href="index.html">Go to My Portal</a></p></div>';
+    document.getElementById('dests').innerHTML = '';
+    return;
+  }
+
+  document.getElementById('who').textContent = ME.email || '';
+  KW.setInterface('ops');
+  renderDests();
+  await loadReminders();
+  window.addEventListener('hashchange', route);
+  route();
+})();
+
+function renderDests() {
+  document.getElementById('dests').innerHTML = DESTS.map(d =>
+    `<button class="dest" data-dest="${d.id}" onclick="go('${d.id}')"`
+    + `${SCREEN === d.id ? ' aria-current="page"' : ''}>${d.label}</button>`).join('');
+}
+
+function go(id) { location.hash = '#' + id; }
+function route() {
+  const h = (location.hash || '#review').slice(1);
+  SCREEN = DESTS.some(d => d.id === h) ? h : 'review';
+  renderDests();
+  if (SCREEN === 'review')  return renderReview();
+  if (SCREEN === 'today')   return renderToday();
+  if (SCREEN === 'orgs')    return renderOrgs();
+  if (SCREEN === 'reports') return renderReports();
+}
+
+/* ── Reminders ──────────────────────────────────────────────
+   The staff notification surface M5's build record flagged as owed here. A
+   plain count, not a badge, and deliberately NOT yellow — yellow means a
+   decision is needed and an unread reminder is not a decision. Opening Today
+   marks them read, because Today shows the same actions natively. */
+async function loadReminders() {
+  const { data } = await sb.from('notifications')
+    .select('id,type,title,body,created_at')
+    .is('read_at', null).like('type', 'action\\_%')
+    .order('created_at', { ascending:false });
+  UNREAD = data || [];
+  const el = document.getElementById('reminders');
+  el.textContent = 'Reminders · ' + UNREAD.length;
+  el.setAttribute('data-unread', String(UNREAD.length));
+}
+async function markRemindersRead() {
+  if (!UNREAD.length) return;
+  const ids = UNREAD.map(n => n.id);
+  await sb.from('notifications').update({ read_at: new Date().toISOString() }).in('id', ids);
+  await loadReminders();
+}
+
+/* ══ REVIEW — the Tuesday meeting screen ══════════════════════ */
+
+async function loadReview() {
+  const d = iso(today());
+  const [pack, back, fwd] = await Promise.all([
+    sb.rpc('tuesday_review_pack', { p_date: d }),
+    sb.rpc('ops_timeline', { p_from: iso(addDays(today(), -7)), p_to: d }),
+    sb.rpc('ops_timeline', { p_from: d, p_to: iso(addDays(today(), 14)) })
+  ]);
+  PACK = pack.data || null;
+  TIMELINE.back = back.data || null;
+  TIMELINE.fwd  = fwd.data || null;
+}
+
+async function renderReview() {
+  const v = document.getElementById('view');
+  v.innerHTML = '<div class="col-mid"><p class="notice">Loading…</p></div>';
+  await loadReview();
+
+  if (!PACK) { v.innerHTML = '<div class="col-mid"><p class="notice">Could not load the review.</p></div>'; return; }
+
+  const orgs = PACK.organisations || [];
+  const started = !!PACK.meeting_id;
+
+  v.innerHTML =
+    `<div class="board meeting">
+       <div class="col-left">${rollcall(orgs, started)}</div>
+       <div class="col-mid">${started ? centre(orgs) : emptyState()}</div>
+       <div class="col-right">${started ? panel(orgs) : panelEmpty()}</div>
+     </div>`;
+}
+
+function rollcall(orgs, started) {
+  const t = today();
+  return `<div class="clock"><strong>${esc(fmtDay(t))}</strong>Tuesday review</div>`
+    + (!started ? '<p class="slot">Not started</p>' :
+      `<ul class="rollcall">${orgs.map((o,i) =>
+        `<li><button class="rc ${i===RC?'current':''} ${i<RC?'done':''}" onclick="jump(${i})">
+           <span class="n">${i+1}</span>
+           <span class="nm">${esc(o.name)}</span>
+           ${o.needs_decision ? `<span class="flag" title="${esc((needReasons(o)[0]||{}).text || 'Needs a decision')}"></span>` : ''}
+         </button></li>`).join('')}</ul>`)
+    + `<p class="then">Then: capacity · new actions</p>`;
+}
+
+function emptyState() {
+  return `<div class="empty">
+    <h1 class="client-name">Tuesday</h1>
+    <p>No review has been started today. Starting one opens the roll-call and
+       brings forward every action still open from last week.</p>
+    <button class="start-btn" id="startBtn" onclick="startReview()">Start Tuesday's review</button>
+  </div>`;
+}
+function panelEmpty() {
+  return `<p class="label">Actions</p><hr class="rule">
+          <p class="slot">Actions written during the review appear here.</p>`;
+}
+
+async function startReview() {
+  const b = document.getElementById('startBtn');
+  if (b) { b.disabled = true; b.textContent = 'Starting…'; }
+  const { data, error } = await sb.rpc('tuesday_review_open', { p_date: iso(today()) });
+  if (error) { if (b) { b.disabled = false; b.textContent = "Start Tuesday's review"; } return; }
+  MEETING = data;
+  RC = 0;
+  await renderReview();
+}
+
+function orgTimeline(bucket, orgId) {
+  const src = TIMELINE[bucket];
+  if (!src) return [];
+  const o = (src.organisations || []).find(x => x.org_id === orgId);
+  return o ? (o.items || []) : [];
+}
+
+function centre(orgs) {
+  if (!orgs.length) return `<p class="notice">No active organisations to review.</p>`;
+  const o = orgs[Math.min(RC, orgs.length - 1)];
+  const since  = orgTimeline('back', o.org_id);
+  const coming = orgTimeline('fwd',  o.org_id);
+  const nxt    = orgs[RC + 1];
+
+  /* Marked slots. Contract, work plan and capacity have no data source until
+     M4 and M7. The design asks for the section to be present and to say what
+     is missing — hiding it would make the review look finished. But three
+     separate apologies in a row read as a broken screen, so they collapse
+     into one sentence. Decided 26 Aug: "if more than three sections are empty
+     for a client, collapse them to a single line." */
+  const missing = ['contract', 'work plan', 'capacity'];
+  const missingLine = 'No ' + list(missing) + ' recorded yet.';
+
+  /* Do NOT assert a service line we do not know. There is no org-level
+     service_line column; the only honest answer is what this client actually
+     has in the window. M4's contract carries included_lines and replaces this. */
+  const lines = Array.from(new Set(since.concat(coming).map(i => i.service_line)))
+    .map(l => l === 'psychosocial' ? 'Psychosocial' : 'Financial').sort();
+  const lineLabel = lines.length ? lines.join(' and ') : 'no activity in this window';
+
+  return `<p class="kicker">${RC+1} of ${orgs.length} · ${esc(lineLabel)}
+            <span class="sep">·</span> plan period not recorded</p>
+    <h1 class="client-name">${esc(o.name)}</h1>
+    <p class="facts">
+      <span>Account manager not recorded</span><span class="sep">·</span>
+      <span>HR contact not recorded</span><span class="sep">·</span>
+      <span>Headcount not recorded</span>
+      ${needLabel(o)}
+    </p>
+
+    <p class="label">Since last Tuesday</p><hr class="rule">
+    ${since.length ? since.map(itemRow).join('')
+                   : '<p class="slot">Nothing recorded in the last seven days.</p>'}
+
+    <p class="label">Coming up</p><hr class="rule">
+    ${coming.length ? coming.map(itemRow).join('')
+                    : '<p class="slot">Nothing scheduled in the next fortnight.</p>'}
+
+    <p class="label">Retainer</p><hr class="rule">
+    <p class="slot">${esc(missingLine)}</p>
+
+    <p class="label">Last week's actions</p><hr class="rule">
+    ${(o.last_week||[]).length ? o.last_week.map(actionRow).join('')
+                               : '<p class="slot">No actions were recorded last week.</p>'}
+
+    ${nxt ? `<button class="next-btn" onclick="next()">Next: ${esc(nxt.name)} →</button>`
+          : `<button class="next-btn" onclick="finish()">Finish the round →</button>`}`;
+}
+
+/* A yellow flag with no referent is not allowed. needs_decision is exactly
+   "this client has an open action that is past its due date" (M5's
+   tuesday_review_pack), so the reason is always derivable — and the label
+   names it and scrolls to the action it is about. If a future reason ever
+   arrives that cannot be named, it must not be flagged. */
+function needReasons(o) {
+  const overdue = (o.open_now || []).filter(a => a.overdue);
+  const out = [];
+  if (overdue.length) out.push({
+    text: overdue.length === 1 ? '1 action overdue' : overdue.length + ' actions overdue',
+    ref: overdue[0].id
+  });
+  return out;
+}
+function needLabel(o) {
+  const rs = needReasons(o);
+  if (!rs.length) return '';
+  return rs.map(r =>
+    `<button class="need" onclick="showAction('${r.ref}')"
+       title="Go to the action this refers to">${esc(r.text)}</button>`).join(' ');
+}
+function showAction(id) {
+  const el = document.getElementById('act-' + id);
+  if (!el) return;
+  el.scrollIntoView({ block: 'center' });
+  el.classList.add('picked');
+}
+
+function itemRow(i) {
+  return `<div class="row">
+    <span class="date">${esc(fmtShort(i.on_date))}</span>
+    ${slMark(i.service_line)}
+    <span class="text">${esc(i.title)}${
+      i.practitioner ? ' · ' + esc(i.practitioner)
+                     : (i.kind === 'booking' ? ' · <span class="muted">no practitioner</span>' : '')}</span>
+    <span class="state">${esc(i.state || '')}</span></div>`;
+}
+
+function actionRow(a) {
+  const label = a.label || a.state;
+  return `<div class="row">
+    <span class="date">${esc(fmtShort(a.due_date))}</span>
+    <span class="text">${esc(a.title)}</span>
+    <span class="state">${esc(label)}</span></div>`;
+}
+
+function jump(i) { RC = i; renderReview(); }
+function next()  { RC = Math.min(RC + 1, (PACK.organisations||[]).length - 1); renderReview(); }
+function finish(){ go('today'); }
+
+function panel(orgs) {
+  const o = orgs[Math.min(RC, orgs.length - 1)];
+  if (!o) return panelEmpty();
+  const open = (o.open_now || []);
+  const passed = orgs.slice(0, RC);
+
+  return `<p class="label">Actions · ${esc(o.name)}</p><hr class="rule">
+    ${open.length ? open.map(a => `<div class="action" id="act-${a.id}">
+        <div class="t">${esc(a.title)}</div>
+        <div class="m">${esc(shortOwner(a.owner))} · due ${esc(fmtShort(a.due_date))}
+          ${a.overdue ? '<span class="need">overdue</span>' : ''}</div></div>`).join('')
+      : '<p class="slot">No open actions for this client.</p>'}
+    <input class="action-input" id="newAction" placeholder="Type an action for ${esc(o.name)}…"
+           onkeydown="if(event.key==='Enter')addAction('${o.org_id}')">
+    <div class="sofar">
+      <p class="label">This meeting so far</p><hr class="rule">
+      ${passed.length ? passed.map(p => `<div class="row"><span class="text">${esc(p.name)}</span>
+           <span class="state">${(p.open_count||0)} open</span></div>`).join('')
+        : '<p class="slot">No clients passed yet.</p>'}
+    </div>`;
+}
+
+/* Owner is a uuid until M4 gives us a staff directory to resolve it against.
+   Showing the raw uuid would be worse than saying so. */
+function shortOwner(uuid) {
+  if (!uuid) return 'unassigned';
+  if (ME && uuid === ME.id) return 'you';
+  return 'assigned';
+}
+
+async function addAction(orgId) {
+  const el = document.getElementById('newAction');
+  const title = (el.value || '').trim();
+  if (!title) return;
+  el.disabled = true;
+  const due = iso(addDays(today(), 7));
+  const { error } = await sb.rpc('action_upsert', {
+    p_title: title, p_owner: ME.id, p_due_date: due,
+    p_org_id: orgId, p_meeting_id: PACK.meeting_id
+  });
+  el.disabled = false; el.value = '';
+  if (!error) await renderReview();
+}
+
+/* ══ TODAY — the daily view ═══════════════════════════════════ */
+
+async function renderToday() {
+  const v = document.getElementById('view');
+  v.innerHTML = '<div class="col-mid"><p class="notice">Loading…</p></div>';
+
+  const t = today();
+  /* The pack is fetched here too. Tuesday's completion rate lives on it, and
+     landing straight on Today (from a reminder, or a bookmark) otherwise
+     reported "not reviewed yet" whether or not the review had happened. */
+  const [acts, fwd, pack] = await Promise.all([
+    sb.from('actions').select('id,title,owner,due_date,state,org_id')
+      .eq('state','open').order('due_date', { ascending:true }),
+    sb.rpc('ops_timeline', { p_from: iso(t), p_to: iso(addDays(t, 14)) }),
+    PACK ? Promise.resolve({ data: PACK }) : sb.rpc('tuesday_review_pack', { p_date: iso(t) })
+  ]);
+  if (!PACK && pack && pack.data) PACK = pack.data;
+  DAILY = { actions: acts.data || [], timeline: fwd.data || null };
+  await markRemindersRead();
+
+  const mine    = DAILY.actions.filter(a => a.owner === ME.id);
+  const waiting = DAILY.actions.filter(a => a.owner !== ME.id);
+  /* Land on the first thing that needs her rather than an instruction to
+     click. "Choose something on the left" is a screen asking to be used;
+     the day should already be open at the top of the list. */
+  if (!SELECTED && mine.length) SELECTED = mine[0].id;
+  const items   = flatten(DAILY.timeline);
+  const td = iso(t);
+  const wkEnd = iso(addDays(t, 6));
+
+  v.innerHTML = `<div class="board">
+    <div class="col-left">
+      <div class="clock"><strong>${esc(fmtDay(t))}</strong>${esc(ME.email||'')}</div>
+      <p class="label">Needs me · ${mine.length}</p><hr class="rule">
+      ${mine.length ? mine.map((a,i) => `<button class="rc ${SELECTED===a.id?'current':''}"
+           onclick="selectAction('${a.id}')">
+           <span class="n">${i+1}</span><span class="nm">${esc(a.title)}</span>
+           ${a.due_date < td ? '<span class="flag" title="Overdue"></span>' : ''}</button>`).join('')
+        : '<p class="slot">Nothing waiting on you.</p>'}
+
+      <p class="label">Waiting on others · ${waiting.length}</p><hr class="rule">
+      ${waiting.length ? waiting.map(a => `<button class="rc" onclick="selectAction('${a.id}')">
+           <span class="nm">${esc(a.title)}</span></button>`).join('')
+        : '<p class="slot">Nothing outstanding with anyone else.</p>'}
+
+      <p class="then">Tuesday's actions · ${esc(completionLabel())}</p>
+    </div>
+
+    <div class="col-mid">
+      <p class="kicker">Today and the rest of the fortnight</p>
+      <h1 class="client-name">${esc(t.toLocaleDateString('en-GB',{weekday:'long'}))}</h1>
+
+      <p class="label">Today</p><hr class="rule">
+      ${section(items.filter(i => i.on_date === td))}
+
+      <p class="label">This week</p><hr class="rule">
+      ${section(items.filter(i => i.on_date > td && i.on_date <= wkEnd))}
+
+      <p class="label">Next week</p><hr class="rule">
+      ${section(items.filter(i => i.on_date > wkEnd))}
+
+      <p class="label">On plans, without a date</p><hr class="rule">
+      <p class="slot">Work plans are not recorded yet, so nothing can be undated.</p>
+    </div>
+
+    <div class="col-right">
+      <p class="label">Selected</p><hr class="rule">
+      ${selectedPanel()}
+      <p class="label">Capacity · this fortnight</p><hr class="rule">
+      <p class="slot">Practitioner ceilings are not recorded yet.</p>
+      <p class="label">This month</p><hr class="rule">
+      <div class="cap"><span>Touchpoints in the next fortnight</span>
+        <span class="v">${items.length}</span></div>
+      <div class="cap"><span>Invoices produced</span><span class="v">—</span></div>
+    </div>
+  </div>`;
+}
+
+/* A percentage over a denominator of three is false precision — "33.3% done"
+   reads as a measurement when it means one of three. Counts below 20, a
+   percentage at or above it. The denominator is the one M5 defines: done +
+   open + dropped-with-a-successor, i.e. carried. Deliberately dropped work is
+   not a failure to deliver and stays out. */
+function completionLabel() {
+  if (!PACK) return 'not reviewed yet';
+  const all = (PACK.organisations || []).flatMap(o => o.last_week || [])
+    .concat((PACK.unassigned && PACK.unassigned.last_week) || []);
+  const counted = all.filter(a => ['done','open','carried'].includes(a.label || a.state));
+  const done = counted.filter(a => (a.label || a.state) === 'done').length;
+  if (!counted.length) return 'none carried over';
+  if (counted.length < 20) return done + ' of ' + counted.length + ' done';
+  return Math.round(1000 * done / counted.length) / 10 + '% done';
+}
+
+function flatten(tl) {
+  if (!tl) return [];
+  const out = [];
+  (tl.organisations || []).forEach(o => (o.items||[]).forEach(i =>
+    out.push(Object.assign({ org_name:o.name }, i))));
+  (tl.unassigned || []).forEach(i => out.push(Object.assign({ org_name:null }, i)));
+  return out.sort((a,b) => (a.on_date||'').localeCompare(b.on_date||''));
+}
+
+function section(list) {
+  if (!list.length) return '<p class="slot">Nothing.</p>';
+  return list.map(i => `<div class="row">
+    <span class="date">${esc(fmtShort(i.on_date))}</span>
+    ${slMark(i.service_line)}
+    <span class="text">${esc(i.title)}${
+      i.org_name ? ' · ' + esc(i.org_name) : ' · <span class="muted">no organisation</span>'}</span>
+    <span class="state">${esc(i.state||'')}</span></div>`).join('');
+}
+
+function selectAction(id) { SELECTED = id; renderToday(); }
+
+function selectedPanel() {
+  if (!SELECTED) return '<p class="slot">Choose something on the left.</p>';
+  const a = (DAILY.actions || []).find(x => x.id === SELECTED);
+  if (!a) return '<p class="slot">That action is no longer open.</p>';
+  return `<div class="action"><div class="t">${esc(a.title)}</div>
+     <div class="m">${esc(shortOwner(a.owner))} · due ${esc(fmtShort(a.due_date))}</div></div>
+     <button class="start-btn" style="margin-top:12px" onclick="markDone('${a.id}')">Mark done</button>`;
+}
+
+async function markDone(id) {
+  const a = (DAILY.actions || []).find(x => x.id === id);
+  if (!a) return;
+  await sb.rpc('action_upsert', {
+    p_title: a.title, p_owner: a.owner, p_due_date: a.due_date,
+    p_id: id, p_state: 'done'
+  });
+  SELECTED = null;
+  await renderToday();
+}
+
+/* ══ ORGANISATIONS and REPORTS — thin, but real ═══════════════ */
+
+async function renderOrgs() {
+  const v = document.getElementById('view');
+  const { data } = await sb.rpc('tuesday_review_pack', { p_date: iso(today()) });
+  const orgs = (data && data.organisations) || [];
+  v.innerHTML = `<div class="col-mid" style="grid-column:1/-1;max-width:900px">
+    <h1 class="client-name">Organisations</h1>
+    <p class="notice">Active clients. Test organisations are excluded by
+       <span class="mono">ops_timeline</span> and the review pack, not by this page.</p>
+    <table class="plain" style="margin-top:22px">
+      <thead><tr><th>Name</th><th>Open actions</th><th>Needs a decision</th></tr></thead>
+      <tbody>${orgs.map(o => `<tr><td>${esc(o.name)}</td>
+        <td class="num">${o.open_count||0}</td>
+        <td>${o.needs_decision ? '<span class="need">Yes</span>' : '—'}</td></tr>`).join('')
+        || '<tr><td colspan="3">No active organisations.</td></tr>'}</tbody></table>
+    <p class="label">Work plans</p><hr class="rule">
+    <p class="slot">Work plans and contracts are not recorded yet.</p></div>`;
+}
+
+async function renderReports() {
+  const v = document.getElementById('view');
+  const { data, error } = await sb.from('org_reports')
+    .select('id,period_label,period_start,period_end,status,org_id')
+    .order('period_start', { ascending:false });
+  v.innerHTML = `<div class="col-mid" style="grid-column:1/-1;max-width:900px">
+    <h1 class="client-name">Reports</h1>
+    ${error ? '<p class="notice">Reports are readable by admins only.</p>'
+      : `<table class="plain" style="margin-top:22px">
+          <thead><tr><th>Period</th><th>From</th><th>To</th><th>Status</th></tr></thead>
+          <tbody>${(data||[]).map(r => `<tr><td>${esc(r.period_label)}</td>
+            <td class="num">${esc(r.period_start)}</td><td class="num">${esc(r.period_end)}</td>
+            <td>${esc(r.status)}</td></tr>`).join('')
+            || '<tr><td colspan="4">No reports yet.</td></tr>'}</tbody></table>`}
+    <p class="label">Publishing</p><hr class="rule">
+    <p class="slot">Report publishing is still in the admin dashboard.</p></div>`;
+}
+
+/* ══ Other interfaces ═════════════════════════════════════════ */
+function toggleOther() {
+  const m = document.getElementById('otherMenu');
+  if (m.style.display === 'block') { m.style.display = 'none'; return; }
+  const opts = KW.interfaces(ROLES).filter(o => o.id !== 'ops');
+  m.innerHTML = opts.map(o =>
+    `<a href="${o.href}" style="display:block;padding:10px 14px;border-bottom:1px solid var(--rule);text-decoration:none">${esc(o.title)}</a>`).join('')
+    + (ROLES.admin ? `<a href="admin.html" style="display:block;padding:10px 14px;text-decoration:none">Admin dashboard</a>` : '');
+  m.style.display = 'block';
+}
+
+/* ══ Ctrl-K ═══════════════════════════════════════════════════ */
+let KIDX = 0, KHITS = [];
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openK(); }
+  else if (e.key === 'Escape') closeK();
+});
+function openK() {
+  document.getElementById('kdim').classList.add('open');
+  document.getElementById('kbox').classList.add('open');
+  const i = document.getElementById('kinput');
+  i.value = ''; i.focus(); kSearch('');
+}
+function closeK() {
+  document.getElementById('kdim').classList.remove('open');
+  document.getElementById('kbox').classList.remove('open');
+}
+document.getElementById('kinput').addEventListener('input', e => kSearch(e.target.value));
+function kSearch(q) {
+  const s = (q||'').toLowerCase();
+  const orgs = ((PACK && PACK.organisations) || []).map(o => ({ kind:'Organisation', name:o.name, org:o.org_id }));
+  const acts = ((DAILY && DAILY.actions) || []).map(a => ({ kind:'Action', name:a.title, id:a.id }));
+  KHITS = orgs.concat(acts).filter(h => !s || h.name.toLowerCase().includes(s)).slice(0, 20);
+  KIDX = 0;
+  document.getElementById('kres').innerHTML = KHITS.length
+    ? KHITS.map((h,i) => `<button class="${i===0?'on':''}" onclick="kPick(${i})">
+         <span>${esc(h.name)}</span><span class="kind">${h.kind}</span></button>`).join('')
+    : '<div class="kempty">Nothing matches.</div>';
+}
+function kPick(i) {
+  const h = KHITS[i]; if (!h) return;
+  closeK();
+  if (h.kind === 'Organisation') {
+    const idx = ((PACK && PACK.organisations)||[]).findIndex(o => o.org_id === h.org);
+    if (idx >= 0) { RC = idx; SCREEN = 'review'; location.hash = '#review'; renderReview(); }
+  } else { SELECTED = h.id; SCREEN = 'today'; location.hash = '#today'; renderToday(); }
+}
+</script>
+</body>
+</html>

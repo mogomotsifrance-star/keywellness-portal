@@ -46,7 +46,7 @@ $PSQL -d kwm5a -f "$HERE/m5a-tests.sql" 2>&1 \
 
 # The view exists only for the assertions; drop it so the leftover check is
 # about the migration, not the test scaffolding.
-$PSQL -d kwm5a -c "drop view if exists _tl; drop table if exists _expected" >/dev/null
+$PSQL -d kwm5a -c "drop view if exists _tl; drop view if exists _tl2; drop table if exists _expected" >/dev/null
 
 $PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5a-ops-timeline.sql" >/dev/null 2>&1
 echo "  rollback M5a      ok"

@@ -141,7 +141,21 @@ Never replace an existing file wholesale. Before touching `admin.html`,
 every line it prints:
 
 ```bash
+git diff origin/dev -- index.html
+```
+
+**The version in the build pack is broken on Windows.** This —
+
+```bash
 diff <(git show origin/dev:index.html) index.html | grep '^<'
+```
+
+— reports **every line of the file**, because the working tree is CRLF and
+`git show` emits LF. It is a 100% false positive, so it cannot tell real drift
+from none. Use `git diff` above, or normalise first:
+
+```bash
+diff <(git show origin/dev:index.html | tr -d '') <(tr -d '' < index.html) | grep '^<'
 ```
 
 These four files are large and hand-maintained — `index.html` is 518 KB,

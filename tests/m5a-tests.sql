@@ -146,6 +146,39 @@ select _chk('17 a psychosocial booking is currently visible to any staff member 
   exists (select 1 from _tl where org_name='Sedimosa' and service_line='psychosocial'));
 
 
+-- ══ 17a–17d · Delivery states only ══════════════════════════
+-- The state column is reserved for pending / scheduled / attended /
+-- delivered / cancelled. 'published' and 'draft' are EDITORIAL states and
+-- must never reach it — a Tuesday roll-call saying a webinar is "published"
+-- tells the room nothing about whether it happened.
+
+create or replace view _tl2 as
+select i ->> 'title' as title, i ->> 'state' as state, i ->> 'kind' as kind
+  from jsonb_array_elements(
+         (select ops_timeline(current_date - 10, current_date + 10) -> 'organisations')) o,
+       jsonb_array_elements(o -> 'items') i;
+
+select _chk('17a a webinar before its date is scheduled, not published',
+  (select state from _tl2 where title = 'Webinar still to come') = 'scheduled',
+  (select state from _tl2 where title = 'Webinar still to come'));
+
+select _chk('17b a webinar after its date is delivered',
+  (select state from _tl2 where title = 'Webinar already run') = 'delivered',
+  (select state from _tl2 where title = 'Webinar already run'));
+
+select _chk('17c publication does not leak into the state column',
+  (select state from _tl2 where title = 'Webinar not published yet') = 'scheduled'
+  and not exists (select 1 from _tl2 where state in ('published','draft')));
+
+select _chk('17d a future booking reads scheduled, and every state is in the vocabulary',
+  (select state from _tl2 where title = 'A session still to come') = 'scheduled'
+  and not exists (
+    select 1 from _tl2
+     where state not in ('pending','scheduled','attended','delivered','cancelled',
+                         'did not attend')),
+  (select string_agg(distinct state, ', ') from _tl2));
+
+
 -- ══ 18–22 · Gate and grants (RLS enforced) ══════════════════
 
 set role authenticated;
@@ -166,7 +199,9 @@ select _chk('19 an advisor sees the same timeline as an admin, not their own sli
   (select count(*) from jsonb_array_elements(
      ops_timeline(date '2026-08-24', date '2026-08-30') -> 'organisations') o,
      jsonb_array_elements(o -> 'items') i) = (select n from _expected)
-  and (select n from _expected) = 6,
+  /* A literal here (it was 6) re-breaks every time the fixture grows. The
+     property is "the same as the admin, and not vacuously zero". */
+  and (select n from _expected) > 0,
   'advisor sees ' || (select count(*) from jsonb_array_elements(
      ops_timeline(date '2026-08-24', date '2026-08-30') -> 'organisations') o,
      jsonb_array_elements(o -> 'items') i)::text

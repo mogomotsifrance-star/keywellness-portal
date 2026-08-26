@@ -137,3 +137,23 @@ values
   ('Test Co webinar', 'webinar', '0a000000-0000-0000-0000-0000000000c0', true,
    date '2026-08-28', 'financial'),
   ('A lesson, not a webinar', 'lesson', null, true, null, 'financial');
+
+-- Either side of today, for the delivery-state mapping. Relative to
+-- current_date so the assertion does not rot as the calendar moves.
+insert into content_items (title, kind, org_id, published, webinar_date, service_line)
+values
+  ('Webinar still to come', 'webinar', '0a000000-0000-0000-0000-0000000000b0',
+   true, current_date + 5, 'financial'),
+  ('Webinar already run',   'webinar', '0a000000-0000-0000-0000-0000000000b0',
+   true, current_date - 5, 'financial'),
+  -- unpublished, and still to come: publication is editorial, the state
+  -- column is about delivery
+  ('Webinar not published yet', 'webinar', '0a000000-0000-0000-0000-0000000000b0',
+   false, current_date + 6, 'financial');
+
+insert into bookings (id, user_id, requested_date, service, service_line,
+                      session_format, created_at)
+values ('0b000000-0000-0000-0000-00000000000a',
+        '00000000-0000-0000-0000-00000000000e',
+        to_char(current_date + 4, 'YYYY-MM-DD'), 'A session still to come',
+        'financial', 'one_on_one', now());
