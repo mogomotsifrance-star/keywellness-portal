@@ -127,18 +127,25 @@ revoke all on function kw_can_see_activity(program_activities) from public, anon
 -- name is here because section 2 of docs/build/m3-plan.md found it reading
 -- one of the two tables while granted to `authenticated`.
 
+-- THE OIDS ARE SNAPSHOTTED FIRST. Iterating a cursor over pg_proc while
+-- CREATE OR REPLACE-ing the rows it is walking makes the loop lose its place —
+-- it visits some functions and skips others, silently. The rollback hit this
+-- and un-filtered 3 of 12 before the array was introduced. The count assertion
+-- below would have caught it here; the array means it never happens.
 do $$
 declare
-  r      record;
+  v_oids oid[];
+  v_oid  oid;
+  v_name text;
   v_def  text;
   v_new  text;
   n      int := 0;
 begin
-  for r in
-    select p.oid, p.proname
-      from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
-     where ns.nspname = 'public'
-       and p.proname in (
+  select coalesce(array_agg(p.oid), '{}')
+    into v_oids
+    from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+   where ns.nspname = 'public'
+     and p.proname in (
          -- read bookings
          'admin_advisor_roster', 'advisor_client_detail', 'advisor_client_notes',
          'advisor_clients_list', 'advisor_pending_responses',
@@ -146,9 +153,21 @@ begin
          'ops_timeline', 'session_source_trend',
          -- read program_activities
          'activity_upsert', 'contract_position', 'org_work_plan'
-       )
-  loop
-    v_def := pg_get_functiondef(r.oid);
+       );
+
+  foreach v_oid in array v_oids loop
+    select p.proname into v_name from pg_proc p where p.oid = v_oid;
+    v_def := pg_get_functiondef(v_oid);
+
+    -- NORMALISE FIRST. Without this, a second apply wraps the subquery inside
+    -- itself and the function still works, still returns the right rows, and
+    -- is now unreadable — with no error to say so.
+    v_def := replace(v_def,
+      '(select * from bookings where kw_can_see_booking(bookings))', 'bookings');
+    v_def := replace(v_def,
+      '(select * from program_activities where kw_can_see_activity(program_activities))',
+      'program_activities');
+
     v_new := v_def;
 
     -- Reads only. `insert into bookings` and `update bookings` are untouched:
@@ -167,12 +186,12 @@ begin
       raise exception 'M3: % was listed for the sweep but nothing matched. Its '
                       'read does not use the expected `from <table> <alias>` '
                       'shape and needs rewriting BY HAND — do not skip it.',
-                      r.proname;
+                      v_name;
     end if;
 
     execute v_new;
     n := n + 1;
-    raise notice 'M3: % filtered', r.proname;
+    raise notice 'M3: % filtered', v_name;
   end loop;
 
   if n <> 12 then
@@ -197,30 +216,50 @@ end $$;
 -- the FINANCIAL line only, and psychosocial reaches HR through theme_counts()
 -- and nowhere else.
 
-do $$
-declare v_def text; v_new text;
-begin
-  select pg_get_functiondef(p.oid) into v_def
-    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-   where n.nspname = 'public' and p.proname = '_org_report_period_data';
+-- OVERLOADS. _org_report_period_data exists TWICE — (uuid, date, date) and
+-- (uuid, date, date, uuid[]) — and only the four-argument one reads bookings.
+-- An earlier version of this block used `select ... into`, which takes ONE row
+-- arbitrarily when there are two. It would have patched whichever overload the
+-- planner handed back and left the other one counting counselling into HR's
+-- totals, silently. Loop over every overload; assert that at least one was
+-- actually changed.
 
-  if v_def is null then
+do $$
+declare r record; v_def text; v_new text; n_seen int := 0; n_split int := 0;
+begin
+  for r in
+    select p.oid, pg_get_function_identity_arguments(p.oid) as args
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = '_org_report_period_data'
+  loop
+    n_seen := n_seen + 1;
+    v_def  := pg_get_functiondef(r.oid);
+
+    -- Normalise first, for the same reason as the sweep above.
+    v_def  := replace(v_def,
+      '(select * from bookings where service_line = ''financial'')', 'bookings');
+
+    v_new := regexp_replace(v_def, '(\mfrom\s+)bookings(\s+)(\w+)',
+             '\1(select * from bookings where service_line = ''financial'')\2\3', 'gi');
+    v_new := regexp_replace(v_new, '(\mjoin\s+)bookings(\s+)(\w+)',
+             '\1(select * from bookings where service_line = ''financial'')\2\3', 'gi');
+
+    if v_new <> v_def then
+      execute v_new;
+      n_split := n_split + 1;
+      raise notice 'M3: _org_report_period_data(%) now counts the financial line only', r.args;
+    end if;
+  end loop;
+
+  if n_seen = 0 then
     raise exception 'M3: _org_report_period_data is missing';
   end if;
-
-  v_new := regexp_replace(v_def, '(\mfrom\s+)bookings(\s+)(\w+)',
-           '\1(select * from bookings where service_line = ''financial'')\2\3', 'gi');
-  v_new := regexp_replace(v_new, '(\mjoin\s+)bookings(\s+)(\w+)',
-           '\1(select * from bookings where service_line = ''financial'')\2\3', 'gi');
-
-  if v_new = v_def then
-    raise exception 'M3: _org_report_period_data does not use the expected '
-                    'shape — split it BY HAND rather than shipping HR a number '
-                    'that silently includes counselling.';
+  if n_split = 0 then
+    raise exception 'M3: none of the % _org_report_period_data overload(s) could be '
+                    'split — do it BY HAND rather than shipping HR a number that '
+                    'silently includes counselling.', n_seen;
   end if;
-
-  execute v_new;
-  raise notice 'M3: _org_report_period_data now counts the financial line only.';
+  raise notice 'M3: % of % reporting overload(s) split by line.', n_split, n_seen;
 end $$;
 
 
@@ -272,14 +311,17 @@ end $$;
 -- nothing today that it could regress.
 
 drop policy if exists org_contracts_staff_read on org_contracts;
+drop policy if exists org_contracts_admin_read on org_contracts;
 create policy org_contracts_admin_read on org_contracts
   for select using (is_admin());
 
 drop policy if exists contract_rates_staff_read on contract_rates;
+drop policy if exists contract_rates_admin_read on contract_rates;
 create policy contract_rates_admin_read on contract_rates
   for select using (is_admin());
 
 drop policy if exists org_contacts_staff_read on org_contacts;
+drop policy if exists org_contacts_admin_read on org_contacts;
 create policy org_contacts_admin_read on org_contacts
   for select using (is_admin());
 
@@ -296,7 +338,16 @@ create policy org_contacts_admin_read on org_contacts
 -- exactly this class of thing, and leaving it would mean knowing about it and
 -- walking past.
 
-revoke execute on function kw_unit_label(uuid) from anon;
+do $$
+begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public' and p.proname = 'kw_unit_label') then
+    execute 'revoke execute on function kw_unit_label(uuid) from anon';
+    raise notice 'M3: kw_unit_label is no longer anon-callable.';
+  else
+    raise notice 'M3: kw_unit_label is not present here — nothing to revoke.';
+  end if;
+end $$;
 
 
 -- ── 7. Post-conditions ──────────────────────────────────────
@@ -314,8 +365,18 @@ begin
      and p.prosrc ~* '\mfrom\s+bookings\M|\mjoin\s+bookings\M'
      and p.prosrc !~* '\mkw_can_see_booking\M'
      -- the self-scoped four, justified in section 4
-     and p.proname not in ('advisor_book_session','advisor_mark_response_seen',
-                           'member_respond_booking','award_points');
+     and p.proname not in (
+       -- Self-scoped, justified individually in section 4.
+       'advisor_book_session','advisor_mark_response_seen',
+       'member_respond_booking','award_points',
+       -- theme_counts is AGGREGATE-ONLY and floored at five ALWAYS. Applying
+       -- the per-row predicate here would be actively WRONG: each
+       -- counsellor's aggregate would cover only their own cases, which in a
+       -- two-counsellor practice is a per-counsellor figure wearing an
+       -- aggregate's clothes -- and the floor would then suppress nearly
+       -- everything while appearing to report. The FLOOR is the control on
+       -- this function; the predicate is the control on row reads.
+       'theme_counts');
   if bad is not null then
     raise exception 'M3: these functions read bookings without the visibility '
                     'predicate: %', bad;
@@ -333,13 +394,26 @@ begin
                     'visibility predicate: %', bad;
   end if;
 
+  -- Nesting means the file was applied twice without normalising. It is
+  -- harmless to the results and fatal to anyone reading the function.
+  select string_agg(p.proname, ', ') into bad
+    from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+   where ns.nspname = 'public'
+     and p.prosrc like '%from (select * from (select * from bookings%';
+  if bad is not null then
+    raise exception 'M3: the filter is nested inside itself in: %', bad;
+  end if;
+
   -- The helpers themselves must not be reachable.
   if has_function_privilege('anon', 'kw_can_see_booking(bookings)', 'EXECUTE')
   or has_function_privilege('authenticated', 'kw_can_see_booking(bookings)', 'EXECUTE') then
     raise exception 'M3: kw_can_see_booking must not be callable directly';
   end if;
 
-  if has_function_privilege('anon', 'kw_unit_label(uuid)', 'EXECUTE') then
+  -- Only if it is present: it belongs to phase0, which is not in every stack.
+  if exists (select 1 from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+              where ns.nspname = 'public' and p.proname = 'kw_unit_label')
+     and has_function_privilege('anon', 'kw_unit_label(uuid)', 'EXECUTE') then
     raise exception 'M3: kw_unit_label is still anon-callable';
   end if;
 

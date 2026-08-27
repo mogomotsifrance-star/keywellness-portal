@@ -268,6 +268,14 @@ create index if not exists bookings_counsellor_idx on bookings (counsellor_id)
 
 begin;
 
+-- ROW-LEVEL SECURITY MUST ACTUALLY BE ON. This is not defensive noise: the
+-- test fixture had nine policies on `bookings` and RLS DISABLED, so every one
+-- of them was decoration and every read returned every row. Live happens to
+-- have it enabled — but "happens to" is not a thing a confidentiality boundary
+-- may rest on, and a policy without RLS is a comment that looks like a
+-- control.
+alter table bookings enable row level security;
+
 -- The four that go. Their live predicates are written out in the plan (§7);
 -- they existed in the repo only as a comment inventory, and
 -- supabase_cleanup_policies.sql was never applied.
@@ -282,6 +290,17 @@ drop policy if exists bookings_advisor_update  on bookings;
 drop policy if exists bookings_lead_update     on bookings;
 drop policy if exists bookings_member_respond  on bookings;
 drop policy if exists bookings_own             on bookings;
+
+-- And the ones THIS FILE creates, so a re-run replaces rather than collides.
+-- Idempotency is not a nicety here: this migration is applied to a branch,
+-- reviewed, and applied again after a fix, and a file that only works on a
+-- virgin database cannot be iterated on.
+drop policy if exists bookings_financial_read           on bookings;
+drop policy if exists bookings_financial_admin_write    on bookings;
+drop policy if exists bookings_psychosocial_read        on bookings;
+drop policy if exists bookings_psychosocial_admin_write on bookings;
+drop policy if exists bookings_counsellor_insert        on bookings;
+drop policy if exists bookings_counsellor_update        on bookings;
 
 
 -- ── The member. Unchanged: their own rows, both lines. ──
@@ -630,6 +649,15 @@ begin
                         'bookings_advisor_select');
   if n <> 0 then
     raise exception 'M3: % legacy bookings policy/policies survive', n;
+  end if;
+
+  -- A policy is decoration unless RLS is on. Asserted because the fixture
+  -- proved this is not hypothetical.
+  if not exists (select 1 from pg_class c join pg_namespace ns on ns.oid = c.relnamespace
+                  where ns.nspname = 'public' and c.relname = 'bookings'
+                    and c.relrowsecurity) then
+    raise exception 'M3: row-level security is DISABLED on bookings — every '
+                    'policy in this migration is decoration';
   end if;
 
   -- No bookings policy may still compare an email without lowering it.
