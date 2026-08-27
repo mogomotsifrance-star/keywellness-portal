@@ -100,14 +100,39 @@ Decisions already taken (25 Aug 2026), not open for re-litigation:
 - **No Clinical Lead is assigned.** `is_clinical_lead` is false for everyone;
   counselling notes are author-only until one exists, and a risk flag creates a
   content-free action for Lone.
-- Invoices are **prepared by the system and handed to accounts by Lone**.
-  Nothing is sent automatically, and nothing is sent by hand from inside the
-  platform either. **Superseded by M4 as built (26 Aug 2026):** the earlier
-  wording said "produced by Laone", which was true of the business and false of
-  the system — Laone does not use the platform, has no account, owns nothing
-  and uploads nothing. There is no accountant user anywhere in the schema. See
-  `docs/build/m4-contracts-workplans-invoices.md` section 2.
+- **Invoices are produced in Sage. This system never produces one and never
+  sees one.** It records the *handover* — the moment Lone gives Laone the
+  numbers — and Lone's own confirmation afterwards that the invoice exists.
+  Nothing is sent automatically and nothing is sent by hand from inside the
+  platform. Laone does not use the platform: no account, owns nothing, uploads
+  nothing, and there is no accountant user anywhere in the schema. Earlier
+  wordings here said "prepared by the system, produced by Laone" and then
+  "handed to accounts by Lone"; both are superseded. See
+  `docs/build/m4-billing-handovers-plan.md`.
 - Flyers go to the organisation's HR contact by default.
+
+### We have no read of Sage, and that is a design constraint
+
+Recorded 27 Aug 2026. It decides more of M4 than anything else.
+
+**No `paid` state and no `overdue`.** Both are facts about a document this
+system cannot see. A stale "paid" is worse than no "paid", because a wrong
+answer gets acted on and a missing one gets checked. No scan upload and no
+storage bucket either — the document lives in Sage, and a photocopy here would
+be a second version of the truth.
+
+**`invoiced` does exist, and it means something narrower than it looks.** It
+means Lone has confirmed with Laone that the invoice exists. She owns that
+follow-up, which is what makes the flag safe when `paid` is not.
+
+**The wording rule, binding on every screen:** the label reads
+**"Confirmed with Laone · 26 Aug"**, never a bare **"Invoiced"**. The system
+does not know an invoice exists; it knows Lone said so, and when. **Any label
+implying first-hand knowledge of Sage is a defect — flag it.** One already
+exists: `ops.html` line 641 reads "Invoices produced".
+
+The table is therefore `billing_handovers`, not `invoices`. A row is the
+handover, not the invoice.
 
 ### Not every client is on retainer — this shapes M4
 

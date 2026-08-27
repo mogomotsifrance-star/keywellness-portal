@@ -1,3 +1,23 @@
+> ## SUPERSEDED — 27 Aug 2026
+>
+> **Do not build from this file.** It describes M4 as written on 26 Aug, when
+> the plan still assumed this system produced invoices. It does not: **invoices
+> are produced in Sage**, which we have no read of.
+>
+> What changed: `invoices` becomes `billing_handovers`; `paid`, `overdue`, the
+> scan upload and the storage bucket are all deleted; `invoiced` comes back
+> meaning "Lone confirmed with Laone that it exists", with a binding rule that
+> the screen must say "Confirmed with Laone · 26 Aug" and never a bare
+> "Invoiced".
+>
+> The current plan is **`docs/build/m4-billing-handovers-plan.md`**.
+>
+> This file is kept because §4 (the live pack and `covers_from`), §6
+> (idempotency and the transition-guarded trigger) and §7 (the M3 obligation)
+> survive the change unaltered, and the reasoning behind them is here.
+>
+> Nothing described in either file has been applied to any database.
+
 # M4 — contracts, work plans, activities, invoices
 
 **Built 26 Aug 2026 on `dev`. Not applied to Supabase.**
