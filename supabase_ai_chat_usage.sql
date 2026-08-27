@@ -10,7 +10,7 @@
 -- Rollback: migrations/rollback-ask-claude-usage.sql
 -- (written and committed BEFORE this file, per project rule).
 --
--- Purpose (BATCH-0-ASK-CLAUDE-FINDINGS.md, Locked Decisions 5/6/2.1):
+-- Purpose (docs/build/BATCH-0-ASK-CLAUDE-FINDINGS.md, Locked Decisions 5/6/2.1):
 --   Server-side backing store for the ask-claude Edge Function's
 --   DAILY cap (20/user/day, Africa/Gaborone boundary) and BURST limit
 --   (5/user/rolling minute), plus per-request token telemetry for cost

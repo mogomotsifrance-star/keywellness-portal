@@ -1,0 +1,33 @@
+M5 baseline — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, BEFORE apply
+
+WHAT EXISTS
+  organizations.is_test        absent
+  meetings / actions / action_reminders   all absent
+  is_staff()                   absent
+  pg_cron                      INSTALLED   <- the deploy note said otherwise; it was wrong
+
+COUNTS THAT MUST NOT MOVE
+  organizations rows           3
+  bookings rows                22
+  notifications rows           2
+  points_events rows           177
+
+WHO CAN OWN AN ACTION (actions.owner references auth.users)
+  admin   france@keywealth.co.bw          ok
+  admin   france@prolearn.co.bw           ok
+  admin   lone@keywellness.co.bw          ok
+  admin   michelle@keywealth.co.bw        ok
+  admin   tnmokgwetsi@gmail.com           ok
+  advisor france@keywealth.co.bw          ok
+  advisor kealeboga@keywellness.co.bw     ok
+  advisor kmarapane@debswana.bw           ok
+  advisor kramontshonyana@debswana.bw     <-- NO ACCOUNT (cannot own an action)
+  advisor tnmokgwetsi@gmail.com           ok
+
+THE PREDICTION (written before applying; see the migration header)
+  organizations gains is_test, false on all 3 rows.
+  meetings, actions, action_reminders appear, EMPTY.
+  Eight policies on meetings + actions. Zero on action_reminders, deliberately.
+  A daily job kw-action-reminders appears at 0 4 * * *.
+  All four counts above are unchanged, because M5 writes to nothing existing.
+  No reporting figure moves, because M5 never touches bookings.

@@ -10,7 +10,7 @@
 -- (written and committed BEFORE this file, per project rule).
 --
 -- Batch 0 findings this file is shaped by
--- (BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md):
+-- (docs/build/BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md):
 --   • There is NO `webinars` table. Webinars are content_items rows with
 --     kind='webinar' (video_path = Vimeo ref). The thumbnail column goes
 --     on content_items, alongside the existing webinar_date (added by

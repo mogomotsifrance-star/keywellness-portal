@@ -353,7 +353,7 @@
   // Chart.js <canvas> backing stores can go blank on print in some browsers
   // (the print layout reflow clears/resizes the canvas before it paints) —
   // flagged as a risk, not yet confirmed one way or the other, in
-  // BATCH-0-FINDINGS.md. Rather than gamble on it, every registered chart is
+  // docs/build/BATCH-0-FINDINGS.md. Rather than gamble on it, every registered chart is
   // swapped for a static <img> snapshot (canvas.toDataURL()) just before
   // print and swapped back immediately after — the smallest change that
   // makes print reliable regardless of how any given browser handles it.

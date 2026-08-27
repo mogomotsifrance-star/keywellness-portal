@@ -1,0 +1,50 @@
+M5 — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP as migration `m5_meetings_actions`.
+
+PREDICTION                                   ACTUAL          MATCH
+organizations rows unchanged (3)             3               yes
+bookings rows unchanged (22)                 22              yes
+notifications rows unchanged (2)             2               yes
+points_events rows unchanged (177)           177             yes
+meetings created EMPTY                       0 rows          yes
+actions created EMPTY                        0 rows          yes
+action_reminders created EMPTY               0 rows          yes
+8 policies on meetings + actions             8               yes
+0 policies on action_reminders               0               yes
+RLS enabled on all three                     3 of 3          yes
+daily job kw-action-reminders 0 4 * * *      present         yes
+_action_label not reachable ungated          not reachable   yes
+
+Every prediction met. No exceptions.
+
+Then, by hand, the one line the deploy note calls for:
+  update organizations set is_test = true where name = 'Test Co';
+  -> BOPEU=false, Sedimosa=false, Test Co=true
+
+============================================================
+M5a baseline — BEFORE apply
+
+WHAT EXISTS
+  ops_timeline(date,date)   absent
+  _ops_as_date(text)        absent
+  is_staff()   (from M5)    PRESENT
+  organizations.is_test     PRESENT, Test Co flagged
+
+THE PREDICTION (written before applying)
+  Two functions appear and NOTHING else changes. M5a creates no table, adds no
+  column and writes no row -- it is a read.
+
+  _ops_as_date must NOT be callable by anon or authenticated. ops_timeline
+  MUST be callable by authenticated. The migration refuses to finish if either
+  is wrong, so a bad grant cannot ship quietly.
+
+  Asked for the fortnight around today, ops_timeline should return BOPEU and
+  Sedimosa and NOT Test Co -- the test organisation is excluded inside the
+  function, not on the page, so no caller can forget to filter.
+
+  Every row it returns should be service_line 'financial'. There is no
+  counselling work in the system yet, and M3 is what changes that.
+
+  IF IT IS WRONG: nothing existing can be damaged, because nothing existing is
+  written to. The worst case is the Tuesday screen showing the wrong week.
+  Undo with migrations/rollback-m5a-ops-timeline.sql.

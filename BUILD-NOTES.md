@@ -286,7 +286,7 @@ Batch" section below) that called it a "future subdomain, not yet live."
 
 # Webinar Thumbnails + Admin Webinar Editing (Vimeo oEmbed + manual fallback)
 
-Full Batch-0 discovery in `BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md` (verdict: GO).
+Full Batch-0 discovery in `docs/build/BATCH-0-WEBINAR-THUMBNAILS-FINDINGS.md` (verdict: GO).
 Frontend on `dev`. One production-live Supabase change (a single additive column),
 **not yet applied** — see below. Tshenolo chose the defaults for the two open
 decisions ("category" dropped; both thumbnail paths built with manual as the robust
@@ -465,7 +465,7 @@ never persisted anywhere), not a comma-parse bug.
 
 # Fixes & Diagnosis Batch (password toggle, email logo/links, signup errors, opt-in refresh, admin time column)
 
-Per `kw-fixes-diagnosis.md`'s batch plan. Full discovery in `BATCH-0-FINDINGS.md`
+Per `kw-fixes-diagnosis.md`'s batch plan. Full discovery in `docs/build/BATCH-0-FINDINGS.md`
 (replaces an unrelated stale version from a prior workstream — see that file's own
 note). Two decisions confirmed with Tshenolo before proceeding past Batch 0:
 
@@ -985,7 +985,7 @@ File: `supabase_org_stress_summary.sql`. Pure addition — one new function, not
 
 **Design decisions:**
 - Source table is `stress_logs` (fortnightly Check-in flow), not the `financial_stress_tracker`
-  tool's `tool_data` blob — see "headline finding" in `BATCH-0-FINDINGS.md` for why two stress
+  tool's `tool_data` blob — see "headline finding" in `docs/build/BATCH-0-FINDINGS.md` for why two stress
   sources exist and why they're on opposite scales.
 - **Band thresholds correct a scale-direction bug found in `org_financial_indicators()`.**
   `stress_logs.level` is 1–10 where **lower = more stressed** ("1 = Barely coping" ... "10 =
@@ -2798,7 +2798,7 @@ template; flag back if so.
 
 # Learning Pathways — Video LMS, Quizzes & Prolearn Certificates
 
-Full discovery in `BATCH-0-LMS-FINDINGS.md`. Two decisions confirmed with
+Full discovery in `docs/build/BATCH-0-LMS-FINDINGS.md`. Two decisions confirmed with
 Tshenolo before proceeding past Batch 0:
 
 1. **`quiz_passed` points stay at 50** — already seeded in `points_catalog`
@@ -2864,7 +2864,7 @@ Left in the bucket, harmless, ignorable.
 
 SQL: `supabase_lms_schema.sql`. `content_items`/`content_progress` created
 fresh (Batch 0 confirmed they didn't pre-exist — brief's ALTER-based plan
-corrected to CREATE, see BATCH-0-LMS-FINDINGS.md). All 6 tables + the
+corrected to CREATE, see docs/build/BATCH-0-LMS-FINDINGS.md). All 6 tables + the
 `quiz_questions_public` view, RLS policies (no HR/employer policy on any of
 them), 3 pathways, 15 Pathway-1 content_items (real uploaded filenames from
 Batch 1), 1 welcome content_item (placeholder path, pending upload), and
@@ -3045,7 +3045,7 @@ with correct rendering, but a human visual pass is still worth doing).
   `<image>` tags pointing at `assets/img/prolearn-logo.png` /
   `assets/img/prolearn-signature.png` — neither asset nor the referenced
   `prolearn-certificate-preview.html` were available this session (flagged
-  in BATCH-0-LMS-FINDINGS.md and again here). Certificate will render with
+  in docs/build/BATCH-0-LMS-FINDINGS.md and again here). Certificate will render with
   broken image icons in place of the logo/signature until those two PNGs
   are added to `assets/img/`.
 
@@ -3075,7 +3075,7 @@ Manual follow-ups only; no code/SQL in this section.
 3. **Point values — resolved for Pathway 1, but the threshold math behind
    them is a real, already-confirmed problem, not a hypothetical.**
    `quiz_passed` stays at the pre-existing 50 points (Tshenolo's call in
-   Batch 0, not the brief's 75 — see BATCH-0-LMS-FINDINGS.md). But
+   Batch 0, not the brief's 75 — see docs/build/BATCH-0-LMS-FINDINGS.md). But
    `reward_thresholds` already has `learning.returning_points = 150`,
    seeded before this feature existed, with its own code comment flagging
    that it "MUST be reviewed each season against new content published."
@@ -3159,7 +3159,7 @@ video was in native fullscreen.
 
 # Org Webinars, Quarterly Reward Thresholds & HR Rewards Explainer (2026-07-14)
 
-Full discovery + GO/NO-GO: `BATCH-0-WEBINARS-THRESHOLDS-FINDINGS.md`.
+Full discovery + GO/NO-GO: `docs/build/BATCH-0-WEBINARS-THRESHOLDS-FINDINGS.md`.
 Rollback (written before the forward files): `migrations/rollback-webinars-thresholds.sql`.
 
 ## ⚠️ MANDATORY FIRST MANUAL STEP — apply the SQL
@@ -3458,7 +3458,7 @@ accepted gap above, not a bug to chase.
 Adds a company-unit layer **under** organisations so HR reporting is scoped
 per company inside a single-invite-code org (Debswana = the **Sedimosa**
 fund). Sedimosa keeps ONE invite code and ONE branded experience — no
-separate orgs per company. Batch 0 findings: `BATCH-0-COMPANY-UNITS-FINDINGS.md`.
+separate orgs per company. Batch 0 findings: `docs/build/BATCH-0-COMPANY-UNITS-FINDINGS.md`.
 
 ### What went to Supabase (author here → **applied by hand in the SQL Editor**)
 None of these are live until applied; they are behaviour-neutral to existing
@@ -3552,7 +3552,7 @@ company managers out of those actions):
 # Sedimosa Phase 2 (Departments · Gender · Phone · Notifications · Compulsory
 # assessment · Budget actuals · Estate planning · Webinars · Password change)
 
-Discovery: `BATCH-0-SEDIMOSA-PHASE2-FINDINGS.md` (2026-07-31, GO). Prerequisite
+Discovery: `docs/build/BATCH-0-SEDIMOSA-PHASE2-FINDINGS.md` (2026-07-31, GO). Prerequisite
 `supabase_org_units.sql` confirmed applied. No live DB access here — all SQL
 hand-applied by Tshenolo in the Supabase SQL Editor.
 
@@ -4096,7 +4096,7 @@ function. Built to the locked spec (Batches 0–4).
 
 ## Files touched / added
 
-- `BATCH-0-ASK-CLAUDE-FINDINGS.md` — read-only discovery + GO decision.
+- `docs/build/BATCH-0-ASK-CLAUDE-FINDINGS.md` — read-only discovery + GO decision.
 - `supabase_ai_chat_usage.sql` — Batch 1 forward migration (table + index + RLS).
 - `migrations/rollback-ask-claude-usage.sql` — rollback, written first.
 - `supabase/functions/ask-claude/index.ts` — the Edge Function.

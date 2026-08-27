@@ -1,0 +1,24 @@
+M1 baseline — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, BEFORE apply
+
+V1 service_line on bookings        : absent
+V1 session_format on bookings      : absent
+V1 _m1_session_mode_backup         : absent
+V1 bookings rows                   : 22
+V4 points_events rows              : 177   |  session_attended: 1
+V5 attended true/false/null        : 1 / 1 / 20
+
+V2 session_type x session_mode
+  In-Person  x  (null mode)   =  12 row(s)   <-- M1 will normalise these
+  In-Person  x  physical      =   2 row(s)
+  Individual x  physical      =   2 row(s)
+  Virtual    x  (null mode)   =   6 row(s)   <-- M1 will normalise these
+  (12 + 6 = 18, which is the count the migration reports)
+
+V3 regression baseline
+BOPEU    | Q3 2026 [no report; live check] | 2026-07-01..2026-09-30 | sessions=NULL (insufficient_cohort)
+Sedimosa | Q3 2026 [no report; live check] | 2026-07-01..2026-09-30 | sessions={"mode_split": {}, "total_booked": 5, "monthly_trend": [{"month": "2026-07", "booked": {"value": 5, "suppressed": false}, "attended": {"value": null, "suppressed": true}}], "total_attended": 0, "attendance_confirmation_coverage_pct": 0.0}
+Test Co  | Q1 2026 (Jan-Mar) [previous window] | 2025-10-03..2025-12-31 | sessions=NULL (insufficient_cohort)
+Test Co  | Q1 2026 (Jan-Mar)                   | 2026-01-01..2026-03-31 | sessions=NULL (insufficient_cohort)
+Test Co  | Q3 2026 (Jul-Sep) [previous window] | 2026-03-31..2026-06-30 | sessions={"mode_split": {}, "total_booked": 5, "monthly_trend": [{"month": "2026-06", "booked": {"value": 5, "suppressed": false}, "attended": {"value": null, "suppressed": true}}], "total_attended": 0, "attendance_confirmation_coverage_pct": 0.0}
+Test Co  | Q3 2026 (Jul-Sep)                   | 2026-07-01..2026-09-30 | sessions={"mode_split": {"physical": {"value": null, "suppressed": true}}, "total_booked": 8, "monthly_trend": [{"month": "2026-07", "booked": {"value": 8, "suppressed": false}, "attended": {"value": null, "suppressed": true}}], "total_attended": 1, "attendance_confirmation_coverage_pct": 25.0}
+Test Co  | Q3 2026 [no report; live check]     | 2026-07-01..2026-09-30 | sessions={"mode_split": {"physical": {"value": null, "suppressed": true}}, "total_booked": 8, "monthly_trend": [{"month": "2026-07", "booked": {"value": 8, "suppressed": false}, "attended": {"value": null, "suppressed": true}}], "total_attended": 1, "attendance_confirmation_coverage_pct": 25.0}

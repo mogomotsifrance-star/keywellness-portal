@@ -1,0 +1,48 @@
+M5a — live Supabase, 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP as migration `m5a_ops_timeline`.
+
+PREDICTION                                   ACTUAL                    MATCH
+two functions appear, nothing else changes   bookings=22 orgs=3        yes
+                                             notifications=2 unchanged
+_ops_as_date NOT callable by anon/auth       not callable              yes
+ops_timeline callable by authenticated       callable                  yes
+returns BOPEU and Sedimosa                   BOPEU, Sedimosa           yes
+does NOT return Test Co                      correctly excluded        yes
+every row service_line 'financial'           no psychosocial row       yes
+
+Every prediction met.
+
+OBSERVED, not a fault, but worth knowing: asked for the three weeks around
+today, BOPEU and Sedimosa each return ZERO items, and the only two items in
+the window belong to members with no organisation on their profile. Sedimosa's
+seven bookings are real; they are dated outside this window. The Tuesday
+roll-call will therefore look empty for both real clients this week.
+
+============================================================
+Member support baseline — BEFORE apply
+
+WHAT EXISTS
+  is_ops_admin()        absent
+  support_actions       absent
+  support_lookup / support_can / support_log / support_recent   all absent
+
+THE PREDICTION (written before applying)
+  One new table appears, EMPTY: support_actions, the audit trail. Five new
+  functions appear. Nothing existing is read, written or deleted.
+
+  support_actions gets exactly ONE policy, and it is read-only, for ops admins.
+  There is deliberately no insert, update or delete policy: rows are written
+  only by support_log(), and NOBODY can amend or delete one -- including the
+  person whose action it records. The migration refuses to finish if the policy
+  count is not exactly 1.
+
+  is_ops_admin() is defined as "every admin is an ops admin" for now. That
+  means France gains the ability to trigger a member password reset today, and
+  LOSES IT when M3 lands and replaces the body of that one function. That is
+  intended and is the reason the gate exists as its own function rather than
+  calling is_admin() directly at each site.
+
+  IF IT IS WRONG: the audit table could be readable by someone who should not
+  read it, or the rate limits could fail open. No member data is modified and
+  no email is sent by this file -- sending is the Edge Function's job, and it
+  is deployed separately. Undo with migrations/rollback-support-audit.sql.

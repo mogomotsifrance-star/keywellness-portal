@@ -242,7 +242,7 @@ git checkout dev
 2. **Admin dashboard** — for Key Wellness team to see all users and their wellness scores
 3. **Push notifications / email reminders** — monthly check-in reminders
 4. **Video content** — replace placeholder "Coming Soon" videos with real content
-5. ~~**Advisor portal**~~ — ✅ built. See `ADVISOR-PORTAL-HANDOVER.md`
+5. ~~**Advisor portal**~~ — ✅ built. See `docs/build/ADVISOR-PORTAL-HANDOVER.md`
 
 ---
 
@@ -329,10 +329,20 @@ select p.proname, pg_get_function_identity_arguments(p.oid) as args
    and pg_get_function_result(p.oid) <> 'trigger'
    and (has_function_privilege('anon', p.oid, 'EXECUTE')
      or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
-   and not (p.prosrc ~* '\mis_admin\M|\mis_team_lead\M|\memployer_org\M|\mis_advisor\M|\mcurrent_advisor_id\M|\mhr_unit_in_scope\M|\mcan_manage_advisor\M'
+   and not (p.prosrc ~* '\mis_admin\M|\mis_team_lead\M|\memployer_org\M|\mis_advisor\M|\mcurrent_advisor_id\M|\mhr_unit_in_scope\M|\mcan_manage_advisor\M|\mis_staff\M|\mis_psychosocial_admin\M|\mis_counsellor\M|\mcurrent_counsellor_id\M|\mis_clinical_lead\M'
          or p.prosrc ~* 'auth\.uid\(\)|auth\.jwt\(\)')
  order by p.proname;
 ```
+
+**The gate list in that regex is part of the rule, not decoration.** A function
+gated by a name the regex does not know is reported as ungated, and the next
+person either "fixes" a false positive by revoking a grant the page needs, or
+learns to ignore the sweep — which is worse. `is_staff` was added by M5;
+`is_ops_admin` was added by the support work and **removed by M4a** — it
+conflated three separate ideas and its replacement is `is_psychosocial_admin`;
+`is_counsellor`, `current_counsellor_id` and `is_clinical_lead` are listed
+ahead of M3 so the sweep stays honest the day they land. **Add any new gate
+here in the same migration that creates it.**
 
 ---
 

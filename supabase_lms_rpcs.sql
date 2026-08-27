@@ -10,7 +10,7 @@
 -- Reuses existing infrastructure confirmed in Batch 0 discovery:
 --   - award_points(p_event_type text, p_ref_id text) — 'video_watched'
 --     (25 pts) and 'quiz_passed' (50 pts, Tshenolo's confirmed value, not
---     the brief's 75 — see BATCH-0-LMS-FINDINGS.md) are already seeded in
+--     the brief's 75 — see docs/build/BATCH-0-LMS-FINDINGS.md) are already seeded in
 --     points_catalog with category='learning'. No catalog changes needed.
 --   - is_admin() (supabase_multitenancy.sql) — existing SECURITY DEFINER
 --     helper checking the `admins` table by JWT email. Reused directly

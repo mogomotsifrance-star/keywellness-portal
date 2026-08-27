@@ -1,0 +1,44 @@
+M4a — live Supabase, 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP as migration `m4a_ownership_and_roles`.
+
+PREDICTED                              ACTUAL                          MATCH
+is_ops_admin exists: no                no                              yes
+policies on is_ops_admin: 0            0                               yes
+functions on is_ops_admin: 0           0                               yes
+_handover_owner falls back: no         no                              yes
+owner resolves to lone@                lone@keywellness.co.bw          yes
+is_psychosocial_admin: yes             yes                             yes
+psychosocial_admins: Lone, Michelle    lone@, michelle@                yes
+called by nothing yet                  0 functions, 0 policies         yes
+admins unchanged (five)                the same five                   yes
+counts unchanged                       bookings=22 orgs=3              yes
+                                       handovers=0 contracts=0
+                                       support=0
+billing flags gain no_owner            not_confirmed + no_owner        yes
+
+Every prediction met. No exceptions.
+
+WHAT THIS FIXED, AND WHY IT COULD NOT HAVE BEEN CAUGHT LOCALLY
+
+  _handover_owner() fell back to "the first admin by email". On live that is
+  france@, because france sorts before lone. The M4 apply set the config by
+  hand, which fixed the symptom; the fallback remained and would have picked
+  France again the moment the key were cleared or the system stood up
+  elsewhere.
+
+  No local test could catch it: the fixture has Lone as the only admin, so the
+  fallback returns Lone there and looks correct. tests/m4a-tests.sql now adds
+  two more admins - one sorting BEFORE lone - so the fixture can no longer
+  flatter the code.
+
+WHAT DID NOT CHANGE, AND THIS IS THE POINT
+
+  Nobody gained or lost a capability. is_ops_admin() was DEFINED as
+  `select is_admin()`, so re-pointing its sixteen call sites at is_admin() is
+  a no-op in behaviour. What changed is that the name no longer invites the
+  conflation that produced the bug.
+
+  France and Tshenolo keep admin. Assertions 18a-22 of the M4a suite prove a
+  France-shaped admin still reads every contract, every handover and the whole
+  support audit trail, and can still write a contract - measured against the
+  true counts rather than ">= 0", which any stranger would satisfy.

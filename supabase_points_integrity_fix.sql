@@ -34,7 +34,7 @@
 --  Fixing that safely needs a coordinated change (a SECURITY DEFINER
 --  award-badge RPC + revoking direct write on badges + updating
 --  kw-badges.js to call the RPC), which must not be half-applied or it
---  breaks saveBadges(). Tracked in AUDIT-REPORT.md P0-7; do that as its
+--  breaks saveBadges(). Tracked in docs/build/AUDIT-REPORT.md P0-7; do that as its
 --  own reviewed change.
 -- ════════════════════════════════════════════════════════════════════
 

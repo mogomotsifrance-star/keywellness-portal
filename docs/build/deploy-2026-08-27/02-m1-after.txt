@@ -1,0 +1,34 @@
+M1 — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP as migration `m1_service_line`.
+
+V1 service_line on bookings        : PRESENT   (was absent)
+V1 session_format on bookings      : PRESENT   (was absent)
+V1 _m1_session_mode_backup         : PRESENT   (was absent)
+V1 bookings rows                   : 22        UNCHANGED
+V4 points_events rows              : 177 | session_attended: 1   UNCHANGED
+V5 attended true/false/null        : 1 / 1 / 20                  UNCHANGED
+
+V6 rows M1 normalised (backup)     : 18        <- the predicted count
+V6 every booking financial         : PASS
+V6 every booking has a format      : PASS
+V6 every format is one_on_one      : PASS
+V6 no mode left in session_type    : PASS
+V6 mode vocabulary respected       : PASS
+V6 other three tables defaulted    : PASS
+
+V3 REGRESSION DIFF — mode_split gained keys, nothing else moved.
+
+BOPEU    Q3                    NULL (insufficient_cohort)  ->  unchanged
+Sedimosa Q3                    mode_split {}               ->  {virtual: withheld, physical: withheld}
+Test Co  Q1 + previous         NULL (insufficient_cohort)  ->  unchanged
+Test Co  Q3 previous (Apr-Jun) mode_split {}               ->  {physical: withheld}
+Test Co  Q3 (Jul-Sep)          mode_split {physical: withheld} -> {virtual: withheld, physical: withheld}
+Test Co  Q3 [live check]       mode_split {physical: withheld} -> {virtual: withheld, physical: withheld}
+
+Every gained key reads {"value": null, "suppressed": true}. No cell acquired a
+number. total_booked (5/8), total_attended (0/1), monthly_trend and
+attendance_confirmation_coverage_pct (0.0/25.0) are byte-identical in all six
+payloads. This is what supabase_m1_service_line.sql note (b) predicted.
+
+Published reports are unaffected either way: publish_org_report() froze Q3 into
+org_reports.data_snapshot and HR reads the snapshot.

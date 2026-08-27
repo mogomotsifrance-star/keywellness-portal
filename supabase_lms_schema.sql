@@ -11,7 +11,7 @@
 -- exist in this project (the brief assumed they did and planned to ALTER
 -- them) — both are CREATE TABLE here, not ALTER. No naming collisions with
 -- `pathways`/`quizzes`/`quiz_questions`/`quiz_attempts`/`certificates`
--- either (also confirmed in Batch 0). See BATCH-0-LMS-FINDINGS.md.
+-- either (also confirmed in Batch 0). See docs/build/BATCH-0-LMS-FINDINGS.md.
 --
 -- video_path values below use the REAL filenames Tshenolo already uploaded
 -- to the `Videos` bucket (confirmed via a live storage listing after Batch
