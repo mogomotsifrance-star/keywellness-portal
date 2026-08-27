@@ -128,6 +128,57 @@ means nothing for a per-engagement client, so the Tuesday review's *Retainer*
 section needs a second shape; and `contract_position()` from Prompt 5 has to
 branch on `contract_kind` rather than assuming a period allowance.
 
+### Three standing rules for applying a migration
+
+Given 27 Aug 2026, after M1 went to live through the Supabase MCP. These are
+not guidance; they are the procedure.
+
+**1 · Migrations go through the MCP, to live, one at a time.** Not the SQL
+editor by hand. The one exception is rule 3.
+
+**2 · Baseline and prediction BEFORE. Verification AFTER. In that order.**
+
+Before touching anything: save the baseline to
+`docs/build/deploy-<date>/NN-<phase>-before.txt`, and write the expected diff
+into the migration header — what will change, what will not, what breaks if it
+is wrong, how to undo it. *Then* apply. Then diff the result against the saved
+baseline and report whether reality matched the prediction.
+
+The reason this is a rule and not a preference: **a description written after
+the fact is not verification, it is a restatement.** If the expected diff is
+written once the result is already on screen, it can only agree with it, and
+the check has proved nothing. M1 is the reference — its header predicted
+"every gained mode_split key is withheld, no figure moves", the run produced
+exactly that, and the prediction was on paper first.
+
+**3 · M3 goes to a Supabase branch first. Every other migration goes straight
+to live.**
+
+Apply M3 on a branch, run the full role x line x command matrix there, and
+report it as a plain-language table — "France, psychosocial, SELECT: 0 rows
+(was: all rows)" — never as SQL. Merge only once that table has been approved.
+
+M3 is singular because **rollback does not undo the harm.** Every other
+migration can be reversed: drop what was created, restore what was overwritten,
+and the world is as it was. If M3's policies are wrong and a counselling
+booking is read by someone who should not see it, dropping the policy afterwards
+does not unread it. There is no rollback for a disclosure.
+
+### Write in plain language, always
+
+Tshenolo reads **what a migration does and what it will change**, not the SQL.
+Migration headers, plans and verification reports must be readable on that
+basis alone:
+
+- what changes
+- what does not
+- what breaks if it is wrong
+- how to undo it
+
+If a decision genuinely cannot be made without reading SQL, **say so
+explicitly.** Do not present the SQL and assume it was read — that is how a
+decision gets recorded as approved when nobody actually made it.
+
 ### The fixture's `auth.jwt()` is not Supabase's
 
 Recorded 26 Aug 2026, writing the Prompt 6 seed. A second face of "a fixture is

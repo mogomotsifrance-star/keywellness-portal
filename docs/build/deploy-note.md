@@ -96,17 +96,18 @@ update organizations set is_test = true where name = 'Test Co';
 Without it the first screen Lone opens has a test organisation in the
 roll-call, and `ops_timeline` cannot exclude what is not flagged.
 
-**Then enable `pg_cron`** — Database → Extensions — **and re-run
-`supabase_m5_meetings_actions.sql`.** The schedule block is a guarded no-op
-until the extension exists, so without this second run **no reminder ever
-fires**. Confirm:
+`pg_cron` **is already installed** — confirmed against the live database on
+27 Aug 2026. An earlier version of this note, and M5's own header, said it was
+not and told you to enable it and re-run the migration. **Both were wrong; that
+step is gone.** The schedule is created on the first apply. Confirm it:
 
 ```sql
 select jobname, schedule from cron.job where jobname = 'kw-action-reminders';
 ```
 
 Expect `0 4 * * *` — 04:00 UTC, which is 06:00 in Gaborone, before the working
-day rather than during it.
+day rather than during it. If it returns nothing, the schedule block did not
+run; re-running the migration is then safe and is the fix.
 
 Run `tests/m5-verify-live.sql` again: eight policies across `meetings` and
 `actions`, **zero** on `action_reminders`, both helpers not public, all three
@@ -153,9 +154,8 @@ supabase_m4_contracts_workplans_invoices.sql    apply
 tests/m4-verify-live.sql                        run again, diff
 ```
 
-If `pg_cron` was enabled during step 2, **re-run the migration once** — its
-schedule block is a guarded no-op until the extension exists, so without the
-second run no invoice pack is ever prepared. V8 reports which case you are in.
+`pg_cron` is installed, so M4's schedule block runs on the first apply — there
+is no second run to remember. V8 confirms the job exists.
 
 Expect: V1 and V2 all `PRESENT`; **V3's three counts identical** — M4 adds
 columns to `program_activities` and must add no rows; V4 resolving the owner to

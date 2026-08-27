@@ -1,0 +1,40 @@
+Member support — live Supabase, 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP as migration `support_audit`.
+Edge Function admin-support deployed: version 1, ACTIVE, verify_jwt = true.
+
+PREDICTION                                   ACTUAL                     MATCH
+support_actions created EMPTY                0 rows                     yes
+exactly ONE policy, read-only, ops admins    1, admin_read / SELECT     yes
+RLS enabled on support_actions               enabled                    yes
+five functions appear                        5 of 5                     yes
+nothing existing changes                     bookings=22 orgs=3         yes
+                                             notifications=2 pts=177
+no ungated SECURITY DEFINER helper           none - clean               yes
+
+Every prediction met.
+
+Edge Function tests before deploying: 13 passed, 0 failed, including all five
+security assertions -- the anon key alone is refused; a non-admin JWT is
+refused by the database rather than by the function; a body carrying an email
+instead of a user id is refused outright; the address is resolved from the user
+id; the per-target reset limit refuses and records the refusal.
+
+Deno was not on PATH but IS a declared devDependency at node_modules/.bin/deno.
+Run the suite with:  ./node_modules/.bin/deno test --allow-env --allow-net
+--no-check supabase/functions/admin-support/index.test.ts
+
+============================================================
+DEPLOY COMPLETE for M1, M5, M5a and member support.
+
+STILL NOT APPLIED, deliberately:
+  M4 -- being respecified. Invoices are produced in Sage, not here.
+  M3 -- not built, and goes to a Supabase BRANCH first, never straight to live.
+
+STILL OWED, needs a person:
+  kramontshonyana@debswana.bw is an active advisor with no auth account and
+  therefore cannot own an action. Creating it needs the Supabase dashboard
+  (Authentication -> Add user) -- there is no clean tool-driven route, and a
+  raw insert into auth.users leaves the account broken.
+
+  Walking the test site as Lone and as France. Neither can be done without
+  signing in.

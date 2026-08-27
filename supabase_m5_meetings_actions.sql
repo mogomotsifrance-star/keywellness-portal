@@ -50,10 +50,37 @@
 --     PG15+; production is 17.6. This is what makes tuesday_review_open()
 --     idempotent, and Prompt 3's one-click empty state safe to double-click.
 --
--- (d) pg_cron is NOT installed on this project (checked 25 Aug 2026). The
---     schedule block at the end is a guarded no-op until it is enabled from
---     the dashboard, and the migration must then be re-run. The reminder
+-- (d) pg_cron IS installed on this project (confirmed 27 Aug 2026 against the
+--     live database; an earlier note here said otherwise and was wrong). The
+--     schedule block at the end therefore runs on the FIRST apply and there is
+--     no second run to remember. The block stays guarded so this file still
+--     applies cleanly to a database without the extension. The reminder
 --     function is pure SQL and needs no pg_net.
+--
+-- ── WHAT THIS WILL CHANGE, AND WHAT IT WILL NOT ─────────────
+-- Written BEFORE the apply, as the prediction to check the result against.
+--
+--   CHANGES
+--     organizations gains an is_test column, false on every existing row.
+--     Three new tables appear, all empty: meetings, actions, action_reminders.
+--     Five new functions appear. Eight policies appear across meetings and
+--     actions; action_reminders gets none, on purpose.
+--     A daily job called kw-action-reminders is scheduled for 04:00 UTC,
+--     which is 06:00 in Gaborone — before the working day, not during it.
+--
+--   DOES NOT CHANGE
+--     No existing row in any existing table is read, written or deleted.
+--     Booking counts, notification counts, points and every reporting figure
+--     are untouched, because nothing here reads or writes bookings.
+--     Nobody gains access to anything they could not already see: HR and
+--     members get no policy at all, so row-level security denies them.
+--
+--   IF IT IS WRONG
+--     The worst case is a table nobody can read, or a reminder that does not
+--     fire. No existing data can be damaged, because nothing existing is
+--     written to. Undo with migrations/rollback-m5-meetings-actions.sql,
+--     which deletes the reminder notifications it wrote and drops everything
+--     it created.
 -- ============================================================
 
 
@@ -682,13 +709,12 @@ grant execute on function action_upsert(text, uuid, date, uuid, text, uuid, uuid
 
 
 -- ── 12. The schedule ────────────────────────────────────────
--- pg_cron is not installed on this project as of 25 Aug 2026, so this is a
--- no-op today. EXECUTE is mandatory, not stylistic: a bare cron.schedule(...)
--- fails to PARSE when the schema is absent, which is the current state.
+-- pg_cron IS installed on this project (confirmed 27 Aug 2026), so this runs
+-- on the first apply. The guard stays anyway: EXECUTE is mandatory rather than
+-- stylistic, because a bare cron.schedule(...) fails to PARSE on a database
+-- where the cron schema is absent, and this file must still apply there.
 --
 -- 04:00 UTC is 06:00 in Gaborone — before the working day, not during it.
---
--- After enabling pg_cron from Database → Extensions, RE-RUN this migration.
 
 do $$
 begin
@@ -699,8 +725,10 @@ begin
     $c$;
     raise notice 'M5: pg_cron job kw-action-reminders scheduled for 04:00 UTC.';
   else
-    raise notice 'M5: pg_cron is NOT installed — reminders will not fire. '
-                 'Enable it in Database -> Extensions, then re-run this file.';
+    raise notice 'M5: pg_cron is NOT installed here — reminders will not fire. '
+                 'It IS installed on the live project; if you see this on live, '
+                 'something has changed. Enable it in Database -> Extensions, '
+                 'then re-run this file.';
   end if;
 end $$;
 
