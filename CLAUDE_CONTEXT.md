@@ -153,6 +153,83 @@ means nothing for a per-engagement client, so the Tuesday review's *Retainer*
 section needs a second shape; and `contract_position()` from Prompt 5 has to
 branch on `contract_kind` rather than assuming a period allowance.
 
+### Access, ownership and confidentiality are three different things
+
+Recorded 27 Aug 2026, after `is_ops_admin()` was found to be carrying all
+three. They fail separately and must be reasoned about separately.
+
+| | What it answers | Mechanism |
+|---|---|---|
+| **Access** | who may see | `is_admin()`, `is_staff()` |
+| **Ownership** | who is assigned work and expected to act | configuration |
+| **Confidentiality** | who may **not** see, whatever role they hold | `is_psychosocial_admin()` |
+
+**Access.** France holds admin **as MD, at his own request**. Tshenolo holds it
+**for testing and continuous build**. **NEITHER IS TO BE REMOVED.** An earlier
+instruction to take France out of ops-admin was withdrawn: it would have
+stripped access the MD asked for.
+
+**Ownership.** Lone, Michelle, or a named practitioner. **Never derived from a
+role.** Holding admin does not mean you are assigned the work.
+
+**Confidentiality.** `is_psychosocial_admin()` is **membership** of
+`psychosocial_admins` — Lone and Michelle — and deliberately *not*
+`is_admin() and ...`. A confidentiality boundary that is a subset of a role is
+one role change away from leaking.
+
+`is_ops_admin()` is gone. The name was vague enough that the three ideas got
+conflated **while the specification was being written**, which is the strongest
+possible argument that a name doing three jobs is a defect rather than a
+convenience.
+
+### NO OWNER IS EVER RESOLVED BY SORT ORDER
+
+Recorded 27 Aug 2026. This is a rule for the whole system, not one function.
+
+**Configured, or absent-and-flagged. Never guessed.**
+
+`_handover_owner()` used to fall back to "the first admin by email" when nothing
+was configured. On live that is `france@`, because france sorts before lone — so
+the default put Lone's invoice pack in France's name. **No local test caught it
+and none could:** the fixture has Lone as the only admin, so the fallback looked
+correct there. Only the live diff exposed it, and only because the prediction
+had been written down first.
+
+When no owner is configured, leave the thing **ownerless** and raise a
+needs-a-decision on the Tuesday review — "August pack has no owner". Do not
+choose a person.
+
+An unowned item is a visible problem someone fixes in ten seconds. An item
+silently owned by the wrong person is an invisible one that surfaces when the
+wrong person is asked why they did not do something they never knew about.
+
+### M3 has TWO requirements, and they fail separately
+
+Recorded 27 Aug 2026. Both need their own tests.
+
+**(a) France cannot read psychosocial bookings or counselling notes.**
+
+**(b) France's ordinary admin access is unchanged everywhere else.** The
+role × line × command matrix must *prove* he still sees what he sees today
+outside psychosocial — not merely that the psychosocial door is shut.
+
+(b) is the one that gets skipped, because a migration that locks everything
+down passes (a) perfectly. `tests/m4a-tests.sql` assertions 18a–22 are the
+baseline for (b), taken before M3 moves anything.
+
+### Michelle needs her own screen — an obligation, not a build
+
+Recorded 27 Aug 2026. **Do not build this yet. Do not ship Lone's screen to
+Michelle and call it done.**
+
+Michelle's work is **scheduling client one-on-ones**. The daily view in
+`docs/design-directions.md` is **Lone's** — its centre column is Lone's day.
+Michelle needs the **same three-column grammar** with **scheduling in the
+centre**.
+
+The failure mode this exists to prevent is the cheap one: handing her the ops
+daily view unchanged, because it is already built and superficially fits.
+
 ### Three standing rules for applying a migration
 
 Given 27 Aug 2026, after M1 went to live through the Supabase MCP. These are

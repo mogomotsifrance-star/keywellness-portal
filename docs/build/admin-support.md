@@ -74,6 +74,28 @@ the three rules that fixed it. They hold here, with one deliberate difference:
 
 ### 3.1 Gated on `is_ops_admin()` from the start
 
+> **CORRECTED 27 Aug 2026 — read this before the section below.**
+>
+> `is_ops_admin()` **no longer exists.** M4a removed it, and member support is
+> now gated on `is_admin()`.
+>
+> The reasoning below — that France would lose this capability when M3 lands —
+> **was wrong, and the correction matters.** It assumed `is_ops_admin()` was
+> the confidentiality boundary. It was not. One name was carrying three ideas
+> that fail separately:
+>
+> - **Access** — who may see. France holds admin as MD at his own request;
+>   Tshenolo holds it for testing. `is_admin()`. **Neither is to be removed.**
+> - **Ownership** — who is assigned work. Configuration, never a role, never
+>   sort order.
+> - **Confidentiality** — who may not see psychosocial data, whatever role
+>   they hold. `is_psychosocial_admin()`: Lone and Michelle.
+>
+> Member support reveals no psychosocial content — `support_lookup` returns an
+> address and a role list, nothing clinical. It is **ordinary admin** and stays
+> that way. See `supabase_m4a_ownership_and_roles.sql`.
+
+
 Defined now as `select is_admin();`. **M3 replaces the body and nothing else
 changes** — every caller already asks the right question.
 

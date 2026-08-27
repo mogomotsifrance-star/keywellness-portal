@@ -1,0 +1,57 @@
+M4a baseline — live Supabase, 27 Aug 2026, BEFORE apply
+
+WHAT EXISTS
+  is_ops_admin()                exists
+  policies gated on it          7
+  functions gated on it         9
+  _handover_owner falls back    YES - picks the first admin by sort order
+  owner resolves to             lone@keywellness.co.bw  (because the key was
+                                set by hand at the M4 apply; the FALLBACK is
+                                still there and still picks france@)
+  is_psychosocial_admin()       absent
+  psychosocial_admins           absent
+
+ADMINS (access - unchanged by this migration)
+  france@keywealth.co.bw    <- MD, holds admin at his own request. NOT removed.
+  france@prolearn.co.bw
+  lone@keywellness.co.bw
+  michelle@keywealth.co.bw
+  tnmokgwetsi@gmail.com     <- testing and continuous build. NOT removed.
+
+COUNTS THAT MUST NOT MOVE
+  bookings 22 | organizations 3 | billing_handovers 0 | org_contracts 0
+  support_actions 0
+
+THE PREDICTION - written before applying. See the migration header.
+
+  CHANGES NOTHING ABOUT WHO CAN DO WHAT, TODAY. is_ops_admin() is DEFINED as
+  `select is_admin()`, so pointing its 16 call sites at is_admin() is a no-op
+  in behaviour. The same people can do exactly the same things afterwards.
+
+  CHANGES
+    psychosocial_admins appears with TWO rows, Lone and Michelle.
+    is_psychosocial_admin() appears, called by NOTHING - M3 wires it.
+    is_ops_admin() disappears; 0 policies and 0 functions reference it.
+    _handover_owner() loses the fallback: configured, or null.
+    _billing_flags() gains a second kind, 'no_owner'.
+
+  DOES NOT CHANGE
+    The five counts above. France and Tshenolo keep every capability.
+    tuesday_review_pack()'s shape: 'billing' entries gain a 'kind' field and
+    may include a no-owner entry. Additive.
+
+  IF IT IS WRONG
+    A policy that matches nobody - an admin unable to write a contract. No
+    data damaged. Undo with rollback-m4a-ownership-and-roles.sql, which puts
+    is_ops_admin() back and re-points all 16 sites to it.
+
+  EXPECTED AFTER-STATE, EXACTLY
+    is_ops_admin exists       : no
+    policies on is_ops_admin  : 0
+    functions on is_ops_admin : 0
+    _handover_owner falls back: no
+    owner resolves to         : lone@keywellness.co.bw   (unchanged)
+    is_psychosocial_admin     : yes
+    psychosocial_admins       : 2 rows, Lone and Michelle
+    admins                    : the same five, unchanged
+    counts                    : the same five, unchanged
