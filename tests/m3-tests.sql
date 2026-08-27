@@ -422,6 +422,125 @@ select _chk('38a row-level security is actually ENABLED on bookings',
            where n.nspname='public' and c.relname='bookings' and c.relrowsecurity));
 
 
+-- ══ 40–49 · The referral accept flow ══════════════════════
+-- The referral from Karabo to Nicola already exists (assertions 24–26) and is
+-- unaccepted. These walk it.
+--
+-- The assertions that matter here are the NEGATIVE ones. That acceptance works
+-- is easy; that it grants nothing backward is the whole design, and 44–46 are
+-- the ones to read.
+
+-- Who may accept: only the counsellor it was sent to.
+reset role;
+set role authenticated;
+set session "test.email" = 'karabo@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-0000000000ca';
+
+do $$
+declare ok boolean := false; msg text := '';
+begin
+  begin
+    perform referral_accept('0f000000-0000-0000-0000-0000000000fa');
+  exception when others then ok := sqlerrm like '%sent to can accept%'; msg := sqlerrm;
+  end;
+  insert into _r values ('40 the REFERRING counsellor cannot accept her own referral', ok, msg);
+end $$;
+
+reset role;
+set role authenticated;
+set session "test.email" = 'lone@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-000000000009';
+
+do $$
+declare ok boolean := false; msg text := '';
+begin
+  begin
+    perform referral_accept('0f000000-0000-0000-0000-0000000000fa');
+  exception when others then ok := sqlerrm like '%only a counsellor%'; msg := sqlerrm;
+  end;
+  insert into _r values ('41 a psychosocial admin cannot accept on anyone''s behalf', ok, msg);
+end $$;
+
+-- Nicola accepts.
+reset role;
+set role authenticated;
+set session "test.email" = 'nicola@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-0000000000cb';
+
+do $$
+declare v jsonb;
+begin
+  v := referral_accept('0f000000-0000-0000-0000-0000000000fa');
+  insert into _r values ('42 the receiving counsellor accepts, and gets a new link',
+    (v ->> 'already_accepted') = 'false'
+    and (v ->> 'link_id') is not null
+    and (v ->> 'closed_link_id') = '0cc00000-0000-0000-0000-0000000000ea',
+    v::text);
+  raise notice 'STATE  accept: %', v::text;
+end $$;
+
+select _chk('43 accepting twice is not an error and opens no second link',
+  ((referral_accept('0f000000-0000-0000-0000-0000000000fa')) ->> 'already_accepted') = 'true'
+  and (select count(*) from counsellor_clients
+        where counsellor_id = current_counsellor_id() and is_active) = 2);
+--                                                                      ^ Nicola's
+--   own pre-existing link plus the one she just received. Not three.
+
+
+-- ── 44–46 · NOTHING FLOWS BACKWARD ─────────────────────────
+-- Nicola has now accepted the case. She still cannot see anything Karabo
+-- wrote. This is the whole point of the design and the reason a referral
+-- carries a freshly authored note instead of a pointer.
+
+select _chk('44 after accepting, Nicola STILL cannot read Karabo''s note',
+  not exists (select 1 from counselling_notes
+               where id = '0a000000-0000-0000-0000-0000000000fa'));
+
+select _chk('45 nor Karabo''s booking for the same client',
+  not exists (select 1 from bookings
+               where id = '0b000000-0000-0000-0000-0000000000fa'));
+
+select _chk('46 nor Karabo''s now-closed caseload row',
+  not exists (select 1 from counsellor_clients
+               where id = '0cc00000-0000-0000-0000-0000000000ea'));
+
+
+-- ── 47–48 · The old link stays Karabo's ────────────────────
+reset role;
+set role authenticated;
+set session "test.email" = 'karabo@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-0000000000ca';
+
+select _chk('47 Karabo still reads her own note and booking after handing over',
+  exists (select 1 from counselling_notes where id='0a000000-0000-0000-0000-0000000000fa')
+  and exists (select 1 from bookings where id='0b000000-0000-0000-0000-0000000000fa'));
+
+select _chk('48 and her caseload row is CLOSED, not deleted and not repointed',
+  exists (select 1 from counsellor_clients
+           where id = '0cc00000-0000-0000-0000-0000000000ea'
+             and counsellor_id = '0c000000-0000-0000-0000-0000000000da'
+             and not is_active
+             and ended_at is not null));
+
+
+-- ── 49 · Lone learns the fact, and still not the note ──────
+reset role;
+set role authenticated;
+set session "test.email" = 'lone@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-000000000009';
+
+do $$
+declare v jsonb;
+begin
+  v := referral_fact_list();
+  insert into _r values ('49 Lone sees the referral was ACCEPTED, with a date and no note',
+    v::text ilike '%accepted_on%'
+    and (v -> 0 ->> 'accepted_on') is not null
+    and v::text not ilike '%Handover written%',
+    v::text);
+end $$;
+
+
 -- ══ Report ═════════════════════════════════════════════════
 
 reset role;

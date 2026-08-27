@@ -72,9 +72,11 @@ echo "  advisor + M1..M4a ok"
 # other — if it did, a green run would mean nothing.
 apply "$ROOT/supabase_m3_part1_confidentiality_boundary.sql"
 apply "$ROOT/supabase_m3_part2_definer_sweep.sql"
-echo "  M3 part 1 + 2     ok"
+apply "$ROOT/supabase_m3a_referral_accept.sql"
+echo "  M3 part 1 + 2 + 3 ok"
 apply "$ROOT/supabase_m3_part1_confidentiality_boundary.sql"
 apply "$ROOT/supabase_m3_part2_definer_sweep.sql"
+apply "$ROOT/supabase_m3a_referral_accept.sql"
 echo "  M3 re-run         ok (idempotent)"
 
 $PSQL -d kwm3 -f "$HERE/m3-tests.sql" 2>&1 \
@@ -83,6 +85,9 @@ $PSQL -d kwm3 -f "$HERE/m3-tests.sql" 2>&1 \
 
 run_rollback() {
   local _out
+  _out=$($PSQL -d kwm3 -f "$ROOT/migrations/rollback-m3a-referral-accept.sql" 2>&1) || {
+    echo "$_out" | grep -vE "NOTICE:|^$"
+    echo "  rollback          FAILED (m3a)"; exit 1; }
   _out=$($PSQL -d kwm3 -f "$ROOT/migrations/rollback-m3-counsellors.sql" 2>&1) || {
     echo "$_out" | grep -vE "NOTICE:|^$"
     echo "  rollback          FAILED"; exit 1; }
