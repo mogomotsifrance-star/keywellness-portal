@@ -149,21 +149,30 @@ Optional in this deploy: nothing calls it. Apply it if you want the schema in
 place before the first month it bills.
 
 ```
-tests/m4-verify-live.sql                        run it, SAVE THE OUTPUT
-supabase_m4_contracts_workplans_invoices.sql    apply
-tests/m4-verify-live.sql                        run again, diff
+tests/m4-verify-live.sql                       run it, SAVE THE OUTPUT
+supabase_m4_contracts_workplans_billing.sql    apply
+tests/m4-verify-live.sql                       run again, diff
 ```
+
+**M4 is the first migration that replaces something already live.**
+`tuesday_review_pack()` is running in production, and M4 rewrites it to add the
+billing flag. **V0 of the verify file is therefore the block that matters** —
+run it first and save it. The expected diff is that every organisation gains a
+`billing` key, and `needs_decision` may turn true where a retainer period is
+past its prepare day without Lone's confirmation. Everything else in that
+payload must be identical.
 
 `pg_cron` is installed, so M4's schedule block runs on the first apply — there
 is no second run to remember. V8 confirms the job exists.
 
-Expect: V1 and V2 all `PRESENT`; **V3's three counts identical** — M4 adds
-columns to `program_activities` and must add no rows; V4 resolving the owner to
-`lone@keywellness.co.bw`; V5 listing ten policies with `invoices_read` reading
-`is_ops_admin()` and nothing else; V6 showing four ACLs of
-`postgres=X/postgres` and **no `UNGATED` line**; V7 `transition-guarded`; V9
-`(none)` for both lines, which is correct because M4 creates no contracts; V10
-private.
+Expect: V1 all `PRESENT` and every `GONE` line reading `correctly absent`; V2
+reporting `ok` for no-paid, no-overdue and no-scan/paid/due columns; V3's
+columns present with `activity_type` unchanged; **V4's four counts identical**;
+V5 resolving the owner to `lone@keywellness.co.bw` and `invoice.due_days`
+`correctly absent`; V6 listing ten policies; V7 showing five ACLs of
+`postgres=X/postgres` and **no `UNGATED` line**; V8 `transition-guarded`; V9
+naming `kw-monthly-handovers`; V10 `(none)` for both, which is right because M4
+creates no contracts.
 
 Nothing else needs doing after the apply. M4 creates no contracts, no rates and
 no invoices — the first pack appears on the 25th of the first month a retainer
@@ -171,9 +180,14 @@ contract exists, and **Lone marks it handed over herself**, through the SQL
 editor until M7 gives her a button:
 
 ```sql
-select invoice_pack('<invoice-uuid>');        -- read it; it is live
-select invoice_hand_over('<invoice-uuid>');   -- freeze it
+select handover_pack('<handover-uuid>');               -- read it; it is live
+select handover_mark_handed_over('<handover-uuid>');   -- freeze it
+select handover_confirm_invoiced('<handover-uuid>');   -- once Laone confirms
 ```
+
+**The last one is Lone's record of her own follow-up, not a reading of Sage.**
+Any screen showing it must read "Confirmed with Laone · 26 Aug", never a bare
+"Invoiced".
 
 ### 6 · The front end
 
@@ -206,7 +220,7 @@ until the test site has been walked.**
 Roll back in reverse order — M4, then support, then M5a, M5, M1:
 
 ```
-migrations/rollback-m4-contracts-workplans-invoices.sql
+migrations/rollback-m4-contracts-workplans-billing.sql
 migrations/rollback-support-audit.sql
 migrations/rollback-m5a-ops-timeline.sql
 migrations/rollback-m5-meetings-actions.sql
@@ -221,12 +235,14 @@ Each verifies itself and raises if anything survives. Two things to know:
 - The **M1 rollback restores `session_mode` from its backup table.** Rolling
   back M1 after weeks of new bookings restores only the 18 rows M1 touched;
   anything written since is untouched, which is correct.
-- The **M4 rollback deletes contracts, work plans and invoices.** There is no
-  backup table — unlike M1's `session_mode` these are whole rows, not an
-  overwritten column. Export first:
-  `select * from org_contracts; select * from invoices; select * from work_plans;`
+- The **M4 rollback deletes contracts, work plans and billing handovers.**
+  There is no backup table — unlike M1's `session_mode` these are whole rows,
+  not an overwritten column. Export first:
+  `select * from org_contracts; select * from billing_handovers; select * from work_plans;`
   It keeps every `program_activities` row (it drops the columns M4 added, not
-  the rows) and keeps the `invoice-scans` bucket if it holds any file.
+  the rows), and it **puts `tuesday_review_pack()` back to its M5 body** so the
+  Tuesday review keeps working instead of calling a helper that no longer
+  exists.
 
 `ops.html` degrades rather than breaking if the migrations are absent: it
 loads, gates correctly, and its RPC calls fail.

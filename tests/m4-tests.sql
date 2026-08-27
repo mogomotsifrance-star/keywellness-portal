@@ -159,21 +159,21 @@ values ('0b000000-0000-0000-0000-0000000000a1',
 select _chk('10 linking a booking moves the activity planned -> scheduled',
   (select state from program_activities where id='0f000000-0000-0000-0000-000000000001') = 'scheduled');
 
--- The first confirmed attendance delivers it, and invoices it.
+-- The first confirmed attendance delivers it, and billing_handovers it.
 update bookings set attended = true where id = '0b000000-0000-0000-0000-0000000000a1';
 
 select _chk('11 the first confirmed attendance moves it scheduled -> delivered',
   (select state from program_activities where id='0f000000-0000-0000-0000-000000000001') = 'delivered');
 
 select _chk('12 and raises exactly one engagement invoice at the rate-card amount',
-  (select count(*) from invoices where activity_id='0f000000-0000-0000-0000-000000000001') = 1
-  and (select amount from invoices where activity_id='0f000000-0000-0000-0000-000000000001') = 4500);
+  (select count(*) from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000001') = 1
+  and (select amount from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000001') = 4500);
 
-select _chk('13 with a to_prepare action attached, owned by an ops admin',
-  (select state from invoices where activity_id='0f000000-0000-0000-0000-000000000001') = 'to_prepare'
-  and (select a.title from actions a join invoices i on i.action_id = a.id
-        where i.activity_id='0f000000-0000-0000-0000-000000000001') like 'Hand to accounts%'
-  and (select a.owner from actions a join invoices i on i.action_id = a.id
+select _chk('13 with a to_prepare action attached, owned by an ops admin, naming Laone',
+  (select state from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000001') = 'to_prepare'
+  and (select a.title from actions a join billing_handovers i on i.action_id = a.id
+        where i.activity_id='0f000000-0000-0000-0000-000000000001') like 'Hand to Laone%'
+  and (select a.owner from actions a join billing_handovers i on i.action_id = a.id
         where i.activity_id='0f000000-0000-0000-0000-000000000001')
       = '00000000-0000-0000-0000-000000000009'::uuid);
 
@@ -185,17 +185,17 @@ values ('0b000000-0000-0000-0000-0000000000a2',
         '0f000000-0000-0000-0000-000000000001', true);
 
 select _chk('14 a later attendance does not re-deliver or re-invoice',
-  (select count(*) from invoices where activity_id='0f000000-0000-0000-0000-000000000001') = 1);
+  (select count(*) from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000001') = 1);
 
 do $$
 declare n_before int; n_after int;
 begin
-  select count(*) into n_before from invoices;
+  select count(*) into n_before from billing_handovers;
   update bookings set attended = true where id = '0b000000-0000-0000-0000-0000000000a1';
-  select count(*) into n_after from invoices;
+  select count(*) into n_after from billing_handovers;
   insert into _r values ('15 re-confirming the same booking raises nothing',
     n_after = n_before, n_before || ' -> ' || n_after);
-  raise notice 'STATE  activity 1 = %, invoices = %',
+  raise notice 'STATE  activity 1 = %, billing_handovers = %',
     (select state from program_activities where id='0f000000-0000-0000-0000-000000000001'), n_after;
 end $$;
 
@@ -208,7 +208,7 @@ values ('0b000000-0000-0000-0000-0000000000a3',
 
 select _chk('16 a retainer client''s activity delivers but raises no engagement invoice',
   (select state from program_activities where id='0f000000-0000-0000-0000-000000000002') = 'delivered'
-  and not exists (select 1 from invoices where activity_id='0f000000-0000-0000-0000-000000000002'));
+  and not exists (select 1 from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000002'));
 
 
 -- ══ 17–19 · The missing rate, and the missing accountant ═══
@@ -220,7 +220,7 @@ values ('0f000000-0000-0000-0000-000000000003',
         'other', 'Wellness day', current_date, 0, 'financial', 'wellness_day', 'planned');
 
 -- Do the mutation FIRST, on its own line, then assert. Written as
---   activity_upsert(...) = 'delivered' and exists (select ... from invoices)
+--   activity_upsert(...) = 'delivered' and exists (select ... from billing_handovers)
 -- the two operands of AND have no guaranteed evaluation order, so the exists
 -- can run before the upsert and see nothing. Same family as the volatile-in-a-
 -- predicate rule in CLAUDE_CONTEXT.md 3.1a: if it does something, give it its
@@ -233,21 +233,21 @@ begin
                        p_state => 'delivered');
   insert into _r values ('17 a delivered activity whose format has no rate still raises an invoice',
     (v ->> 'state') = 'delivered'
-    and exists (select 1 from invoices where activity_id='0f000000-0000-0000-0000-000000000003'),
+    and exists (select 1 from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000003'),
     v ->> 'state');
 end $$;
 
 select _chk('18 with a null amount rather than a guess',
-  (select amount from invoices where activity_id='0f000000-0000-0000-0000-000000000003') is null);
+  (select amount from billing_handovers where activity_id='0f000000-0000-0000-0000-000000000003') is null);
 
 select _chk('19 and an action naming the format that has no rate',
-  (select a.title from actions a join invoices i on i.action_id=a.id
+  (select a.title from actions a join billing_handovers i on i.action_id=a.id
     where i.activity_id='0f000000-0000-0000-0000-000000000003') like '%no rate on file for wellness_day%');
 
 -- Laone does not use the platform. Nothing may point at an accountant user.
 select _chk('19a no invoice and no action references an accountant user',
   not exists (select 1 from threshold_config where key = 'invoice.accountant_user_id')
-  and not exists (select 1 from invoices i
+  and not exists (select 1 from billing_handovers i
                    where i.prepared_by is not null and not exists (
                      select 1 from admins a join auth.users u on lower(u.email)=lower(a.email)
                       where u.id = i.prepared_by))
@@ -262,7 +262,7 @@ select _chk('19a no invoice and no action references an accountant user',
 do $$
 declare v jsonb;
 begin
-  v := invoices_run_monthly(date '2026-12-25');
+  v := handovers_run_monthly(date '2026-12-25');
   insert into _r values ('20 the job covers the CURRENT month, not the previous one',
     (v ->> 'period_start') = '2026-12-01' and (v ->> 'period_end') = '2026-12-31', v::text);
   insert into _r values ('21 and raises one pack for the retainer contract',
@@ -271,13 +271,13 @@ begin
 end $$;
 
 select _chk('22 it skips per-engagement contracts entirely',
-  not exists (select 1 from invoices
+  not exists (select 1 from billing_handovers
                where kind='retainer' and contract_id='0d000000-0000-0000-0000-000000000002'));
 
 do $$
 declare v jsonb;
 begin
-  v := invoices_run_monthly(date '2026-12-25');
+  v := handovers_run_monthly(date '2026-12-25');
   insert into _r values ('23 a second run raises nothing — the partial index refuses it',
     (v ->> 'created')::int = 0 and (v ->> 'already_present')::int = 1, v::text);
 end $$;
@@ -287,13 +287,13 @@ declare v jsonb;
 begin
   -- cron runs daily and the function decides, so the prepare day stays
   -- configurable without rescheduling.
-  v := invoices_run_monthly(date '2026-12-14', true);
+  v := handovers_run_monthly(date '2026-12-14', true);
   insert into _r values ('24 on a day that is not the prepare day it does nothing',
     (v ->> 'skipped') = 'true', v::text);
 end $$;
 
 select _chk('25 the pack is created EMPTY — it is live, not a snapshot',
-  (select narrative from invoices
+  (select narrative from billing_handovers
     where kind='retainer' and period_start = date '2026-12-01') = '{}'::jsonb);
 
 
@@ -306,11 +306,11 @@ do $$
 declare v_pack uuid; n_before int; n_after int; v jsonb; v_this date;
 begin
   v_this := date_trunc('month', current_date)::date;
-  perform invoices_run_monthly((v_this + 24));       -- the 25th of this month
-  select id into v_pack from invoices
+  perform handovers_run_monthly((v_this + 24));       -- the 25th of this month
+  select id into v_pack from billing_handovers
    where kind='retainer' and period_start = v_this;
 
-  v := invoice_pack(v_pack);
+  v := handover_pack(v_pack);
   n_before := (v -> 'contents' ->> 'count')::int;
 
   insert into program_activities (id, org_id, activity_type, title, activity_date,
@@ -320,7 +320,7 @@ begin
           'education_talk', 'Delivered after the prepare day', current_date, 30,
           'financial', 'talk', 'delivered', now());
 
-  v := invoice_pack(v_pack);
+  v := handover_pack(v_pack);
   n_after := (v -> 'contents' ->> 'count')::int;
 
   insert into _r values ('25a a pack recomputes when an activity is delivered after the prepare day',
@@ -332,16 +332,16 @@ do $$
 declare v_pack uuid; v jsonb; n_frozen int; n_later int; v_this date;
 begin
   v_this := date_trunc('month', current_date)::date;
-  select id into v_pack from invoices
+  select id into v_pack from billing_handovers
    where kind='retainer' and period_start = v_this;
 
-  v := invoice_hand_over(v_pack);
+  v := handover_mark_handed_over(v_pack);
   n_frozen := (v -> 'contents' ->> 'count')::int;
 
   insert into _r values ('25b marking it handed over freezes it and closes the action',
-    (v ->> 'state') = 'handed_to_accounts'
-    and (select state from invoices where id = v_pack) = 'handed_to_accounts'
-    and (select a.state from actions a join invoices i on i.action_id = a.id
+    (v ->> 'state') = 'handed_over'
+    and (select state from billing_handovers where id = v_pack) = 'handed_over'
+    and (select a.state from actions a join billing_handovers i on i.action_id = a.id
           where i.id = v_pack) = 'done',
     n_frozen::text);
 
@@ -352,11 +352,11 @@ begin
           'education_talk', 'Delivered after handover', current_date, 12,
           'financial', 'talk', 'delivered', clock_timestamp());
   -- clock_timestamp(), not now(): now() is TRANSACTION-START time, so a row
-  -- inserted after invoice_hand_over() in the same block would carry exactly
+  -- inserted after handover_mark_handed_over() in the same block would carry exactly
   -- handed_at and the strict '> covers_from' boundary would drop it — from both
   -- packs. Real deliveries land in later transactions; the test must too.
 
-  v := invoice_pack(v_pack);
+  v := handover_pack(v_pack);
   n_later := (v -> 'contents' ->> 'count')::int;
 
   insert into _r values ('25c and a later delivery does not change it',
@@ -371,11 +371,11 @@ begin
   -- The next pack starts where the last handover left off. Its label is the
   -- next calendar month; its WINDOW is (handed_at, now()].
   v_next_month := (date_trunc('month', current_date) + interval '1 month')::date;
-  perform invoices_run_monthly((v_next_month + 24));
-  select id into v_next from invoices
+  perform handovers_run_monthly((v_next_month + 24));
+  select id into v_next from billing_handovers
    where kind='retainer' and period_start = v_next_month;
 
-  v := invoice_pack(v_next);
+  v := handover_pack(v_next);
   select string_agg(x ->> 'title', ', ')
     into v_titles from jsonb_array_elements(v -> 'contents' -> 'delivered') x;
 
@@ -390,51 +390,120 @@ end $$;
 do $$
 declare v_pack uuid; ok boolean := false;
 begin
-  select id into v_pack from invoices
+  select id into v_pack from billing_handovers
    where kind='retainer' and period_start = date_trunc('month', current_date)::date;
   begin
-    perform invoice_hand_over(v_pack);
+    perform handover_mark_handed_over(v_pack);
   exception when others then ok := sqlerrm = 'this pack has already been handed over';
   end;
   insert into _r values ('25f a pack cannot be handed over twice', ok, null);
 end $$;
 
 
--- ══ 25g–25i · Invoiced, and the optional scan ══════════════
+-- ══ 25g–25j · Lone's confirmation ══════════════════════════
+-- 'invoiced' means LONE CONFIRMED WITH LAONE THAT THE INVOICE EXISTS. It is
+-- not a reading of Sage, and there is no state after it.
 
 do $$
 declare v_pack uuid; v jsonb; v_at timestamptz;
 begin
-  select id into v_pack from invoices
+  select id into v_pack from billing_handovers
    where kind='retainer' and period_start = date_trunc('month', current_date)::date;
 
-  v := invoice_mark_invoiced(v_pack);
-  insert into _r values ('25g a handed-over pack can be marked invoiced with NO scan',
-    (v ->> 'state') = 'invoiced' and (v ->> 'scan_attached') = 'false', v::text);
-  select invoiced_at into v_at from invoices where id = v_pack;
+  v := handover_confirm_invoiced(v_pack);
+  insert into _r values ('25g a handed-over pack records Lone''s confirmation',
+    (v ->> 'state') = 'invoiced'
+    and (v ->> 'already_confirmed') = 'false'
+    and (select invoice_confirmed_at from billing_handovers where id = v_pack) is not null
+    and (select invoice_confirmed_by from billing_handovers where id = v_pack) is not null,
+    v::text);
+  select invoice_confirmed_at into v_at from billing_handovers where id = v_pack;
 
-  -- The scan arrives later, as it does in life.
-  v := invoice_mark_invoiced(v_pack, 'bopeu/current.pdf');
-  insert into _r values ('25h the scan is optional evidence, not a state trigger',
-    (v ->> 'was_already_invoiced') = 'true'
-    and (v ->> 'scan_attached') = 'true'
-    and (select scan_path from invoices where id = v_pack) = 'bopeu/current.pdf'
-    and (select invoiced_at from invoices where id = v_pack) = v_at,   -- unmoved
+  -- Confirming twice is somebody checking, not an error.
+  v := handover_confirm_invoiced(v_pack);
+  insert into _r values ('25h confirming twice is not an error and does not move the moment',
+    (v ->> 'already_confirmed') = 'true'
+    and (select invoice_confirmed_at from billing_handovers where id = v_pack) = v_at,
     v::text);
 end $$;
 
 do $$
-declare v_next uuid; ok boolean := false;
+declare v_next uuid; ok boolean := false; msg text := '';
 begin
-  select id into v_next from invoices
+  select id into v_next from billing_handovers
    where kind='retainer'
      and period_start = (date_trunc('month', current_date) + interval '1 month')::date;
   begin
-    perform invoice_mark_invoiced(v_next);
-  exception when others then ok := sqlerrm like '%handed to accounts%';
+    perform handover_confirm_invoiced(v_next);
+  exception when others then ok := sqlerrm like '%handed to Laone%'; msg := sqlerrm;
   end;
-  insert into _r values ('25i a pack cannot be invoiced before it is handed over', ok, null);
+  insert into _r values ('25i Laone cannot confirm an invoice for numbers she has not been given',
+                         ok, msg);
 end $$;
+
+-- Cancelling, from any state, and only with a reason.
+do $$
+declare v_pack uuid; v jsonb; ok boolean := false; msg text := '';
+begin
+  select id into v_pack from billing_handovers
+   where kind='retainer' and period_start = date_trunc('month', current_date)::date;
+
+  begin
+    perform handover_cancel(v_pack, '   ');
+  exception when others then ok := sqlerrm like '%say why%'; msg := sqlerrm;
+  end;
+  insert into _r values ('25j cancelling with no reason is refused', ok, msg);
+
+  -- From 'invoiced', which is the furthest state there is.
+  v := handover_cancel(v_pack, 'client disputed the August figures');
+  insert into _r values ('25k cancelled is reachable from any state, and clears the confirmation',
+    (v ->> 'state') = 'cancelled'
+    and (select invoice_confirmed_at from billing_handovers where id = v_pack) is null
+    and (select cancel_reason from billing_handovers where id = v_pack) like '%disputed%',
+    v::text);
+end $$;
+
+
+-- ══ 25l–25o · Nothing here knows what Sage holds ═══════════
+-- The rule these enforce: invoices are produced in Sage, this system never
+-- sees one, and no column or state may claim otherwise.
+
+select _chk('25l there is no paid state and no overdue state, and never may be',
+  (select pg_get_constraintdef(oid) from pg_constraint
+    where conname='billing_handovers_state_check') !~* '\mpaid\M'
+  and (select pg_get_constraintdef(oid) from pg_constraint
+    where conname='billing_handovers_state_check') !~* '\moverdue\M');
+
+select _chk('25m the handover carries no scan, no paid date and no due date',
+  not exists (select 1 from information_schema.columns
+               where table_schema='public' and table_name='billing_handovers'
+                 and column_name in ('scan_path','paid_at','due_date')));
+
+select _chk('25n there is no function to mark a handover paid',
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+               where n.nspname='public'
+                 and p.proname in ('invoice_mark_paid','handover_mark_paid')));
+
+-- A DO block, because PostgreSQL PARSES storage.buckets whether or not a
+-- to_regclass guard in the same expression ever reaches it, and there is no
+-- storage schema on a plain database. Same trap as tests/m4-verify-live.sql.
+do $$
+declare n int := 0;
+begin
+  if to_regclass('storage.buckets') is not null then
+    execute $q$ select count(*) from storage.buckets where id = 'invoice-scans' $q$ into n;
+  end if;
+  insert into _r values ('25n2 there is no invoice-scans bucket', n = 0, 'buckets=' || n);
+end $$;
+
+-- The action tells Lone to hand the numbers to Laone, and is due at MONTH END
+-- because that is a date we know. The handover itself has no date.
+select _chk('25o the handover action is due at month end and names Laone',
+  exists (select 1 from actions a
+           join billing_handovers h on h.action_id = a.id
+          where h.kind = 'retainer'
+            and a.title like '%to Laone%'
+            and a.due_date = h.period_end));
 
 
 -- ══ 26–28 · contract_position, two shapes ══════════════════
@@ -443,9 +512,12 @@ select _chk('26 a retainer client reports delivered against the period',
   (contract_position((select id from organizations where name='BOPEU')) ->> 'kind') = 'retainer'
   and (contract_position((select id from organizations where name='BOPEU')) -> 'retainer_amount') is not null);
 
-select _chk('27 a per-engagement client reports value invoiced, not an allowance',
+select _chk('27 a per-engagement client reports value HANDED OVER, not invoiced',
   (contract_position((select id from organizations where name='Sedimosa')) ->> 'kind') = 'per_engagement'
-  and (contract_position((select id from organizations where name='Sedimosa')) -> 'invoiced_value') is not null
+  and (contract_position((select id from organizations where name='Sedimosa')) -> 'handed_over_value') is not null
+  and (contract_position((select id from organizations where name='Sedimosa')) -> 'confirmed_value') is not null
+  -- The word we cannot honestly use is gone from the payload entirely.
+  and (contract_position((select id from organizations where name='Sedimosa')) -> 'invoiced_value') is null
   and (contract_position((select id from organizations where name='Sedimosa')) -> 'expected') is null);
 
 select _chk('28 an organisation with no contract says so rather than inventing one',
@@ -467,8 +539,8 @@ select _chk('30 an activity on no plan is still returned, under unplanned',
 set role authenticated;
 set session "test.uid" = '00000000-0000-0000-0000-000000000009';
 set session "test.email" = 'lone@keywellness.co.bw';
-select _chk('31 an ops admin reads contracts and invoices',
-  _visible('org_contracts') > 0 and _visible('invoices') > 0);
+select _chk('31 an ops admin reads contracts and billing_handovers',
+  _visible('org_contracts') > 0 and _visible('billing_handovers') > 0);
 reset role;
 set session "test.uid" = '00000000-0000-0000-0000-000000000009';
 set session "test.email" = 'lone@keywellness.co.bw';
@@ -478,8 +550,8 @@ set session "test.uid" = '00000000-0000-0000-0000-00000000000b';
 set session "test.email" = 'kefilwe@keywealth.co.bw';
 select _chk('32 an advisor reads contracts and work plans',
   _visible('org_contracts') > 0 and _visible('work_plans') > 0);
-select _chk('33 but not invoices — money is not a practitioner concern',
-  _visible('invoices') <= 0);
+select _chk('33 but not billing_handovers — money is not a practitioner concern',
+  _visible('billing_handovers') <= 0);
 reset role;
 set session "test.uid" = '00000000-0000-0000-0000-000000000009';
 set session "test.email" = 'lone@keywellness.co.bw';
@@ -489,7 +561,7 @@ set session "test.uid" = '00000000-0000-0000-0000-00000000000e';
 set session "test.email" = 'plainmember@example.test';
 select _chk('34 a member reads none of it',
   _visible('org_contracts') <= 0 and _visible('work_plans') <= 0
-  and _visible('invoices') <= 0 and _visible('contract_rates') <= 0);
+  and _visible('billing_handovers') <= 0 and _visible('contract_rates') <= 0);
 reset role;
 set session "test.uid" = '00000000-0000-0000-0000-000000000009';
 set session "test.email" = 'lone@keywellness.co.bw';
@@ -500,8 +572,8 @@ set session "test.email" = 'lone@keywellness.co.bw';
 set role authenticated;
 set session "test.uid" = '00000000-0000-0000-0000-00000000000d';
 set session "test.email" = 'laone@keywellness.co.bw';
-select _chk('35 someone with no role reads no invoices at all',
-  _visible('invoices') <= 0);
+select _chk('35 someone with no role reads no billing_handovers at all',
+  _visible('billing_handovers') <= 0);
 select _chk('36 and no contracts, no work plans, no rates',
   _visible('org_contracts') <= 0 and _visible('work_plans') <= 0
   and _visible('contract_rates') <= 0);
@@ -526,19 +598,84 @@ set session "test.uid" = '00000000-0000-0000-0000-000000000009';
 set session "test.email" = 'lone@keywellness.co.bw';
 
 
--- ══ 38–40 · Derived overdue, and the sweep ═════════════════
+-- ══ 38–39 · The Tuesday-review flag, and the sweep ═════════
 
-select _chk('38 there is no stored overdue state, and no "sent" state either',
-  (select pg_get_constraintdef(oid) from pg_constraint where conname='invoices_state_check')
-    not like '%overdue%'
-  and (select pg_get_constraintdef(oid) from pg_constraint where conname='invoices_state_check')
-    not like '%sent%');
+-- The four states, and only those four. 'sent' was always wrong -- the system
+-- never sends. 'paid' and 'overdue' describe a document in Sage.
+select _chk('38 the states are exactly to_prepare, handed_over, invoiced, cancelled',
+  (select pg_get_constraintdef(oid) from pg_constraint
+    where conname='billing_handovers_state_check')
+    like '%to_prepare%handed_over%invoiced%cancelled%');
 
-update invoices set due_date = current_date - 1
- where kind='retainer' and state = 'invoiced';
+-- ── The flag Lone asked for ────────────────────────────────
+-- A retainer period past its prepare day with no invoiced confirmation must
+-- reach the TUESDAY REVIEW as needs-a-decision, not only the screen.
+do $$
+declare v_org uuid; v_pack uuid; v jsonb; x jsonb; v_before boolean; v_after boolean;
+begin
+  select id into v_org from organizations where name='BOPEU';
 
-select _chk('39 overdue is derived from state and due_date',
-  (select count(*) from invoices where state='invoiced' and due_date < current_date) >= 1);
+  -- Before: no late retainer period, so BOPEU is not flagged for billing.
+  delete from billing_handovers where org_id = v_org and kind = 'retainer';
+  v := tuesday_review_pack(current_date);
+  select e into x from jsonb_array_elements(v -> 'organisations') e
+   where e ->> 'name' = 'BOPEU';
+  v_before := jsonb_array_length(x -> 'billing') > 0;
+  insert into _r values ('38a with no late period, the Tuesday review shows no billing flag',
+    not v_before, coalesce(x -> 'billing', 'null')::text);
+
+  -- A retainer period from two months ago, never confirmed.
+  insert into billing_handovers (contract_id, org_id, kind, period_start, period_end,
+                                 amount, currency, state, covers_from)
+  values ((select id from org_contracts where org_id = v_org and contract_kind='retainer' limit 1),
+          v_org, 'retainer',
+          (date_trunc('month', current_date) - interval '2 months')::date,
+          (date_trunc('month', current_date) - interval '1 month' - interval '1 day')::date,
+          15000, 'BWP', 'to_prepare',
+          (date_trunc('month', current_date) - interval '2 months'));
+
+  v := tuesday_review_pack(current_date);
+  select e into x from jsonb_array_elements(v -> 'organisations') e
+   where e ->> 'name' = 'BOPEU';
+  v_after := jsonb_array_length(x -> 'billing') > 0;
+
+  insert into _r values ('38b a period past its prepare day with no confirmation is flagged',
+    v_after, coalesce(x -> 'billing', 'null')::text);
+  insert into _r values ('38c and it says which month, in words a person can read',
+    (x -> 'billing' -> 0 ->> 'label') like '%not confirmed invoiced%',
+    x -> 'billing' -> 0 ->> 'label');
+  insert into _r values ('38d and it makes the organisation need a decision',
+    (x ->> 'needs_decision') = 'true', x ->> 'needs_decision');
+  raise notice 'STATE  Tuesday flag: % -> %  (%)', v_before, v_after,
+    coalesce(x -> 'billing' -> 0 ->> 'label', '(none)');
+end $$;
+
+-- Confirming it clears the flag. Nothing else does.
+do $$
+declare v_org uuid; v_pack uuid; v jsonb; x jsonb;
+begin
+  select id into v_org from organizations where name='BOPEU';
+  select id into v_pack from billing_handovers
+   where org_id = v_org and kind='retainer'
+     and period_start = (date_trunc('month', current_date) - interval '2 months')::date;
+
+  perform handover_mark_handed_over(v_pack);
+  v := tuesday_review_pack(current_date);
+  select e into x from jsonb_array_elements(v -> 'organisations') e where e ->> 'name'='BOPEU';
+  insert into _r values ('38e handing the numbers over does NOT clear the flag',
+    jsonb_array_length(x -> 'billing') > 0, coalesce(x -> 'billing','null')::text);
+
+  perform handover_confirm_invoiced(v_pack);
+  v := tuesday_review_pack(current_date);
+  select e into x from jsonb_array_elements(v -> 'organisations') e where e ->> 'name'='BOPEU';
+  insert into _r values ('38f only Lone''s confirmation clears it',
+    jsonb_array_length(x -> 'billing') = 0, coalesce(x -> 'billing','null')::text);
+end $$;
+
+-- The rest of the M5 payload must be untouched by that change.
+select _chk('39 tuesday_review_pack keeps every key M5 returned',
+  (select tuesday_review_pack(current_date)) ?& array['as_of','meeting_id',
+    'previous_meeting_id','completion_rate','organisations','unassigned']);
 
 select _chk('40 no M4 function is reachable ungated by anon or authenticated',
   (select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -546,9 +683,10 @@ select _chk('40 no M4 function is reachable ungated by anon or authenticated',
       and pg_get_function_result(p.oid) <> 'trigger'
       and (has_function_privilege('anon', p.oid, 'EXECUTE')
         or has_function_privilege('authenticated', p.oid, 'EXECUTE'))
-      and p.proname in ('_invoice_period','_invoice_owner','_pack_contents',
-                        '_invoice_for_activity','invoices_run_monthly','invoice_pack',
-                        'invoice_hand_over','invoice_mark_invoiced','invoice_mark_paid',
+      and p.proname in ('_handover_period','_handover_owner','_pack_contents',
+                        '_handover_for_activity','handovers_run_monthly','handover_pack',
+                        'handover_mark_handed_over','handover_confirm_invoiced','handover_cancel',
+                        '_billing_flags',
                         'contract_position','org_work_plan','work_plan_upsert',
                         'activity_upsert')
       and not (p.prosrc ~* '\mis_admin\M|\mis_staff\M|\mis_ops_admin\M'

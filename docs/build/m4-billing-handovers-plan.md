@@ -1,10 +1,31 @@
 # M4, amended — contracts, work plans, activities, billing handovers
 
-**Plan only. No SQL written. 27 Aug 2026.**
+**BUILT 27 Aug 2026 on `dev`. Not applied to any database.**
 
-This replaces the plan behind `supabase_m4_contracts_workplans_invoices.sql`,
-which is committed on `dev` and **has never been applied to anything**. That is
-what makes this cheap: it is a rewrite of files, not a migration of live data.
+This replaced the plan behind the old
+`supabase_m4_contracts_workplans_invoices.sql`, which had never been applied to
+anything — which is what made the rewrite cheap: files, not live data. That
+file and its rollback are now deleted; the current pair is
+`supabase_m4_contracts_workplans_billing.sql` and
+`migrations/rollback-m4-contracts-workplans-billing.sql`.
+
+Local state, PostgreSQL 17.6:
+
+```
+REGRESSION  org_report_data: 9 of 9 payloads byte-identical
+STATE       activity 1 = delivered, billing_handovers = 1
+STATE       monthly job: created 1, period 2026-12-01..2026-12-31, prepare_day 25
+STATE       live pack: 1 -> 2 activities after a late delivery
+STATE       frozen pack: 2 activities, unchanged by a later delivery
+STATE       next pack contains: Delivered after handover
+STATE       Tuesday flag: f -> t  (June not confirmed invoiced)
+            63 passed, 0 failed.
+            rollback clean    ok (zero leftover objects)
+            activities kept   ok (the rollback dropped columns, not rows)
+```
+
+Every other suite, re-run afterwards: phase0/0a/1 passed, M1 22, M5 45,
+M5a 29, support 28, Edge Function 13. Nothing moved.
 
 ---
 
@@ -129,27 +150,34 @@ rebuilt.
 
 ---
 
-## 9. Three decisions I need before writing SQL
+## 9. The three decisions, as taken (27 Aug 2026)
 
-**9.1 · Does the handover keep a `due_date`?**
-It existed only to derive `overdue`, which is gone. Recommend **deleting it**,
-and `invoice.due_days` with it. But the *action* that tells Lone to hand the
-pack over still needs a due date — recommend **month end**, which is a date we
-actually know, rather than a payment term we are guessing at.
+**9.1 · The handover keeps NO date.** `due_date` is gone and `invoice.due_days`
+with it — the migration actively deletes that config key, so a database that
+had it does not keep a stale one. The *action* that tells Lone to hand the pack
+over is due at **month end**: `period_end` for a retainer, and the end of the
+month the work was delivered in for an engagement. Both are dates this system
+set and therefore knows.
 
-**9.2 · An activity for an organisation with no contract at all.**
-Today a *missing rate* still raises the handover with a null amount plus an
-action naming the gap. Should a *missing contract* behave the same way?
-Recommend **yes** — raise it with a null amount and an action. Never lose
-delivered work because the paperwork is behind.
+**9.2 · An organisation with no contract at all still gets a handover** — blank
+amount, plus an action reading *"— no contract on file for this organisation"*.
+Same treatment as a missing rate. Delivered work is never lost because the
+paperwork is behind.
 
-**9.3 · Where the yellow flag is computed.**
-Recommend extending **`tuesday_review_pack()`** rather than adding a separate
-call, so the review screen keeps making one request and `needs_decision` stays
-one concept. The cost is real and worth naming: **that function is already live
-on the production database**, so M4 would replace it. It therefore needs its
-own baseline, its own written prediction and its own assertion, under the
-standing rule. Every other part of M4 only adds.
+  One guard came out of building it, which the plan had not anticipated: if the
+  organisation has **no per-engagement contract but an active retainer**, the
+  activity belongs in the monthly pack and `_handover_for_activity()` returns
+  without raising anything. Without that check the work would be handed over
+  twice — once on delivery and once in the month's pack.
+
+**9.3 · The flag extends `tuesday_review_pack()`.** So the review screen keeps
+making one request and `needs_decision` stays one concept. That function is
+live, so it carries its own baseline (V0 of the live check), its own written
+prediction, and six assertions of its own — including that handing the numbers
+over does **not** clear the flag and only Lone's confirmation does.
+
+The rollback restores its M5 body exactly, and refuses to finish if the
+restored function still calls `_billing_flags`.
 
 ---
 
