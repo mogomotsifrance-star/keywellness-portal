@@ -378,7 +378,7 @@ create table if not exists billing_handovers (
 
 comment on table billing_handovers is
   'The moment Lone hands Laone the numbers for a period or an engagement. '
-  'NOT an invoice — billing_handovers are produced in Sage and this system never sees '
+  'NOT an invoice — invoices are produced in Sage and this system never sees '
   'one. There is deliberately no paid state and no overdue.';
 comment on column billing_handovers.invoice_confirmed_at is
   'When Lone confirmed with Laone that the invoice exists. Screens must read '
@@ -1489,7 +1489,7 @@ begin
 
   raise notice 'M4 applied. The handover is prepared on day % of the month it '
                'covers and stays LIVE until Lone hands it over. There is no '
-               'paid state and no overdue: billing_handovers are produced in Sage. '
+               'paid state and no overdue: invoices are produced in Sage. '
                'M3 must gate org_work_plan() and contract_position().',
     (select coalesce((value #>> '{}')::int, 25) from threshold_config
       where key = 'invoice.prepare_day');

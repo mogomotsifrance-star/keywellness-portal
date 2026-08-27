@@ -159,7 +159,7 @@ values ('0b000000-0000-0000-0000-0000000000a1',
 select _chk('10 linking a booking moves the activity planned -> scheduled',
   (select state from program_activities where id='0f000000-0000-0000-0000-000000000001') = 'scheduled');
 
--- The first confirmed attendance delivers it, and billing_handovers it.
+-- The first confirmed attendance delivers it, and raises its handover.
 update bookings set attended = true where id = '0b000000-0000-0000-0000-0000000000a1';
 
 select _chk('11 the first confirmed attendance moves it scheduled -> delivered',

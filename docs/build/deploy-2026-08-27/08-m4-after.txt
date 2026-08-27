@@ -1,0 +1,68 @@
+M4 — live Supabase, 27 Aug 2026, AFTER apply
+Applied through the Supabase MCP in five parts (m4_billing_1..5). Split only
+because the file is ~1450 lines; every part is idempotent.
+
+V0 · tuesday_review_pack() — THE LIVE FUNCTION M4 REPLACES
+
+  BEFORE  HEADER  as_of=2026-08-27 meeting_id=(none) previous=(none)
+                  completion_rate=null unassigned open_now=0 last_week=0
+          BOPEU     open_count=0 needs_decision=false last_week=0 open_now=0 billing=ABSENT
+          Sedimosa  open_count=0 needs_decision=false last_week=0 open_now=0 billing=ABSENT
+
+  AFTER   HEADER  as_of=2026-08-27 meeting_id=(none) previous=(none)
+                  completion_rate=null unassigned open_now=0 last_week=0
+          BOPEU     open_count=0 needs_decision=false last_week=0 open_now=0 billing=[]
+          Sedimosa  open_count=0 needs_decision=false last_week=0 open_now=0 billing=[]
+
+  The ONLY difference is billing: ABSENT -> []. Every other key on every line
+  is identical. That is exactly what the prediction said.
+
+PREDICTION vs ACTUAL
+
+  program_activities rows unchanged (1)        1                        yes
+  bookings rows unchanged (22)                 22                       yes
+  organizations rows unchanged (3)             3                        yes
+  actions rows unchanged (0)                   0                        yes
+  meetings rows unchanged (0)                  0                        yes
+  activity_type constraint untouched           identical                yes
+  five new tables, ALL EMPTY                   5 tables, 0/0/0/0/0      yes
+  ten policies                                 10                       yes
+  states to_prepare/handed_over/               exactly those four       yes
+    invoiced/cancelled
+  no paid, overdue, scan_path or due_date      ok                       yes
+  invoice.prepare_day = 25                     25                       yes
+  invoice.due_days NOT created                 absent                   yes
+  daily job kw-monthly-handovers 0 3 * * *     present                  yes
+  no ungated SECURITY DEFINER helper           none - clean             yes
+  trigger reads OLD (transition-guarded)       reads OLD                yes
+
+ONE PREDICTION WAS WRONG, AND IT MATTERED
+
+  Predicted: "invoice.prepared_by_user_id null = the first ops admin, which is
+  Lone."
+  Actual:    it resolved to france@keywealth.co.bw.
+
+  _handover_owner() falls back to the first admin BY EMAIL. In the local
+  fixture Lone is the only admin, so the fallback looked like "Lone". On live
+  there are five admins and france@ sorts before lone@ alphabetically.
+
+  So the default would have put Lone's invoice pack in France's name -- and
+  France is precisely the person who LOSES ops-admin capability when M3 lands.
+  The deploy note always said to set this key explicitly; the fallback was
+  never meant to be relied on.
+
+  FIXED at apply time:
+    update threshold_config
+       set value = to_jsonb('<lone-user-id>'::text)
+     where key = 'invoice.prepared_by_user_id';
+
+    invoice.prepared_by_user_id : a9e42be3-ed16-4597-8f49-861069becb42
+    resolves to                 : lone@keywellness.co.bw
+
+  This is what the baseline-and-prediction rule is for. A local green said the
+  fallback was fine; only the live diff showed it was not.
+
+STILL TRUE AFTER M4
+  No contract, no rate and no handover exists. The first pack appears on the
+  25th of the first month a retainer contract exists. Lone marks it handed
+  over herself, from the SQL editor, until M7 gives her a button.

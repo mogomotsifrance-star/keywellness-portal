@@ -1,0 +1,65 @@
+M4 baseline — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, BEFORE apply
+
+V0 · tuesday_review_pack() — THE FUNCTION M4 REPLACES
+  HEADER  as_of=2026-08-27  meeting_id=(none)  previous=(none)
+          completion_rate=null  unassigned open_now=0  last_week=0
+  ORG     BOPEU     open_count=0  needs_decision=false  last_week=0  open_now=0  billing=ABSENT
+  ORG     Sedimosa  open_count=0  needs_decision=false  last_week=0  open_now=0  billing=ABSENT
+  (Test Co is correctly absent — it is flagged is_test.)
+
+COUNTS THAT MUST NOT MOVE
+  program_activities rows   1
+  bookings rows             22
+  organizations rows        3
+  actions rows              0
+  meetings rows             0
+
+MUST NOT CHANGE
+  activity_type constraint  CHECK (activity_type = ANY (ARRAY['group_intervention',
+                            'education_talk','webinar','clinic','other']))
+  threshold_config invoice.*   (none)
+  tuesday_review_pack calls _billing_flags   no
+
+
+THE PREDICTION — written before applying. See the migration header.
+
+  CHANGES
+    Five new tables appear, ALL EMPTY: org_contracts, contract_rates,
+    org_contacts, work_plans, billing_handovers.
+    program_activities gains twelve columns; bookings gains one. NO ROW in
+    either is added, removed or altered.
+    Fourteen functions appear.
+    threshold_config gains invoice.prepared_by_user_id (null = the first ops
+    admin, which is Lone) and invoice.prepare_day (25). It does NOT gain
+    invoice.due_days -- the migration deletes that key, because the handover
+    carries no date of its own.
+    A daily job kw-monthly-handovers appears at 0 3 * * *.
+
+  ONE EXISTING FUNCTION IS REPLACED
+    tuesday_review_pack(). Every organisation gains a `billing` key, which
+    will read [] because there are no contracts and therefore no handovers.
+    needs_decision may turn true where a retainer period is past its prepare
+    day without Lone's confirmation -- there are none today, so it stays false.
+    EVERY OTHER KEY MUST BE IDENTICAL: as_of, meeting_id, previous_meeting_id,
+    completion_rate, last_week, open_now, open_count, unassigned.
+
+  DOES NOT CHANGE
+    No booking, no member, no report. The five counts above are unchanged.
+    The activity_type constraint is untouched -- it is a reporting input, and
+    if it moves, org_report_data() has moved with it.
+    No published report can move: publish_org_report() froze those into
+    org_reports.data_snapshot and HR reads the snapshot.
+    Nobody gains sight of anything: every policy is staff-read, ops-admin-write.
+    HR and members get no policy at all.
+
+  IF IT IS WRONG
+    The realistic failure is the Tuesday review showing a wrong flag or failing
+    to load. No data is damaged, because nothing existing is written to.
+    Undo with migrations/rollback-m4-contracts-workplans-billing.sql, which
+    drops what it created AND restores tuesday_review_pack() to its M5 body,
+    refusing to finish if the restored function still calls _billing_flags.
+
+  EXPECTED AFTER-STATE, EXACTLY
+    ORG BOPEU     ... billing=[]
+    ORG Sedimosa  ... billing=[]
+    everything else on those two lines and the HEADER line unchanged.
