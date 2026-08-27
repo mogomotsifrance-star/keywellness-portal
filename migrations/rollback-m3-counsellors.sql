@@ -203,7 +203,7 @@ do $$
 begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.proname = 'kw_unit_label') then
-    execute 'grant execute on function kw_unit_label(uuid) to anon';
+    execute 'grant execute on function kw_unit_label(uuid) to public, anon';
   end if;
 end $$;
 

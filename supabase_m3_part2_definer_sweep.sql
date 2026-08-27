@@ -342,7 +342,12 @@ do $$
 begin
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.proname = 'kw_unit_label') then
-    execute 'revoke execute on function kw_unit_label(uuid) from anon';
+    -- FROM PUBLIC, not only from anon. `anon` INHERITS PUBLIC's grant, so
+    -- revoking from anon alone changes nothing: the ACL still reads
+    -- `=X/postgres` and has_function_privilege('anon', ...) stays true. This is
+    -- CLAUDE.md's own standing rule about PUBLIC, and the post-condition below
+    -- caught me breaking it on the live apply.
+    execute 'revoke execute on function kw_unit_label(uuid) from public, anon';
     raise notice 'M3: kw_unit_label is no longer anon-callable.';
   else
     raise notice 'M3: kw_unit_label is not present here — nothing to revoke.';
