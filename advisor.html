@@ -457,6 +457,15 @@ tbody td{padding:10px 12px;vertical-align:middle}
       <h3>New Client Assessment</h3>
       <button class="modal-close" onclick="closeModal('newClientModal')">✕</button>
     </div>
+    <!-- Whose caseload does this client join? An ordinary advisor has only
+         one possible answer, so the field stays hidden for them. A team lead
+         working in "All clients" has no implied owner — this form asks rather
+         than refusing, and the scope bar's advisor picker cannot stand in for
+         it because it deliberately excludes the lead themselves. -->
+    <div class="field" style="margin-bottom:14px" id="nc-owner-wrap" hidden>
+      <label>Advisor <span style="font-weight:600;color:var(--muted)">— whose caseload this client joins</span></label>
+      <select id="nc-owner"></select>
+    </div>
     <div class="field" style="margin-bottom:14px">
       <label>Name</label>
       <input type="text" id="nc-name" placeholder="First name">
@@ -1510,6 +1519,26 @@ function ncNoOrgChanged(){
   }
 }
 
+// The owner list is the active roster plus, always, the lead themselves —
+// so "file this under me" is reachable from every scope, including "All
+// clients", where it used to be the one thing the form could not express.
+function fillOwnerPicker(){
+  const wrap = document.getElementById('nc-owner-wrap');
+  const sel  = document.getElementById('nc-owner');
+  if(!isLead() || !ADVISOR){ wrap.hidden = true; sel.innerHTML = ''; return; }
+  const mine = ADVISOR.id;
+  let list = TEAM.filter(a => a.is_active || a.advisor_id === mine);
+  if(!list.some(a => a.advisor_id === mine)){
+    list = [{ advisor_id: mine, full_name: ADVISOR.full_name || 'You' }].concat(list);
+  }
+  const chosen = VIEW.mode === 'advisor' ? VIEW.advisorId : mine;
+  wrap.hidden = false;
+  sel.innerHTML = list.map(function(a){
+    return '<option value="'+a.advisor_id+'"'+(a.advisor_id===chosen?' selected':'')+'>'
+         + esc(a.full_name) + (a.advisor_id===mine ? ' (you)' : '') + '</option>';
+  }).join('');
+}
+
 function openNewClientModal(){
   pendingImport = null;
   document.getElementById('nc-name').value='';
@@ -1521,6 +1550,7 @@ function openNewClientModal(){
   document.getElementById('nc-unit').disabled = false;
   document.querySelector('#newClientModal .modal-header h3').textContent = 'New Client Assessment';
   document.getElementById('newClientModal').classList.add('open');
+  fillOwnerPicker();
   fillOrgPicker();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -1531,14 +1561,14 @@ async function createClientRecord(){
   const phone   = (document.getElementById('nc-phone').value || '').trim();
   if(!name){ alert('A first name is required.'); return; }
 
-  // A new client belongs to whichever caseload is open. In the "all
-  // clients" view there is no single owner to pick, so creation is
-  // blocked rather than silently filed under the team lead.
-  if(VIEW.mode === 'all'){
-    showBanner('Choose a specific advisor before adding a client.');
-    return;
-  }
-  const ownerId = VIEW.mode === 'advisor' ? VIEW.advisorId : ADVISOR.id;
+  // A new client belongs to whichever caseload is open. A team lead can
+  // override that on the form — in the "all clients" view there is no
+  // caseload open at all, and the picker defaults to the lead themselves
+  // rather than blocking the only route they have to add a client.
+  const ownerSel = document.getElementById('nc-owner');
+  const ownerId  = (isLead() && ownerSel && ownerSel.value) ? ownerSel.value
+                 : VIEW.mode === 'advisor' ? VIEW.advisorId
+                 : ADVISOR.id;
 
   // Attribution. The database will refuse a client that is neither under
   // an organisation nor declared private, so catch it here where the
@@ -1631,9 +1661,8 @@ function searchMembers(q){
 }
 
 async function addMemberAsClient(userId){
-  if(VIEW.mode !== 'mine' && isLead()){
+  if(VIEW.mode === 'advisor' && isLead()){
     // Assign to the advisor whose caseload is open, not to the team lead.
-    if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor first.'); return; }
     const { data: newId, error: aErr } = await sb.rpc('admin_assign_client', {
       p_advisor_id: VIEW.advisorId, p_member_user_id: userId });
     if(aErr){ showBanner('Could not assign: ' + aErr.message); return; }
@@ -1735,7 +1764,6 @@ function importClientFile(file){
       const surname = (imported.personal.surname||'').trim();
       delete imported.id; delete imported._link; delete imported._memberUserId;
       delete imported.appointments;   // sessions live in `bookings`, not in a file
-      if(VIEW.mode === 'all'){ showBanner('Choose a specific advisor before importing a client.'); return; }
 
       // An imported client needs an organisation like any other. Rather
       // than a second attribution path that could drift from the first,
@@ -1752,6 +1780,7 @@ function importClientFile(file){
       document.querySelector('#newClientModal .modal-header h3').textContent =
         'Import Client — choose the organisation';
       document.getElementById('newClientModal').classList.add('open');
+      fillOwnerPicker();
       await fillOrgPicker();
     } catch(e){
       alert('Could not read that file — make sure it\'s a client file exported from this portal.');
