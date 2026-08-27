@@ -740,13 +740,24 @@ async function renderReports() {
 }
 
 /* ══ Other interfaces ═════════════════════════════════════════ */
+/* Leaving has to be recorded, not just navigated. boot() stamps
+   kw_interface='ops' on every load and index.html routes on that stamp, so
+   a bare link to My Portal was replaced straight back to here — ops was a
+   room with no door. Every other switcher in the app sets the interface
+   before it moves (kwGoToInterface in index/admin/advisor); this one was
+   the exception. The anchor still navigates on its own, so a failed
+   sessionStorage write costs the stamp, not the click. */
 function toggleOther() {
   const m = document.getElementById('otherMenu');
   if (m.style.display === 'block') { m.style.display = 'none'; return; }
+  const item = (href, id, label) =>
+    `<a href="${href}" onclick="KW.setInterface('${id}')" style="display:block;padding:10px 14px;border-bottom:1px solid var(--rule);text-decoration:none">${esc(label)}</a>`;
   const opts = KW.interfaces(ROLES).filter(o => o.id !== 'ops');
-  m.innerHTML = opts.map(o =>
-    `<a href="${o.href}" style="display:block;padding:10px 14px;border-bottom:1px solid var(--rule);text-decoration:none">${esc(o.title)}</a>`).join('')
-    + (ROLES.admin ? `<a href="admin.html" style="display:block;padding:10px 14px;text-decoration:none">Admin dashboard</a>` : '');
+  m.innerHTML = opts.map(o => item(o.href, o.id, o.title)).join('')
+    /* admin.html does not route on the stamp, but it is the same staff hat
+       as ops — leave the stamp alone so a later index.html load still
+       resolves to the workspace rather than to the page being retired. */
+    + (ROLES.admin ? item('admin.html', 'ops', 'Admin dashboard') : '');
   m.style.display = 'block';
 }
 
