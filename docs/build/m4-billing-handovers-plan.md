@@ -19,7 +19,7 @@ STATE       live pack: 1 -> 2 activities after a late delivery
 STATE       frozen pack: 2 activities, unchanged by a later delivery
 STATE       next pack contains: Delivered after handover
 STATE       Tuesday flag: f -> t  (June not confirmed invoiced)
-            63 passed, 0 failed.
+            66 passed, 0 failed.
             rollback clean    ok (zero leftover objects)
             activities kept   ok (the rollback dropped columns, not rows)
 ```
@@ -72,7 +72,30 @@ to_prepare  ──▶  handed_over  ──▶  invoiced
 | `to_prepare` | The month's work is still accumulating. Nobody has done anything yet. |
 | `handed_over` | Lone has given Laone the numbers. The contents freeze at this moment. |
 | `invoiced` | **Lone has confirmed with Laone that the invoice exists in Sage.** Recorded as `invoice_confirmed_by` and `invoice_confirmed_at`. |
-| `cancelled` | Reachable from any state. |
+| `cancelled` | Reachable from any state. **Keeps the confirmation if there was one.** |
+
+### Cancelling does not erase the confirmation
+
+If Lone confirmed the invoice and the handover is cancelled afterwards, **an
+invoice very likely exists in Sage and needs a credit note.** Clearing
+`invoice_confirmed_by` / `invoice_confirmed_at` would destroy the only trace of
+it at exactly the moment she needs to chase it.
+
+> **We record what happened, not what is currently true.**
+
+So the state reads `cancelled`, and the confirmation stays beside it with the
+reason. `handover_cancel()` returns `was_confirmed` and `confirmed_at` so the
+caller knows it is looking at the case that needs a human.
+
+The check constraint says this as a rule rather than leaving it to behaviour:
+`invoiced` **requires** a confirmation, `to_prepare` and `handed_over`
+**forbid** one, and `cancelled` allows either. Four assertions cover it,
+including the reverse — a handover cancelled *before* anyone confirmed anything
+must not acquire a confirmation out of nowhere.
+
+**This is an M7 obligation too.** A handover that reads *cancelled, but was
+confirmed on 26 Aug* is not the same thing as a handover that was cancelled
+before it ever went anywhere, and the screen must not show them identically.
 
 `invoiced` was cut from the previous plan and is now back. The objection to it
 was that a status nobody owns goes stale — which is right, and is exactly why

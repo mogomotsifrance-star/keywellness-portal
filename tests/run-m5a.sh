@@ -41,16 +41,19 @@ echo "  M5a               ok"
 $PSQL -d kwm5a -f "$ROOT/supabase_m5a_ops_timeline.sql"    >/dev/null 2>&1
 echo "  M5a re-run        ok (idempotent)"
 
+# ERROR and FATAL are in this pattern deliberately. Without them a test file
+# that ABORTS part-way prints its notices, prints no summary, and reads as a
+# pass to anyone skimming. That has happened twice on this project.
 $PSQL -d kwm5a -f "$HERE/m5a-tests.sql" 2>&1 \
-  | grep -E "PASS|FAIL|passed" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
+  | grep -E "PASS|FAIL|passed|ERROR|FATAL" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
 
 # The view exists only for the assertions; drop it so the leftover check is
 # about the migration, not the test scaffolding.
 $PSQL -d kwm5a -c "drop view if exists _tl; drop view if exists _tl2; drop table if exists _expected" >/dev/null
 
-$PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5a-ops-timeline.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5a-ops-timeline.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback M5a      ok"
-$PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5a-ops-timeline.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5a-ops-timeline.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback re-run   ok (idempotent)"
 
 LEFT=$($PSQL -d kwm5a -t -A -c "
@@ -64,5 +67,5 @@ else
 fi
 
 # M5 must still roll back cleanly underneath it.
-$PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5-meetings-actions.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwm5a -f "$ROOT/migrations/rollback-m5-meetings-actions.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback M5       ok (the stack unwinds in order)"

@@ -36,12 +36,15 @@ echo "  migration         ok"
 $PSQL -d kwsupport -f "$ROOT/supabase_support_audit.sql" >/dev/null 2>&1
 echo "  migration re-run  ok (idempotent)"
 
+# ERROR and FATAL are in this pattern deliberately. Without them a test file
+# that ABORTS part-way prints its notices, prints no summary, and reads as a
+# pass to anyone skimming. That has happened twice on this project.
 $PSQL -d kwsupport -f "$HERE/support-tests.sql" 2>&1 \
-  | grep -E "PASS|FAIL|passed" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
+  | grep -E "PASS|FAIL|passed|ERROR|FATAL" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
 
-$PSQL -d kwsupport -f "$ROOT/migrations/rollback-support-audit.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwsupport -f "$ROOT/migrations/rollback-support-audit.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback          ok"
-$PSQL -d kwsupport -f "$ROOT/migrations/rollback-support-audit.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwsupport -f "$ROOT/migrations/rollback-support-audit.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback re-run   ok (idempotent)"
 
 LEFT=$($PSQL -d kwsupport -t -A -c "

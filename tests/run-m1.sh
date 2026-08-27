@@ -93,13 +93,16 @@ echo "  migration re-run  ok (idempotent)"
 
 # ── Assertions ───────────────────────────────────────────────
 # m1-tests.sql sets test.email itself, so it also runs standalone.
+# ERROR and FATAL are in this pattern deliberately. Without them a test file
+# that ABORTS part-way prints its notices, prints no summary, and reads as a
+# pass to anyone skimming. That has happened twice on this project.
 $PSQL -d kwm1 -f "$HERE/m1-tests.sql" 2>&1 \
-  | grep -E "PASS|FAIL|passed" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
+  | grep -E "PASS|FAIL|passed|ERROR|FATAL" | sed "s/^psql:[^ ]* //; s/^NOTICE:  //"
 
 # ── Rollback, twice ──────────────────────────────────────────
-$PSQL -d kwm1 -f "$ROOT/migrations/rollback-m1-service-line.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwm1 -f "$ROOT/migrations/rollback-m1-service-line.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback          ok"
-$PSQL -d kwm1 -f "$ROOT/migrations/rollback-m1-service-line.sql" >/dev/null 2>&1
+_kwout=$($PSQL -d kwm1 -f "$ROOT/migrations/rollback-m1-service-line.sql" 2>&1) || { echo "$_kwout" | grep -vE "NOTICE:|^$"; echo "  rollback          FAILED"; exit 1; }
 echo "  rollback re-run   ok (idempotent)"
 
 # ── Clean slate + the data is genuinely back ─────────────────

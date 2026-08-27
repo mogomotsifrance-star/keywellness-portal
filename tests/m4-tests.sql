@@ -456,12 +456,46 @@ begin
 
   -- From 'invoiced', which is the furthest state there is.
   v := handover_cancel(v_pack, 'client disputed the August figures');
-  insert into _r values ('25k cancelled is reachable from any state, and clears the confirmation',
+  insert into _r values ('25k cancelled is reachable from any state, and records why',
     (v ->> 'state') = 'cancelled'
-    and (select invoice_confirmed_at from billing_handovers where id = v_pack) is null
     and (select cancel_reason from billing_handovers where id = v_pack) like '%disputed%',
     v::text);
+
+  -- THE ONE THAT MATTERS. An invoice Lone confirmed almost certainly exists in
+  -- Sage. Cancelling the handover does not un-issue it — it means somebody has
+  -- to chase a credit note, and they cannot chase what the system has erased.
+  insert into _r values ('25k2 a cancelled handover that HAD been confirmed still reports its confirmation',
+    (select invoice_confirmed_at from billing_handovers where id = v_pack) is not null
+    and (select invoice_confirmed_by from billing_handovers where id = v_pack) is not null
+    and (v ->> 'was_confirmed') = 'true'
+    and (v ->> 'confirmed_at') is not null,
+    v::text);
 end $$;
+
+-- And the other direction: a handover cancelled BEFORE anyone confirmed
+-- anything must not acquire a confirmation out of nowhere.
+do $$
+declare v_h uuid; v jsonb;
+begin
+  insert into billing_handovers (contract_id, org_id, kind, period_start, period_end,
+                                 amount, currency, state, covers_from)
+  values ((select id from org_contracts where contract_kind='retainer' limit 1),
+          (select id from organizations where name='BOPEU'), 'retainer',
+          date '2026-01-01', date '2026-01-31', 1000, 'BWP', 'to_prepare',
+          timestamptz '2026-01-01 00:00+02')
+  returning id into v_h;
+
+  v := handover_cancel(v_h, 'raised against the wrong client');
+  insert into _r values ('25k3 a handover cancelled before confirmation reports no confirmation',
+    (v ->> 'was_confirmed') = 'false'
+    and (select invoice_confirmed_at from billing_handovers where id = v_h) is null,
+    v::text);
+end $$;
+
+-- The constraint, stated as a rule rather than inferred from behaviour.
+select _chk('25k4 to_prepare and handed_over cannot carry a confirmation, cancelled may',
+  (select pg_get_constraintdef(oid) from pg_constraint
+    where conname = 'billing_handovers_confirmed_agrees') like '%to_prepare%handed_over%');
 
 
 -- ══ 25l–25o · Nothing here knows what Sage holds ═══════════
