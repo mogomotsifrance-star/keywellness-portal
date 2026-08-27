@@ -1,0 +1,109 @@
+M3 — live Supabase (tarmpqxsabbehgjaonfz), 27 Aug 2026, BEFORE apply
+
+Branch declined on cost ($0.01344/hour, checked against the real org),
+reaffirmed after seeing the figure, and M3 instructed to proceed to live
+anyway. So the branch matrix is replaced by a REAL before/after against live,
+using the M1 discipline: baseline and prediction first, verify after.
+
+════════════════════════════════════════════════════════════
+ONE THING STEP 1 COULD NOT DO, AND WHY
+
+`counsellors` and `bookings.counsellor_id` DO NOT EXIST until M3 creates them.
+So Karabo and Nicola cannot be seeded as counsellors BEFORE the apply — there
+is nowhere to put them and no column to attach a booking to.
+
+That is not effort I skipped; it is the thing being measured not existing yet.
+Their accounts DO already exist in auth.users, so they are probed here as
+themselves — and read nothing, correctly, because they hold no role.
+
+The counsellor-vs-counsellor rows become measurable only AFTER the apply and
+are reported separately, clearly labelled.
+
+TWO PROBE ROWS were seeded to make the "before" real rather than theoretical:
+
+  0e3b0000-...-a1  and  0e3b0000-...-a2
+  service = 'M3 PROBE — delete after verification'
+  service_line = 'psychosocial'
+  owner = 2358cfbf-621a-4009-b4ba-9a138d53de8d (a Test Co member, deliberately
+          NOT Karabo or Nicola, who are both themselves Test Co members and
+          would have confounded the result by reading their own rows)
+
+They are DELETED after verification.
+
+════════════════════════════════════════════════════════════
+THE BEFORE MATRIX — measured, not remembered
+
+  persona                          financial   psychosocial
+  France (admin + lead + HR)            22           2
+  Lone (admin + psychosocial)           22           2
+  Michelle (admin + psychosocial)       22           2
+  Advisor, plain                         0           0
+  HR only                                0           0
+  Karabo (no counsellor role yet)        0           0
+  Nicola (no counsellor role yet)        0           0
+
+  Test Co Q3 total_booked, which HR READS   : 10
+  bookings policies                          : 9
+  kw_can_see_booking exists                  : no
+  RLS enabled on bookings                    : true
+
+FOUR THINGS THIS BEFORE-MATRIX SHOWS THAT PROSE WOULD HAVE GOT WRONG
+
+1. FRANCE IS THE TEAM LEAD, THE ADMIN AND AN HR ACCOUNT, ALL THREE. Three rows
+   of the intended matrix collapse into one person on this database. His single
+   row therefore carries both the "France-type admin" assertion and the
+   "financial team lead" assertion.
+
+2. THERE IS NO NON-ADMIN TEAM LEAD ON LIVE to test separately. The team-lead
+   path is exercised through France or not at all.
+
+3. THE PLAIN ADVISOR READS 0 FINANCIAL, not 22. Not because a policy denies
+   them — because only 2 of 5 advisors carry a user_id, so
+   current_advisor_id() does not resolve for them. Their 0 is an identity
+   failure wearing the costume of an access decision, and it means the advisor
+   row of this matrix proves nothing either way. Recorded rather than papered
+   over.
+
+4. THE PROBE ROWS ARE ALREADY IN HR's NUMBER. Test Co total_booked reads 10;
+   it read 8 before they were seeded. That is section 8.1 of the plan happening
+   in front of us: psychosocial sessions land in HR's session totals silently,
+   with no decision having been taken.
+
+════════════════════════════════════════════════════════════
+THE PREDICTION — written BEFORE applying
+
+  persona                        financial          psychosocial
+  France                         22 -> 22           2 -> 0   <- the migration
+  Lone                           22 -> 22           2 -> 2
+  Michelle                       22 -> 22           2 -> 2
+  Advisor, plain                  0 ->  0           0 -> 0
+  HR only                         0 ->  0           0 -> 0
+  Karabo                          0 ->  0           0 -> 0
+  Nicola                          0 ->  0           0 -> 0
+
+  Test Co Q3 total_booked        10 -> 8    (the two psychosocial rows leave
+                                             HR's figure — section 8.1)
+  bookings policies               9 -> 11
+  kw_can_see_booking exists      no -> yes
+  RLS on bookings               true -> true
+
+  In plain language, the two changes this migration exists for:
+
+    France · psychosocial · SELECT : 0 rows (was: all rows)
+    HR     · psychosocial · counted: not counted (was: counted in total_booked)
+
+  And the two that must NOT change:
+
+    France · financial · SELECT : 22 rows (was: 22 rows)
+    Lone   · psychosocial · SELECT : 2 rows (was: 2 rows)
+
+AFTER THE APPLY, separately, once counsellors can exist:
+
+    Karabo · her own psychosocial booking     : 1 row
+    Karabo · Nicola's psychosocial booking    : 0 rows
+    Nicola · her own psychosocial booking     : 1 row
+    Nicola · Karabo's psychosocial booking    : 0 rows
+    Karabo · financial                        : 0 rows
+    Lone   · counselling notes                : 0 rows
+
+IF ANYTHING DOES NOT MATCH: stop, report, change nothing further.
