@@ -600,6 +600,36 @@ grant execute on function admin_org_summary(uuid)                               
 
 -- The old signatures are retained as client-safe wrappers, so their grants
 -- must survive a re-create.
+--
+-- REVOKE FIRST, and not as a formality. These four used to carry the authz
+-- check in their own body; now they are thin delegators to the 5-argument
+-- form, so their source no longer names a gate. Two things follow:
+--
+--   * PUBLIC still holds EXECUTE on them (CREATE OR REPLACE does not take a
+--     grant away, and nothing here ever revoked it), so anon could call them.
+--     No data escapes — the callee raises 'not authorised' for a caller who is
+--     neither is_admin() nor the org's employer_org() — but a reachable
+--     SECURITY DEFINER entry point is not something to leave resting on the
+--     gate one call further down.
+--
+--   * The CLAUDE.md definer sweep reports them as ungated, because it matches
+--     on gate NAMES in prosrc and a delegator contains none. That sweep was
+--     clean before this migration.
+--
+--     THE REVOKE BELOW DOES NOT SILENCE THAT. The sweep flags anything
+--     reachable by anon OR authenticated, and these stay granted to
+--     authenticated. They are recorded in CLAUDE.md as known delegators
+--     instead — the sweep is meant to make somebody prove a definer function
+--     is safe, and the honest answer here is "the callee gates it", not a
+--     grant removed until the warning goes away.
+--
+-- Verified 28 Aug 2026: nothing calls these overloads from the front end —
+-- admin.html builds the 5-argument form, employer.html calls none of them.
+revoke all on function org_report_data(uuid, date, date)                       from public, anon;
+revoke all on function org_report_data(uuid, date, date, uuid)                 from public, anon;
+revoke all on function org_report_company_breakdown(uuid, date, date)          from public, anon;
+revoke all on function org_report_department_breakdown(uuid, date, date, uuid) from public, anon;
+
 grant execute on function org_report_data(uuid, date, date)                       to authenticated;
 grant execute on function org_report_data(uuid, date, date, uuid)                 to authenticated;
 grant execute on function org_report_company_breakdown(uuid, date, date)          to authenticated;
@@ -660,6 +690,33 @@ begin
     raise exception 'POST: theme_counts no longer has its hard floor of 5.';
   end if;
   raise notice 'POST: theme_counts is unchanged — psychosocial stays floored for everyone.';
+
+  -- (d) No SECURITY DEFINER entry point here is reachable by anon.
+  -- The back-compat overloads are the trap: they were gated in their own body
+  -- before this migration and are thin delegators after it, so they read as
+  -- ungated to the CLAUDE.md sweep while keeping the PUBLIC grant they were
+  -- created with. Nothing leaks — the callee refuses — but an anon-reachable
+  -- definer function that relies on a gate one call down is not the contract
+  -- this project works to.
+  n := 0;
+  for r in
+    select p.proname, pg_get_function_identity_arguments(p.oid) as args
+      from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+     where ns.nspname = 'public'
+       and p.prosecdef
+       and p.proname in ('org_report_data', 'org_report_company_breakdown',
+                         'org_report_department_breakdown', 'admin_org_summary')
+       and has_function_privilege('anon', p.oid, 'EXECUTE')
+  loop
+    n := n + 1;
+    raise warning 'POST: %(%) is executable by anon — it needs a revoke beside '
+                  'its grant.', r.proname, r.args;
+  end loop;
+  if n > 0 then
+    raise exception 'POST: % report RPC(s) reachable with the published anon key '
+                    '(named in the warnings above).', n;
+  end if;
+  raise notice 'POST: no report RPC is reachable by anon.';
 end $$;
 
 

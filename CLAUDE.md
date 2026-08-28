@@ -389,6 +389,23 @@ select p.proname, pg_get_function_identity_arguments(p.oid) as args
  order by p.proname;
 ```
 
+**Four functions are expected in that sweep's output and are not holes.** The
+back-compat overloads `org_report_data(uuid,date,date)`,
+`org_report_data(uuid,date,date,uuid)`,
+`org_report_company_breakdown(uuid,date,date)` and
+`org_report_department_breakdown(uuid,date,date,uuid)` are thin delegators to
+the 5-argument `p_client_safe` forms added by
+`supabase_admin_internal_view.sql`. The authz check lives in the callee, so
+their own source names no gate and the regex cannot see it. They are revoked
+from `public, anon` and granted only to `authenticated`; an anon caller cannot
+reach them, and an authenticated non-admin, non-employer caller gets
+`not authorised` from the function they delegate to. Each body is a single
+`select` that passes `p_client_safe := true` literally, so these four are
+client-safe **by construction** — they cannot return the internal view to
+anybody, admin included. Verified 28 Aug 2026.
+**If any of the four ever gains a body of its own, it needs its own gate** —
+delegation is the only reason this is safe.
+
 **The gate list in that regex is part of the rule, not decoration.** A function
 gated by a name the regex does not know is reported as ungated, and the next
 person either "fixes" a false positive by revoking a grant the page needs, or
