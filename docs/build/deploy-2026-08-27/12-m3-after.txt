@@ -1,0 +1,118 @@
+M3 — live Supabase, 27 Aug 2026, AFTER apply
+Applied as m3_part1_confidentiality_boundary + m3_part2_definer_sweep.
+
+════════════════════════════════════════════════════════════
+THE BEFORE/AFTER MATRIX — measured both times, not described
+
+  persona                        financial        psychosocial
+  France (admin + lead + HR)     22 -> 22          2 -> 0    <== CHANGED
+  Lone (admin + psychosocial)    22 -> 22          2 -> 2
+  Michelle (admin + psychosocial)22 -> 22          2 -> 2
+  Advisor, plain                  0 ->  0          0 -> 0
+  HR only                         0 ->  0          0 -> 0
+
+  Test Co Q3 total_booked        10 -> 8           <== CHANGED (HR's number)
+  bookings policies               9 -> 11
+  kw_can_see_booking exists      no -> yes
+  RLS on bookings               true -> true
+  legacy bookings policies        4 -> 0
+  kw_unit_label anon-callable   true -> false
+  definer fns reading bookings without the predicate : none
+
+MEASURABLE ONLY AFTER, because counsellors did not exist before:
+
+  Karabo | her own psychosocial booking      | 1
+  Karabo | Nicola's psychosocial booking     | 0
+  Karabo | her own note                      | 1
+  Karabo | Nicola's note                     | 0
+  Karabo | financial bookings                | 0
+  Nicola | her own psychosocial booking      | 1
+  Nicola | Karabo's psychosocial booking     | 0
+  Nicola | her own note                      | 1
+  Nicola | Karabo's note                     | 0
+  Nicola | financial bookings                | 0
+  Lone   | psychosocial bookings             | 2
+  Lone   | counselling notes (ANY)           | 0
+  France | psychosocial bookings             | 0
+  France | counselling notes (ANY)           | 0
+  France | counsellor caseloads              | 0
+
+IN PLAIN LANGUAGE
+
+  France · psychosocial · SELECT  : 0 rows      (was: all rows)
+  France · financial    · SELECT  : 22 rows     (was: 22 rows — unchanged)
+  Lone   · psychosocial · SELECT  : 2 rows      (was: 2 rows — unchanged)
+  Lone   · notes        · SELECT  : 0 rows      (she schedules and bills; she
+                                                 does not read what was said)
+  Karabo · Nicola's booking       : 0 rows      (not previously possible)
+  Nicola · Karabo's note          : 0 rows      (not previously possible)
+  HR     · psychosocial · counted : not counted (was: counted in total_booked,
+                                                 10 -> 8)
+
+EVERYTHING MATCHED THE PREDICTION EXACTLY. No exceptions.
+
+════════════════════════════════════════════════════════════
+ONE FAILURE DURING THE APPLY, CAUGHT BY THE MIGRATION ITSELF
+
+Part 2 failed on its first attempt and rolled back:
+
+    ERROR: M3: kw_unit_label is still anon-callable
+
+The migration said `revoke execute ... from anon`. That does nothing: `anon`
+INHERITS PUBLIC's grant, the ACL read `=X/postgres`, and
+has_function_privilege('anon', ...) stayed true. It needed
+`from public, anon`.
+
+This is CLAUDE.md's own standing rule about PUBLIC — the rule this project
+wrote down after the _org_indicator_counts incident — and I broke it while
+writing a migration whose entire purpose is confidentiality. The post-condition
+I had written caught it, refused the apply, and rolled the whole file back.
+
+Between the two attempts, live was in the intermediate state Part 1's header
+warns about: policies written, definer functions unfiltered. That window was
+about ninety seconds and was closed by re-applying Part 2 rather than by
+investigating first.
+
+Both source files are corrected.
+
+════════════════════════════════════════════════════════════
+WHAT WAS SEEDED, AND WHAT WAS REMOVED
+
+SEEDED AND KEPT — real people, as instructed:
+  counsellors: Karabo <karabo@keywellness.co.bw>, Nicola <nicola@keywellness.co.bw>
+  Both already had auth accounts; they now hold the counsellor role.
+
+SEEDED AND REMOVED — probe data, existed only to make the matrix real:
+  2 psychosocial bookings ('M3 PROBE — delete after verification')
+  2 counsellor_clients ('M3 PROBE client')
+  2 counselling_notes
+  the _m3matrix / _m3c helper tables and their probe functions
+
+  bookings are back to 22 financial / 0 psychosocial.
+  Test Co Q3 total_booked is back to 8, its original value.
+
+════════════════════════════════════════════════════════════
+THREE THINGS THE MATRIX SHOWS THAT ARE WORTH KNOWING
+
+1. FRANCE IS THE TEAM LEAD, THE ADMIN AND AN HR ACCOUNT. His single row carries
+   both the "France-type admin" and the "financial team lead" assertions.
+   There is no non-admin team lead on live to test separately.
+
+2. THE PLAIN ADVISOR ROW PROVES NOTHING, before or after. It reads 0 financial
+   in both phases — not because a policy denies it, but because only 2 of 5
+   advisors carry a user_id, so current_advisor_id() does not resolve. An
+   identity failure wearing the costume of an access decision.
+
+3. LONE READS PSYCHOSOCIAL BOOKINGS AND NO NOTES. That asymmetry is deliberate
+   and is now demonstrated rather than asserted.
+
+════════════════════════════════════════════════════════════
+STILL TRUE AFTER M3
+
+  There is no Clinical Lead and no object named is_clinical_lead.
+  counselling_notes has exactly one policy: the author.
+  counselling_referrals is the only path between counsellors, and its note is
+  freshly authored — reading a referral grants no access to the referring
+  counsellor's notes.
+  The risk-flag interim is NOT built.
+  The accept-flow RPC is NOT built (4a/4b were answered; the RPC is next).

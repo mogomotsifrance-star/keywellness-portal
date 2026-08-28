@@ -1,0 +1,34 @@
+M3a (referral accept flow) — live Supabase, 27 Aug 2026, BEFORE apply
+
+BASELINE
+  referral_accept exists   : no
+  counsellors              : Karabo, Nicola
+  counsellor_clients rows  : 0
+  counselling_referrals    : 0
+  counselling_notes        : 0
+  bookings financial/psych : 22 / 0
+  bookings policies        : 11
+
+THE PREDICTION — written before applying
+
+  CHANGES
+    ONE function appears: referral_accept(uuid), granted to authenticated.
+
+  DOES NOT CHANGE
+    No table, no column, no policy, no row, no grant on anything else.
+    All seven baseline figures above are unchanged.
+
+  UNTIL SOMEBODY CALLS IT, NOTHING ABOUT THIS MIGRATION IS OBSERVABLE. There
+  are zero referrals on live, so there is nothing for it to act on today. It is
+  being applied now so the capability exists when Karabo and Nicola need it,
+  not because anything is waiting.
+
+  IF IT IS WRONG
+    The realistic failure is a referral that cannot be accepted — visible and
+    harmless. The dangerous failure would be acceptance granting BACKWARD
+    access to the referring counsellor's notes or bookings, which assertions
+    44-46 of tests/m3-tests.sql exist to catch and which passed locally.
+
+  EXPECTED AFTER-STATE, EXACTLY
+    referral_accept exists   : yes
+    everything else          : identical to the baseline above

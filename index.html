@@ -1790,7 +1790,7 @@ async function doSignup() {
   const pass = document.getElementById('b-pass').value;
   btn.disabled = true; btn.textContent = 'Creating account…';
   try {
-    const { error } = await sb.auth.signUp({
+    const { data, error } = await sb.auth.signUp({
       email, password: pass,
       options: {
         data: { invite_code: inviteCode || null },
@@ -1810,6 +1810,12 @@ async function doSignup() {
       }
       return;
     }
+    // Email confirmation is OFF (Supabase → Authentication → Sign In / Providers
+    // → Email → "Confirm email"), so signUp hands back a live session and the
+    // SIGNED_IN listener carries straight on into onboarding — same as the phone
+    // path. Branch on what actually came back rather than on an assumption about
+    // the setting, so re-enabling confirmation later still shows the right copy.
+    if (data?.session) return;   // signed in already — onAuthStateChange takes over
     showAuthTab('login');
     const _le = document.getElementById('a-email'); if (_le) _le.value = email;
     authOk('Account created! Check your email to confirm, then sign in.');
