@@ -388,20 +388,27 @@ begin
     return jsonb_build_object('ok', false, 'msg', 'No account found.');
   end if;
 
+  -- array_append, NOT `v_roles || 'admin'`. Against a text[], an unadorned
+  -- string literal is `unknown`, and PostgreSQL resolves `anyarray || anyarray`
+  -- ahead of `anyarray || anyelement` — so it tries to parse 'admin' as an
+  -- array literal and raises "malformed array literal". It fires on the FIRST
+  -- role appended, which means the preview throws for every account that holds
+  -- any role at all. Shipped that way on 28 Aug 2026 and caught the same day by
+  -- the first end-to-end run. Same reason for v_blockers below.
   if exists (select 1 from admins where lower(email) = v_email)
-    then v_roles := v_roles || 'admin'; end if;
+    then v_roles := array_append(v_roles, 'admin'); end if;
   if exists (select 1 from employers where user_id = v_id or lower(email) = v_email)
-    then v_roles := v_roles || 'hr'; end if;
+    then v_roles := array_append(v_roles, 'hr'); end if;
   if exists (select 1 from advisors where user_id = v_id or lower(email) = v_email)
-    then v_roles := v_roles || 'advisor'; end if;
+    then v_roles := array_append(v_roles, 'advisor'); end if;
   if to_regclass('public.counsellors') is not null
      and exists (select 1 from counsellors where user_id = v_id or lower(email) = v_email)
-    then v_roles := v_roles || 'counsellor'; end if;
+    then v_roles := array_append(v_roles, 'counsellor'); end if;
   if to_regclass('public.psychosocial_admins') is not null
      and exists (select 1 from psychosocial_admins where user_id = v_id or lower(email) = v_email)
-    then v_roles := v_roles || 'psychosocial_admin'; end if;
+    then v_roles := array_append(v_roles, 'psychosocial_admin'); end if;
   if exists (select 1 from profiles where id = v_id)
-    then v_roles := v_roles || 'member'; end if;
+    then v_roles := array_append(v_roles, 'member'); end if;
 
   select coalesce(jsonb_agg(jsonb_build_object(
            'table', r.tbl, 'column', r.col, 'rule', r.del_rule,
@@ -411,14 +418,15 @@ begin
 
   -- Refusal 1: yourself.
   if v_id = auth.uid() or v_email = lower(auth.jwt() ->> 'email') then
-    v_blockers := v_blockers || 'This is your own account. Ask another admin to delete it.';
+    v_blockers := array_append(v_blockers,
+      'This is your own account. Ask another admin to delete it.');
   end if;
 
   -- Refusal 2: the last admin.
   select count(*) into v_admins from admins;
   if 'admin' = any(v_roles) and v_admins <= 1 then
-    v_blockers := v_blockers ||
-      'This is the only admin account. Deleting it would lock everyone out of the admin dashboard.';
+    v_blockers := array_append(v_blockers,
+      'This is the only admin account. Deleting it would lock everyone out of the admin dashboard.');
   end if;
 
   -- Refusal 4: a reference nobody has classified.
