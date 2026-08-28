@@ -322,6 +322,12 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .scope-warn{flex-basis:100%;font-size:11.5px;color:var(--kw-yellow-ink);line-height:1.5}
 .scope-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .scope-select{padding:7px 11px;border:1px solid var(--border);border-radius:999px;background:var(--white);font-family:inherit;font-size:12.5px;font-weight:600;color:var(--navy);cursor:pointer;outline:none}
+.scope-select.on{border-color:var(--kw-green);box-shadow:0 0 0 2px var(--kw-green-tint)}
+.scope-filter{display:flex;align-items:center;gap:6px}
+.scope-filter .scope-lbl{white-space:nowrap}
+.org-cell{font-size:12.5px;color:var(--navy)}
+.org-cell.none{color:var(--muted);font-style:italic}
+.org-cell .unit{display:block;font-size:11px;color:var(--muted)}
 .owner-me{font-size:12px;font-weight:700;color:var(--kw-green-deep)}
 .owner-other{font-size:12px;color:var(--muted)}
 .lead-badge{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--kw-navy);background:var(--kw-yellow);padding:2px 7px;border-radius:999px;margin-top:5px}
@@ -359,6 +365,7 @@ tbody td{padding:10px 12px;vertical-align:middle}
   .scope-right{justify-content:stretch}
   .scope-right .btn{flex:1}
   .scope-select{width:100%}
+  .scope-filter{flex:1 1 100%}
   .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap}
   .tabs .tab{white-space:nowrap}
   .client-hero{flex-wrap:wrap}
@@ -684,6 +691,26 @@ let ROLES = { advisor:false, admin:false, member:false, employer:false };
 let VIEW = { mode:'mine', advisorId:null, advisorName:null };
 let TEAM = [];                  // caseload summary, team leads only
 
+/* ── Organisation filter ──────────────────────────────────────────
+   The advisor scope above decides whose caseload the server returns;
+   this narrows that result to one organisation, so a lead can ask for
+   "Kabo's Debswana clients" rather than one question or the other.
+
+   It is a client-side filter and that is deliberate: the check that
+   matters — can_manage_advisor() inside advisor_clients_list() — has
+   already run, and every row the RPC returns already carries org_id,
+   org_name and unit_label. Filtering here costs no round trip and can
+   show nothing the advisor scope did not already permit. ── */
+let orgFilter = '';             // '' = every organisation, '__none' = private
+const ORG_FILTER_NAME = {};     // org_id → name, so a filter keeps its label
+                                // after a scope change empties the list
+
+function readOrgFromUrl(){
+  const o = new URLSearchParams(window.location.search).get('org');
+  if(!o) return '';
+  return o === 'none' ? '__none' : o;
+}
+
 function readScopeFromUrl(){
   const q = new URLSearchParams(window.location.search);
   const a = q.get('advisor');
@@ -768,6 +795,7 @@ async function bootAdvisor(){
   }
 
   if (isLead()) {
+    orgFilter = readOrgFromUrl();
     const { data, error } = await sb.rpc('advisor_caseload_summary');
     if (!error) {
       TEAM = data || [];
@@ -829,6 +857,13 @@ function normalizeClient(row){
   c.personal  = Object.assign({}, base.personal, a.personal || {});
   if (!c.personal.name)    c.personal.name    = row.first_name || '';
   if (!c.personal.surname) c.personal.surname = row.last_name  || '';
+  // Attribution answers the Employer question too, so a client seen under
+  // a company programme does not need the company name typed a second
+  // time. Done on load rather than only at creation, so it also covers
+  // records added before the organisation picker existed and members
+  // whose organisation arrived from their profile (advisor_add_member_client,
+  // trg_sync_advisor_client_org). Anything the advisor typed wins.
+  if (!(c.personal.employer || '').trim() && row.org_name) c.personal.employer = row.org_name;
   c.email = row.email || '';
   c.phone = row.phone || '';
   // Portal linkage — read-only, drives the "Portal member" panel.
@@ -843,6 +878,12 @@ function normalizeClient(row){
     lastSessionDate: row.last_session_date || null
   };
   c._memberUserId = row.member_user_id || null;
+  // Attribution, straight off advisor_clients_list(). Drives the team
+  // lead's organisation filter on the clients list.
+  c._org = { id:        row.org_id || null,
+             name:      row.org_name || null,
+             unitLabel: row.unit_label || null,
+             noOrg:     !!row.no_org };
   c._owner = { advisorId: row.advisor_id || null,
                advisorName: row.advisor_name || null,
                isMine: row.is_mine !== false };
@@ -1221,16 +1262,66 @@ async function dismissResponse(bookingId){
   if(currentClientId) renderClientEditor(); else go(document.querySelector('.sb-item.active')?.dataset.view || 'clients');
 }
 
+/* Which organisation a client counts under. `no_org` clients and the
+   (should-be-empty) set carrying no attribution at all share one bucket —
+   both read as "not an organisation's client" on this screen. */
+function orgKeyOf(c){
+  const o = c._org || {};
+  return o.id || '__none';
+}
+function orgNameOf(c){
+  const o = c._org || {};
+  return o.id ? (o.name || 'Unnamed organisation') : 'Private / no organisation';
+}
+function orgFilterLabel(key){
+  if(!key) return '';
+  if(key === '__none') return 'Private / no organisation';
+  const hit = clients.find(c => orgKeyOf(c) === key);
+  return hit ? orgNameOf(hit) : (ORG_FILTER_NAME[key] || 'Selected organisation');
+}
+
+/* Options come from the caseload in view, with a count each, so the list
+   answers "who is here" rather than naming every organisation on the
+   books. A filter matching nothing in the current advisor scope is kept
+   as a zero option — dropping it would leave the select reading "All
+   organisations" while the list below stayed filtered. */
+function orgFilterOptions(){
+  const seen = {};
+  clients.forEach(function(c){
+    const k = orgKeyOf(c);
+    if(!seen[k]) seen[k] = { key:k, label:orgNameOf(c), count:0 };
+    seen[k].count++;
+    if(k !== '__none') ORG_FILTER_NAME[k] = seen[k].label;
+  });
+  if(orgFilter && !seen[orgFilter]){
+    seen[orgFilter] = { key:orgFilter, label:orgFilterLabel(orgFilter), count:0 };
+  }
+  return Object.keys(seen).map(function(k){ return seen[k]; }).sort(function(a,b){
+    if(a.key === '__none') return 1;
+    if(b.key === '__none') return -1;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function scopedClients(){
+  if(!orgFilter) return clients;
+  return clients.filter(c => orgKeyOf(c) === orgFilter);
+}
+
 function scopeBar(){
   if(!isLead()) return '';
-  const opts = TEAM.filter(x => x.advisor_id !== ADVISOR.id)
+  const advOpts = TEAM.filter(x => x.advisor_id !== ADVISOR.id)
     .map(x => `<option value="${x.advisor_id}"${VIEW.advisorId===x.advisor_id?' selected':''}>${esc(x.full_name)} (${x.active_clients})</option>`)
     .join('');
-  const viewing = VIEW.mode === 'all'
+  const orgOpts = orgFilterOptions()
+    .map(o => `<option value="${esc(o.key)}"${orgFilter===o.key?' selected':''}>${esc(o.label)} (${o.count})</option>`)
+    .join('');
+  const whose = VIEW.mode === 'all'
       ? 'Every advisor\'s clients'
       : VIEW.mode === 'advisor'
         ? esc(VIEW.advisorName || 'another advisor') + '\'s clients'
         : 'Your own clients';
+  const viewing = orgFilter ? whose + ' · ' + esc(orgFilterLabel(orgFilter)) : whose;
   return `
     <div class="scope-bar${VIEW.mode!=='mine'?' scope-away':''}">
       <div class="scope-left">
@@ -1241,12 +1332,33 @@ function scopeBar(){
       <div class="scope-right">
         <button class="btn btn-sm ${VIEW.mode==='mine'?'btn-primary':'btn-outline'}" onclick="setScope('mine')">My clients</button>
         <button class="btn btn-sm ${VIEW.mode==='all'?'btn-primary':'btn-outline'}" onclick="setScope('all')">All clients</button>
-        <select class="scope-select" onchange="setScope('advisor', this.value)">
-          <option value="">Open an advisor…</option>
-          ${opts}
-        </select>
+        <label class="scope-filter"><span class="scope-lbl">Advisor</span>
+          <select class="scope-select${VIEW.mode==='advisor'?' on':''}" onchange="setScope('advisor', this.value)">
+            <option value="">Open an advisor…</option>
+            ${advOpts}
+          </select>
+        </label>
+        <label class="scope-filter"><span class="scope-lbl">Organisation</span>
+          <select class="scope-select${orgFilter?' on':''}" onchange="setOrgFilter(this.value)">
+            <option value="">All organisations</option>
+            ${orgOpts}
+          </select>
+        </label>
       </div>
     </div>`;
+}
+
+/* Nothing to reload — the rows are already here, so this only re-renders.
+   The address bar is kept honest the way setScope() does it, so a filtered
+   view survives a refresh or a link sent to a colleague. */
+function setOrgFilter(key){
+  if(!isLead()) return;
+  orgFilter = key || '';
+  const url = new URL(window.location.href);
+  if(orgFilter) url.searchParams.set('org', orgFilter === '__none' ? 'none' : orgFilter);
+  else          url.searchParams.delete('org');
+  history.replaceState({}, '', url);
+  renderClientsList();
 }
 
 async function setScope(mode, advisorId){
@@ -1277,22 +1389,35 @@ async function setScope(mode, advisorId){
 
 function renderClientsList(){
   const wrap = document.getElementById('page-content');
-  if(clients.length===0){
+  const list = scopedClients();
+  if(list.length===0){
+    // Empty because of the organisation filter is a different situation
+    // from an empty caseload, and needs a way out rather than a prompt
+    // to create a client under the wrong attribution.
+    const byFilter = clients.length > 0;
     wrap.innerHTML = `
       ${scopeBar()}
       <div class="card">
         <div class="empty-state">
           <div class="ic">📋</div>
-          <h3>${VIEW.mode==='mine' ? 'No client assessments yet' : 'No clients in this view'}</h3>
-          <p>Capture a client's income, expenses, debt and assets during a consultation to get an instant Income / Expense / Debt / Lifestyle diagnostic.</p>
-          <button class="btn btn-primary" onclick="openNewClientModal()">+ New Client Assessment</button>
-          <button class="btn btn-outline" style="margin-left:8px" onclick="openFindMemberModal()">🔍 Add Portal Member</button>
+          <h3>${byFilter
+                ? 'No clients from ' + esc(orgFilterLabel(orgFilter)) + ' in this view'
+                : (VIEW.mode==='mine' ? 'No client assessments yet' : 'No clients in this view')}</h3>
+          ${byFilter
+            ? `<p>Nobody in this caseload is attributed to that organisation. Widen the advisor scope, or clear the filter.</p>
+               <button class="btn btn-primary" onclick="setOrgFilter('')">Show all organisations</button>`
+            : `<p>Capture a client's income, expenses, debt and assets during a consultation to get an instant Income / Expense / Debt / Lifestyle diagnostic.</p>
+               <button class="btn btn-primary" onclick="openNewClientModal()">+ New Client Assessment</button>
+               <button class="btn btn-outline" style="margin-left:8px" onclick="openFindMemberModal()">🔍 Add Portal Member</button>`}
         </div>
       </div>`;
     return;
   }
   const showOwner = VIEW.mode !== 'mine';
-  const rows = clients.map(c=>{
+  // With one organisation selected every row carries the same one, so the
+  // column only earns its width when the filter is off.
+  const showOrg = isLead() && !orgFilter;
+  const rows = list.map(c=>{
     const t = calcTotals(c);
     const dti = diagDebt(t);
     const own = c._owner || {};
@@ -1301,6 +1426,8 @@ function renderClientsList(){
       ${showOwner ? `<td>${own.isMine
           ? '<span class="owner-me">You</span>'
           : `<span class="owner-other">${esc(own.advisorName||'—')}</span>`}</td>` : ''}
+      ${showOrg ? `<td><span class="org-cell${(c._org&&c._org.id)?'':' none'}">${esc(orgNameOf(c))}
+          ${(c._org&&c._org.unitLabel)?`<span class="unit">${esc(c._org.unitLabel)}</span>`:''}</span></td>` : ''}
       <td class="mono">${fmt(t.totalIncome)}/mo</td>
       <td class="mono">${fmt(t.netWorth)}</td>
       <td><span class="status-pill status-${dti.color}">${dti.label}</span></td>
@@ -1311,18 +1438,18 @@ function renderClientsList(){
     </tr>`;
   }).join('');
 
-  const totalClients = clients.length;
+  const totalClients = list.length;
   // "Flagged" means over-indebted, the same test the organisation
   // figures use — previously this counted anyone above 50% while the
   // activity report counted anyone above 35%, so the two disagreed.
-  const flagged = clients.filter(c=>{ const t=calcTotals(c); return kwIsOverIndebted(t.dti); }).length;
-  const avgNetWorth = clients.reduce((s,c)=>s+calcTotals(c).netWorth,0)/totalClients;
+  const flagged = list.filter(c=>{ const t=calcTotals(c); return kwIsOverIndebted(t.dti); }).length;
+  const avgNetWorth = list.reduce((s,c)=>s+calcTotals(c).netWorth,0)/totalClients;
 
   wrap.innerHTML = `
     ${scopeBar()}
     ${pendingBanner()}
     <div class="stat-grid">
-      <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">${VIEW.mode==='mine'?'Clients':'Clients in view'}</div></div>
+      <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">${(VIEW.mode==='mine' && !orgFilter)?'Clients':'Clients in view'}</div></div>
       <div class="stat-box ${flagged>0?'red':'green'}"><div class="stat-val">${flagged}</div><div class="stat-lbl">Flagged Debt Risk</div></div>
       <div class="stat-box gold"><div class="stat-val">${fmt(avgNetWorth)}</div><div class="stat-lbl">Avg. Net Worth</div></div>
     </div>
@@ -1332,7 +1459,7 @@ function renderClientsList(){
     <div class="card" style="padding:0">
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Client</th>${showOwner?'<th style="width:150px">Advisor</th>':''}<th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th style="width:150px"></th></tr></thead>
+          <thead><tr><th>Client</th>${showOwner?'<th style="width:150px">Advisor</th>':''}${showOrg?'<th style="width:170px">Organisation</th>':''}<th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th style="width:150px"></th></tr></thead>
           <tbody id="clientsTableBody">${rows}</tbody>
         </table>
       </div>
@@ -1584,6 +1711,17 @@ async function createClientRecord(){
   }
 
   const draft = pendingImport || blankClient(name, surname);
+
+  // The Employer field on the Personal tab asks the same question the
+  // organisation picker has just answered, so it is answered here rather
+  // than typed a second time. Only when blank: an imported file may already
+  // carry an employer, and that is the advisor's own record to keep.
+  const orgName = noOrg ? ''
+    : (((ORG_OPTIONS || []).find(function(o){ return o.org_id === orgId; }) || {}).name || '');
+  if(orgName && !((draft.personal && draft.personal.employer) || '').trim()){
+    draft.personal = draft.personal || {};
+    draft.personal.employer = orgName;
+  }
   const { data, error } = await sb.from('advisor_clients').insert({
     advisor_id:  ownerId,
     first_name:  name,
@@ -2062,6 +2200,11 @@ function setYearsToRetirement(value){
 
 function panelPersonal(c){
   const p = c.personal;
+  // The Employer value is filled from the organisation the client is
+  // seen under; say so while it still matches, and stop saying it the
+  // moment the advisor types something of their own.
+  const fromOrg = !!(c._link && c._link.orgName
+                     && (p.employer || '').trim() === c._link.orgName);
   const kidsRows = c.kids.map((k,i)=>`
     <tr>
       <td><input type="text" value="${esc(k.name)}" oninput="saveRow('kids',${i},'name',this.value)" placeholder="Name & surname"></td>
@@ -2076,7 +2219,7 @@ function panelPersonal(c){
       <div class="form-grid cols-3">
         <div class="field"><label>Name</label><input type="text" value="${esc(p.name)}" oninput="saveField('personal.name', this.value)"></div>
         <div class="field"><label>Surname</label><input type="text" value="${esc(p.surname)}" oninput="saveField('personal.surname', this.value)"></div>
-        <div class="field"><label>Employer</label><input type="text" value="${esc(p.employer)}" placeholder="Company name" oninput="saveField('personal.employer', this.value)"></div>
+        <div class="field"><label>Employer${fromOrg?' <span style="font-weight:600;color:var(--green)">· from their organisation</span>':''}</label><input type="text" value="${esc(p.employer)}" placeholder="Company name" oninput="saveField('personal.employer', this.value)"></div>
         <div class="field">
           <label>Email ${c._link&&c._link.isMember?'<span style="color:var(--green);font-weight:700">· linked to portal</span>':'<span style="font-weight:600;color:var(--muted)">· links to their portal account</span>'}</label>
           <input type="email" value="${esc(c.email)}" placeholder="name@example.com" oninput="saveField('email', this.value)">
