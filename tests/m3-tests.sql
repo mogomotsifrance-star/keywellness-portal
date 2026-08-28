@@ -541,6 +541,112 @@ begin
 end $$;
 
 
+-- ══ 50–57 · Declining a referral ══════════════════════════
+-- A SECOND referral, Nicola -> Karabo, so the decline path is exercised
+-- without disturbing the accepted one from 40–49.
+
+reset role;
+set role authenticated;
+set session "test.email" = 'nicola@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-0000000000cb';
+
+insert into counselling_referrals (id, counsellor_client_id, from_counsellor_id,
+                                   to_counsellor_id, note)
+values ('0f000000-0000-0000-0000-0000000000fb',
+        '0cc00000-0000-0000-0000-0000000000eb',
+        '0c000000-0000-0000-0000-0000000000db',
+        '0c000000-0000-0000-0000-0000000000da',
+        'Handover for Karabo.')
+on conflict (id) do nothing;
+
+-- Who may decline: the same gate as accepting.
+do $$
+declare ok boolean := false; msg text := '';
+begin
+  begin
+    perform referral_decline('0f000000-0000-0000-0000-0000000000fb');
+  exception when others then ok := sqlerrm like '%sent to can decline%'; msg := sqlerrm;
+  end;
+  insert into _r values ('50 the REFERRING counsellor cannot decline her own referral',
+                         ok, msg);
+end $$;
+
+reset role;
+set role authenticated;
+set session "test.email" = 'lone@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-000000000009';
+
+do $$
+declare ok boolean := false; msg text := '';
+begin
+  begin
+    perform referral_decline('0f000000-0000-0000-0000-0000000000fb');
+  exception when others then ok := sqlerrm like '%only a counsellor%'; msg := sqlerrm;
+  end;
+  insert into _r values ('51 a psychosocial admin cannot decline on anyone''s behalf',
+                         ok, msg);
+end $$;
+
+-- Karabo declines.
+reset role;
+set role authenticated;
+set session "test.email" = 'karabo@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-0000000000ca';
+
+do $$
+declare v jsonb; n_before int; n_after int;
+begin
+  select count(*) into n_before from counsellor_clients;
+  v := referral_decline('0f000000-0000-0000-0000-0000000000fb');
+  select count(*) into n_after from counsellor_clients;
+
+  insert into _r values ('52 the receiving counsellor declines, and it is recorded with a date',
+    (v ->> 'already_declined') = 'false' and (v ->> 'declined_at') is not null, v::text);
+
+  -- THE POINT OF A DECLINE: nothing moves.
+  insert into _r values ('53 declining moves NO caseload — the client stays with the referrer',
+    n_after = n_before, n_before || ' -> ' || n_after);
+  raise notice 'STATE  decline: %', v::text;
+end $$;
+
+select _chk('54 declining twice is not an error',
+  ((referral_decline('0f000000-0000-0000-0000-0000000000fb')) ->> 'already_declined') = 'true');
+
+do $$
+declare ok boolean := false; msg text := '';
+begin
+  begin
+    perform referral_accept('0f000000-0000-0000-0000-0000000000fb');
+  exception when others then ok := sqlerrm like '%declined and cannot then be accepted%';
+    msg := sqlerrm;
+  end;
+  insert into _r values ('55 a declined referral cannot then be accepted', ok, msg);
+end $$;
+
+-- THE ABSENCE IS THE DESIGN, SO THE ABSENCE IS ASSERTED.
+select _chk('56 there is NO reason column on counselling_referrals, and must never be',
+  not exists (select 1 from information_schema.columns
+               where table_schema='public' and table_name='counselling_referrals'
+                 and column_name ~* 'reason|why|comment'));
+
+-- Lone needs the OUTCOME to route the next booking, and nothing more.
+reset role;
+set role authenticated;
+set session "test.email" = 'lone@keywellness.co.bw';
+set session "test.uid"   = '00000000-0000-0000-0000-000000000009';
+
+do $$
+declare v jsonb;
+begin
+  v := referral_fact_list();
+  insert into _r values ('57 Lone sees one accepted and one declined, with dates and no content',
+    v::text ilike '%accepted%' and v::text ilike '%declined%'
+    and v::text not ilike '%Handover%'
+    and v::text not ilike '%reason%',
+    v::text);
+end $$;
+
+
 -- ══ Report ═════════════════════════════════════════════════
 
 reset role;

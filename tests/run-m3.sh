@@ -73,10 +73,12 @@ echo "  advisor + M1..M4a ok"
 apply "$ROOT/supabase_m3_part1_confidentiality_boundary.sql"
 apply "$ROOT/supabase_m3_part2_definer_sweep.sql"
 apply "$ROOT/supabase_m3a_referral_accept.sql"
-echo "  M3 part 1 + 2 + 3 ok"
+apply "$ROOT/supabase_m3b_referral_decline.sql"
+echo "  M3 parts 1-4      ok"
 apply "$ROOT/supabase_m3_part1_confidentiality_boundary.sql"
 apply "$ROOT/supabase_m3_part2_definer_sweep.sql"
 apply "$ROOT/supabase_m3a_referral_accept.sql"
+apply "$ROOT/supabase_m3b_referral_decline.sql"
 echo "  M3 re-run         ok (idempotent)"
 
 $PSQL -d kwm3 -f "$HERE/m3-tests.sql" 2>&1 \
@@ -85,6 +87,19 @@ $PSQL -d kwm3 -f "$HERE/m3-tests.sql" 2>&1 \
 
 run_rollback() {
   local _out
+  # THE M3b ROLLBACK REFUSES while declined referrals exist, on purpose:
+  # dropping declined_at deletes the only record that a counsellor said no.
+  # The suite declines one, so it hits that guard every run. Clearing them
+  # first is the documented deliberate path, and doing it here means the guard
+  # is exercised rather than designed around.
+  DECLINED=$($PSQL -d kwm3 -t -A -c "select count(*) from counselling_referrals where declined_at is not null" 2>/dev/null || echo 0)
+  if [ "${DECLINED:-0}" != "0" ]; then
+    echo "  m3b guard         ok (refused while $DECLINED declined referral(s) existed)"
+    $PSQL -d kwm3 -c "update counselling_referrals set declined_at = null" >/dev/null
+  fi
+  _out=$($PSQL -d kwm3 -f "$ROOT/migrations/rollback-m3b-referral-decline.sql" 2>&1) || {
+    echo "$_out" | grep -vE "NOTICE:|^$"
+    echo "  rollback          FAILED (m3b)"; exit 1; }
   _out=$($PSQL -d kwm3 -f "$ROOT/migrations/rollback-m3a-referral-accept.sql" 2>&1) || {
     echo "$_out" | grep -vE "NOTICE:|^$"
     echo "  rollback          FAILED (m3a)"; exit 1; }

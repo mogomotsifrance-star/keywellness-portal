@@ -1,0 +1,34 @@
+M3b (referral decline) — live Supabase, 28 Aug 2026, BEFORE apply
+
+BASELINE (to be confirmed immediately before applying)
+  counselling_referrals.declined_at : absent
+  referral_decline()                : absent
+  counselling_referrals rows        : 0
+  counsellor_clients rows           : 0
+  referral_fact_list keys           : referred_on, accepted_on, from, to
+
+THE PREDICTION — written before applying
+
+  CHANGES
+    counselling_referrals gains ONE column, declined_at, plus a constraint
+    that a referral cannot be both accepted and declined, plus a partial index
+    on genuinely open referrals.
+    ONE new function: referral_decline(uuid).
+    TWO EXISTING FUNCTIONS ARE REPLACED:
+      referral_accept()    gains a refusal for an already-declined referral
+      referral_fact_list() gains declined_on and an `outcome` word
+
+  DOES NOT CHANGE
+    No caseload link, no booking, no note, no policy, no other grant.
+    All row counts unchanged — there are no referrals on live to act on.
+
+  IF IT IS WRONG
+    The realistic failure is a decline that will not record: visible and
+    harmless. There is NO dangerous direction here — declining grants nobody
+    access to anything, and the function is asserted at apply time not to
+    write to counsellor_clients at all.
+
+  EXPECTED AFTER-STATE, EXACTLY
+    declined_at present, referral_decline present,
+    referral_fact_list carrying declined_on and outcome,
+    every row count identical, no reason-shaped column anywhere.

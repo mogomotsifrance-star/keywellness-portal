@@ -1,0 +1,96 @@
+M3b (referral decline) — live Supabase, 28 Aug 2026, AFTER apply
+Applied as migration `m3b_referral_decline`.
+
+PREDICTED                                ACTUAL                      MATCH
+declined_at column      absent -> present  present                   yes
+referral_decline()      absent -> present  present                   yes
+one-outcome constraint  new                present                   yes
+accept refuses a declined referral        yes                        yes
+fact_list gains declined_on + outcome     yes                        yes
+NO reason-shaped column                   none                       yes
+decline does NOT touch counsellor_clients no                         yes
+counselling_referrals rows        0 -> 0  0                          yes
+counsellor_clients rows           0 -> 0  0                          yes
+bookings fin/psych           22 / 0 -> 22 / 0   22 / 0               yes
+
+Every prediction met.
+
+════════════════════════════════════════════════════════════
+WHY THERE IS NO REASON FIELD
+
+Decided 28 Aug 2026. The absence is the design, not an omission:
+
+  A reason field would be a SECOND CHANNEL FOR CLINICAL CONTENT, sitting
+  outside counselling_notes and its author-only policy — readable by both
+  counsellors, and one schema change away from being readable by more. The
+  whole M3 boundary is that what a counsellor learns about a client lives in
+  their own notes and crosses only in a handover they wrote on purpose. A
+  free-text "why I will not take this" is exactly that content entering by a
+  side door.
+
+  So the record is: Nicola declined, on this date. If Karabo needs to know why,
+  she asks Nicola — a conversation between two clinicians, not a column.
+
+THE MIGRATION ENFORCES THE ABSENCE. It refuses to apply if a reason-shaped
+column exists on counselling_referrals, so the field cannot be added later
+without somebody deliberately deleting the check that explains why it must
+not. The test suite asserts the same thing independently (assertion 56).
+
+════════════════════════════════════════════════════════════
+WHAT DECLINING DOES, AND DOES NOT
+
+  DOES  record that the receiving counsellor said no, with a date.
+  DOES  stop that referral ever being accepted afterwards.
+  DOES  tell Lone the outcome, so she does not route the next booking to a
+        counsellor who never took the case.
+
+  DOES NOT move any caseload. The client stays with the referring counsellor,
+        who never stopped being responsible for them. The migration asserts
+        this structurally: it refuses to apply if referral_decline contains any
+        write to counsellor_clients.
+  DOES NOT record, imply or transmit a reason.
+
+WHO MAY DECLINE — the same gate as accepting
+
+  Only the counsellor the referral was sent to. Not the referrer. Not Lone or
+  Michelle: declining a case is as much a clinical decision as taking one, and
+  the migration refuses to apply if referral_decline mentions is_admin or
+  is_psychosocial_admin at all.
+
+════════════════════════════════════════════════════════════
+LOCAL SUITE — 59 assertions, 0 failed
+
+The eight new ones:
+
+  50 the REFERRING counsellor cannot decline her own referral
+  51 a psychosocial admin cannot decline on anyone's behalf
+  52 the receiving counsellor declines, and it is recorded with a date
+  53 declining moves NO caseload — the client stays with the referrer
+  54 declining twice is not an error
+  55 a declined referral cannot then be accepted
+  56 there is NO reason column, and must never be
+  57 Lone sees one accepted and one declined, with dates and no content
+
+Full regression, all exit 0: phase0 all, m1 22, m5 45, m5a 29, support 28,
+m4 66, m4a 23, m3 59.
+
+════════════════════════════════════════════════════════════
+THE ROLLBACK REFUSES TO DESTROY THE RECORD
+
+rollback-m3b-referral-decline.sql will not run while any referral has been
+declined: dropping declined_at deletes the only record that a counsellor said
+no, and afterwards a declined referral is once again indistinguishable from one
+nobody has read — the exact ambiguity M3b was built to end.
+
+The harness hits that guard every run, because the suite declines one. It
+clears them deliberately and reports "m3b guard ok (refused while 1 declined
+referral(s) existed)", so the guard is EXERCISED rather than designed around.
+
+════════════════════════════════════════════════════════════
+NOTHING IS WAITING ON IT
+
+Zero referrals on live. Applied so the capability exists when Karabo and Nicola
+need it.
+
+STILL NOT BUILT: the risk-flag interim (a content-free, nameless action for
+Lone when a counsellor raises a flag).
