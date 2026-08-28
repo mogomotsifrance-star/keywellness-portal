@@ -252,6 +252,21 @@ tbody td{padding:12px 14px;vertical-align:middle}
   </div>
 </div>
 
+<!-- ══ DELETE ACCOUNT MODAL ══
+     Two stages in one box: the preview (what deletion would do, read from
+     admin_user_delete_preview) and the confirmation (type the address back).
+     The Delete button stays disabled until the typed address matches, and
+     stays disabled entirely if the preview returned a blocker. -->
+<div class="modal-overlay" id="deleteUserModal">
+  <div class="modal-box" style="max-width:600px">
+    <div class="modal-header">
+      <h3 id="du-title">Delete account</h3>
+      <button class="modal-close" onclick="closeDeleteUser()">✕</button>
+    </div>
+    <div id="du-body">Loading…</div>
+  </div>
+</div>
+
 <!-- ══ NEW REPORT MODAL ══ -->
 <div class="modal-overlay" id="newReportModal">
   <div class="modal-box" style="max-width:520px">
@@ -563,9 +578,14 @@ async function loadAllData() {
   if (actR.error) console.error('program_activities load failed:', actR.error);
 }
 
+// The Users-tab banner. This deliberately does NOT call org_overview():
+// that function floors its output at 5 enrolled members, which is right for
+// the HR dashboard it was written for and wrong here — we hold every one of
+// these members' records on the rows immediately below the banner.
+// admin_org_summary() is admin-only and unfloored.
 async function loadOrgOverview(orgId) {
-  const { data, error } = await sb.rpc('org_overview', { target_org: orgId });
-  if (error) { console.error('org_overview error:', error); return null; }
+  const { data, error } = await sb.rpc('admin_org_summary', { p_org_id: orgId });
+  if (error) { console.error('admin_org_summary error:', error); return null; }
   return data;
 }
 
@@ -1501,9 +1521,12 @@ async function renderOrgAccount() {
       p_unit_id:     acctUnitId || null,
       p_client_safe: acctSafe
     }),
+    // Same Client-safe switch as the indicators above it. Without this the
+    // report half of the account file stayed floored while the indicator
+    // half did not, and an org under 5 members returned nothing at all.
     safeCall('org_report_data', {
       p_org_id: acctOrgId, p_start: acctStart, p_end: acctEnd,
-      p_unit_id: acctUnitId || null
+      p_unit_id: acctUnitId || null, p_client_safe: acctSafe
     }),
     safeCall('org_financial_indicators', { target_org: acctOrgId }),
     safeCall('advisor_session_breakdown', {
@@ -3062,22 +3085,14 @@ function renderUsers(filter = '', statusFilter = 'all') {
       if (!banner) return;
       const ov = await loadOrgOverview(selectedOrgId);
       if (!ov) { banner.textContent = 'Could not load organisation summary.'; return; }
-      if (ov.suppressed) {
-        banner.innerHTML = `<strong>Privacy notice:</strong> ${ov.message} (${ov.n_employees} enrolled so far)`;
-        return;
-      }
-      // org_overview()'s real shape nests these under `summary` (this
-      // banner previously read them off the top level, which has never
-      // matched the RPC's actual response — always rendered "undefined").
-      // participation_pct/avg_score are null (not a number) when fewer
-      // than 3 employees have been assessed, to avoid an average/percentage
-      // revealing 1-2 individuals' real scores.
-      const summary = ov.summary || {};
+      // admin_org_summary() is flat and never suppressed — the only nulls
+      // are genuine "no data yet" (nobody assessed, or no members at all).
       const orgName = allOrgs.find(o => o.id === selectedOrgId)?.name || 'Organisation';
       banner.innerHTML = `<strong>${orgName}:</strong> &nbsp;
-        ${summary.n_employees ?? '—'} enrolled &nbsp;·&nbsp;
-        ${summary.participation_pct == null ? '—' : summary.participation_pct + '%'} participated &nbsp;·&nbsp;
-        Avg score <strong>${summary.avg_score == null ? '—' : summary.avg_score}</strong>`;
+        ${ov.n_employees ?? '—'} enrolled &nbsp;·&nbsp;
+        ${ov.participation_pct == null ? '—' : ov.participation_pct + '%'} participated
+        (${ov.n_assessed ?? 0} assessed) &nbsp;·&nbsp;
+        Avg score <strong>${ov.avg_score == null ? '—' : ov.avg_score}</strong>`;
     }, 0);
   }
 
@@ -3168,12 +3183,26 @@ function renderUsers(filter = '', statusFilter = 'all') {
                 <td style="font-size:12px;color:var(--muted)">${lastActive ? fmtDate(lastActive) : '—'}</td>
                 <td style="text-align:center">${badgeCount}</td>
                 <td class="mono" style="font-size:12px">${points}</td>
-                <td><button class="btn btn-outline btn-sm" onclick="openUserProfile('${u.id}')">View →</button></td>
+                <td style="white-space:nowrap">
+                  <button class="btn btn-outline btn-sm" onclick="openUserProfile('${u.id}')">View →</button>
+                  <button class="btn btn-red btn-sm" onclick="openDeleteUser('${u.id}')" title="Permanently delete this account">Delete</button>
+                </td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
       </div>`}
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:8px">Delete an account by email</div>
+        <p style="font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.6">
+          The table above lists accounts that have a profile. Staff accounts, and anyone who signed up
+          but never finished onboarding, do not appear there — find those by address.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="du-email-lookup" type="email" placeholder="name@example.com" style="flex:1;min-width:220px;padding:9px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--cream);outline:none" onkeydown="if(event.key==='Enter')openDeleteUserByEmail()">
+          <button class="btn btn-outline btn-sm" onclick="openDeleteUserByEmail()">Look up</button>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -3242,11 +3271,185 @@ async function openUserProfile(userId) {
     <div class="modal-row"><div><div class="modal-label">Badges</div><div class="modal-val">${badgeCount}</div></div><div><div class="modal-label">Points</div><div class="modal-val mono">${points}</div></div></div>
     <div class="modal-row"><div><div class="modal-label">Assessments</div><div class="modal-val">${userAssess.length}</div></div><div><div class="modal-label">Last Assessment</div><div class="modal-val">${fmtDate(latest?.created_at)}</div></div></div>
     ${dimHtml}
-    ${efHtml}`;
+    ${efHtml}
+    <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted)">Permanently remove this account and its data.</span>
+      <button class="btn btn-red btn-sm" onclick="closeModal();openDeleteUser('${userId}')">Delete account</button>
+    </div>`;
 }
 
 function closeModal() {
   document.getElementById('profileModal').classList.remove('open');
+}
+
+// ── Delete an account ─────────────────────────────────────────────
+// Two RPCs, applied by supabase_admin_delete_user.sql:
+//   admin_user_delete_preview(p_user_id, p_email)  — read-only; what would happen
+//   admin_user_delete(p_user_id, p_confirm_email, p_reassign_to) — does it
+//
+// Every guard that matters lives in the database, not here: is_admin(), the
+// self-delete and last-admin refusals, the typed-address check, and the refusal
+// to proceed on any reference the delete plan does not classify. This UI exists
+// so an admin reads what they are about to destroy before they confirm it —
+// it is not the control.
+let duPreview = null;
+
+function closeDeleteUser() {
+  document.getElementById('deleteUserModal').classList.remove('open');
+  duPreview = null;
+}
+
+function openDeleteUserByEmail() {
+  const email = (document.getElementById('du-email-lookup')?.value || '').trim();
+  if (!email) return;
+  openDeleteUser(null, email);
+}
+
+async function openDeleteUser(userId, email) {
+  duPreview = null;
+  document.getElementById('deleteUserModal').classList.add('open');
+  document.getElementById('du-title').textContent = 'Delete account';
+  document.getElementById('du-body').innerHTML = '<div class="spinner"><div class="spin"></div> Checking what this account holds…</div>';
+
+  const { data, error } = await sb.rpc('admin_user_delete_preview', {
+    p_user_id: userId || null,
+    p_email: email || null,
+  });
+
+  if (error) {
+    console.error('admin_user_delete_preview failed:', error);
+    document.getElementById('du-body').innerHTML = `
+      <div style="font-size:13px;padding:14px 16px;border-radius:var(--radius-sm);background:#fdf2f2;border-left:3px solid var(--red);line-height:1.6">
+        <strong>Could not read the account.</strong><br>${escNar(error.message || 'unknown error')}<br>
+        <span style="font-size:12px;color:var(--muted)">If the delete-user migration has not been applied yet,
+        run <span class="mono">supabase_admin_delete_user.sql</span> in the Supabase SQL editor first.</span>
+      </div>`;
+    return;
+  }
+  if (!data || data.ok !== true) {
+    document.getElementById('du-body').innerHTML =
+      `<p style="font-size:13px">${escNar((data && data.msg) || 'No account found.')}</p>`;
+    return;
+  }
+
+  duPreview = data;
+  renderDeleteUser();
+}
+
+function renderDeleteUser() {
+  const p = duPreview;
+  const blockers = p.blockers || [];
+  const refs = p.refs || [];
+
+  // The four modes the delete plan uses, in the order an admin cares about:
+  // what disappears, what is kept but unlinked, what changes hands.
+  const GROUPS = [
+    { modes: ['member', 'auto-delete'], label: 'Deleted outright', colour: 'var(--red)' },
+    { modes: ['grant'],                 label: 'Role access removed', colour: 'var(--orange)' },
+    { modes: ['unlink', 'auto-unlink'], label: 'Kept, but no longer linked to this person', colour: 'var(--muted)' },
+    { modes: ['reassign'],              label: 'Reassigned to you', colour: 'var(--gold)' },
+    { modes: ['UNCLASSIFIED'],          label: 'Unclassified — blocks the delete', colour: 'var(--red)' },
+  ];
+
+  const groupHtml = GROUPS.map(g => {
+    const rows = refs.filter(r => g.modes.includes(r.mode));
+    if (!rows.length) return '';
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:${g.colour};margin-bottom:5px">${g.label}</div>
+      ${rows.map(r => `<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0">
+        <span class="mono">${escNar(r.table)}.${escNar(r.column)}</span>
+        <span class="mono" style="color:var(--muted)">${r.n}</span>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+
+  const roles = (p.roles || []);
+  const rolePills = roles.length
+    ? roles.map(r => `<span class="band-pill" style="background:var(--cream-dark);color:var(--navy);margin-right:4px">${escNar(r)}</span>`).join('')
+    : '<span style="color:var(--muted);font-size:12px">no roles</span>';
+
+  document.getElementById('du-title').textContent = 'Delete ' + (p.name || p.email);
+
+  document.getElementById('du-body').innerHTML = `
+    <div class="modal-row"><div><div class="modal-label">Email</div><div class="modal-val mono" style="font-size:13px">${escNar(p.email)}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Name</div><div class="modal-val">${escNar(p.name || '—')}</div></div>
+      <div><div class="modal-label">Organisation</div><div class="modal-val" style="font-size:13px">${escNar(p.org || '—')}</div></div></div>
+    <div class="modal-row"><div><div class="modal-label">Created</div><div class="modal-val">${p.created_at ? fmtDate(p.created_at) : '—'}</div></div>
+      <div><div class="modal-label">Last sign-in</div><div class="modal-val">${p.last_sign_in ? fmtDate(p.last_sign_in) : 'never'}</div></div></div>
+    <div class="modal-row"><div style="flex:1"><div class="modal-label" style="margin-bottom:6px">Roles held</div>${rolePills}</div></div>
+
+    <div style="margin-top:18px;padding:14px 16px;background:var(--cream-dark);border-radius:var(--radius-sm)">
+      ${groupHtml || '<p style="font-size:12.5px;color:var(--muted);margin:0">This account holds no data and is referenced by nothing.</p>'}
+    </div>
+
+    ${p.reassign_n > 0 ? `<p style="font-size:12.5px;color:var(--muted);margin-top:12px;line-height:1.6">
+      ${p.reassign_n} record${p.reassign_n === 1 ? '' : 's'} authored or owned by this account will be
+      reassigned to <strong>${escNar(p.reassign_to || 'you')}</strong>, so nothing is left pointing at an
+      account that no longer exists.</p>` : ''}
+
+    <p style="font-size:12.5px;color:var(--red);margin-top:12px;line-height:1.6">
+      <strong>This cannot be undone.</strong> The password and sign-in identity are destroyed —
+      restoring this person means creating a new account, which gets a new ID.
+      ${(refs.some(r => r.table === 'bookings' && r.mode === 'member'))
+        ? ' Their bookings go with it, so organisation utilisation figures recalculated after this will differ.' : ''}
+    </p>
+
+    ${blockers.length ? `<div style="margin-top:14px;font-size:13px;line-height:1.6;padding:14px 16px;border-radius:var(--radius-sm);background:#fdf2f2;border-left:3px solid var(--red)">
+        <strong>This account cannot be deleted:</strong>
+        <ul style="margin:6px 0 0 18px">${blockers.map(b => `<li>${escNar(b)}</li>`).join('')}</ul>
+      </div>
+      <div style="margin-top:16px;text-align:right"><button class="btn btn-outline btn-sm" onclick="closeDeleteUser()">Close</button></div>`
+    : `
+      <label style="display:block;font-size:12px;font-weight:600;margin-top:16px">
+        Type <span class="mono">${escNar(p.email)}</span> to confirm
+        <input id="du-confirm" type="text" autocomplete="off" spellcheck="false"
+               style="width:100%;padding:9px 12px;margin-top:6px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:13px"
+               oninput="duCheckConfirm()">
+      </label>
+      <div id="du-error" style="display:none;color:var(--red);font-size:13px;font-weight:600;margin-top:10px"></div>
+      <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="closeDeleteUser()">Cancel</button>
+        <button class="btn btn-red btn-sm" id="du-go" disabled onclick="confirmDeleteUser()">Delete permanently</button>
+      </div>`}`;
+}
+
+function duCheckConfirm() {
+  const typed = (document.getElementById('du-confirm')?.value || '').trim().toLowerCase();
+  const btn = document.getElementById('du-go');
+  if (btn) btn.disabled = !duPreview || typed !== (duPreview.email || '').toLowerCase();
+}
+
+async function confirmDeleteUser() {
+  if (!duPreview) return;
+  const typed = (document.getElementById('du-confirm').value || '').trim();
+  const btn = document.getElementById('du-go');
+  const errEl = document.getElementById('du-error');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Deleting…';
+
+  // p_reassign_to is left out on purpose: the RPC defaults it to auth.uid(),
+  // so the recipient is whoever is signed in and cannot be spoofed from here.
+  const { data, error } = await sb.rpc('admin_user_delete', {
+    p_user_id: duPreview.user_id,
+    p_confirm_email: typed,
+  });
+
+  if (error || !data || data.ok !== true) {
+    console.error('admin_user_delete failed:', error || data);
+    errEl.textContent = (error && error.message) || (data && data.msg) || 'The delete did not complete.';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Delete permanently';
+    return;
+  }
+
+  const msg = data.msg || 'Account deleted.';
+  closeDeleteUser();
+  await loadAllData();
+  renderUsers();
+  if (typeof showToast === 'function') showToast(msg);
+  else alert(msg);
 }
 
 // ── Bookings View ──
@@ -3711,8 +3914,22 @@ async function createReport() {
 }
 
 let currentReportDataError = null; // distinguishes a real RPC failure from legitimate insufficient_cohort suppression
+let reportSafe = true;             // builder opens as the CLIENT will see it; toggle reveals the internal view
 let currentReportBreakdown = null; // org_report_company_breakdown() result (org-wide reports only)
 let currentReportDeptBreakdown = null; // org_report_department_breakdown() result (unit-scoped reports only)
+
+// Shown on every builder screen so it is never ambiguous which figures are
+// on screen. Flipping it re-runs the RPCs — a suppressed value is not in the
+// payload waiting to be revealed client-side, which is rather the point.
+function reportSafeToggle() {
+  return `<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;
+                        color:${reportSafe ? 'var(--muted)' : 'var(--red)'}"
+                 title="Client-safe shows exactly what the employer receives: groups under 5 hidden, cells under 3 withheld. Switch it off to see the real figures behind them. A published report is always client-safe, whatever this is set to.">
+    <input type="checkbox" ${reportSafe ? 'checked' : ''}
+           onchange="reportSafe=this.checked;openReportBuilder(currentReportId)">
+    ${reportSafe ? 'Client-safe view' : '<strong>INTERNAL view — not suppressed</strong>'}
+  </label>`;
+}
 
 async function openReportBuilder(id) {
   reportsView = 'builder';
@@ -3735,11 +3952,20 @@ async function openReportBuilder(id) {
   currentReportDeptBreakdown = null;
   currentNarrative = Object.assign({ executive_summary:'', insights:'', progress_outcomes:'', challenges_risks:[], next_steps:'' }, row.narrative || {});
 
-  // A report scoped to a unit (row.unit_id) uses the 4-arg overload; an
-  // org-wide report uses the 3-arg version and additionally pulls the
-  // per-company breakdown for the fund-manager table.
-  const rpcArgs = { p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end };
-  if (row.unit_id) rpcArgs.p_unit_id = row.unit_id;
+  // An org-wide report (no row.unit_id) additionally pulls the per-company
+  // breakdown for the fund-manager table; a unit-scoped one pulls departments.
+  //
+  // reportSafe defaults to TRUE here, unlike the account file, and the
+  // difference is deliberate. The account file is our working view of a
+  // client we are servicing, so it opens unfloored. This screen composes
+  // what the employer will actually receive, so it opens showing exactly
+  // that — otherwise you write a narrative around numbers the reader will
+  // never see. The toggle is for checking the real figures behind a
+  // suppressed cell, not for drafting against them.
+  const rpcArgs = {
+    p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end,
+    p_unit_id: row.unit_id || null, p_client_safe: reportSafe,
+  };
   const { data: rpcData, error: rpcErr } = await sb.rpc('org_report_data', rpcArgs);
   if (rpcErr) {
     console.error('org_report_data failed:', rpcErr);
@@ -3750,6 +3976,7 @@ async function openReportBuilder(id) {
   if (!row.unit_id) {
     const { data: bd, error: bdErr } = await sb.rpc('org_report_company_breakdown', {
       p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end,
+      p_client_safe: reportSafe,
     });
     if (bdErr) console.warn('org_report_company_breakdown failed:', bdErr);
     else currentReportBreakdown = bd || null;
@@ -3757,7 +3984,8 @@ async function openReportBuilder(id) {
     // Unit-scoped report → pull the per-department breakdown (the RPC returns
     // {available:false} for a parent/combined unit like Debswana).
     const { data: db, error: dbErr } = await sb.rpc('org_report_department_breakdown', {
-      p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end, p_unit_id: row.unit_id,
+      p_org_id: row.org_id, p_start: row.period_start, p_end: row.period_end,
+      p_unit_id: row.unit_id, p_client_safe: reportSafe,
     });
     if (dbErr) console.warn('org_report_department_breakdown failed:', dbErr);
     else currentReportDeptBreakdown = db || null;
@@ -3800,10 +4028,15 @@ function renderReportBuilder() {
 
   if (!data || data.insufficient_cohort) {
     el.innerHTML = `
-      <div style="margin-bottom:16px"><button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button></div>
+      <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button>
+        ${reportSafeToggle()}
+      </div>
       <div class="card">
         <div class="card-title">${orgName(row.org_id)} — ${row.period_label}</div>
-        <div class="empty">This organisation has fewer than 5 enrolled members for this period. Aggregates cannot be shown while protecting individual privacy, and this report cannot be published.</div>
+        <div class="empty">This organisation has fewer than 5 enrolled members for this period,
+          so there is no report to give the employer and this one cannot be published.
+          ${reportSafe ? 'Switch off <strong>Client-safe view</strong> above to see the real figures for our own servicing — those are ours to look at, they are just not theirs to receive.' : ''}</div>
       </div>`;
     return;
   }
@@ -3888,6 +4121,7 @@ function renderReportBuilder() {
     <div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <button class="btn btn-outline btn-sm" onclick="reportsView='list';renderReports()">← Back to list</button>
       <div style="display:flex;align-items:center;gap:10px">
+        ${reportSafeToggle()}
         ${readOnly ? `<button class="btn btn-outline btn-sm" onclick="downloadAdminReportPdf()">⬇️ Download PDF</button>` : ''}
         <span class="status-pill report-status-${row.status}">${row.status}</span>
       </div>

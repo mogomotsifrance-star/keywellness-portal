@@ -294,6 +294,61 @@ neither and vanishes from the department breakdown. Use
 `unit_departments_admin_all` lets you write to the table directly and skip every
 guard, so go through the `admin_dept_*` RPCs.
 
+**The suppression floors are for the EMPLOYER, not for us.** Base-5 and the
+<3 cell floor exist so a report handed to HR cannot name a person. Key
+Wellness already holds the individual records, so a floor applied to admin
+protects nobody. Every aggregate RPC therefore takes `p_client_safe`:
+`admin_org_indicators`, `org_report_data`, `org_report_company_breakdown`,
+`org_report_department_breakdown`. Non-admins are forced to `true` inside
+each function, so an HR caller passing `false` still gets the floored
+payload. **`publish_org_report` always passes `true`** — an admin may read
+an org unsuppressed; what reaches the employer never is. The Users-tab
+banner uses `admin_org_summary()`, not `org_overview()`, which keeps its
+floors for the HR dashboard it was written for.
+
+The exception is **psychosocial, which is floored for everyone, always** —
+`theme_counts()` has no internal view, decided 25 Aug. Do not add one.
+
+**`_org_report_period_data` and `_dept_metrics` are NOT what their files
+say.** M3 Part 2 rewrote them in place via `pg_get_functiondef` to count
+`service_line = 'financial'` only. Re-running
+`supabase_org_report_data_v4.sql` or `_v5_departments.sql` would undo that
+and put counselling bookings into HR's session totals. Those two files are
+HISTORY. Patch these functions the way M3 and
+`supabase_admin_internal_view.sql` do — read the live definition, substitute,
+assert the split survived — or regenerate the canonical file from the live
+body first.
+
+**Deleting an account goes through `admin_user_delete()`, never by hand.**
+Twenty-one foreign keys point at `auth.users` with ON DELETE NO ACTION, two are
+not named `user_id` (`actions.owner`, `work_plans.authored_by`), and two tables
+reference a user with **no key at all** (`tool_data`, `ai_chat_usage`) — those
+do not block the delete, they orphan silently. So references are found by
+sweeping `pg_constraint` at call time, and `_admin_user_delete_plan()` says what
+each one means: `member` and `grant` are deleted, `unlink` keeps the row and
+nulls the link, `reassign` repoints to the admin doing the deleting. **Anything
+the plan does not classify is a blocker, not a guess** — add a table with a new
+FK to `auth.users` and the delete refuses, naming the column, until somebody
+decides which of the four it is. Add it to the plan in the same migration.
+
+Deleting is not the same as revoking: a caseload row (`advisor_clients`,
+`counsellor_clients`) is kept and unlinked, and an advisor or counsellor roster
+row is closed (`is_active = false`, `user_id = null`) rather than removed,
+because it anchors that person's caseload and notes.
+
+**`support_actions` carries `actor_email` / `target_email` and both its keys are
+ON DELETE SET NULL.** Before that, an admin who had ever used the Support screen
+could not be deleted at all — the row cannot be removed, `actor` could not be
+nulled, and repointing it would be a lie about who acted. The trail now keeps
+the address a human reads and loses only the uuid. Nothing amends or removes a
+row, and `supabase_admin_delete_user.sql` §6 asserts the delete path cannot
+start to.
+
+**`supabase_support_audit.sql` on disk is STALE**: it still gates `support_log()`
+and `support_recent()` on `is_ops_admin()`, which M4a deleted. Re-applying that
+file, or copying those bodies out of it, creates a function that only fails when
+somebody clicks. Read the live definition before transcribing either one.
+
 **A new function is callable by everyone until you REVOKE it.** Postgres grants
 `EXECUTE` on every new function to `PUBLIC`, so `anon` and `authenticated` can
 call it whether or not you wrote a `GRANT`. Declining to write one locks
@@ -358,3 +413,5 @@ here in the same migration that creates it.**
 - Do not assume an internal SQL helper is private because you did not `GRANT` it — Postgres gives `EXECUTE` to `PUBLIC` by default. Every `SECURITY DEFINER` helper needs an explicit `REVOKE` (see Roles & Interfaces)
 - Do not create a separate table for advisor sessions — they belong in `bookings`
 - Do not use `localStorage` for new features — use Supabase instead
+- Do not hand-write account-deletion SQL — use `admin_user_delete()` (Users tab → Delete). A one-off script misses the two tables that have no foreign key and silently orphans them
+- Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
