@@ -495,3 +495,35 @@ Note: `unit_departments_admin_all` RLS predates these functions, so an admin can
 still write to the table directly afterwards — without the case-insensitive
 duplicate guard, the parent-company reporting warning, or the strand-the-members
 warning.
+
+
+## supabase_admin_delete_user.sql (Delete account, admin dashboard)
+
+```sql
+-- migrations/rollback-admin-delete-user.sql
+```
+
+Do not hand-write this one. The rollback file is conditional and has to be,
+because three of the things it would undo may already be load-bearing:
+
+* **`actor_email` / `target_email` on `support_actions` are dropped only if
+  every row still resolves through its uuid.** Once an account has been
+  deleted, those columns hold the ONLY remaining record of who performed the
+  action. Dropping them would destroy audit history that the forward migration
+  deliberately preserved.
+* **`actor` goes back to `NOT NULL` only if no row has a null actor.** A null
+  actor means an account was deleted while the feature was live; restoring the
+  constraint would require inventing an actor or removing an audit row.
+* **`'delete_user'` stays in the action check constraint if any row uses it.**
+  A CHECK its own table violates is not a rollback.
+
+The script says which branch it took on each, via `raise notice`. If it reports
+KEPT on all three, the schema change is permanent in practice — the functions
+are gone, but `support_actions` keeps its two extra columns and its nullable
+actor. That is the intended end state, not a failed rollback.
+
+**Deleted accounts do not come back.** `auth.users` rows, password hashes,
+identities and member data are gone for good — the same limitation as
+`migrations/rollback-delete-account-france-prolearn.sql`, for the same reason.
+Re-creating someone means a new account through Supabase Auth, with a new uuid,
+and their reassigned records stay with whoever received them.

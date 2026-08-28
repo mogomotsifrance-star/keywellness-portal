@@ -1,3 +1,22 @@
+-- ############################################################
+-- ## HISTORY — DO NOT RE-RUN THIS FILE.
+-- ##
+-- ## This is not what is deployed. M3 Part 2 rewrote
+-- ## _org_report_period_data and _dept_metrics IN PLACE, via
+-- ## pg_get_functiondef, so that they count
+-- ## service_line = 'financial' only. supabase_admin_internal_view.sql
+-- ## then added p_client_safe the same way.
+-- ##
+-- ## Re-running this file restores the pre-M3 body and puts
+-- ## counselling bookings back into HR's session totals.
+-- ##
+-- ## To see what is actually deployed:
+-- ##   select pg_get_functiondef(p.oid)
+-- ##     from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+-- ##    where ns.nspname = 'public'
+-- ##      and p.proname in ('_org_report_period_data','_dept_metrics');
+-- ############################################################
+
 -- ============================================================
 -- Key Wellness — org_report_data() v4: unit-scoped reporting
 -- Run in the Supabase SQL Editor AFTER supabase_org_report_data_v3.sql
