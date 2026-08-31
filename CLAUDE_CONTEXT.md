@@ -97,9 +97,17 @@ Decisions already taken (25 Aug 2026), not open for re-litigation:
 - Psychosocial admin is done by Lone and Michelle. **France keeps admin but must not
   see who booked counselling** — M3 needs an admin split and must recommend the
   mechanism.
-- **No Clinical Lead is assigned.** `is_clinical_lead` is false for everyone;
-  counselling notes are author-only until one exists, and a risk flag creates a
-  content-free action for Lone.
+- **There is no Clinical Lead, permanently, by design.** M3 ships no
+  `is_clinical_lead` function and no such column - a permission nobody uses is
+  a bug waiting to be flipped without anyone re-deriving why it existed.
+  Counselling notes are **author-only with no exception**, and
+  `counselling_referrals` is the only sanctioned path between counsellors.
+- **Risk escalation happens OUTSIDE the platform, permanently** (28 Aug 2026).
+  A counsellor escalates by referring the client to external parties according
+  to the level of risk. There is **no internal flag, no notification and no
+  admin action** tied to a risk event. Earlier specs proposed a content-free,
+  nameless action for Lone; that is **superseded and is not being built**, so
+  `actions` must not be shaped to leave room for a risk-flag row type.
 - **Invoices are produced in Sage. This system never produces one and never
   sees one.** It records the *handover* — the moment Lone gives Laone the
   numbers — and Lone's own confirmation afterwards that the invoice exists.
