@@ -258,6 +258,107 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .rp-status.st-red{color:var(--red)}
 .rp-status.st-grey{color:var(--muted)}
 
+/* ── Advance Recommendation (Report tab) ──────────────────────
+   Design language: a confidential memo, not a dashboard. One accent
+   (Key Wellness green) for structure, tier colour only on the risk
+   block, figures in DM Mono, hairline rules instead of boxes. Every
+   prose line is directly editable while the version is a draft; the
+   edit affordance is a dotted rule that appears on hover, nothing
+   more, so the screen reads like the printed page. ── */
+.ar-switch{display:inline-flex;border:1px solid var(--border);border-radius:999px;padding:3px;margin-bottom:16px;background:#fff}
+.ar-switch button{border:none;background:transparent;padding:6px 14px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--muted)}
+.ar-switch button.active{background:var(--kw-green);color:#fff}
+.ar-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.ar-bar .sp{flex:1}
+.ar-status{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px;border:1px solid var(--border);border-radius:4px;color:var(--muted)}
+.ar-status.final{border-color:var(--kw-green);color:var(--kw-green)}
+.ar-status.draft{border-color:var(--kw-yellow-ink);color:var(--kw-yellow-ink)}
+.ar-select{border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;font-family:inherit}
+.ar-note{font-size:11.5px;color:var(--muted);font-style:italic}
+.ar-doc{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:40px 44px 32px;max-width:820px;color:var(--kw-ink);font-size:13px;line-height:1.55;position:relative}
+.ar-doc::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:var(--kw-green);border-radius:var(--radius) var(--radius) 0 0}
+.ar-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:26px}
+.ar-conf{font-size:10.5px;font-weight:800;letter-spacing:.22em;color:var(--kw-red)}
+.ar-brand{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--kw-grey)}
+.ar-brand b{color:var(--kw-green)}
+.ar-title{font-size:26px;font-weight:800;line-height:1.1;color:var(--kw-navy);margin:0 0 4px}
+.ar-sub{font-size:12.5px;color:var(--kw-grey);margin-bottom:28px}
+.ar-sec{margin:26px 0 0}
+.ar-tbl,.ar-risk,.ar-kv,.ar-two{page-break-inside:avoid}
+.ar-h{page-break-after:avoid}
+.ar-h{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--kw-line);padding-bottom:6px;margin-bottom:12px}
+.ar-h .n{font-family:'DM Mono',monospace;font-size:11px;color:var(--kw-green);letter-spacing:.06em}
+.ar-h .t{font-size:14px;font-weight:800;color:var(--kw-navy)}
+.ar-kv{display:grid;grid-template-columns:1fr 1fr;gap:0 32px}
+.ar-kv div{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dotted var(--kw-line);font-size:12.5px}
+.ar-kv span{color:var(--kw-grey)}
+.ar-kv strong{font-weight:700;color:var(--kw-ink);text-align:right}
+.ar-kv strong.num{font-family:'DM Mono',monospace;font-weight:500}
+.ar-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0 10px}
+.ar-tbl thead th{background:transparent;text-align:left;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--kw-grey);padding:6px 8px 6px 0;border-bottom:1px solid var(--kw-ink);white-space:normal}
+.ar-tbl td{padding:7px 8px 7px 0;border-bottom:1px solid var(--kw-line);vertical-align:top}
+.ar-tbl .num{font-family:'DM Mono',monospace;text-align:right;white-space:nowrap}
+.ar-tbl thead th.num{text-align:right}
+.ar-tbl tr.tot td{font-weight:800;border-bottom:2px solid var(--kw-ink)}
+.ar-tbl td.settled{color:var(--kw-green);font-weight:700}
+.ar-tbl td.muted{color:var(--kw-grey);font-style:italic}
+.ar-p{margin:0 0 10px;font-size:13px;line-height:1.6}
+.ar-ul{margin:0 0 10px 0;padding-left:18px}
+.ar-ul li{margin-bottom:4px}
+.ar-risk{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:start;border-left:4px solid var(--kw-grey);padding:6px 0 6px 16px}
+.ar-risk .tier{font-size:12px;font-weight:800;letter-spacing:.18em;padding-top:2px}
+.ar-risk.GREEN{border-color:var(--kw-green)} .ar-risk.GREEN .tier{color:var(--kw-green)}
+.ar-risk.AMBER{border-color:#c99a06} .ar-risk.AMBER .tier{color:var(--kw-yellow-ink)}
+.ar-risk.RED{border-color:var(--kw-red)} .ar-risk.RED .tier{color:var(--kw-red)}
+.ar-dec{font-size:16px;font-weight:800;color:var(--kw-navy);margin:2px 0 8px}
+.ar-cond{list-style:none;padding:0;margin:0 0 10px}
+.ar-cond li{display:grid;grid-template-columns:18px 1fr;gap:10px;padding:6px 0;border-bottom:1px dotted var(--kw-line);align-items:start}
+.ar-cond li.off{color:var(--kw-grey)}
+.ar-cond li.off .txt{text-decoration:line-through;opacity:.6}
+.ar-cond input{margin-top:3px;accent-color:var(--kw-green)}
+.ar-glyph{font-family:'DM Mono',monospace;color:var(--kw-green)}
+.ar-two{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.ar-close{font-style:italic;color:var(--kw-body)}
+.ar-confid{margin-top:30px;padding:12px 0;border-top:1px solid var(--kw-ink);border-bottom:1px solid var(--kw-line);font-size:11.5px;line-height:1.6;color:var(--kw-body)}
+.ar-foot{display:flex;justify-content:space-between;margin-top:14px;font-size:10.5px;color:var(--kw-grey);font-family:'DM Mono',monospace}
+.ar-gaps{margin:0 0 6px;padding:10px 14px;border:1px dashed var(--kw-line);border-radius:6px;font-size:12px;color:var(--kw-body)}
+.ar-gaps b{color:var(--kw-red);letter-spacing:.06em;font-size:10.5px}
+/* editing */
+.ar-doc.editable [data-ar]{outline:none;border-bottom:1px dotted transparent;transition:border-color .15s;cursor:text}
+.ar-doc.editable [data-ar]:hover{border-bottom-color:var(--kw-green)}
+.ar-doc.editable [data-ar]:focus{border-bottom-color:var(--kw-green);background:var(--kw-green-wash)}
+.ar-doc.final .ar-cond input{pointer-events:none}
+/* prepare */
+.ar-prep .ar-tbl td{vertical-align:middle}
+.ar-prep select,.ar-prep input[type=number],.ar-prep input[type=date]{border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:12.5px;font-family:inherit;background:#fff}
+.ar-seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.ar-seg button{border:none;background:#fff;padding:5px 10px;font-size:11.5px;font-weight:700;color:var(--muted)}
+.ar-seg button.on.formal{background:var(--kw-navy);color:#fff}
+.ar-seg button.on.informal{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.ar-live{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--kw-ink);border-bottom:1px solid var(--kw-line);margin:14px 0}
+.ar-live div{padding:10px 12px 10px 0;border-right:1px solid var(--kw-line)}
+.ar-live div:last-child{border-right:none}
+.ar-live .l{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--kw-grey)}
+.ar-live .v{font-family:'DM Mono',monospace;font-size:16px;color:var(--kw-ink);margin-top:2px}
+.ar-live .v small{font-size:11px;color:var(--kw-grey)}
+.ar-live .v.GREEN{color:var(--kw-green)} .ar-live .v.AMBER{color:var(--kw-yellow-ink)} .ar-live .v.RED{color:var(--kw-red)}
+.ar-fields{display:grid;grid-template-columns:140px 180px 1fr;gap:14px;align-items:end;margin:12px 0}
+.ar-fields label{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--kw-grey);margin-bottom:4px}
+.ar-fields textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-family:inherit;font-size:12.5px;min-height:38px;resize:vertical}
+@media print{
+  .ar-doc{border:none;padding:0;max-width:100%;font-size:12px}
+  .ar-doc::before{display:none}
+  .ar-doc.editable [data-ar]{border-bottom-color:transparent!important;background:transparent!important}
+  .ar-cond input{display:none}
+  .ar-cond li{display:block;padding-left:16px;text-indent:-16px}
+  .ar-cond li input + .txt::before{content:"\25A0";font-family:'DM Mono',monospace;color:var(--kw-green);margin-right:8px;font-size:10px}
+  .ar-cond li.off{display:none}
+  body:has(.ar-wrap) .client-hero{display:none!important}
+  .ar-switch,.ar-bar{display:none!important}
+  @page{margin:18mm 16mm}
+}
+@media (max-width:700px){.ar-kv,.ar-two,.ar-live{grid-template-columns:1fr}.ar-fields{grid-template-columns:1fr}.ar-doc{padding:24px 18px}}
+
 /* ── Interface switcher ── */
 .role-switcher{padding:12px 14px;border-top:1px solid rgba(255,255,255,.12)}
 .rs-label{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.45);margin-bottom:7px}
@@ -3307,7 +3408,7 @@ function rpTable(headers, rows, emptyMsg){
   if(!rows.length) return `<div class="rp-empty">${emptyMsg||'None captured'}</div>`;
   return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
-function panelReport(c){
+function panelReportPFA(c){
   const t = calcTotals(c);
   const inc = diagIncome(t), exp = diagExpense(t), debt = diagDebt(t), life = diagLifestyle(t);
 
@@ -3434,6 +3535,343 @@ function panelReport(c){
       <h3>Consultation Notes Log</h3>
       <div class="rp-notes">${consultNotesHtml || '<p style="color:var(--muted);font-style:italic">No dated notes captured yet — add these on the Notes tab.</p>'}</div>
     </div>`;
+}
+
+/* ================================================================
+   ADVANCE RECOMMENDATION — second view of the Report tab
+   ----------------------------------------------------------------
+   Hollard Employee Financial Wellness Program. The advisor confirms
+   which debts are formal vs informal/high-cost (Prepare), the Edge
+   Function `advance-recommendation` computes every figure and asks
+   the model for prose only, and the result is stored as a versioned
+   row in advance_recommendations. While a version is a DRAFT every
+   line of prose is editable in place and every condition is a
+   checkbox; MARK FINAL locks it. To change a final, regenerate.
+
+   Nothing on this screen does arithmetic. The numbers on the page are
+   the numbers in the stored row, which are the numbers compute.ts
+   produced from the stored input snapshot.
+   ================================================================ */
+let reportView = 'pfa';
+const AR = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null,
+             suggestions:[], busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'' };
+
+function panelReport(c){
+  const sw = `<div class="ar-switch no-print">
+      <button class="${reportView==='pfa'?'active':''}" onclick="setReportView('pfa')">Personal Financial Assessment</button>
+      <button class="${reportView==='advance'?'active':''}" onclick="setReportView('advance')">Advance Recommendation</button>
+    </div>`;
+  if(reportView==='advance'){
+    setTimeout(()=>arInit(c), 0);
+    return `<div class="ar-wrap">` + sw + `<div id="ar-root"><div class="ar-note">Loading advance recommendations…</div></div></div>`;
+  }
+  return sw + panelReportPFA(c);
+}
+function setReportView(v){ reportView = v; renderClientEditor(); }
+
+/* ── data ── */
+async function arInit(c){
+  if(AR.clientId !== c.id){
+    Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'' });
+  }
+  await arLoadList();
+  if(!AR.list.length && AR.mode !== 'prepare'){ AR.mode = 'prepare'; }
+  if(AR.mode === 'prepare' && !AR.prep) await arStartPrepare();
+  arRender();
+}
+async function arLoadList(){
+  const { data, error } = await sb.from('advance_recommendations')
+    .select('id, version, status, generated_at, finalised_at, model, narrative_source, content, conditions, computed, input')
+    .eq('client_id', AR.clientId).order('version', { ascending:false });
+  if(error){ AR.error = 'Could not load reports: ' + error.message; AR.list = []; return; }
+  AR.error = ''; AR.list = data || [];
+  if(!AR.selectedId || !AR.list.some(r=>r.id===AR.selectedId)) AR.selectedId = AR.list.length ? AR.list[0].id : null;
+}
+function arSelected(){ return AR.list.find(r=>r.id===AR.selectedId) || null; }
+
+async function arInvoke(body){
+  const { data, error } = await sb.functions.invoke('advance-recommendation', { body });
+  if(error){
+    let msg = error.message || 'Request failed';
+    try { const j = await error.context.json(); if(j && j.message) msg = j.message; } catch(_){}
+    return { ok:false, message:msg };
+  }
+  return data || { ok:false, message:'Empty response' };
+}
+
+/* ── prepare ── */
+async function arStartPrepare(fromReport){
+  AR.busy = true; arRender();
+  const seed = fromReport && fromReport.input && fromReport.input.prep ? fromReport.input.prep : {};
+  AR.prep = {
+    term_months: Number(seed.term_months) || 24,
+    consultation_date: seed.consultation_date || new Date().toISOString().slice(0,10),
+    advisor_context: seed.advisor_context || '',
+    liabilities: Array.isArray(seed.liabilities) ? seed.liabilities.map(l=>({ index:l.index, classification:l.classification, rate_period:l.rate_period })) : null
+  };
+  const r = await arInvoke({ client_id: AR.clientId, mode:'preview', prep: AR.prep.liabilities ? AR.prep : { term_months: AR.prep.term_months } });
+  AR.busy = false;
+  if(!r.ok){ AR.error = r.message; AR.preview = null; return; }
+  AR.suggestions = r.suggestions || [];
+  if(!AR.prep.liabilities){
+    AR.prep.liabilities = AR.suggestions.map(s=>({ index:s.index, classification:s.classification, rate_period:s.rate_period }));
+  }
+  AR.preview = r.computed;
+}
+function arPrepSet(i, key, val){
+  const row = AR.prep.liabilities.find(l=>l.index===i); if(!row) return;
+  row[key] = val || null;
+  arSchedulePreview();
+}
+function arPrepField(key, val){
+  AR.prep[key] = key==='term_months' ? Math.max(1, Math.min(60, parseInt(val,10)||24)) : val;
+  if(key !== 'advisor_context') arSchedulePreview();
+}
+function arSchedulePreview(){
+  clearTimeout(AR.previewTimer);
+  AR.previewTimer = setTimeout(async ()=>{
+    const r = await arInvoke({ client_id: AR.clientId, mode:'preview', prep: AR.prep });
+    if(r.ok){ AR.preview = r.computed; AR.error=''; } else { AR.error = r.message; }
+    arRender();
+  }, 250);
+  arRender();
+}
+async function arGenerate(){
+  if(AR.busy) return;
+  AR.busy = true; AR.error=''; arRender();
+  const r = await arInvoke({ client_id: AR.clientId, mode:'generate', prep: AR.prep });
+  AR.busy = false;
+  if(!r.ok){ AR.error = r.message; arRender(); return; }
+  AR.mode = 'view'; AR.prep = null; AR.preview = null;
+  await arLoadList();
+  if(r.report && r.report.id) AR.selectedId = r.report.id;
+  loadNotes(AR.clientId);   // the generation wrote a system note to the timeline
+  arRender();
+}
+function arCancelPrepare(){ AR.mode='view'; AR.prep=null; AR.preview=null; AR.error=''; arRender(); }
+
+/* ── edit / save / finalise ── */
+function arGet(o, path){ return path.split('.').reduce((a,k)=> a==null ? a : a[k], o); }
+function arSet(o, path, val){
+  const ks = path.split('.'); let cur = o;
+  for(let i=0;i<ks.length-1;i++){ if(cur[ks[i]]==null) cur[ks[i]] = {}; cur = cur[ks[i]]; }
+  cur[ks[ks.length-1]] = val;
+}
+function arOnInput(el){
+  const rep = arSelected(); if(!rep || rep.status!=='draft') return;
+  const path = el.getAttribute('data-ar');
+  const text = el.innerText.replace(/\n+$/,'');
+  if(path.startsWith('cond.')){ const i = +path.split('.')[1]; if(rep.conditions[i]) rep.conditions[i].label = text; }
+  else arSet(rep.content, path, text);
+  arScheduleSave();
+}
+function arToggle(i, on){
+  const rep = arSelected(); if(!rep || rep.status!=='draft') return;
+  const c = rep.conditions[i]; if(!c) return;
+  c.on = !!on;
+  // The support-plan line mirrors the Debt Rehab condition: enrolled when the
+  // condition stands, a referral when the advisor has removed it.
+  if(c.group==='condition' && c.key==='debt_rehab'){
+    const sp = rep.conditions.find(x=>x.group==='support' && x.key==='debt_rehab');
+    if(sp && /Debt Rehab Programme$/.test(sp.label)) sp.label = c.on ? 'Enrolled in Debt Rehab Programme' : 'Refer to Debt Rehab Programme';
+  }
+  arScheduleSave(); arRender();
+}
+function arScheduleSave(){
+  clearTimeout(AR.saveTimer);
+  AR.saveTimer = setTimeout(arSaveNow, 800);
+}
+async function arSaveNow(){
+  clearTimeout(AR.saveTimer);
+  const rep = arSelected(); if(!rep || rep.status!=='draft') return;
+  const { error } = await sb.rpc('advance_recommendation_update', { p_id: rep.id, p_content: rep.content, p_conditions: rep.conditions });
+  if(error){ showBanner('Could not save report edits: ' + error.message); return; }
+  flashSaved();
+}
+function arAsk(action){ AR.confirm = AR.confirm===action ? null : action; arRender(); }
+async function arFinalise(){
+  const rep = arSelected(); if(!rep) return;
+  await arSaveNow();
+  const { error } = await sb.rpc('advance_recommendation_finalise', { p_id: rep.id });
+  AR.confirm = null;
+  if(error){ AR.error = 'Could not mark final: ' + error.message; arRender(); return; }
+  await arLoadList(); loadNotes(AR.clientId); arRender();
+}
+async function arDiscard(){
+  const rep = arSelected(); if(!rep) return;
+  const { error } = await sb.rpc('advance_recommendation_discard', { p_id: rep.id });
+  AR.confirm = null;
+  if(error){ AR.error = 'Could not discard: ' + error.message; arRender(); return; }
+  AR.selectedId = null; await arLoadList();
+  if(!AR.list.length){ AR.mode='prepare'; await arStartPrepare(); }
+  arRender();
+}
+async function arRegenerate(){ AR.mode='prepare'; AR.confirm=null; await arStartPrepare(arSelected()); arRender(); }
+function arPick(id){ AR.selectedId = id; AR.confirm=null; arRender(); }
+
+/* ── render ── */
+function arRender(){
+  const root = document.getElementById('ar-root'); if(!root) return;
+  if(AR.mode === 'prepare') { root.innerHTML = arRenderPrepare(); return; }
+  const rep = arSelected();
+  if(!rep){ root.innerHTML = arErr() + `<div class="ar-note">No advance recommendation yet.</div>`; return; }
+  root.innerHTML = arErr() + arRenderBar(rep) + arRenderDoc(rep);
+}
+function arDate(v){ if(!v) return '—'; try { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v+'T12:00:00Z') : v; } catch(_){ return v; } }
+function arErr(){ return AR.error ? `<div class="notice notice-red no-print" style="margin-bottom:12px">${esc(AR.error)}</div>` : ''; }
+
+function arRenderBar(rep){
+  const opts = AR.list.map(r=>`<option value="${r.id}" ${r.id===rep.id?'selected':''}>v${r.version} · ${r.status==='final'?'Final':'Draft'} · ${fmtDate(r.generated_at)}</option>`).join('');
+  const draft = rep.status==='draft';
+  const ask = AR.confirm;
+  return `<div class="ar-bar no-print">
+    <select class="ar-select" onchange="arPick(this.value)">${opts}</select>
+    <span class="ar-status ${rep.status}">${draft?'Draft — editable':'Final'}</span>
+    ${rep.narrative_source==='fallback' ? `<span class="ar-note">Fallback prose (model unavailable) — review wording before finalising.</span>` : ''}
+    <span class="sp"></span>
+    ${draft ? (ask==='final'
+        ? `<button class="btn btn-primary btn-sm" onclick="arFinalise()">Confirm — mark final</button><button class="btn btn-outline btn-sm" onclick="arAsk(null)">Keep editing</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="arAsk('final')">Mark final</button>`) : ''}
+    ${draft ? (ask==='discard'
+        ? `<button class="btn btn-red btn-sm" onclick="arDiscard()">Confirm discard</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="arAsk('discard')">Discard draft</button>`) : ''}
+    <button class="btn btn-outline btn-sm" onclick="arRegenerate()">Regenerate</button>
+    <button class="btn btn-navy btn-sm" onclick="window.print()">🖨️ Print / PDF</button>
+  </div>`;
+}
+
+function arEd(rep, path, tag, cls){
+  const v = arGet(rep.content, path);
+  const ed = rep.status==='draft' ? ` contenteditable="true" data-ar="${path}" oninput="arOnInput(this)" spellcheck="true"` : '';
+  return `<${tag} class="${cls||''}"${ed}>${esc(v==null?'':v)}</${tag}>`;
+}
+function arCondList(rep, group){
+  const items = rep.conditions.map((c,i)=>({c,i})).filter(x=>x.c.group===group);
+  if(!items.length) return '';
+  const draft = rep.status==='draft';
+  return `<ul class="ar-cond">${items.map(({c,i})=>`
+    <li class="${c.on?'':'off'}">
+      ${draft ? `<input type="checkbox" ${c.on?'checked':''} onchange="arToggle(${i}, this.checked)">` : `<span class="ar-glyph">${c.on?'■':'□'}</span>`}
+      <span class="txt" ${draft?`contenteditable="true" data-ar="cond.${i}.label" oninput="arOnInput(this)"`:''}>${esc(c.label)}</span>
+    </li>`).join('')}</ul>`;
+}
+function arRenderDoc(rep){
+  const m = rep.content.meta || {}, s = rep.content.sections || {};
+  const hasAfter = (s.dsr && s.dsr.rows || []).some(r=>r.after!=null);
+  const dsrRows = (s.dsr && s.dsr.rows || []).map((r,i)=>`<tr class="${i===2?'tot':''}"><td>${esc(r.label)}</td><td class="num">${esc(r.before)}</td>${hasAfter?`<td class="num">${esc(r.after)}</td>`:''}</tr>`).join('');
+  const dpRows = (s.debt_position && s.debt_position.rows || []).map(r=>`<tr>
+      <td>${esc(r.debt)}</td><td>${esc(r.institution)}</td><td class="${r.interest==='Not captured'?'muted':''}">${esc(r.interest)}</td>
+      <td class="num ${r.balance==='Not captured'?'muted':''}">${esc(r.balance)}</td><td class="num">${esc(r.instalment)}</td>
+      <td class="${/Settled/.test(r.status)?'settled':/not captured/.test(r.status)?'muted':''}">${esc(r.status)}</td></tr>`).join('');
+  const bullets = (s.reasoning && s.reasoning.bullets || []).map((b,i)=>`<li${rep.status==='draft'?` contenteditable="true" data-ar="sections.reasoning.bullets.${i}" oninput="arOnInput(this)"`:''}>${esc(b)}</li>`).join('');
+  const gaps = (s.gaps||[]);
+  const approving = rep.conditions.some(c=>c.group==='condition');
+  return `<div class="ar-doc ${rep.status==='draft'?'editable':'final'}" id="ar-doc">
+    <div class="ar-top"><span class="ar-conf">CONFIDENTIAL</span><span class="ar-brand"><b>Key</b> Wellness</span></div>
+    <h1 class="ar-title">Advance Recommendation Report</h1>
+    <div class="ar-sub">${esc(m.programme||'Hollard Employee Financial Wellness Program')}</div>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">01</span><span class="t">Employee Details &amp; Advance Request</span></div>
+      <div class="ar-kv">
+        <div><span>Employee Name</span><strong>${esc(m.employee_name)}</strong></div>
+        <div><span>Type of Advance</span><strong>${esc(m.advance_type)}</strong></div>
+        <div><span>Employer</span><strong>${esc(m.employer)}</strong></div>
+        <div><span>Recommended Amount</span><strong class="num">${esc(m.recommended_amount)}</strong></div>
+        <div><span>Consultation Date</span><strong>${esc(arDate(m.consultation_date))}</strong></div>
+        <div><span>Repayment Term</span><strong class="num">${esc(m.repayment_term)}</strong></div>
+        <div><span>Recommendation Date</span><strong>${esc(arDate(m.recommendation_date))}</strong></div>
+        <div><span>Consultant</span><strong>${esc(m.consultant)}</strong></div>
+      </div></section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">02</span><span class="t">Reasoning for Advance &amp; Amount</span></div>
+      ${arEd(rep,'sections.reasoning.intro','p','ar-p')}
+      <ul class="ar-ul">${bullets}</ul>
+      ${arEd(rep,'sections.reasoning.close','p','ar-p')}
+    </section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">03</span><span class="t">${esc(s.dsr&&s.dsr.title||'Debt Service Ratio')}</span></div>
+      <table class="ar-tbl"><thead><tr><th></th><th class="num">${hasAfter?'Before':'Current'}</th>${hasAfter?'<th class="num">After Advance</th>':''}</tr></thead><tbody>${dsrRows}</tbody></table>
+      ${arEd(rep,'sections.dsr.paragraph','p','ar-p')}
+    </section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">04</span><span class="t">${esc(s.ability&&s.ability.title||'Ability to Repay')}</span></div>
+      ${arEd(rep,'sections.ability.paragraph','p','ar-p')}
+    </section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">05</span><span class="t">${esc(s.debt_position&&s.debt_position.title||'Debt Position')}</span></div>
+      <table class="ar-tbl"><thead><tr><th>Debt</th><th>Institution</th><th>Interest</th><th class="num">Balance</th><th class="num">Instalment (Before)</th><th>Status After Advance</th></tr></thead><tbody>${dpRows}</tbody></table>
+      ${gaps.length ? `<div class="ar-gaps"><b>DATA GAPS</b> — ${gaps.map(esc).join('; ')}.</div>` : ''}
+    </section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">06</span><span class="t">Financial Risk Assessment</span></div>
+      <div class="ar-risk ${esc(s.risk&&s.risk.tier||'')}"><span class="tier">${esc(s.risk&&s.risk.tier||'')}</span>${arEd(rep,'sections.risk.text','p','ar-p')}</div>
+    </section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="t">Consultant Recommendation</span></div>
+      <div class="ar-dec">${esc(s.recommendation&&s.recommendation.decision||'')}</div>
+      ${arEd(rep,'sections.recommendation.intro','p','ar-p')}
+      ${approving ? arCondList(rep,'condition') : ''}
+      ${arEd(rep,'sections.recommendation.closing','p','ar-p ar-close')}
+    </section>
+
+    <section class="ar-sec"><div class="ar-two">
+      <div><div class="ar-h"><span class="n">07</span><span class="t">Employee Support Plan</span></div>${arCondList(rep,'support')}</div>
+      <div><div class="ar-h"><span class="n">08</span><span class="t">Follow-Up Recommendation</span></div>${arCondList(rep,'follow_up')}</div>
+    </div></section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">09</span><span class="t">Confidentiality Statement</span></div>
+      <div class="ar-confid">${esc(s.confidentiality||'')}</div>
+    </section>
+    <div class="ar-foot"><span>v${rep.version} · ${rep.status==='final'?'final '+fmtDate(rep.finalised_at):'draft'} · generated ${fmtDate(rep.generated_at)}</span><span>Key Wellness (Pty) Ltd</span></div>
+  </div>`;
+}
+
+function arRenderPrepare(){
+  const p = AR.prep, pv = AR.preview;
+  if(!p) return arErr() + `<div class="ar-note">Preparing…</div>`;
+  const sug = Object.fromEntries(AR.suggestions.map(s=>[s.index, s]));
+  const liabs = (pv ? pv.liabilities : []);
+  const rows = liabs.map(l=>{
+    const pr = p.liabilities.find(x=>x.index===l.index) || {};
+    const hint = sug[l.index] ? sug[l.index].reason : '';
+    return `<tr>
+      <td><strong>${esc(l.item)}</strong><div class="ar-note">${esc(l.institution)}</div></td>
+      <td class="num">${l.rate_value==null ? '<span class="muted">Not captured</span>' : esc(String(l.rate_value))+'%'}</td>
+      <td>${l.rate_value==null ? '<span class="ar-note">—</span>' : `<select onchange="arPrepSet(${l.index},'rate_period',this.value)">
+            <option value="annual" ${pr.rate_period!=='monthly'?'selected':''}>per year</option>
+            <option value="monthly" ${pr.rate_period==='monthly'?'selected':''}>per month</option></select>`}</td>
+      <td><span class="ar-seg">
+            <button class="formal ${pr.classification!=='informal'?'on':''}" onclick="arPrepSet(${l.index},'classification','formal')">Formal</button>
+            <button class="informal ${pr.classification==='informal'?'on':''}" onclick="arPrepSet(${l.index},'classification','informal')">Informal / high-cost</button>
+          </span><div class="ar-note">${esc(hint)}</div></td>
+      <td class="num">${fmt(l.balance||0)}${l.balance==null?'<div class="ar-note">not captured</div>':''}</td>
+      <td class="num">${fmt(l.instalment)}</td>
+    </tr>`;
+  }).join('');
+  const live = pv ? `<div class="ar-live">
+      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div></div>
+      <div><div class="l">DSR after</div><div class="v">${pv.after?pv.after.dsr.toFixed(2)+'%':'—'} ${pv.dsr_change?`<small>${pv.dsr_change.direction} ${pv.dsr_change.delta_points>0?'+':''}${pv.dsr_change.delta_points.toFixed(2)}</small>`:''}</div></div>
+      <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div></div>
+      <div><div class="l">Risk tier</div><div class="v ${pv.tier}">${pv.tier}</div><div class="ar-note">${esc(pv.decision)}</div></div>
+    </div>` : '';
+  return `${arErr()}
+  <div class="card ar-prep">
+    <div class="card-title">Prepare the Advance Recommendation</div>
+    <div class="card-hint">Confirm how each debt is treated. Only debts marked <strong>Informal / high-cost</strong> are consolidated into the advance; formal facilities are left unchanged. The rate period matters: a motshelo at 30% <em>per month</em> is a different case from 30% per year.</div>
+    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Treatment</th><th class="num">Balance</th><th class="num">Instalment</th></tr></thead><tbody>${rows}</tbody></table></div>`
+                   : `<div class="ar-note">No liabilities captured for this client. Add them on the Liabilities tab first.</div>`}
+    <div class="ar-fields">
+      <div><label>Repayment term (months)</label><input type="number" min="1" max="60" value="${p.term_months}" onchange="arPrepField('term_months', this.value)"></div>
+      <div><label>Consultation date</label><input type="date" value="${esc(p.consultation_date)}" onchange="arPrepField('consultation_date', this.value)"></div>
+      <div><label>Context for the narrative (optional, not printed)</label><textarea placeholder="e.g. forex loss on a side business; second motshelo taken in July" oninput="arPrepField('advisor_context', this.value)">${esc(p.advisor_context)}</textarea></div>
+    </div>
+    ${live}
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="arGenerate()" ${AR.busy||!pv?'disabled':''}>${AR.busy?'Generating…':'Generate Advance Recommendation'}</button>
+      ${AR.list.length ? `<button class="btn btn-outline" onclick="arCancelPrepare()">Back to v${AR.list[0].version}</button>` : ''}
+      <span class="ar-note">Generation takes about 10–20 seconds. Every line stays editable until you mark it final.</span>
+    </div>
+  </div>`;
 }
 
 /* ================================================================
