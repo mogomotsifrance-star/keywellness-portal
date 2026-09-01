@@ -1,0 +1,48 @@
+M6 (physical is its own line) — live, 1 Sep 2026, BEFORE apply
+
+BASELINE, measured
+  VISIBLE BOOKINGS  France (admin + team lead) : 22
+  VISIBLE BOOKINGS  Lone (psychosocial admin)  : 22
+  VISIBLE BOOKINGS  Karabo (counsellor)        : 0
+  VISIBLE BOOKINGS  HR only                    : 0
+
+  service_lines table                : absent
+  kw_line_is_confidential()          : absent
+  bookings service_line check        : financial, psychosocial
+  bookings policies naming a line literally : 9
+  report filters activities by line  : NO  (defect 2)
+  report filters activities by state : NO  (defect 1)
+  rows: bookings financial/psychosocial/physical : 22 / 0 / 0
+
+THE PREDICTION
+
+  CHANGES
+    service_lines appears with three rows; physical is NOT confidential.
+    kw_line_is_confidential() appears, fail-closed: an unrecognised line is
+    treated as confidential.
+    Five check constraints admit 'physical'.
+    All 9 bookings policies stop naming a line literally -> 0.
+    The report gains BOTH filters: non-confidential AND delivered-only.
+
+  DOES NOT CHANGE
+    France still sees 22. Lone still sees 22. Karabo still sees 0. HR still
+    sees 0. No row's service_line is altered: every existing row is
+    'financial', which is non-confidential — exactly what the old literal said.
+    No booking, member, contract or activity added or removed.
+
+  IF IT IS WRONG
+    A line classified wrongly in service_lines — one UPDATE to fix. The
+    dangerous direction is guarded: the migration refuses to finish if
+    'psychosocial' is not confidential or if 'financial' is.
+
+  EXPECTED AFTER-STATE, EXACTLY
+    France 22, Lone 22, Karabo 0, HR 0 — all unchanged.
+    service_lines present with 3 rows, kw_line_is_confidential present.
+    checks admit physical. policies naming a line literally: 0.
+    both report filters: yes.
+
+  THEN, with probe rows seeded after the apply (deleted afterwards):
+    France  · physical booking     : visible   (it is not a secret)
+    France  · psychosocial booking : NOT visible
+    Karabo  · physical booking     : NOT visible (not hers; just not secret)
+    Lone    · all three lines      : visible

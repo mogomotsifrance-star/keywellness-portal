@@ -9,7 +9,22 @@
 --
 -- ══ TWO THINGS THE DOCUMENT NEEDS AND THE SCHEMA CANNOT SAY ══
 --
--- (1) THE PROGRAMME HAS THREE PILLARS. THE SCHEMA HAS TWO SERVICE LINES.
+-- (1) THE PROGRAMME HAS THREE PILLARS — RESOLVED BY M6.
+--
+--     This file originally recorded the health screening and both wellness
+--     challenges on the financial line as a placeholder, because service_line
+--     admitted only 'financial' and 'psychosocial'. M6 added PHYSICAL as a
+--     third, non-confidential line, so those three rows now sit where they
+--     belong. The reasoning is kept below because it explains why they were
+--     not simply filed as psychosocial.
+--
+--     WHAT REMAINS A PLACEHOLDER: the three "All Pillars" rows — the launch,
+--     the baseline survey and the close-out. They are programme milestones
+--     rather than sessions on any one line, and there is no line that means
+--     "all of them". They stay on financial, still marked, still not a lie
+--     anyone can act on: none is a member session.
+--
+--     THE ORIGINAL REASONING, KEPT:
 --
 --     service_line admits 'financial' and 'psychosocial'. BOPEU's programme
 --     also has PHYSICAL and MEDICAL/PHYSICAL rows: the health screening and
@@ -29,7 +44,7 @@
 --     'planned', so nothing counts them as delivered yet and the decision can
 --     be taken before any of them is.
 --
---     THIS NEEDS A DECISION BEFORE ANY PHYSICAL ROW IS MARKED DELIVERED.
+--     RESOLVED: M6 added the physical line, so those three rows now sit on it.
 --     Adding a third service line is not a seed's business — it touches M3's
 --     confidentiality boundary and every policy and definer function built on
 --     the two-way split.
@@ -119,10 +134,19 @@ do $$
 declare
   v_org  uuid;
   v_plan uuid := '0e000000-0000-0000-0000-00000000b0e1';
+  -- created_by is NOT NULL on live and nullable in the fixture, so the local
+  -- run could not catch this. It is an audit field — who entered the row — and
+  -- these were entered on Tshenolo's instruction from the document he
+  -- supplied, so that account is the honest value.
+  v_by   uuid := (select id from auth.users where email = 'tnmokgwetsi@gmail.com');
   r      record;
 begin
   select id into v_org from organizations where name = 'BOPEU';
   if v_org is null then raise exception 'BOPEU does not exist'; end if;
+  if v_by is null then
+    raise exception 'BOPEU seed: no account to record as created_by. '
+                    'program_activities.created_by is NOT NULL.';
+  end if;
 
   for r in
     select * from (values
@@ -188,22 +212,22 @@ begin
      || 'delivered — that is Lone''s confirmation to give, not an inference '
      || 'from the calendar.'),
 
-    ('11', date '2026-08-26', null, 'clinic', 'wellness_day', 'financial',
+    ('11', date '2026-08-26', null, 'clinic', 'wellness_day', 'physical',
      'planned', 'vendor',
      'Basic Health Screening (BP, BMI, Blood Glucose, Health Risk Review)',
-     'Pillar as given: Medical / Physical. THERE IS NO SERVICE LINE FOR THIS. [PLACEHOLDER-LINE] [NEEDS-DECISION] '
-     || 'Recorded as financial because it is the non-confidential line and the '
-     || 'error is visible; psychosocial would hide a health screening from '
-     || 'France invisibly. NEEDS A DECISION before this is marked delivered. '
-     || 'Delivered by an external provider — practitioner_kind=vendor. '
-     || 'Document status Planned though the date has passed; not flipped.'),
+     'Pillar as given: Medical / Physical. Recorded on the PHYSICAL line, '
+     || 'added by M6 — non-confidential, so France can see it, which is right: '
+     || 'a health screening is not clinical confidence. '
+     || 'Delivered by an external provider — practitioner_kind=vendor, so it '
+     || 'is not counted as Key Wellness practitioner time. '
+     || 'Document status Planned though the date has passed; NOT flipped.'),
 
-    ('12', date '2026-09-01', date '2026-09-01', 'other', 'campaign', 'financial',
+    ('12', date '2026-09-01', date '2026-09-01', 'other', 'campaign', 'physical',
      'planned', null,
      'Healthy Living Challenge: Walking, Physical Activity & Healthy Eating Habits',
      'Runs 01–30 Sep 2026. activity_date is NOT NULL so it holds the range '
      || 'start; planned_month carries the month. Pillar as given: Physical — '
-     || 'NO SERVICE LINE EXISTS. [PLACEHOLDER-LINE] [NEEDS-DECISION] '
+     || 'Recorded on the PHYSICAL line, added by M6. '
      || 'Self-directed: no practitioner, and whether a vendor coordinates it '
      || 'is not recorded in the document.'),
 
@@ -212,12 +236,12 @@ begin
      'Workplace Victimization, Bullying, Harassment & Psychological Safety in '
      || 'the Workplace', null),
 
-    ('14', date '2026-10-01', date '2026-10-01', 'other', 'campaign', 'financial',
+    ('14', date '2026-10-01', date '2026-10-01', 'other', 'campaign', 'physical',
      'planned', null,
      'Wellness Habits Challenge (Movement, Sleep & Hydration)',
      'Runs 01–31 Oct 2026. Same treatment as row 12: range start in '
-     || 'activity_date, month in planned_month, Physical pillar with NO '
-     || 'SERVICE LINE. [PLACEHOLDER-LINE] [NEEDS-DECISION]'),
+     || 'activity_date, month in planned_month, Recorded on the PHYSICAL '
+     || 'line, added by M6.'),
 
     ('15', date '2026-10-07', null, 'group_intervention', 'group', 'psychosocial',
      'planned', null,
@@ -254,7 +278,7 @@ begin
     insert into program_activities (
       id, org_id, work_plan_id, activity_type, title, activity_date,
       planned_date, planned_month, attendee_count, service_line, format,
-      state, delivered_at, practitioner_kind, notes)
+      state, delivered_at, practitioner_kind, notes, created_by)
     values (
       ('0f0b0000-0000-0000-0000-0000000000' || r.id_suffix)::uuid,
       v_org, v_plan, r.activity_type, r.title, r.activity_date,
@@ -263,7 +287,7 @@ begin
       0,                                   -- not recorded in the document
       r.service_line, r.format, r.state,
       case when r.state = 'delivered' then r.activity_date::timestamptz end,
-      r.practitioner_kind, r.notes)
+      r.practitioner_kind, r.notes, v_by)
     on conflict (id) do nothing;
   end loop;
 end $$;
@@ -272,7 +296,8 @@ end $$;
 -- ── 4. What was actually recorded ───────────────────────────
 
 do $$
-declare n_all int; n_del int; n_plan int; n_psy int; n_placeholder int; n_decision int;
+declare n_all int; n_del int; n_plan int; n_psy int; n_placeholder int;
+        n_decision int; n_physical int;
 begin
   select count(*) into n_all from program_activities
    where work_plan_id = '0e000000-0000-0000-0000-00000000b0e1';
@@ -302,18 +327,27 @@ begin
   -- An under-counting check is worse than none: the first version used a
   -- case-sensitive LIKE and reported 3 of 6, silently omitting the three
   -- PHYSICAL rows, which are the ones that actually need a decision.
-  if n_placeholder <> 6 then
-    raise exception 'BOPEU seed: expected 6 rows on a placeholder service line, found %',
-                    n_placeholder;
+  -- Three "All Pillars" milestones remain on a placeholder line. The three
+  -- PHYSICAL rows no longer do: M6 gave them a real line.
+  if n_placeholder <> 3 then
+    raise exception 'BOPEU seed: expected 3 rows on a placeholder service line '
+                    '(the All Pillars milestones), found %', n_placeholder;
   end if;
-  if n_decision <> 3 then
-    raise exception 'BOPEU seed: expected 3 rows needing a service-line decision, found %',
-                    n_decision;
+  if n_decision <> 0 then
+    raise exception 'BOPEU seed: % row(s) still marked as needing a service-line '
+                    'decision. M6 settled that.', n_decision;
+  end if;
+
+  select count(*) into n_physical from program_activities
+   where work_plan_id = '0e000000-0000-0000-0000-00000000b0e1' and service_line = 'physical';
+  if n_physical <> 3 then
+    raise exception 'BOPEU seed: expected 3 activities on the PHYSICAL line, found %',
+                    n_physical;
   end if;
 
   raise notice 'BOPEU: % activities (% delivered, % planned), % psychosocial.',
                n_all, n_del, n_plan, n_psy;
-  raise notice 'BOPEU: % rows carry a PLACEHOLDER service line; % of them are '
-               'PHYSICAL/MEDICAL and NEED A DECISION before being marked delivered.',
-               n_placeholder, n_decision;
+  raise notice 'BOPEU: % on the physical line; % All Pillars milestones remain '
+               'on a placeholder line (no line means "all of them").',
+               n_physical, n_placeholder;
 end $$;
