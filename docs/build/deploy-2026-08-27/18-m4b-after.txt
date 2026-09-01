@@ -1,0 +1,90 @@
+M4b — live Supabase, 1 Sep 2026, AFTER apply
+Applied as migration `m4b_real_contract_shape`.
+
+PREDICTED                                 ACTUAL                        MATCH
+amount_is_approximate   absent -> present   present                     yes
+amount_note             absent -> present   present                     yes
+approx-must-be-explained constraint         present                     yes
+format admits campaign                      yes                         yes
+format kept every existing value            yes                         yes
+practitioner_kind admits vendor             yes                         yes
+group_session NOT added                     correctly refused           yes
+no existing row marked approximate          correct                     yes
+rows unchanged        0 / 1 / 22            0 / 1 / 22                  yes
+
+Every prediction met. Local suite: 12 passed, 0 failed.
+Full regression: phase0 all, m1 22, m5 45, m5a 29, support 28, m4 66,
+m4a 23, m4b 12, m3 59. All exit 0.
+
+════════════════════════════════════════════════════════════
+WHAT THE FIRST REAL CONTRACT BROKE
+
+Three walls in the first ten minutes, all the same mistake: a schema built
+from a specification rather than from a document somebody actually has.
+
+(a) THE SCHEMA COULD NOT SAY "APPROXIMATELY".
+
+    BOPEU's retainer is confirmed at APPROXIMATELY P18,000/month. That is the
+    honest state of the fact. org_contracts had nowhere to put it:
+    retainer_amount is numeric(12,2), and org_contracts_amount_agrees_with_kind
+    REQUIRES it non-null for a retainer. The only way to record the contract at
+    all was to write 18000.00 — a number that reads as exact, that the monthly
+    handover would bill from, and that nobody would know to question.
+
+    A schema that can only store precise numbers does not make the world
+    precise. It makes the imprecision invisible, which is worse than refusing
+    the row.
+
+    An approximate amount now MUST carry a note. An unexplained "about" tells
+    the next reader the number is soft and nothing about why.
+
+(b) `campaign` WAS NOT A FORMAT. Two of BOPEU's rows are self-directed
+    challenges — a walking challenge and a movement challenge. Nobody delivers
+    them at a time and a place. 'other' would have lost the only thing that
+    makes them different.
+
+(c) `vendor` WAS NOT A PRACTITIONER KIND. Health screening is delivered by an
+    external provider. The column admitted only 'advisor' and 'counsellor',
+    both Key Wellness staff. Recording vendor work as advisor work inflates
+    every capacity and utilisation figure that counts practitioner time —
+    quietly, and in the direction that flatters us.
+
+NOT ADDED, ON PURPOSE: `group_session`. The programme spec names it; the schema
+already has `group`. Two values for one idea means half the rows use each
+within a month. BOPEU's group sessions are recorded as `group`.
+
+════════════════════════════════════════════════════════════
+THE ROLLBACK REFUSES TWICE, AND BOTH ARE EXERCISED
+
+  guard 1 — refuses while any contract is marked approximate. Dropping the
+            flag does not make the number exact; it makes it LOOK exact, which
+            is the state M4b exists to end.
+  guard 2 — refuses while any row uses campaign or vendor. Narrowing the checks
+            would orphan a record of a real session, and re-classifying vendor
+            work as advisor work would corrupt capacity figures.
+
+The suite creates all three, so it hits both guards every run and clears them
+deliberately, reporting "m4b guard 1 ok" and "m4b guard 2 ok".
+
+════════════════════════════════════════════════════════════
+BLOCKED, AND WHY
+
+BOPEU's contract row is NOT yet created. Two things are missing and neither is
+mine to invent:
+
+  1. THE 19-ROW PROGRAMME. `claude/bopeu-workplan-2026.md` is not in this
+     working tree — there is no `claude/` directory here at all — and it is not
+     anywhere in the build history. Dates, topics, pillars, formats and
+     statuses for a real client cannot be reconstructed from the schema.
+
+  2. THE ACCOUNT MANAGER. "Lone, presumably — confirm" is not a confirmation,
+     and CLAUDE_CONTEXT.md's standing rule is that ownership is never guessed:
+     configured, or absent-and-flagged.
+
+A FINDING THAT CHANGES WHAT TASK 1.4 CAN SHOW: BOPEU has TWO members and
+org_report_data returns insufficient_cohort for every quarter of 2026 — before
+any of this. Recording nineteen activities will not change a single reported
+figure for BOPEU, because the base-5 cohort floor fires first. The regression
+will correctly show no movement, and that is NOT evidence the activities
+landed. It also means Lone cannot get a BOPEU report out of this system today
+regardless of how complete the programme record is.

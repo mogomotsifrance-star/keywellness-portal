@@ -638,7 +638,11 @@ async function renderToday() {
       <p class="label">This month</p><hr class="rule">
       <div class="cap"><span>Touchpoints in the next fortnight</span>
         <span class="v">${items.length}</span></div>
-      <div class="cap"><span>Invoices produced</span><span class="v">—</span></div>
+      <!-- NOT "Invoices produced". This system never produces an invoice and
+           never sees one: they are produced in Sage. What it knows is that Lone
+           confirmed with Laone that one exists, and when. Any label implying
+           first-hand knowledge of Sage is a defect. -->
+      <div class="cap"><span>Confirmed with Laone</span><span class="v">—</span></div>
     </div>
   </div>`;
 }

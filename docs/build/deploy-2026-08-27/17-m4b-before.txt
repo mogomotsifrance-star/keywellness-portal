@@ -1,0 +1,31 @@
+M4b (the shapes real data needs) — live, 1 Sep 2026, BEFORE apply
+
+WHY IT EXISTS: recording BOPEU's actual contract — the first real data the M4
+schema has ever held — hit three walls in the first ten minutes.
+
+BASELINE (confirmed against live)
+  org_contracts note/approx columns : NONE — cannot express "approximately"
+  amount vs kind constraint         : (contract_kind='retainer') = (retainer_amount IS NOT NULL)
+                                      i.e. a retainer MUST carry a bare number
+  format check                      : talk, one_on_one, couple, group, webinar,
+                                      wellness_day, flyer, other   (no campaign)
+  practitioner_kind check           : advisor, counsellor           (no vendor)
+  org_contracts rows                : 0
+  program_activities rows           : 1
+
+THE PREDICTION
+  CHANGES
+    org_contracts gains amount_is_approximate (default false) and amount_note,
+    plus a constraint that an approximate amount must be explained.
+    format admits 'campaign'. practitioner_kind admits 'vendor'.
+  DOES NOT CHANGE
+    No existing row. Defaults chosen so existing rows keep the meaning they
+    have: amount_is_approximate=false says "this number is exact", which is
+    what every current row implicitly claims.
+    No policy, no grant, no function. Row counts unchanged.
+  NOT ADDED ON PURPOSE
+    group_session — `group` already means that, and two values for one idea
+    means half the rows use each within a month.
+  IF IT IS WRONG
+    A widened check admitting a value nothing reads yet. Both changes are
+    additive; no existing value is removed.
