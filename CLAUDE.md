@@ -13,6 +13,18 @@ Key Wellness is a financial wellness portal for clients in Botswana. It helps us
 
 ---
 
+## Knowledge base
+
+Before making architectural decisions or investigating past issues, check
+`/workspace/vault/keywellness-portal/` and `/workspace/vault/shared/` for prior
+context, decisions, and open issues. Log new decisions or issues there when
+relevant.
+
+**Repo:** https://github.com/mogomotsifrance-star/keywellness-portal
+**Vault:** https://github.com/mogomotsifrance-star/knowledge-vault
+
+---
+
 ## Branch Rules — CRITICAL
 
 - **NEVER commit or push to `main` directly**
