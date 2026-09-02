@@ -27,6 +27,46 @@ git checkout dev
 git status
 ```
 
+### Check your base branch before you start
+
+A branch cut from `main` looks like a clean feature branch and is not — merging
+it into `dev` drags a `main` → `dev` backflow along with your change. Cloud
+sessions are cut from `main` by default, and a fresh clone may not list
+`origin/dev` as a ref at all until you fetch: `git branch -a` showing only
+`main` does **not** mean `dev` is missing.
+
+So, first thing in every session:
+
+```bash
+git fetch origin                            # a fresh clone may not have dev yet
+git checkout -B <your-branch> origin/dev
+```
+
+Already committed on a branch cut from the wrong base? Rebase it onto `dev`
+rather than merging:
+
+```bash
+git rebase --onto origin/dev $(git merge-base origin/dev HEAD) <your-branch>
+```
+
+Before merging anything into `dev`, confirm the branch carries only your work:
+
+```bash
+git fetch origin
+git diff --stat $(git merge-base origin/dev origin/main) origin/main  # expect empty
+git diff --stat origin/dev...<your-branch>                            # expect your files only
+```
+
+A non-empty first diff means `main` holds content `dev` lacks, and your merge
+would carry it into `dev` under the label of your change. Stop and ask before
+pushing.
+
+**Note the three dots** in the second command. `git diff origin/dev <branch>`
+with two dots compares the two tips and lists everything on `dev` that your
+branch lacks — on this repo that is 20 files of unrelated migrations, and it
+tells you nothing about your merge. Three dots diffs against the merge base,
+which is what the merge will actually apply.
+
 ---
 
 ## Tech Stack
@@ -418,11 +458,42 @@ here in the same migration that creates it.**
 
 ---
 
+## Vault Logging — Always Do This
+
+At the end of **every** session, before reporting the task complete, write a
+short entry to the knowledge vault. Do this automatically — do not wait to be
+asked.
+
+| What you produced | Where it goes |
+|---|---|
+| An architectural or design decision (why a table, RPC, gate, or flow is shaped the way it is) | `/workspace/vault/keywellness-portal/decisions/` — one dated markdown file per decision |
+| An unresolved issue, risk, or gap you found but did not fix | `/workspace/vault/keywellness-portal/open-issues.md` — append a dated bullet |
+
+Keep entries short — what changed or what is wrong, and why it matters to the
+next person. A decision entry should record the option chosen *and* the ones
+rejected; an open issue should say what breaks if nobody acts on it.
+
+Then commit and push the vault. It is a **separate repository** from this one,
+so its commit is separate from the portal commit:
+
+```bash
+cd /workspace/vault
+git add .
+git commit -m "log: <short description>"
+git push
+```
+
+If a session produced neither a decision nor an open issue, say so rather than
+inventing an entry — but that is rare, and the default is to write one.
+
+---
+
 ## What NOT to Do
 
 - Do not change the Supabase URL or anon key
 - Do not add npm packages or build tools — this is a static HTML site
 - Do not modify `main` branch directly
+- Do not merge into `dev` without confirming your branch was cut from `dev` — see Branch Rules
 - Do not change the colour system without updating all references
 - Do not break the existing auth flow in index.html
 - Do not reintroduce `window.location.replace()` role redirects in index.html — use `kwRouteByRole()`
@@ -432,3 +503,4 @@ here in the same migration that creates it.**
 - Do not use `localStorage` for new features — use Supabase instead
 - Do not hand-write account-deletion SQL — use `admin_user_delete()` (Users tab → Delete). A one-off script misses the two tables that have no foreign key and silently orphans them
 - Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
+- Do not end a session without writing a vault entry — see Vault Logging above

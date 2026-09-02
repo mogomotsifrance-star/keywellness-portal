@@ -1,88 +1,102 @@
-M3a (referral accept flow) — live Supabase, 27 Aug 2026, AFTER apply
-Applied as migration `m3a_referral_accept`.
+M3a (referral accept flow) — live Supabase, 27 Aug 2026, AFTER apply
+Applied as migration `m3a_referral_accept`.
+
+PREDICTED                          ACTUAL                    MATCH
+referral_accept exists  no -> yes  yes                       yes
+counsellors unchanged              Karabo, Nicola            yes
+counsellor_clients rows 0          0                         yes
+counselling_referrals   0          0                         yes
+counselling_notes       0          0                         yes
+bookings fin/psych      22 / 0     22 / 0                    yes
+bookings policies       11         11                        yes
+
+gated on the receiver, not a role  yes
+never touches counselling_notes    yes
+
+Every prediction met. One function appeared and nothing else moved.
+
+════════════════════════════════════════════════════════════
+WHAT ACCEPTING ACTUALLY DOES
+
+  1. CLOSES the referring counsellor's caseload link
+     (is_active = false, ended_at = now())
+  2. OPENS a new link for the receiving counsellor, carrying the client's
+     IDENTITY ONLY — name, contact, organisation, member id.
+
+counsellor_clients is never repointed, because there is no mutable
+counsellor_id to repoint. Karabo's old row and everything hanging off it stay
+Karabo's BECAUSE THEY ARE STILL THE SAME ROWS. Nothing had to remember not to
+update them.
+
+WHAT ACCEPTING DOES NOT DO — the half that matters
+
+  Nicola does not gain access to Karabo's notes.
+  Nicola does not gain access to Karabo's bookings for that client.
+  Nicola cannot even see Karabo's now-closed caseload row.
+  Not before accepting, not after, not ever.
+
+  Existing bookings keep pointing at Karabo's link and at Karabo, so they stay
+  unreadable to Nicola. That is the behaviour, not an oversight to fix later.
+
+  The only thing that crosses is the handover note Karabo WROTE ON PURPOSE for
+  this referral.
+
+WHO MAY ACCEPT
+
+  Only the counsellor the referral was sent to. Not the referrer — she cannot
+  accept on the receiver's behalf. Not Lone or Michelle — a psychosocial admin
+  sees THAT a referral happened and cannot accept one, because taking on a case
+  is a clinical decision, not an administrative one.
+
+  The migration asserts this structurally: it refuses to apply if
+  referral_accept mentions is_admin or is_psychosocial_admin at all.
+
+════════════════════════════════════════════════════════════
+LOCAL SUITE — 51 assertions, 0 failed
+
+The ten new ones (40-49), with the negative ones doing the real work:
+
+  40 the REFERRING counsellor cannot accept her own referral
+  41 a psychosocial admin cannot accept on anyone's behalf
+  42 the receiving counsellor accepts and gets a new link
+  43 accepting twice is not an error and opens no second link
+  44 after accepting, Nicola STILL cannot read Karabo's note      <-- the point
+  45 nor Karabo's booking for the same client                     <-- the point
+  46 nor Karabo's now-closed caseload row                         <-- the point
+  47 Karabo still reads her own note and booking after handing over
+  48 and her caseload row is CLOSED, not deleted and not repointed
+  49 Lone sees the referral was ACCEPTED, with a date and no note
+
+Full regression, all exit 0: phase0 all, m1 22, m5 45, m5a 29, support 28,
+m4 66, m4a 23, m3 51.
+
+════════════════════════════════════════════════════════════
+NOTHING IS WAITING ON IT
+
+There are zero referrals on live. This was applied so the capability exists
+when Karabo and Nicola need it, not because anything was blocked.
+
+════════════════════════════════════════════════════════════
+NOT BUILT, AND FLAGGED RATHER THAN ASSUMED
+
+  THERE IS NO DECLINE PATH. A referral the receiver does not want sits
+  unaccepted forever, and the referring counsellor has no signal that it was
+  refused rather than not yet read. That is a real gap in the workflow, it was
+  not in the brief, and it needs a decision about what a decline tells the
+  referrer before it is built.
+
+SUPERSEDED — RISK ESCALATION HAPPENS OUTSIDE THE PLATFORM
 
-PREDICTED                          ACTUAL                    MATCH
-referral_accept exists  no -> yes  yes                       yes
-counsellors unchanged              Karabo, Nicola            yes
-counsellor_clients rows 0          0                         yes
-counselling_referrals   0          0                         yes
-counselling_notes       0          0                         yes
-bookings fin/psych      22 / 0     22 / 0                    yes
-bookings policies       11         11                        yes
+  Decided 28 Aug 2026 and permanent, for confidentiality reasons. A counsellor
+  escalates by REFERRING THE CLIENT TO EXTERNAL PARTIES according to the level
+  of risk. That happens out of band, the way out-of-band contact always has.
 
-gated on the receiver, not a role  yes
-never touches counselling_notes    yes
+  There is NO internal flag, NO notification, and NO admin action tied to a
+  risk event. The content-free nameless action for Lone described in earlier
+  specs is NOT BEING BUILT — not deferred, not owed, not pending.
 
-Every prediction met. One function appeared and nothing else moved.
+  This matters for anything reading `actions`: there is no risk-flag row type
+  coming, so nothing should be shaped to leave room for one.
 
-════════════════════════════════════════════════════════════
-WHAT ACCEPTING ACTUALLY DOES
-
-  1. CLOSES the referring counsellor's caseload link
-     (is_active = false, ended_at = now())
-  2. OPENS a new link for the receiving counsellor, carrying the client's
-     IDENTITY ONLY — name, contact, organisation, member id.
-
-counsellor_clients is never repointed, because there is no mutable
-counsellor_id to repoint. Karabo's old row and everything hanging off it stay
-Karabo's BECAUSE THEY ARE STILL THE SAME ROWS. Nothing had to remember not to
-update them.
-
-WHAT ACCEPTING DOES NOT DO — the half that matters
-
-  Nicola does not gain access to Karabo's notes.
-  Nicola does not gain access to Karabo's bookings for that client.
-  Nicola cannot even see Karabo's now-closed caseload row.
-  Not before accepting, not after, not ever.
-
-  Existing bookings keep pointing at Karabo's link and at Karabo, so they stay
-  unreadable to Nicola. That is the behaviour, not an oversight to fix later.
-
-  The only thing that crosses is the handover note Karabo WROTE ON PURPOSE for
-  this referral.
-
-WHO MAY ACCEPT
-
-  Only the counsellor the referral was sent to. Not the referrer — she cannot
-  accept on the receiver's behalf. Not Lone or Michelle — a psychosocial admin
-  sees THAT a referral happened and cannot accept one, because taking on a case
-  is a clinical decision, not an administrative one.
-
-  The migration asserts this structurally: it refuses to apply if
-  referral_accept mentions is_admin or is_psychosocial_admin at all.
-
-════════════════════════════════════════════════════════════
-LOCAL SUITE — 51 assertions, 0 failed
-
-The ten new ones (40-49), with the negative ones doing the real work:
-
-  40 the REFERRING counsellor cannot accept her own referral
-  41 a psychosocial admin cannot accept on anyone's behalf
-  42 the receiving counsellor accepts and gets a new link
-  43 accepting twice is not an error and opens no second link
-  44 after accepting, Nicola STILL cannot read Karabo's note      <-- the point
-  45 nor Karabo's booking for the same client                     <-- the point
-  46 nor Karabo's now-closed caseload row                         <-- the point
-  47 Karabo still reads her own note and booking after handing over
-  48 and her caseload row is CLOSED, not deleted and not repointed
-  49 Lone sees the referral was ACCEPTED, with a date and no note
-
-Full regression, all exit 0: phase0 all, m1 22, m5 45, m5a 29, support 28,
-m4 66, m4a 23, m3 51.
-
-════════════════════════════════════════════════════════════
-NOTHING IS WAITING ON IT
-
-There are zero referrals on live. This was applied so the capability exists
-when Karabo and Nicola need it, not because anything was blocked.
-
-════════════════════════════════════════════════════════════
-NOT BUILT, AND FLAGGED RATHER THAN ASSUMED
-
-  THERE IS NO DECLINE PATH. A referral the receiver does not want sits
-  unaccepted forever, and the referring counsellor has no signal that it was
-  refused rather than not yet read. That is a real gap in the workflow, it was
-  not in the brief, and it needs a decision about what a decline tells the
-  referrer before it is built.
-
-  The risk-flag interim is still not built.
+  Recorded in claude/ops-data-model-and-impact.md §2.3a and §5 item 2, and in
+  claude/ops-migration-governance.md's M3b section.
