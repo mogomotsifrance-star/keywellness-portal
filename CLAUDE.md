@@ -8,7 +8,7 @@
 Key Wellness is a financial wellness portal for clients in Botswana. It helps users understand and improve their financial health through assessments, tools, coaching bookings, and progress tracking. The platform is built for a Botswana audience — currency is BWP (Pula), and the tone is warm, professional, and empowering.
 
 **Live site:** https://mogomotsifrance-star.github.io/keywellness-portal
-**Test site:** https://keywellness-portal.mogomotsifrance.workers.dev (Cloudflare Pages — replaces Netlify which ran out of credits)
+**Test site:** https://keywellness-portal.mogomotsifrance.workers.dev (a Cloudflare **Worker**, not Pages — see Deployment. Replaced Netlify, which ran out of credits)
 **Contact email:** wellness@keywellness.co.bw
 
 ---
@@ -17,7 +17,7 @@ Key Wellness is a financial wellness portal for clients in Botswana. It helps us
 
 - **NEVER commit or push to `main` directly**
 - Always work on the `dev` branch
-- `dev` → deploys to Cloudflare Pages test site
+- `dev` → builds and deploys the Cloudflare Worker test site (**check that the build passed** — see Deployment)
 - `main` → deploys automatically to GitHub Pages (live site)
 - Only merge `dev` into `main` when changes are tested and approved
 
@@ -69,6 +69,51 @@ which is what the merge will actually apply.
 
 ---
 
+## Deployment — how the two sites actually update
+
+Both of these have been described wrongly in this file before, and it cost a
+week of work being "tested" against a stale site. The facts:
+
+### Test site — a Cloudflare **Worker**, not Pages, and not Netlify
+
+The URL is `*.workers.dev`, not `*.pages.dev`. In the dashboard it lives under
+**Compute (Workers) → `keywellness-portal`**, not under Pages. Netlify is gone.
+
+A Workers Build is connected to this GitHub repo and fires on every push to
+**`dev`**. Its settings: build command **None**, deploy command
+**`npx wrangler deploy`**, root directory **`/`**. CI runs `npm clean-install`
+first, so `node_modules` exists on disk by the time wrangler runs.
+
+**`.assetsignore` at the repo root is load-bearing.** `wrangler.jsonc` sets
+`assets.directory` to `"."`, so wrangler uploads *the entire repository* as
+static assets unless a path is listed there. Two consequences:
+
+1. **A large file in the repo breaks the deploy.** Cloudflare's limit is 25 MiB
+   per asset. `npm clean-install` pulls `@deno/linux-x64-glibc/deno` — about
+   92 MB — into `node_modules`, and every build from 26 Aug to 2 Sep 2026 failed
+   on it, silently, for a week. Adding a dependency with a big binary will do
+   this again; `node_modules/` is ignored now, but check the deploy after any
+   change that adds one.
+2. **Anything not ignored is served publicly.** The SQL schema, the build notes
+   and the test suites were all fetchable at
+   `keywellness-portal.mogomotsifrance.workers.dev/<path>` until `.assetsignore`
+   landed. Add server-side or internal files to it, not just build artefacts.
+
+**A failed build is silent.** Nothing notifies anyone — no Action, no email, no
+check on the commit. The site simply keeps serving the last deployment that
+worked, which looks identical to a site that deployed fine. So after pushing to
+`dev`, open **Deployments → Build history** and confirm the top row is green
+before you test anything, and before you believe a test result.
+
+### Live site — GitHub Pages from `main`
+
+There is no `.github/workflows` directory in this repo. GitHub Pages serves the
+`main` branch directly, so **every file committed to `main` is publicly
+readable** at the Pages URL — `.assetsignore` does not apply there. The SQL
+files and internal docs on `main` are readable today.
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -79,8 +124,8 @@ which is what the merge will actually apply.
 | Charts | Chart.js v4.4.0 (CDN) |
 | Fonts | Inter + DM Mono (Google Fonts) |
 | Bookings | FormSubmit.co → wellness@keywellness.co.bw |
-| Live hosting | GitHub Pages (main branch) |
-| Test hosting | Netlify (dev branch) |
+| Live hosting | GitHub Pages, served directly from the `main` branch (no Action) |
+| Test hosting | Cloudflare Worker with static assets, built from `dev` |
 
 ---
 
@@ -262,7 +307,7 @@ git pull origin dev
 git add .
 git commit -m "Brief description of what changed"
 git push origin dev
-# → Netlify test site updates automatically
+# → triggers a Cloudflare Worker build. CONFIRM IT WENT GREEN — see Deployment
 
 # When ready to go live
 git checkout main
@@ -445,6 +490,29 @@ client-safe **by construction** — they cannot return the internal view to
 anybody, admin included. Verified 28 Aug 2026.
 **If any of the four ever gains a body of its own, it needs its own gate** —
 delegation is the only reason this is safe.
+
+**Four more rows are expected and are also not holes.** Each was read in full on
+2 Sep 2026:
+
+- `kw_is_over_indebted(numeric)` — pure arithmetic over `kw_dti_band()` and
+  `kw_threshold()`. Same class as those two: no table is touched.
+- `kw_line_is_confidential(text)` — reads one `service_lines` config row and
+  fails closed (`coalesce(..., true)`). Returns a fact about a service line,
+  never about a person.
+- `verify_invite_code(text)` — deliberately anon-callable; signup needs it
+  before a session exists. Returns only whether *some* active organisation holds
+  that code, never which one.
+- `kw_unit_label(uuid)` — returns "Company — Site" for a unit id the caller
+  already holds. No member data, and unit ids are uuids, so the output is not an
+  enumeration route.
+
+Same condition as the delegators: **if any of these grows a body that reads
+member data, it needs a gate.**
+
+So ten rows are expected in total — the four delegators above, these four, and
+`kw_dti_band` / `kw_threshold` from the pure-helper note below. **A sweep
+returning anything else is a finding.** Keep this list current: a row nobody can
+account for is how the sweep stops being trusted.
 
 **The gate list in that regex is part of the rule, not decoration.** A function
 gated by a name the regex does not know is reported as ungated, and the next

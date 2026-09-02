@@ -1,0 +1,29 @@
+# Cloudflare Workers Assets — wrangler.jsonc sets assets.directory to ".", so
+# every file in the repo is uploaded unless it is listed here.
+#
+# This file exists because the deploy step fails without it: CI runs
+# `npm clean-install` before `npx wrangler deploy`, and node_modules then
+# contains @deno/linux-x64-glibc/deno at ~92 MB — well over Cloudflare's
+# 25 MiB per-asset limit. Builds have failed since deno joined
+# devDependencies on 26 Aug 2026.
+#
+# Everything else listed here is server-side or internal and was being served
+# publicly for no reason: the SQL schema, the build notes and the test suites.
+# The site itself needs only the root .html files, assets/, css/, js/ and the
+# root kw-*.js — nothing here is referenced at runtime.
+
+node_modules/
+tests/
+migrations/
+docs/
+supabase/
+email-templates/
+
+*.sql
+*.md
+
+package.json
+package-lock.json
+deno.lock
+wrangler.jsonc
+browser_rls_test.js
