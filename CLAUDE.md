@@ -418,6 +418,36 @@ here in the same migration that creates it.**
 
 ---
 
+## Vault Logging — Always Do This
+
+At the end of **every** session, before reporting the task complete, write a
+short entry to the knowledge vault. Do this automatically — do not wait to be
+asked.
+
+| What you produced | Where it goes |
+|---|---|
+| An architectural or design decision (why a table, RPC, gate, or flow is shaped the way it is) | `/workspace/vault/keywellness-portal/decisions/` — one dated markdown file per decision |
+| An unresolved issue, risk, or gap you found but did not fix | `/workspace/vault/keywellness-portal/open-issues.md` — append a dated bullet |
+
+Keep entries short — what changed or what is wrong, and why it matters to the
+next person. A decision entry should record the option chosen *and* the ones
+rejected; an open issue should say what breaks if nobody acts on it.
+
+Then commit and push the vault. It is a **separate repository** from this one,
+so its commit is separate from the portal commit:
+
+```bash
+cd /workspace/vault
+git add .
+git commit -m "log: <short description>"
+git push
+```
+
+If a session produced neither a decision nor an open issue, say so rather than
+inventing an entry — but that is rare, and the default is to write one.
+
+---
+
 ## What NOT to Do
 
 - Do not change the Supabase URL or anon key
@@ -432,3 +462,4 @@ here in the same migration that creates it.**
 - Do not use `localStorage` for new features — use Supabase instead
 - Do not hand-write account-deletion SQL — use `admin_user_delete()` (Users tab → Delete). A one-off script misses the two tables that have no foreign key and silently orphans them
 - Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
+- Do not end a session without writing a vault entry — see Vault Logging above
