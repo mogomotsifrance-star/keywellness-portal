@@ -491,6 +491,29 @@ anybody, admin included. Verified 28 Aug 2026.
 **If any of the four ever gains a body of its own, it needs its own gate** —
 delegation is the only reason this is safe.
 
+**Four more rows are expected and are also not holes.** Each was read in full on
+2 Sep 2026:
+
+- `kw_is_over_indebted(numeric)` — pure arithmetic over `kw_dti_band()` and
+  `kw_threshold()`. Same class as those two: no table is touched.
+- `kw_line_is_confidential(text)` — reads one `service_lines` config row and
+  fails closed (`coalesce(..., true)`). Returns a fact about a service line,
+  never about a person.
+- `verify_invite_code(text)` — deliberately anon-callable; signup needs it
+  before a session exists. Returns only whether *some* active organisation holds
+  that code, never which one.
+- `kw_unit_label(uuid)` — returns "Company — Site" for a unit id the caller
+  already holds. No member data, and unit ids are uuids, so the output is not an
+  enumeration route.
+
+Same condition as the delegators: **if any of these grows a body that reads
+member data, it needs a gate.**
+
+So ten rows are expected in total — the four delegators above, these four, and
+`kw_dti_band` / `kw_threshold` from the pure-helper note below. **A sweep
+returning anything else is a finding.** Keep this list current: a row nobody can
+account for is how the sweep stops being trusted.
+
 **The gate list in that regex is part of the rule, not decoration.** A function
 gated by a name the regex does not know is reported as ungated, and the next
 person either "fixes" a false positive by revoking a grant the page needs, or
