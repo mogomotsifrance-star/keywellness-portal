@@ -27,6 +27,46 @@ git checkout dev
 git status
 ```
 
+### Check your base branch before you start
+
+A branch cut from `main` looks like a clean feature branch and is not — merging
+it into `dev` drags a `main` → `dev` backflow along with your change. Cloud
+sessions are cut from `main` by default, and a fresh clone may not list
+`origin/dev` as a ref at all until you fetch: `git branch -a` showing only
+`main` does **not** mean `dev` is missing.
+
+So, first thing in every session:
+
+```bash
+git fetch origin                            # a fresh clone may not have dev yet
+git checkout -B <your-branch> origin/dev
+```
+
+Already committed on a branch cut from the wrong base? Rebase it onto `dev`
+rather than merging:
+
+```bash
+git rebase --onto origin/dev $(git merge-base origin/dev HEAD) <your-branch>
+```
+
+Before merging anything into `dev`, confirm the branch carries only your work:
+
+```bash
+git fetch origin
+git diff --stat $(git merge-base origin/dev origin/main) origin/main  # expect empty
+git diff --stat origin/dev...<your-branch>                            # expect your files only
+```
+
+A non-empty first diff means `main` holds content `dev` lacks, and your merge
+would carry it into `dev` under the label of your change. Stop and ask before
+pushing.
+
+**Note the three dots** in the second command. `git diff origin/dev <branch>`
+with two dots compares the two tips and lists everything on `dev` that your
+branch lacks — on this repo that is 20 files of unrelated migrations, and it
+tells you nothing about your merge. Three dots diffs against the merge base,
+which is what the merge will actually apply.
+
 ---
 
 ## Tech Stack
@@ -453,6 +493,7 @@ inventing an entry — but that is rare, and the default is to write one.
 - Do not change the Supabase URL or anon key
 - Do not add npm packages or build tools — this is a static HTML site
 - Do not modify `main` branch directly
+- Do not merge into `dev` without confirming your branch was cut from `dev` — see Branch Rules
 - Do not change the colour system without updating all references
 - Do not break the existing auth flow in index.html
 - Do not reintroduce `window.location.replace()` role redirects in index.html — use `kwRouteByRole()`
