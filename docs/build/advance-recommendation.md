@@ -20,7 +20,7 @@ whose input and output are stored with the report.
 | `tests/advance-recommendation.test.mjs` | 17 unit checks on `compute.ts` — the Tumelo worked example plus six edge cases. |
 | `tests/smoke-advance.js` | 28 headless-browser checks against the real `advisor.html`, with the real compute/report modules bundled into the page. |
 | `tests/run-advance.sh` | Runs both. |
-| `tests/advance-fixture.sql`, `tests/advance-db-tests.sql`, `tests/run-advance-db.sh` | 20 database checks with RLS enforced (`set role authenticated`): owner / other advisor / member / team lead access, draft edit, finalise idempotent, final immutable, discard draft only, timeline notes, anon has no execute. Then rollback twice → zero objects. Run on local PostgreSQL 16 here; the house standard is 17 — re-run on 17 before trusting it further. |
+| `tests/advance-fixture.sql`, `tests/advance-db-tests.sql`, `tests/run-advance-db.sh` | 20 database checks with RLS enforced (`set role authenticated`): owner / other advisor / member / team lead access, draft edit, finalise idempotent, final immutable, discard draft only, timeline notes, anon has no execute. Then rollback twice → zero objects. Run on local PostgreSQL 16 here and again on 16 in the 2 Sep session; the house standard is 17 — see the note below. |
 
 ## How a report is produced
 
@@ -99,6 +99,39 @@ and the function logs. If `narrative_source` is `fallback`, the log line
 `model narrative unusable` says why (most likely the model id or the
 secret).
 
+## Landed and re-verified — 2 Sep 2026
+
+The 31 Aug commit never reached the remote (the build session's git proxy
+refused the push), so it travelled as `0001-Advisor-Report-tab-Advance-
+Recommendation-Hol.patch`. It is now applied on
+`claude/advance-recommendation-build-record-j4xq2v` with its original
+authorship intact, and every suite was re-run from a clean clone:
+
+| Suite | Result |
+|---|---|
+| `tests/advance-recommendation.test.mjs` | 17 / 17 pass — the worked example reproduces to the cent (45.43% → 42.75%, P 36,850.00, P 1,535.42, AMBER) |
+| `tests/smoke-advance.js` | 28 / 28 pass, zero JS errors |
+| `tests/run-advance-db.sh` | 20 / 20 assertions pass; rollback twice leaves zero objects; the 3 timeline notes are kept |
+
+Live project (`tarmpqxsabbehgjaonfz`) read back directly and matches what
+31 Aug claimed: `advance_recommendations` present with 19 columns; all
+five RPCs `SECURITY DEFINER` with `anon = false` and
+`authenticated = true`; Edge Function `advance-recommendation` ACTIVE at
+version 2 with `verify_jwt = true`. Nothing needed applying.
+
+The CLAUDE.md ungated-`SECURITY DEFINER` sweep was re-run against the live
+project, as the rule requires after adding a phase. None of the five new
+functions appear in it — each is revoked from `public, anon`, granted only
+to `authenticated`, and names `can_manage_advisor()` or
+`current_advisor_id()`, all three of which the sweep's regex already knows.
+
+**PostgreSQL 17 is still not covered.** The container ships 16.13 and the
+agent proxy blocks `apt.postgresql.org`, so 17 could not be installed.
+What is known: the live project runs 17.6.1 and carries the table and all
+five RPCs, so the DDL demonstrably applies on 17. What is *not* covered is
+the 20-assertion RLS suite on 17 — run `tests/run-advance-db.sh` against a
+17 cluster before treating that as done.
+
 ## Rollback
 
 1. `migrations/rollback-advance-recommendation.sql` in the SQL editor.
@@ -119,3 +152,7 @@ that generations happened.
   `suggestClassification()` should read it first.
 - Consultation date defaults to today; it could default to the latest
   completed booking.
+- First live run still outstanding (see above) — no environment that has
+  held this code has been able to reach `*.supabase.co` with an advisor
+  session.
+- `tests/run-advance-db.sh` on PostgreSQL 17.
