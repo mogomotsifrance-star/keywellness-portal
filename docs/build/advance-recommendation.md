@@ -20,7 +20,8 @@ whose input and output are stored with the report.
 | `tests/advance-recommendation.test.mjs` | 17 unit checks on `compute.ts` — the Tumelo worked example plus six edge cases. |
 | `tests/smoke-advance.js` | 28 headless-browser checks against the real `advisor.html`, with the real compute/report modules bundled into the page. |
 | `tests/run-advance.sh` | Runs both. |
-| `tests/advance-fixture.sql`, `tests/advance-db-tests.sql`, `tests/run-advance-db.sh` | 20 database checks with RLS enforced (`set role authenticated`): owner / other advisor / member / team lead access, draft edit, finalise idempotent, final immutable, discard draft only, timeline notes, anon has no execute. Then rollback twice → zero objects. Run on local PostgreSQL 16 here and again on 16 in the 2 Sep session; the house standard is 17 — see the note below. |
+| `tests/advance-fixture.sql`, `tests/advance-db-tests.sql`, `tests/run-advance-db.sh` | 20 database checks with RLS enforced (`set role authenticated`): owner / other advisor / member / team lead access, draft edit, finalise idempotent, final immutable, discard draft only, timeline notes, anon has no execute. Then rollback twice → zero objects. Run on PostgreSQL 16 and, via `run-advance-db-pg17.sh`, on 17.6. |
+| `tests/run-advance-db-pg17.sh` | Provisions a throwaway PostgreSQL 17.6 cluster and runs the suite against it, for machines that have no 17 installed. |
 
 ## How a report is produced
 
@@ -125,12 +126,17 @@ functions appear in it — each is revoked from `public, anon`, granted only
 to `authenticated`, and names `can_manage_advisor()` or
 `current_advisor_id()`, all three of which the sweep's regex already knows.
 
-**PostgreSQL 17 is still not covered.** The container ships 16.13 and the
-agent proxy blocks `apt.postgresql.org`, so 17 could not be installed.
-What is known: the live project runs 17.6.1 and carries the table and all
-five RPCs, so the DDL demonstrably applies on 17. What is *not* covered is
-the 20-assertion RLS suite on 17 — run `tests/run-advance-db.sh` against a
-17 cluster before treating that as done.
+**PostgreSQL 17 is now covered.** The container ships 16.13 and the agent
+proxy blocks `apt.postgresql.org`, so 17 cannot be installed the usual way.
+`tests/run-advance-db-pg17.sh` sidesteps that: it pulls the official 17.6
+server binaries from npm (`registry.npmjs.org` is reachable almost
+everywhere a build runs), starts a throwaway cluster, runs the suite and
+stops it. All 20 assertions pass on **17.6** — the same minor the live
+project runs — with the same clean double rollback.
+
+Use the distro package where a machine has one; the script exists for the
+machines that do not, which is most build containers. It is Linux x64 only,
+and takes `psql` from `PATH` (a 16 client against a 17 server is fine).
 
 ## Rollback
 
@@ -155,4 +161,3 @@ that generations happened.
 - First live run still outstanding (see above) — no environment that has
   held this code has been able to reach `*.supabase.co` with an advisor
   session.
-- `tests/run-advance-db.sh` on PostgreSQL 17.
