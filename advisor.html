@@ -345,6 +345,32 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .ar-fields{display:grid;grid-template-columns:140px 180px 1fr;gap:14px;align-items:end;margin:12px 0}
 .ar-fields label{display:block;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--kw-grey);margin-bottom:4px}
 .ar-fields textarea{width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-family:inherit;font-size:12.5px;min-height:38px;resize:vertical}
+/* ── Debt Rehab Plan (Report tab, third view) — INTERNAL document.
+   Reuses the .ar-* document language; only the pieces that differ live here. */
+.drp-head{font-size:10.5px;font-weight:800;letter-spacing:.14em;color:var(--kw-red);border:1px solid var(--kw-red);border-radius:4px;padding:6px 10px;margin-bottom:18px;line-height:1.5}
+.drp-refer{border-left:4px solid var(--kw-red);padding:8px 14px;margin:0 0 14px;background:#fff5f4;font-size:12.5px}
+.drp-refer b{color:var(--kw-red);letter-spacing:.06em;font-size:10.5px}
+.drp-phase{border:1px solid var(--kw-line);border-radius:8px;padding:12px 14px;margin-bottom:12px;page-break-inside:avoid}
+.drp-phase .ph{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
+.drp-phase .ph b{font-size:13px;color:var(--kw-navy)}
+.drp-phase .ph .band{font-family:'DM Mono',monospace;font-size:12px;color:var(--kw-green)}
+.drp-phase .ph small{color:var(--kw-grey);font-size:11px}
+.drp-kv3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 24px}
+.drp-kv3 h5{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--kw-grey);margin:0 0 4px}
+.drp-notes{font-size:12px;color:var(--kw-body);white-space:pre-wrap}
+.drp-notes dt{font-weight:800;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--kw-grey);margin-top:8px}
+.drp-notes dd{margin:2px 0 0}
+.drp-tl{margin:8px 0 0;padding-left:16px;font-size:12px}
+.drp-tl li{margin-bottom:4px}
+.drp-tl .who{color:var(--kw-grey);font-size:11px}
+.ar-tbl td.act{font-weight:800;letter-spacing:.04em;font-size:11px;white-space:nowrap}
+.ar-tbl td.act.RETAIN{color:var(--kw-grey)} .ar-tbl td.act.CONSOLIDATE{color:var(--kw-yellow-ink)} .ar-tbl td.act.RENEGOTIATE{color:var(--kw-red)}
+.ar-seg button.on.RETAIN{background:var(--kw-grey);color:#fff}
+.ar-seg button.on.CONSOLIDATE{background:var(--kw-yellow-tint);color:var(--kw-yellow-ink)}
+.ar-seg button.on.RENEGOTIATE{background:var(--kw-red);color:#fff}
+.drp-levers{list-style:none;padding:0;margin:8px 0 0}
+.drp-levers li{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dotted var(--kw-line);font-size:12.5px}
+.drp-levers input{accent-color:var(--kw-green)}
 @media print{
   .ar-doc{border:none;padding:0;max-width:100%;font-size:12px}
   .ar-doc::before{display:none}
@@ -355,6 +381,8 @@ tbody td{padding:10px 12px;vertical-align:middle}
   .ar-cond li.off{display:none}
   body:has(.ar-wrap) .client-hero{display:none!important}
   .ar-switch,.ar-bar{display:none!important}
+  .drp-head{margin-bottom:12px}
+  body:has(.drp-wrap) .client-hero{display:none!important}
   @page{margin:18mm 16mm}
 }
 @media (max-width:700px){.ar-kv,.ar-two,.ar-live{grid-template-columns:1fr}.ar-fields{grid-template-columns:1fr}.ar-doc{padding:24px 18px}}
@@ -3697,14 +3725,26 @@ function panelReport(c){
   // actually runs one. A private client has no programme to be advanced
   // against. advance_recommendation_create() enforces the same rule — this
   // only decides whether the advisor is shown a door they cannot open.
-  if(!(c._org && c._org.id && c._org.offersAdvances)) return panelReportPFA(c);
+  const advance = !!(c._org && c._org.id && c._org.offersAdvances);
+  // The Debt Rehab Plan is internal, so it has no organisation gate: it is
+  // offered to any client whose DSR band is strained or worse, or whose
+  // latest Advance Recommendation has Debt Rehab on (see drpOffered()).
+  const rehab = drpOffered(c);
+  if(!advance && !rehab) return panelReportPFA(c);
+  if(reportView==='advance' && !advance) reportView = 'pfa';
+  if(reportView==='rehab' && !rehab) reportView = 'pfa';
   const sw = `<div class="ar-switch no-print">
       <button class="${reportView==='pfa'?'active':''}" onclick="setReportView('pfa')">Personal Financial Assessment</button>
-      <button class="${reportView==='advance'?'active':''}" onclick="setReportView('advance')">Advance Recommendation</button>
+      ${advance ? `<button class="${reportView==='advance'?'active':''}" onclick="setReportView('advance')">Advance Recommendation</button>` : ''}
+      ${rehab ? `<button class="${reportView==='rehab'?'active':''}" onclick="setReportView('rehab')">Debt Rehab Plan</button>` : ''}
     </div>`;
   if(reportView==='advance'){
     setTimeout(()=>arInit(c), 0);
     return `<div class="ar-wrap">` + sw + `<div id="ar-root"><div class="ar-note">Loading advance recommendations…</div></div></div>`;
+  }
+  if(reportView==='rehab'){
+    setTimeout(()=>drpInit(c), 0);
+    return `<div class="ar-wrap drp-wrap">` + sw + `<div id="drp-root"><div class="ar-note">Loading debt rehab plans…</div></div></div>`;
   }
   return sw + panelReportPFA(c);
 }
@@ -4010,6 +4050,341 @@ function arRenderPrepare(){
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="arGenerate()" ${AR.busy||!pv?'disabled':''}>${AR.busy?'Generating…':'Generate Advance Recommendation'}</button>
       ${AR.list.length ? `<button class="btn btn-outline" onclick="arCancelPrepare()">Back to v${AR.list[0].version}</button>` : ''}
+      <span class="ar-note">Generation takes about 10–20 seconds. Every line stays editable until you mark it final.</span>
+    </div>
+  </div>`;
+}
+
+/* ================================================================
+   DEBT REHAB PLAN — third view on the Report tab. INTERNAL document.
+   Mirrors the AR block above one-for-one: the Edge Function
+   `debt-rehab-plan` computes every figure, action and band; the model
+   writes prose; the advisor confirms actions and levers on a Prepare
+   screen, edits the draft in place, and marks it final. Reads go through
+   debt_rehab_plan_list() — the table has no SELECT policy at all.
+   ================================================================ */
+const DRP = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], levers:[],
+              busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'', arFlag:{} };
+
+/* Offered when the client's DSR band is strained / over-indebted (the same
+   threshold_config bands the Diagnostics tab uses), or when the latest
+   Advance Recommendation has the Debt Rehab entry on. No offers_advances
+   gate: the document is internal and applies to any client in trouble. */
+function drpOffered(c){
+  const band = kwDtiBand(calcTotals(c).dti);
+  if(band==='strained' || band==='over_indebted') return true;
+  if(!(c.id in DRP.arFlag)) drpFetchArFlag(c);
+  return DRP.arFlag[c.id] === true;
+}
+async function drpFetchArFlag(c){
+  DRP.arFlag[c.id] = null;   // pending
+  try{
+    const { data } = await sb.from('advance_recommendations').select('conditions').eq('client_id', c.id).order('version', { ascending:false }).limit(1).maybeSingle();
+    const conds = (data && Array.isArray(data.conditions)) ? data.conditions : [];
+    const on = conds.some(x => x && x.key==='debt_rehab' && x.on);
+    DRP.arFlag[c.id] = on;
+    if(on && currentClientId===c.id && currentTab==='report') renderClientEditor();
+  }catch(_){ DRP.arFlag[c.id] = false; }
+}
+
+/* ── data ── */
+async function drpInit(c){
+  if(DRP.clientId !== c.id){
+    Object.assign(DRP, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], levers:[], confirm:null, error:'' });
+  }
+  await drpLoadList();
+  if(!DRP.list.length && DRP.mode !== 'prepare'){ DRP.mode = 'prepare'; }
+  if(DRP.mode === 'prepare' && !DRP.prep) await drpStartPrepare();
+  drpRender();
+}
+async function drpLoadList(){
+  const { data, error } = await sb.rpc('debt_rehab_plan_list', { p_client_id: DRP.clientId });
+  if(error){ DRP.error = 'Could not load plans: ' + error.message; DRP.list = []; return; }
+  DRP.error = ''; DRP.list = Array.isArray(data) ? data : [];
+  if(!DRP.selectedId || !DRP.list.some(r=>r.id===DRP.selectedId)) DRP.selectedId = DRP.list.length ? DRP.list[0].id : null;
+}
+function drpSelected(){ return DRP.list.find(r=>r.id===DRP.selectedId) || null; }
+async function drpInvoke(body){
+  const { data, error } = await sb.functions.invoke('debt-rehab-plan', { body });
+  if(error){
+    let msg = error.message || 'Request failed';
+    try { const j = await error.context.json(); if(j && j.message) msg = j.message; } catch(_){}
+    return { ok:false, message:msg };
+  }
+  return data || { ok:false, message:'Empty response' };
+}
+
+/* ── prepare ── */
+async function drpStartPrepare(fromReport){
+  DRP.busy = true; drpRender();
+  const seed = fromReport && fromReport.input && fromReport.input.prep ? fromReport.input.prep : {};
+  DRP.prep = {
+    extension_months: Number(seed.extension_months) || 24,
+    consultation_date: seed.consultation_date || new Date().toISOString().slice(0,10),
+    liabilities: Array.isArray(seed.liabilities) ? seed.liabilities.map(l=>({ index:l.index, action:l.action, classification:l.classification, rate_period:l.rate_period, term_months:l.term_months||null })) : null,
+    levers: Array.isArray(seed.levers) ? seed.levers.map(l=>({ asset_index:l.asset_index, on:l.on!==false })) : null
+  };
+  const first = { client_id: DRP.clientId, mode:'preview', prep: { extension_months: DRP.prep.extension_months, consultation_date: DRP.prep.consultation_date } };
+  if(DRP.prep.liabilities) first.prep.liabilities = DRP.prep.liabilities;
+  if(DRP.prep.levers) first.prep.levers = DRP.prep.levers;
+  const r = await drpInvoke(first);
+  DRP.busy = false;
+  if(!r.ok){ DRP.error = r.message; DRP.preview = null; return; }
+  DRP.suggestions = r.suggestions || [];
+  DRP.levers = r.levers || [];
+  if(!DRP.prep.liabilities) DRP.prep.liabilities = DRP.suggestions.map(s=>({ index:s.index, action:s.action, classification:s.classification, rate_period:s.rate_period, term_months:null }));
+  if(!DRP.prep.levers) DRP.prep.levers = DRP.levers.map(l=>({ asset_index:l.asset_index, on:true }));
+  DRP.preview = r.computed;
+}
+function drpPrepSet(i, key, val){
+  const row = DRP.prep.liabilities.find(l=>l.index===i); if(!row) return;
+  row[key] = key==='term_months' ? (parseInt(val,10)>0 ? parseInt(val,10) : null) : val;
+  drpPreviewLater();
+}
+function drpLeverSet(i, on){
+  const row = DRP.prep.levers.find(l=>l.asset_index===i);
+  if(row) row.on = !!on; else DRP.prep.levers.push({ asset_index:i, on:!!on });
+  drpPreviewLater();
+}
+function drpPrepField(key, val){
+  DRP.prep[key] = key==='extension_months' ? Math.max(0, Math.min(240, parseInt(val,10)||0)) : val;
+  drpPreviewLater();
+}
+function drpPreviewLater(){
+  clearTimeout(DRP.previewTimer);
+  DRP.previewTimer = setTimeout(async ()=>{
+    const r = await drpInvoke({ client_id: DRP.clientId, mode:'preview', prep: DRP.prep });
+    if(r.ok){ DRP.preview = r.computed; DRP.error=''; } else { DRP.error = r.message; }
+    drpRender();
+  }, 250);
+}
+async function drpGenerate(){
+  if(DRP.busy) return;
+  DRP.busy = true; DRP.error=''; drpRender();
+  const r = await drpInvoke({ client_id: DRP.clientId, mode:'generate', prep: DRP.prep });
+  DRP.busy = false;
+  if(!r.ok){ DRP.error = r.message; drpRender(); return; }
+  DRP.mode = 'view'; DRP.prep = null; DRP.preview = null;
+  await drpLoadList();
+  if(r.report && r.report.id) DRP.selectedId = r.report.id;
+  loadNotes(DRP.clientId);   // the generation wrote a system note to the timeline
+  drpRender();
+}
+function drpCancelPrepare(){ DRP.mode='view'; DRP.prep=null; DRP.preview=null; DRP.error=''; drpRender(); }
+
+/* ── edit / save / finalise ── */
+function drpOnInput(el){
+  const rep = drpSelected(); if(!rep || rep.status!=='draft') return;
+  const path = el.getAttribute('data-drp');
+  const text = el.innerText.replace(/\n+$/,'');
+  if(path.startsWith('act.')){ const i = +path.split('.')[1]; if(rep.actions[i]) rep.actions[i].label = text; }
+  else arSet(rep.content, path, text);
+  drpScheduleSave();
+}
+function drpToggle(i, on){
+  const rep = drpSelected(); if(!rep || rep.status!=='draft') return;
+  const a = rep.actions[i]; if(!a) return;
+  a.on = !!on;
+  drpScheduleSave(); drpRender();
+}
+function drpScheduleSave(){ clearTimeout(DRP.saveTimer); DRP.saveTimer = setTimeout(drpSaveNow, 800); }
+async function drpSaveNow(){
+  clearTimeout(DRP.saveTimer);
+  const rep = drpSelected(); if(!rep || rep.status!=='draft') return;
+  const { error } = await sb.rpc('debt_rehab_plan_update', { p_id: rep.id, p_content: rep.content, p_actions: rep.actions });
+  if(error){ showBanner('Could not save plan edits: ' + error.message); return; }
+  flashSaved();
+}
+function drpAsk(action){ DRP.confirm = DRP.confirm===action ? null : action; drpRender(); }
+async function drpFinalise(){
+  const rep = drpSelected(); if(!rep) return;
+  await drpSaveNow();
+  const { error } = await sb.rpc('debt_rehab_plan_finalise', { p_id: rep.id });
+  DRP.confirm = null;
+  if(error){ DRP.error = 'Could not mark final: ' + error.message; drpRender(); return; }
+  await drpLoadList(); loadNotes(DRP.clientId); drpRender();
+}
+async function drpDiscard(){
+  const rep = drpSelected(); if(!rep) return;
+  const { error } = await sb.rpc('debt_rehab_plan_discard', { p_id: rep.id });
+  DRP.confirm = null;
+  if(error){ DRP.error = 'Could not discard: ' + error.message; drpRender(); return; }
+  DRP.selectedId = null; await drpLoadList();
+  if(!DRP.list.length){ DRP.mode='prepare'; await drpStartPrepare(); }
+  drpRender();
+}
+async function drpRegenerate(){ DRP.mode='prepare'; DRP.confirm=null; await drpStartPrepare(drpSelected()); drpRender(); }
+function drpPick(id){ DRP.selectedId = id; DRP.confirm=null; drpRender(); }
+
+/* ── render ── */
+function drpRender(){
+  const root = document.getElementById('drp-root'); if(!root) return;
+  if(DRP.mode === 'prepare') { root.innerHTML = drpRenderPrepare(); return; }
+  const rep = drpSelected();
+  if(!rep){ root.innerHTML = drpErr() + `<div class="ar-note">No debt rehab plan yet.</div>`; return; }
+  root.innerHTML = drpErr() + drpRenderBar(rep) + drpRenderDoc(rep);
+}
+function drpErr(){ return DRP.error ? `<div class="notice notice-red no-print" style="margin-bottom:12px">${esc(DRP.error)}</div>` : ''; }
+function drpRenderBar(rep){
+  const opts = DRP.list.map(r=>`<option value="${r.id}" ${r.id===rep.id?'selected':''}>v${r.version} · ${r.status==='final'?'Final':'Draft'} · ${fmtDate(r.generated_at)}</option>`).join('');
+  const draft = rep.status==='draft';
+  const ask = DRP.confirm;
+  return `<div class="ar-bar no-print">
+    <select class="ar-select" onchange="drpPick(this.value)">${opts}</select>
+    <span class="ar-status ${rep.status}">${draft?'Draft — editable':'Final'}</span>
+    ${rep.narrative_source==='fallback' ? `<span class="ar-note">Fallback prose (model unavailable) — review wording before finalising.</span>` : ''}
+    <span class="sp"></span>
+    ${draft ? (ask==='final'
+        ? `<button class="btn btn-primary btn-sm" onclick="drpFinalise()">Confirm — mark final</button><button class="btn btn-outline btn-sm" onclick="drpAsk(null)">Keep editing</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="drpAsk('final')">Mark final</button>`) : ''}
+    ${draft ? (ask==='discard'
+        ? `<button class="btn btn-red btn-sm" onclick="drpDiscard()">Confirm discard</button>`
+        : `<button class="btn btn-outline btn-sm" onclick="drpAsk('discard')">Discard draft</button>`) : ''}
+    <button class="btn btn-outline btn-sm" onclick="drpRegenerate()">Regenerate</button>
+    <button class="btn btn-navy btn-sm" onclick="window.print()">🖨️ Print / PDF</button>
+  </div>`;
+}
+function drpEd(rep, path, tag, cls){
+  const v = arGet(rep.content, path);
+  const ed = rep.status==='draft' ? ` contenteditable="true" data-drp="${path}" oninput="drpOnInput(this)" spellcheck="true"` : '';
+  return `<${tag} class="${cls||''}"${ed}>${esc(v==null?'':v)}</${tag}>`;
+}
+function drpEdList(rep, path){
+  const arr = arGet(rep.content, path) || [];
+  return `<ul class="ar-ul">${arr.map((b,i)=>`<li${rep.status==='draft'?` contenteditable="true" data-drp="${path}.${i}" oninput="drpOnInput(this)"`:''}>${esc(b)}</li>`).join('')}</ul>`;
+}
+function drpActList(rep, group){
+  const items = rep.actions.map((a,i)=>({a,i})).filter(x=>x.a.group===group);
+  if(!items.length) return '';
+  const draft = rep.status==='draft';
+  return `<ul class="ar-cond">${items.map(({a,i})=>`
+    <li class="${a.on?'':'off'}">
+      ${draft ? `<input type="checkbox" ${a.on?'checked':''} onchange="drpToggle(${i}, this.checked)">` : `<span class="ar-glyph">${a.on?'■':'□'}</span>`}
+      <span class="txt" ${draft?`contenteditable="true" data-drp="act.${i}.label" oninput="drpOnInput(this)"`:''}>${esc(a.label)}</span>
+    </li>`).join('')}</ul>`;
+}
+function drpKv(rows){ return `<div class="ar-kv">${(rows||[]).map(r=>`<div><span>${esc(r.label)}</span><strong class="${/^-?P |%$/.test(String(r.value))?'num':''}">${esc(r.value)}</strong></div>`).join('')}</div>`; }
+function drpKvCol(title, rows){ return `<div><h5>${esc(title)}</h5>${(rows||[]).map(r=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dotted var(--kw-line);font-size:12px"><span style="color:var(--kw-grey)">${esc(r.label)}</span><strong class="num" style="font-family:'DM Mono',monospace;font-weight:500">${esc(r.value)}</strong></div>`).join('')}</div>`; }
+function drpRenderDoc(rep){
+  const m = rep.content.meta || {}, s = rep.content.sections || {};
+  const debtRows = (s.debts && s.debts.rows || []).map(r=>`<tr>
+      <td>${esc(r.debt)}</td><td>${esc(r.institution)}</td><td class="${r.rate==='Not captured'?'muted':''}">${esc(r.rate)}</td>
+      <td class="num">${esc(r.instalment)}<div class="ar-note">${esc(r.pct)} of income</div></td>
+      <td class="act ${esc(r.action)}">${esc(r.action)}</td><td>${esc(r.outcome)}</td></tr>`).join('');
+  const budRows = (s.budget && s.budget.rows || []).map(r=>`<tr><td>${esc(r.group)}</td><td class="num">${esc(r.actual)}</td><td class="num">${esc(r.pct)}</td><td class="num">${esc(r.target)}</td><td class="num">${esc(r.cut)}</td></tr>`).join('');
+  const phases = (s.phases||[]).map((p,i)=>`<div class="drp-phase">
+      <div class="ph"><b>${esc(p.title)}</b><small>${esc(p.window)}</small><span class="band">DSR ${esc(p.band)}${p.surplus?` · surplus ${esc(p.surplus)}`:''}</span></div>
+      ${drpEd(rep,`sections.phases.${i}.paragraph`,'p','ar-p')}
+      ${drpActList(rep, p.key)}
+    </div>`).join('');
+  const notes = s.consultant_notes || { diagnostics:{}, timeline:[] };
+  const diagLabels = { income:'Income', expense:'Expenses', debt:'Debt', lifestyle:'Lifestyle', general:'General' };
+  const diag = Object.keys(notes.diagnostics||{}).map(k=>`<dt>${esc(diagLabels[k]||k)}</dt><dd>${esc(notes.diagnostics[k])}</dd>`).join('');
+  const tl = (notes.timeline||[]).map(t=>`<li><span class="who">${esc(fmtDate(t.date))}${t.author?' · '+esc(t.author):''}</span><br>${esc(t.body)}</li>`).join('');
+  const gaps = s.gaps || [];
+  const refer = s.refer && s.refer.on;
+  return `<div class="ar-doc ${rep.status==='draft'?'editable':'final'}" id="drp-doc">
+    <div class="drp-head">${esc(m.print_header||'CONFIDENTIAL — INTERNAL DEBT REHAB PLAN (Key Wellness use only — not for distribution to employer or employee)')}</div>
+    <div class="ar-top"><span class="ar-conf">INTERNAL</span><span class="ar-brand"><b>Key</b> Wellness</span></div>
+    <h1 class="ar-title">Debt Rehab Plan</h1>
+    <div class="ar-sub">${esc(m.employee_name||'')} · ${esc(m.headline||'')}</div>
+    ${refer ? `<div class="drp-refer"><b>HEADLINE ACTION — REFER</b><div>${(s.refer.reasons||[]).map(esc).join(' ')} Refer to formal debt counselling; the plan below still applies in the meantime.</div></div>` : ''}
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">01</span><span class="t">Client &amp; Enrollment</span></div>
+      ${drpKv(s.enrollment && s.enrollment.rows)}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">02</span><span class="t">Root Causes</span></div>
+      ${drpEdList(rep,'sections.root_causes.bullets')}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">03</span><span class="t">Financial Position Snapshot</span></div>
+      <div class="drp-kv3">${drpKvCol('Income', s.snapshot&&s.snapshot.income_rows)}${drpKvCol('Debt', s.snapshot&&s.snapshot.debt_rows)}${drpKvCol('Net worth (incl. savings)', s.snapshot&&s.snapshot.net_worth_rows)}</div>
+      <div class="ar-note" style="margin-top:8px">Budget: ${esc(s.snapshot&&s.snapshot.budget_status||'')}</div></section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">04</span><span class="t">Debt-by-Debt Actions</span></div>
+      <table class="ar-tbl"><thead><tr><th>Debt</th><th>Institution</th><th>Rate</th><th class="num">Current instalment</th><th>Action</th><th>Target instalment / outcome</th></tr></thead><tbody>${debtRows}</tbody></table>
+      ${s.debts && s.debts.consolidation ? `<p class="ar-p ar-note">${esc(s.debts.consolidation)}</p>` : ''}
+      ${drpEdList(rep,'sections.debts.lines')}
+      ${gaps.length ? `<div class="ar-gaps"><b>DATA GAPS</b> — ${gaps.map(esc).join('; ')}.</div>` : ''}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">05</span><span class="t">Budget Correction</span></div>
+      ${budRows ? `<table class="ar-tbl"><thead><tr><th>Group</th><th class="num">Actual</th><th class="num">% of income</th><th class="num">Target</th><th class="num">Pula cut</th></tr></thead><tbody>${budRows}</tbody></table>` : ''}
+      <p class="ar-p"><strong>${esc(s.budget&&s.budget.shortfall_line||'')}</strong></p>
+      ${s.budget && s.budget.cash_gap_line ? `<p class="ar-p">${esc(s.budget.cash_gap_line)}</p>` : ''}
+      ${s.budget && s.budget.motshelo_line ? `<p class="ar-p ar-note">${esc(s.budget.motshelo_line)}</p>` : ''}
+      ${drpEd(rep,'sections.budget.paragraph','p','ar-p')}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">06</span><span class="t">Income &amp; Asset Levers</span></div>
+      ${drpEdList(rep,'sections.levers.bullets')}
+      ${(s.levers&&s.levers.concentration||[]).length ? `<p class="ar-p ar-note">${(s.levers.concentration).map(esc).join('. ')}.</p>` : ''}
+      ${drpActList(rep,'lever')}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">07</span><span class="t">Phased Recovery Plan</span></div>${phases}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">08</span><span class="t">Risk Monitoring — Review Triggers</span></div>
+      ${drpActList(rep,'trigger')}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">09</span><span class="t">Next Scheduled Review</span></div>
+      <div class="ar-dec">${esc(s.review&&s.review.date||'')}</div>
+      ${drpEd(rep,'sections.review.closing','p','ar-p ar-close')}</section>
+
+    <section class="ar-sec"><div class="ar-h"><span class="n">10</span><span class="t">Consultant Notes</span><small class="ar-note">${esc(m.consultant||'')} — carried verbatim from the record</small></div>
+      ${diag || tl ? `<dl class="drp-notes">${diag}</dl>${tl?`<ul class="drp-tl">${tl}</ul>`:''}` : `<div class="ar-note">No consultant notes on the record.</div>`}</section>
+
+    <div class="ar-confid">${esc(m.print_header||'')}</div>
+    <div class="ar-foot"><span>v${rep.version} · ${rep.status==='final'?'final '+fmtDate(rep.finalised_at):'draft'} · generated ${fmtDate(rep.generated_at)} · consultant ${esc(m.consultant||'')}</span><span>Key Wellness (Pty) Ltd — internal</span></div>
+  </div>`;
+}
+
+function drpRenderPrepare(){
+  const p = DRP.prep, pv = DRP.preview;
+  if(!p) return drpErr() + `<div class="ar-note">Preparing…</div>`;
+  const sug = Object.fromEntries(DRP.suggestions.map(s=>[s.index, s]));
+  const liabs = (pv ? pv.liabilities : []);
+  const seg = (i, cur) => ['RETAIN','CONSOLIDATE','RENEGOTIATE'].map(a=>`<button class="${a} ${cur===a?'on':''}" onclick="drpPrepSet(${i},'action','${a}')">${a==='RETAIN'?'Retain':a==='CONSOLIDATE'?'Consolidate':'Renegotiate'}</button>`).join('');
+  const rows = liabs.map(l=>{
+    const pr = p.liabilities.find(x=>x.index===l.index) || {};
+    const hint = sug[l.index] ? sug[l.index].reason : '';
+    const needTerm = l.action==='RENEGOTIATE' && l.renegotiation && l.renegotiation.term_source!=='derived';
+    return `<tr>
+      <td><strong>${esc(l.item)}</strong><div class="ar-note">${esc(l.institution)}</div></td>
+      <td class="num">${l.rate_value==null ? '<span class="muted">Not captured</span>' : esc(String(l.rate_value))+'%'}</td>
+      <td>${l.rate_value==null ? '<span class="ar-note">—</span>' : `<select onchange="drpPrepSet(${l.index},'rate_period',this.value)">
+            <option value="annual" ${pr.rate_period!=='monthly'?'selected':''}>per year</option>
+            <option value="monthly" ${pr.rate_period==='monthly'?'selected':''}>per month</option></select>`}</td>
+      <td><span class="ar-seg">${seg(l.index, l.action)}</span><div class="ar-note">${esc(hint)}</div>
+          ${needTerm ? `<div class="ar-note" style="margin-top:4px">Remaining term (months): <input type="number" min="1" max="600" style="width:70px" value="${pr.term_months||''}" onchange="drpPrepSet(${l.index},'term_months',this.value)"> — cannot be derived from the record</div>` : ''}</td>
+      <td class="num">${fmt(l.instalment)}<div class="ar-note">${l.instalment_pct_income==null?'—':l.instalment_pct_income.toFixed(2)+'% of income'}</div></td>
+      <td class="num">${fmt(l.balance||0)}${l.balance==null?'<div class="ar-note">not captured</div>':''}</td>
+      <td class="ar-note">${esc(l.outcome)}</td>
+    </tr>`;
+  }).join('');
+  const levers = DRP.levers.map(l=>{
+    const pr = p.levers.find(x=>x.asset_index===l.asset_index); const on = pr ? pr.on : true;
+    return `<li><input type="checkbox" ${on?'checked':''} onchange="drpLeverSet(${l.asset_index}, this.checked)"> <strong>${esc(l.name)}</strong> <span class="ar-note">${fmt(l.value)} · personal use, no income — untick if it is off-limits (e.g. the family home)</span></li>`;
+  }).join('');
+  const band = (lo,hi) => lo==null&&hi==null ? '—' : (lo!=null&&hi!=null&&lo!==hi) ? `${lo.toFixed(2)}% – ${hi.toFixed(2)}%` : `${(hi==null?lo:hi).toFixed(2)}%`;
+  const live = pv ? `<div class="ar-live">
+      <div><div class="l">DSR now</div><div class="v ${pv.tier}">${pv.dsr==null?'—':pv.dsr.toFixed(2)+'%'}</div><div class="ar-note">norm ${pv.lending_norm_pct}%</div></div>
+      <div><div class="l">Phase 1 band</div><div class="v">${band(pv.phases[0].dsr_low, pv.phases[0].dsr_high)}</div></div>
+      <div><div class="l">Phase 2 band</div><div class="v">${band(pv.phases[1].dsr_low, pv.phases[1].dsr_high)}</div>${pv.phases[1].surplus_after!=null?`<div class="ar-note">surplus ${fmt(pv.phases[1].surplus_after)}</div>`:''}</div>
+      <div><div class="l">Headline</div><div class="v ${pv.refer.on?'RED':''}" style="font-size:12.5px">${esc(pv.headline)}</div>${pv.budget.shortfall!=null&&pv.budget.shortfall>0?`<div class="ar-note">cash gap incl. debt ${fmt(pv.budget.cash_gap||pv.budget.shortfall)}</div>`:''}</div>
+    </div>` : '';
+  return `${drpErr()}
+  <div class="card ar-prep drp-prep">
+    <div class="card-title">Prepare the Debt Rehab Plan</div>
+    <div class="card-hint">Confirm the action on each debt. <strong>Consolidate</strong> is suggested for informal / high-cost debt, <strong>Renegotiate</strong> for a formal facility whose instalment alone is above the lending norm, <strong>Retain</strong> for the rest. The plan cross-references the client's latest Advance Recommendation for any consolidation amount; it never invents one.</div>
+    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Action</th><th class="num">Instalment</th><th class="num">Balance</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table></div>`
+                   : `<div class="ar-note">No liabilities captured for this client. Add them on the Liabilities tab first.</div>`}
+    ${DRP.levers.length ? `<div style="margin-top:14px"><label class="ar-note" style="font-weight:800;text-transform:uppercase;letter-spacing:.06em">Asset levers</label><ul class="drp-levers">${levers}</ul></div>` : `<div class="ar-note" style="margin-top:12px">No personal-use asset without income is captured, so there is no asset lever to consider.</div>`}
+    <div class="ar-fields" style="grid-template-columns:180px 180px 1fr">
+      <div><label>Term extension for renegotiation (months)</label><input type="number" min="0" max="240" value="${p.extension_months}" onchange="drpPrepField('extension_months', this.value)"></div>
+      <div><label>Consultation date</label><input type="date" value="${esc(p.consultation_date)}" onchange="drpPrepField('consultation_date', this.value)"></div>
+      <div class="ar-note" style="align-self:center">Root causes and prose come from the Diagnostics notes and the timeline; names never leave the portal.</div>
+    </div>
+    ${live}
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="drpGenerate()" ${DRP.busy||!pv?'disabled':''}>${DRP.busy?'Generating…':'Generate Debt Rehab Plan'}</button>
+      ${DRP.list.length ? `<button class="btn btn-outline" onclick="drpCancelPrepare()">Back to v${DRP.list[0].version}</button>` : ''}
       <span class="ar-note">Generation takes about 10–20 seconds. Every line stays editable until you mark it final.</span>
     </div>
   </div>`;

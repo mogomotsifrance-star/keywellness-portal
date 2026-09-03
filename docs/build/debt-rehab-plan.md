@@ -1,10 +1,12 @@
 # Debt Rehab Plan — build record
 
-**Status: PLAN, 3 Sep 2026 — awaiting approval. Nothing below has been built.**
+**Status: BUILT, 3 Sep 2026 — files in the repo, nothing applied live.** The plan
+in §0–§7 was approved by Tshenolo on 3 Sep on the basis "go with the
+recommendations; the prompt's author amends later". §8 records the decisions
+taken, §9 the build and its verification, §10 the deploy note, §11 a security
+finding made on the way that affects the live project today.
 Governing document: `docs/build/debt-rehab-plan-spec.md` (spec v2). Architecture
-mirrored from `docs/build/advance-recommendation.md`. This file becomes the build
-record once the plan is approved and the work lands; the plan section stays at the
-top as the record of what was agreed.
+mirrored from `docs/build/advance-recommendation.md`.
 
 ---
 
@@ -393,3 +395,113 @@ Q3 quota pool (separate 40/day recommended) · Q4 `_list` RPC with no SELECT pol
 vs read from `threshold_config` at request time · Q6 `conditions` → `actions`
 rename · Q7 whether a declined AR's amount should appear at all · Q8 print the
 all-in cash gap beside the budget shortfall.
+
+---
+
+## 8. Decisions taken (every recommendation adopted; amend by editing the code that carries it)
+
+| Q | Decision | Where it lives |
+|---|---|---|
+| Q1 | Olorato fixture: FNB balance P 210,000.00 (from the spec's net worth), rate **blank** as on live; the amortised path is pinned by a synthetic 12% variant | `tests/debt-rehab-plan.test.mjs` |
+| Q2 | Phase bands are the computed scenarios: Phase 1 44.72–52.51%, Phase 2 35.00–42.79%. Spec §7's "high-30s" is superseded; the spec file is left as received | `compute-rehab.ts` §4.6 rules |
+| Q3 | Separate quota: 40 plans per advisor per Gaborone day, counted on `debt_rehab_plans` only | `debt_rehab_plan_can_generate()` |
+| Q4 | **No SELECT policy**; the only read path is `debt_rehab_plan_list()` | `supabase_debt_rehab_plan.sql` |
+| Q5 | The 35% line is read from `threshold_config.indicator.dti` (manageable band's `max`) by the Edge Function and passed into compute; `LENDING_NORM_PCT = 35` in `_shared/kw-finance.ts` is the fallback. Stored in `computed.lending_norm_pct` | `index.ts` §3a |
+| Q6 | `conditions` → `actions` | table, RPCs, `advisor.html` |
+| Q7 | A declined AR's amount prints for reference with its decision; only a "Proceed…" AR is a consolidation vehicle | `compute-rehab.ts` §4.3 |
+| Q8 | Both figures print: budget shortfall and the all-in cash gap once debt service is counted | `report-rehab.ts` section 5 |
+| Output | This file keeps the plan and carries the record beneath it | — |
+
+---
+
+## 9. Build record
+
+### Files
+
+| File | What it is |
+|---|---|
+| `supabase/functions/_shared/kw-finance.ts` | **New.** The shared helpers listed in §3, moved verbatim, plus `totalIncome()`, `LENDING_NORM_PCT`, `EXPENSE_GROUP_IDS` and the asset/saving types. |
+| `supabase/functions/advance-recommendation/compute.ts` | Slimmed; imports and **re-exports** every moved name. 120 lines removed, 15 added, no behaviour change. |
+| `supabase/functions/debt-rehab-plan/compute-rehab.ts` | Pure compute: actions, renegotiation target band (annuity arithmetic), consolidation vehicle, budget cuts + shortfall + all-in cash gap, levers, phase bands, REFER, triggers, gaps, checkables. |
+| `supabase/functions/debt-rehab-plan/report-rehab.ts` | Content skeleton (ten sections), fallback narrative, `checkableActions()`. |
+| `supabase/functions/debt-rehab-plan/index.ts` | Edge Function. Reads the client, `threshold_config`, the latest AR and `advisor_client_notes()` **as the caller**; `preview` / `generate`. |
+| `supabase_debt_rehab_plan.sql` · `migrations/rollback-debt-rehab-plan.sql` | One table, six RPCs, zero policies. Gates written `is distinct from true` (see §11). |
+| `supabase_fix_can_manage_advisor_null.sql` · `migrations/rollback-fix-can-manage-advisor-null.sql` | **Separate, independent** one-function fix for §11. Apply first. |
+| `advisor.html` | Third switch option; `DRP` state + `drp*` functions; `.drp-*` CSS on top of `.ar-*`. Fork check: exactly two removed lines, both inside `panelReport()` — the `offers_advances` early return (now feeds an `advance` flag) and the Advance Recommendation button (now conditional). `panelReportPFA()` and the whole `AR` block untouched. |
+| `tests/debt-rehab-plan.test.mjs` | 28 unit checks. |
+| `tests/drp-entry.ts` · `tests/smoke-rehab.js` · `tests/run-rehab.sh` | 33 browser checks against the real `advisor.html` with the real modules bundled in. |
+| `tests/rehab-fixture-extra.sql` · `tests/rehab-db-tests.sql` · `tests/run-rehab-db.sh` | 34 RLS-enforced assertions + double migration + double rollback. |
+| `tests/can-manage-fix-tests.sql` · `tests/run-can-manage-fix.sh` | Proves the §11 hole, the fix, and that rollback restores the original. |
+| `tests/run-advance-db-pg17.sh` | Gains `SUITE=` so any suite runs on the throwaway 17.6 cluster. |
+| `tests/smoke-advance.js` | Check 1 no longer asserts exactly two switch buttons (Tumelo's DSR now also offers the rehab view). |
+| `package.json` · `.gitignore` | `test:rehab`; the two esbuild bundles ignored. |
+
+### Verified on this machine (Node 22.22, Chromium via Playwright, PostgreSQL 16.13 and 17.6)
+
+| Suite | Result |
+|---|---|
+| AR unit — before and after the extraction | 17 / 17 |
+| AR browser — after the extraction and the switch change | 32 / 32, zero JS errors |
+| AR database, 16.13 and 17.6 | 22 pass, rollback clean (3 timeline notes kept) |
+| Rehab unit | 28 / 28 — Olorato to the cent (§4.10), 12% variant, budget not captured, no informal debt, three lenders → REFER, savings settles a debt, unparseable rate, exactly-35% edge, advisor override, unreachable renegotiation, motshelo flag, declined AR |
+| Rehab browser | 33 / 33, zero JS errors — offer rule three ways, Prepare, live recompute, lever opt-out, generate, ten sections, edit, toggle, print, two-step finalise, immutable, regenerate seeded from v1, error path |
+| Rehab database, 16.13 and 17.6 | 34 pass: zero policies; owner/team lead/admin read via RPC; owner's direct select is **zero rows**; another advisor, the member and an HR/employer user all refused; final immutable; discard draft-only; anon no execute; rollback twice → zero functions, tables, policies |
+| `can_manage_advisor` fix, 16.13 and 17.6 | hole reproduced → fix applied twice → member refused → rollback twice → hole back |
+| Sweep (CLAUDE.md ungated `SECURITY DEFINER` query) on the local migrated DB | zero rows; all six `debt_rehab_plan_*` are `anon = false, authenticated = true` |
+| `deno check` on the five pure modules | clean. The two `index.ts` files cannot be checked here: the proxy refuses `deno.land` / `esm.sh`. |
+
+### Not verified from this environment
+
+`*.supabase.co` and the Anthropic API are unreachable, so the deployed function
+has not been called end-to-end. **First live run:** sign in on the dev site as an
+advisor, open Olorato Maliko → Report → Debt Rehab Plan → Generate, then
+`select version, status, narrative_source, model, input_tokens, output_tokens from debt_rehab_plans`
+and the function logs. `narrative_source = 'fallback'` means the log line
+`model narrative unusable` says why. Note the sibling session's finding that
+`advance_recommendations` is empty on live: until an AR is generated and
+finalised for Olorato, her plan takes the "size a consolidation via an AR" path.
+
+---
+
+## 10. Deploy note (in this order; nothing was applied by the build session)
+
+1. `supabase_fix_can_manage_advisor_null.sql` in the SQL editor — **do this today
+   regardless of the rest**, see §11.
+2. `supabase_debt_rehab_plan.sql` in the SQL editor. Verify:
+   `select proname from pg_proc where proname like 'debt_rehab_plan_%'` → 6 rows;
+   `select policyname from pg_policies where tablename='debt_rehab_plans'` → 0 rows.
+3. `supabase functions deploy debt-rehab-plan` **and**
+   `supabase functions deploy advance-recommendation` — the AR now imports
+   `_shared/kw-finance.ts`, so it must be redeployed with the shared file or its
+   next cold start fails to resolve the import. Both use the existing
+   `ANTHROPIC_API_KEY`.
+4. Merge the branch into `dev`; confirm the Cloudflare build goes green
+   (Deployments → Build history) before testing.
+5. Re-run the CLAUDE.md sweep against the live project; expect the ten known rows.
+
+Rollback: `migrations/rollback-debt-rehab-plan.sql`, `supabase functions delete
+debt-rehab-plan`, revert the `advisor.html` commit. The `_shared` extraction is
+safe to leave in place. Roll back the gate fix only if it broke something —
+its rollback reopens §11.
+
+---
+
+## 11. Security finding — `can_manage_advisor()` returns NULL for non-advisors (live today)
+
+Found by the rehab RLS suite ("member: list is refused — it was allowed").
+`can_manage_advisor(p)` is `p is not null and (p = current_advisor_id() or
+is_team_lead() or is_admin())`. For a caller with no `advisors` row —
+a member, an HR user, any signed-in non-advisor — `current_advisor_id()` is
+NULL, `p = NULL` is NULL, and the whole expression is **NULL, not FALSE**.
+Policies treat NULL as false, so the SELECT policies hold. But seventeen RPCs
+gate with `if not can_manage_advisor(v_owner) then raise`, and `if not NULL`
+does not raise. So today a member who knows their own `advisor_clients.id`
+(readable under `advisor_clients_member_read`) can call
+`advisor_client_notes()` and read the advisor's private notes on themselves,
+call `advisor_note_add()`, and call `advance_recommendation_create()` in their
+own name. `tests/run-can-manage-fix.sh` reproduces the last of these.
+
+Fix: `supabase_fix_can_manage_advisor_null.sql` wraps the gate in
+`coalesce(…, false)`. One function, same signature and grants, every call site
+covered. The rehab RPCs are additionally written `is distinct from true` so
+they are safe with or without it. Recorded in the vault open issues.
