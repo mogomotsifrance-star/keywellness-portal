@@ -645,6 +645,38 @@ tbody td{padding:10px 12px;vertical-align:middle}
 
 
 <!-- ══ REASSIGN CLIENT MODAL ══ -->
+<div class="modal-overlay" id="orgAssignModal">
+  <div class="modal-box" style="max-width:460px">
+    <div class="modal-header">
+      <h3>Organisation</h3>
+      <button class="modal-close" onclick="closeModal('orgAssignModal')">✕</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:16px">
+      Which company programme <strong id="oa-name"></strong> is seen under.
+      This is what company reporting counts them in, and what decides whether
+      employer-specific reports apply to them — the Employer field on this tab
+      is a typed note, not the link.
+    </p>
+    <div class="field" style="margin-bottom:14px">
+      <label>Organisation</label>
+      <select id="oa-org" onchange="oaOrgChanged()"></select>
+    </div>
+    <div class="field" style="margin-bottom:14px" id="oa-unit-wrap" hidden>
+      <label>Company / Site</label>
+      <select id="oa-unit"></select>
+    </div>
+    <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;
+                  color:var(--text);margin-bottom:20px;cursor:pointer">
+      <input type="checkbox" id="oa-noorg" onchange="oaNoOrgChanged()" style="margin-top:2px">
+      <span>Private client — not on a company programme</span>
+    </label>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-outline" onclick="closeModal('orgAssignModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmOrgAssign(this)">Save organisation</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="reassignModal">
   <div class="modal-box" style="max-width:460px">
     <div class="modal-header">
@@ -984,6 +1016,11 @@ function normalizeClient(row){
   c._org = { id:        row.org_id || null,
              name:      row.org_name || null,
              unitLabel: row.unit_label || null,
+             unitId:    row.org_unit_id || null,
+             // Whether this client's employer runs a payroll advance
+             // programme. Straight off advisor_clients_list(); decides
+             // whether the Report tab offers the Advance Recommendation.
+             offersAdvances: !!row.offers_advances,
              noOrg:     !!row.no_org };
   c._owner = { advisorId: row.advisor_id || null,
                advisorName: row.advisor_name || null,
@@ -1747,6 +1784,103 @@ function ncNoOrgChanged(){
   }
 }
 
+/* ── Organisation on an existing client ────────────────────────
+   The picker at client creation (nc-org) was the only place this could
+   ever be set, so every client added before it existed — and every one
+   whose organisation was answered only by typing a company name into
+   Employer — reads as a private client. That is not cosmetic: company
+   reporting does not count them, and the Advance Recommendation is gated
+   on the link, not on the typed text.
+
+   Same options and rules as creation: advisor_org_options(), an
+   organisation or "private client" said out loud, a site only where the
+   company has them. The write goes straight to advisor_clients — the
+   advisor_clients_own_update policy already allows the owning advisor,
+   and the advisor_clients_org_required check constraint still refuses a
+   row that answers neither. ── */
+let _orgAssignId = null;
+
+function orgAssignField(c){
+  const o = c._org || {};
+  const current = o.noOrg ? 'Private client — not on a company programme'
+                : o.id    ? (esc(o.name || 'Organisation') + (o.unitLabel ? ' · ' + esc(o.unitLabel) : ''))
+                          : 'Not set';
+  const warn = (!o.id && !o.noOrg)
+    ? '<div style="font-size:12px;color:var(--orange);margin-top:6px">No organisation and not marked private — company reporting will not count them.</div>'
+    : '';
+  return `
+    <div class="field">
+      <label>Organisation <span style="font-weight:600;color:var(--muted)">— which company programme this client is seen under</span></label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;padding:9px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--cream-dark);font-size:12.5px">${current}</div>
+        <button class="btn btn-outline btn-sm" onclick="openOrgAssign('${c.id}')">Change</button>
+      </div>
+      ${warn}
+    </div>`;
+}
+
+async function openOrgAssign(clientId){
+  _orgAssignId = clientId;
+  const c = clients.find(x => x.id === clientId);
+  document.getElementById('oa-name').textContent = c ? fullName(c) : 'this client';
+  const opts = await loadOrgOptions();
+  const cur = (c && c._org) || {};
+  document.getElementById('oa-noorg').checked = !!cur.noOrg;
+  document.getElementById('oa-org').innerHTML =
+    '<option value="">Select…</option>' +
+    opts.map(o => `<option value="${o.org_id}"${o.org_id===cur.id?' selected':''}>${esc(o.name)}</option>`).join('');
+  oaNoOrgChanged();
+  document.getElementById('orgAssignModal').classList.add('open');
+}
+
+function oaOrgChanged(){
+  const orgId = document.getElementById('oa-org').value;
+  const org   = (ORG_OPTIONS || []).find(o => o.org_id === orgId);
+  const units = (org && org.units) || [];
+  const wrap  = document.getElementById('oa-unit-wrap');
+  const sel   = document.getElementById('oa-unit');
+  if(!units.length){ wrap.hidden = true; sel.innerHTML = ''; return; }
+  const c = clients.find(x => x.id === _orgAssignId);
+  const cur = (c && c._org && c._org.unitId) || '';
+  sel.innerHTML = '<option value="">Select…</option>' +
+    units.map(u => `<option value="${u.id}"${u.id===cur?' selected':''}>${esc(u.label)}</option>`).join('');
+  wrap.hidden = false;
+}
+
+function oaNoOrgChanged(){
+  const off = document.getElementById('oa-noorg').checked;
+  document.getElementById('oa-org').disabled = off;
+  const wrap = document.getElementById('oa-unit-wrap');
+  if(off){ wrap.hidden = true; } else { oaOrgChanged(); }
+}
+
+async function confirmOrgAssign(btn){
+  const noOrg = document.getElementById('oa-noorg').checked;
+  const orgId = document.getElementById('oa-org').value || null;
+  const unitId = document.getElementById('oa-unit-wrap').hidden
+               ? null : (document.getElementById('oa-unit').value || null);
+  if(!noOrg && !orgId){ showBanner('Pick an organisation, or mark them a private client.'); return; }
+  if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+  const { error } = await sb.from('advisor_clients')
+    .update({ org_id: noOrg ? null : orgId,
+              org_unit_id: noOrg ? null : unitId,
+              no_org: noOrg })
+    .eq('id', _orgAssignId);
+  if(btn){ btn.disabled = false; btn.textContent = 'Save organisation'; }
+  if(error){
+    showBanner(error.code === '23514'
+      ? 'That client needs an organisation, or to be marked as a private client.'
+      : 'Could not save the organisation: ' + error.message);
+    return;
+  }
+  closeModal('orgAssignModal');
+  const id = _orgAssignId;
+  await loadClients();
+  if(clients.some(x => x.id === id)) openClient(id); else go('clients');
+  showBanner('Organisation updated.');
+}
+
+
 // The owner list is the active roster plus, always, the lead themselves —
 // so "file this under me" is reachable from every scope, including "All
 // clients", where it used to be the one thing the form could not express.
@@ -2325,6 +2459,7 @@ function panelPersonal(c){
         <div class="field"><label>Name</label><input type="text" value="${esc(p.name)}" oninput="saveField('personal.name', this.value)"></div>
         <div class="field"><label>Surname</label><input type="text" value="${esc(p.surname)}" oninput="saveField('personal.surname', this.value)"></div>
         <div class="field"><label>Employer${fromOrg?' <span style="font-weight:600;color:var(--green)">· from their organisation</span>':''}</label><input type="text" value="${esc(p.employer)}" placeholder="Company name" oninput="saveField('personal.employer', this.value)"></div>
+        ${orgAssignField(c)}
         <div class="field">
           <label>Email ${c._link&&c._link.isMember?'<span style="color:var(--green);font-weight:700">· linked to portal</span>':'<span style="font-weight:600;color:var(--muted)">· links to their portal account</span>'}</label>
           <input type="email" value="${esc(c.email)}" placeholder="name@example.com" oninput="saveField('email', this.value)">
@@ -3557,6 +3692,12 @@ const AR = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, pr
              suggestions:[], busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'' };
 
 function panelReport(c){
+  // The Advance Recommendation names an employer's advance programme and a
+  // payroll deduction, so it is offered only where the client's organisation
+  // actually runs one. A private client has no programme to be advanced
+  // against. advance_recommendation_create() enforces the same rule — this
+  // only decides whether the advisor is shown a door they cannot open.
+  if(!(c._org && c._org.id && c._org.offersAdvances)) return panelReportPFA(c);
   const sw = `<div class="ar-switch no-print">
       <button class="${reportView==='pfa'?'active':''}" onclick="setReportView('pfa')">Personal Financial Assessment</button>
       <button class="${reportView==='advance'?'active':''}" onclick="setReportView('advance')">Advance Recommendation</button>

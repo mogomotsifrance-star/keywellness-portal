@@ -311,14 +311,19 @@ export function compute(a: Assessment, prep: Prep): Computed {
   }
 
   // Default conditions — DEFAULT SUGGESTIONS, every one removable in the UI.
+  // The two condition labels below name the employer: one says the employer
+  // does not settle third-party creditors, the other holds their HR letters.
+  // Both said "Hollard" literally, which is wrong the moment a second
+  // employer is switched on in organizations.offers_advances.
+  const employerName = String(personal.employer || "").trim() || "the employer";
   const approving = tier !== "RED" || decision === "Proceed Only Under Prerequisites";
   const conditions = approving ? [
     { key: "proof_of_payment", on: true,
-      label: "Advance is paid to the employee, not to creditors directly — Hollard does not settle third-party creditors on the employee's behalf. Employee must submit proof of payment for the informal debts being settled to Key Wellness before the funds are treated as settled." },
+      label: `Advance is paid to the employee, not to creditors directly — ${employerName} does not settle third-party creditors on the employee's behalf. Employee must submit proof of payment for the informal debts being settled to Key Wellness before the funds are treated as settled.` },
     { key: "debt_rehab", on: tier !== "GREEN" || hasMonthly,
       label: "Employee is automatically enrolled in the Key Wellness Debt Rehab Programme." },
     { key: "hr_letter_hold", on: tier === "RED" || informal.length >= REPEATED_BORROWING_COUNT,
-      label: "Hollard HR must not issue an employment confirmation letter for this employee without checking with Key Wellness first." },
+      label: `${employerName} HR must not issue an employment confirmation letter for this employee without checking with Key Wellness first.` },
   ] : [];
   const rehabOn = conditions.some((c) => c.key === "debt_rehab" && c.on);
   const support_plan = [

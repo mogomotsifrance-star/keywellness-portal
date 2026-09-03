@@ -27,10 +27,20 @@ create table advisors (
   id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), email text not null,
   full_name text not null, is_active boolean not null default true, is_team_lead boolean not null default false
 );
+-- Organisations, because the advance gate reads offers_advances. Only the
+-- columns the gate touches; the real table is much wider.
+create table organizations (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  is_active boolean not null default true,
+  offers_advances boolean not null default false
+);
 create table advisor_clients (
   id uuid primary key default gen_random_uuid(),
   advisor_id uuid not null references advisors(id) on delete cascade,
   member_user_id uuid null references auth.users(id),
+  org_id uuid null references organizations(id),
+  no_org boolean not null default false,
   first_name text not null, last_name text, assessment jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
 );
@@ -75,5 +85,12 @@ insert into advisors (id, user_id, email, full_name, is_team_lead) values
   ('b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'france@example.test', 'France Mogomotsi', false),
   ('b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'kealeboga@example.test', 'Kealeboga Gaseitsiwe', false),
   ('b0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000003', 'lead@example.test', 'Team Lead', true);
-insert into advisor_clients (id, advisor_id, member_user_id, first_name, last_name, assessment) values
-  ('c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000004', 'Tumelo', 'Kgamayane', '{}'::jsonb);
+insert into organizations (id, name, offers_advances) values
+  ('d0000000-0000-4000-8000-000000000001', 'Hollard', true),      -- runs an advance programme
+  ('d0000000-0000-4000-8000-000000000002', 'Debswana', false);    -- does not
+insert into advisor_clients (id, advisor_id, member_user_id, org_id, no_org, first_name, last_name, assessment) values
+  ('c0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000004', 'd0000000-0000-4000-8000-000000000001', false, 'Tumelo', 'Kgamayane', '{}'::jsonb),
+  -- Same advisor, an organisation with no advance programme.
+  ('c0000000-0000-4000-8000-000000000002', 'b0000000-0000-4000-8000-000000000001', null, 'd0000000-0000-4000-8000-000000000002', false, 'Neo', 'Motlhabane', '{}'::jsonb),
+  -- Same advisor, a private client on no company programme at all.
+  ('c0000000-0000-4000-8000-000000000003', 'b0000000-0000-4000-8000-000000000001', null, null, true, 'Boitumelo', 'Sekgoma', '{}'::jsonb);

@@ -1,7 +1,9 @@
 // Key Wellness — advance-recommendation Edge Function
 // ============================================================
 // Generates an Advance Recommendation Report for one advisor-portal
-// client (Hollard Employee Financial Wellness Program).
+// client, on the employer's own advance programme. Which employers have
+// one is organizations.offers_advances; the gate is inside
+// advance_recommendation_create(), not here and not in the UI.
 //
 // Deploy:  supabase functions deploy advance-recommendation
 // Needs:   supabase_advance_recommendation.sql applied first, and the
@@ -46,7 +48,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { compute, fmtP, fmtPct, liveLiabilities, suggestClassification } from "./compute.ts";
 import type { Assessment, Computed, Prep } from "./compute.ts";
-import { buildContent, fallbackNarrative, MAX_BULLETS, PROGRAMME } from "./report.ts";
+import { buildContent, fallbackNarrative, MAX_BULLETS, programmeFor, EMPLOYER_UNKNOWN } from "./report.ts";
 import type { Narrative } from "./report.ts";
 
 // ── Config ──────────────────────────────────────────────────────
@@ -75,7 +77,7 @@ function corsHeaders(req: Request): Record<string, string> {
 // Short on purpose: the model is not asked to reason about credit, only
 // to explain figures it is handed. Everything it may say is anchored to
 // the JSON it receives.
-const SYSTEM_PROMPT = `You write the prose for an "Advance Recommendation Report" produced by a Key Wellness (Pty) Ltd Financial Wellness Consultant for the ${PROGRAMME}. You receive a JSON object of figures that have already been computed and a risk tier and decision that have already been made. Your job is to explain them in plain, professional English for an HR approver who will not see the employee's full finances.
+const systemPrompt = (employer: string) => `You write the prose for an "Advance Recommendation Report" produced by a Key Wellness (Pty) Ltd Financial Wellness Consultant for the ${programmeFor(employer)}. You receive a JSON object of figures that have already been computed and a risk tier and decision that have already been made. Your job is to explain them in plain, professional English for an HR approver who will not see the employee's full finances.
 
 Hard rules:
 - Use only the figures, classifications, tier and decision in the JSON. Do not compute, adjust, round differently, or introduce any number that is not there. Currency is written exactly as "P 12,345.67". Percentages as "42.75%".
@@ -130,7 +132,7 @@ async function askModel(apiKey: string, c: Computed, prep: Prep): Promise<{ narr
       headers: { "x-api-key": apiKey, "anthropic-version": ANTHROPIC_VERSION, "content-type": "application/json" },
       body: JSON.stringify({
         model: MODEL, max_tokens: MAX_TOKENS, temperature: 0.2,
-        system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+        system: [{ type: "text", text: systemPrompt((c.employee.employer || "").trim() || EMPLOYER_UNKNOWN), cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: JSON.stringify(payload) }],
       }),
     });

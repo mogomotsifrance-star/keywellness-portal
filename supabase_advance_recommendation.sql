@@ -125,15 +125,30 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_advisor uuid := current_advisor_id();
   v_owner   uuid;
+  v_org     uuid;
+  v_offers  boolean;
   v_version int;
   v_row     advance_recommendations;
   v_tier    text := coalesce(p_computed->>'tier', '?');
   v_amount  text := coalesce(p_computed->'advance'->>'amount', null);
 begin
-  select advisor_id into v_owner from advisor_clients where id = p_client_id;
+  select advisor_id, org_id into v_owner, v_org from advisor_clients where id = p_client_id;
   if v_owner is null then raise exception 'client not found'; end if;
   if not can_manage_advisor(v_owner) then raise exception 'not authorised for that client'; end if;
   if p_input is null or p_computed is null or p_content is null then raise exception 'incomplete payload'; end if;
+
+  -- The report names an employer's advance programme and a payroll deduction.
+  -- Only an organisation that runs one may have it written about them, and a
+  -- client with no organisation has no programme to be advanced against. The
+  -- Report tab hides the view in both cases; this is the check that binds.
+  select coalesce(offers_advances, false) into v_offers
+    from organizations where id = v_org;
+  if v_org is null then
+    raise exception 'this client is not on a company programme, so an advance recommendation does not apply';
+  end if;
+  if not coalesce(v_offers, false) then
+    raise exception 'that organisation does not run an employee advance programme';
+  end if;
 
   select coalesce(max(version), 0) + 1 into v_version
     from advance_recommendations where client_id = p_client_id;
