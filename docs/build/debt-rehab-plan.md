@@ -219,6 +219,12 @@ All arithmetic on `total_monthly_income` = net salary + spouse + rentals + busin
   cuts, floored at zero — so the printed cuts always sum to the shortfall.
 - `shortfall = round2(total spend − income)`; positive → the single most urgent
   item, printed first.
+- **All-in cash gap.** The budget's `debt_min` + `debt_extra` lines are compared
+  with the liabilities' debt service; when they fall short, the plan also prints
+  `cash_gap = shortfall + (debt service − budgeted debt lines)` labelled as the
+  gap once loan instalments are counted. Olorato's live budget carries no debt
+  line, so her shortfall P 3,550.00 sits beside an all-in gap of P 9,050.00.
+  Both figures print; neither replaces the other (§7 Q8).
 - Not captured → action one is "Capture the household budget"; no target prints.
 - `budget.motshelo > 0` **and** a CONSOLIDATE row whose label matches
   `/motshelo|metshelo|moraka/` → flag "motshelo repayment is debt service, not
@@ -271,7 +277,9 @@ The record is not in the repo, so the fixture reconstructs it from spec §1/§7:
 income P 12,300.00 (net salary + BNO business income, `spouseIncome` 0); FNB
 personal loan instalment P 5,500.00, balance **P 210,000.00** (derived from the
 spec's net worth −P 133,000.00 with AUDI P 100,000.00 and P 23,000.00 informal),
-rate **12% p.a. assumed** (spec does not state it — §7 Q1); motshelo P 16,000.00
+rate **blank on the live record** (a sibling session with live access confirmed this
+on 3 Sep; the vault has the note), so the worked example takes the cap-only path
+and the derived-term arithmetic is pinned by a separate synthetic case; motshelo P 16,000.00
 "30% monthly" instalment 0; mother P 7,000.00 "25% monthly" instalment 0; budget
 needs 7,400 / wants 1,200 / savings 2,400 / other 4,850; AUDI A3 P 100,000.00
 Personal Use, no income; no savings rows; AR context v1 of 28 Aug 2026, advance
@@ -280,12 +288,13 @@ P 23,000.00 over 24 months.
 | Figure | Value the test asserts |
 |---|---|
 | Debt service / DSR | P 5,500.00 / **44.72%** (band `strained` → view offered) |
-| FNB action / cap | **RENEGOTIATE**, cap **P 4,305.00**; derived remaining term 49 months; +24 → 73; amortised **P 4,067.08** (12% p.a. assumed) |
+| FNB action / cap | **RENEGOTIATE**, cap **P 4,305.00**; rate blank → "Interest rate not captured" gap + action, no amortised figure |
+| FNB variant (synthetic, 12% p.a., balance P 210,000.00) | derived remaining term 49 months; +24 → 73; amortised **P 4,067.08** ≤ cap |
 | Motshelo, mother | **CONSOLIDATE**, informal balance P 23,000.00, cross-ref AR v1 28 Aug 2026 |
 | Budget | 60.16 / 9.76 / 19.51 / 39.43%; cuts needs P 1,250.00, wants P 0.00, other P 2,300.00; **shortfall P 3,550.00** |
 | Levers | AUDI covers informal balance 4.35×; savings not captured → gap + action; single earner |
 | Phase 1 band | 44.72% (lever settles) … 52.51% (P 958.33 advance instalment) |
-| Phase 2 band | **33.07%** (4,067.08 / 12,300, lever settles) … **42.79%** ((4,305.00 + 958.33) / 12,300, advance + cap) |
+| Phase 2 band | **35.00%** (cap, lever settles) … **42.79%** ((4,305.00 + 958.33) / 12,300, advance + cap); the 12% variant gives 33.07% … 42.79% |
 | Phase 3 | target ≤ 35.00%, surplus ≥ 0 |
 | REFER | no (Phase 2 low ≤ 45%, 2 informal lenders) |
 | Triggers | 5: new informal borrowing; AUDI unsold at 60 days; missed advance instalment; income below P 11,070.00; DSR unmoved at Phase 2 |
@@ -369,8 +378,18 @@ migration; the six new functions must not appear.
 
 ## 7. Decisions needed before building (see chat)
 
+**A sibling session planned the same feature today** with live database access
+(its vault entries: `decisions/2026-09-03-debt-rehab-plan-compute-decides.md` and
+the 3 Sep open-issues block in the knowledge vault). Its plan file was not pushed
+to this repository. The two plans agree on everything except: read path (it keeps
+an AR-style SELECT policy and rejects a list RPC; this plan removes the policy and
+adds `_list`) and the 35% line (it recommends `threshold_config` with a fallback;
+this plan holds a shared constant asserted against the config). Both are Q4/Q5.
+
+
 Q1 FNB rate and balance for the fixture · Q2 Phase 2 band vs spec §7 "high-30s" ·
 Q3 quota pool (separate 40/day recommended) · Q4 `_list` RPC with no SELECT policy
 (recommended) vs AR-style policy · Q5 the 35% RENEGOTIATE line as a shared constant
 vs read from `threshold_config` at request time · Q6 `conditions` → `actions`
-rename · Q7 whether a declined AR's amount should appear at all.
+rename · Q7 whether a declined AR's amount should appear at all · Q8 print the
+all-in cash gap beside the budget shortfall.
