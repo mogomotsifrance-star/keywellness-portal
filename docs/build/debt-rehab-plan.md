@@ -30,13 +30,17 @@ is appended.
    is a printed gap. Her two motshelo rates are stored as "30" and "25" with no
    period text; the Prepare screen confirms them as per-month, as it does on the
    AR.
-3. **There is no Advance Recommendation row on live — for anyone.** The table has
-   zero rows; the AR's first live run has still not happened. The "AR of 28 Aug
-   2026, P 23,000.00" in spec §7 is a paper document, not a stored row. So the
-   worked example must be tested both ways: with a synthetic final AR row
+3. **There is no Advance Recommendation row on live — for anyone.** The AR has
+   run live: two generations on Tumelo on 3 Sep came back `narrative_source =
+   'model'` (vault, `open-issues.md`), but both drafts were discarded, so the
+   table is empty and Olorato has never had one. The "AR of 28 Aug 2026,
+   P 23,000.00" in spec §7 is a paper document, not a stored row. So the worked
+   example must be tested both ways: with a synthetic final AR row
    (cross-reference path) and without one ("size a consolidation via an Advance
    Recommendation" path). Her organisation is Hollard with `offers_advances`
-   on, so an AR *can* be generated for her once someone does.
+   on, so an AR *can* be generated and finalised for her in a minute. Also from
+   the vault: **the deployed AR function is behind the repo** (employer strings
+   still hardcoded) — the v3 redeploy this build forces (§2) clears that too.
 4. **Spec §7's phase bands are prose, not arithmetic.** "DSR 44.72% → high-30s
    band (mid-30s if FNB renegotiation lands)" does not follow from any DSR
    definition on these figures. With the FNB instalment at the 35% cap and
@@ -461,7 +465,7 @@ migration twice, rollback twice → zero objects, notes kept. Run on 16 and, via
 | 6 | Quota: own 40/day counter or a pool shared with the AR? | **Own counter.** Same shape, no cross-table count. |
 | 7 | `months_remaining` on Prepare (NPER default) for RENEGOTIATE rows? | **Yes.** Without it the "term the advisor sets" has no base. |
 | 8 | Test fixture: Olorato's real figures under her name (as Tumelo's are), or a pseudonym? | Her name, as the AR does — but this is Tshenolo's call. |
-| 9 | First live run of the **AR** is still outstanding (zero rows). Generate Olorato's AR live before the plan's first live run, so the cross-reference path is exercised? | **Yes**, and it is a one-minute job in the portal. |
+| 9 | No AR exists for Olorato (the two live runs were on Tumelo and discarded). Generate and **finalise** one for her before the plan's first live run, so the cross-reference path is exercised? | **Yes**, and it is a one-minute job in the portal. |
 
 ---
 
