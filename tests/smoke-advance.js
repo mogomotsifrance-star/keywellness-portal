@@ -163,13 +163,17 @@ function stub(page) {
   /* ── 1. Reach the view ─────────────────────────────────── */
   await page.evaluate((id) => { openClient(id); switchTab('report'); }, CLIENT_ID);
   await page.waitForTimeout(300);
-  check('1  Report tab shows the two-view switch, PFA first',
-    await page.evaluate(() => document.querySelectorAll('.ar-switch button').length === 2
-      && document.querySelector('.ar-switch button.active').textContent.includes('Personal Financial')));
+  // Tumelo's DSR (45.43%) also offers the Debt Rehab Plan, so the switch now
+  // carries three options; this suite cares only that PFA is first and active
+  // and that the Advance Recommendation is offered.
+  check('1  Report tab shows the view switch, PFA first and active, Advance Recommendation offered',
+    await page.evaluate(() => document.querySelectorAll('.ar-switch button').length >= 2
+      && document.querySelector('.ar-switch button.active').textContent.includes('Personal Financial')
+      && Array.from(document.querySelectorAll('.ar-switch button')).some(b => b.textContent.trim() === 'Advance Recommendation')));
   check('2  the Personal Financial Assessment still renders unchanged underneath',
     (await txt()).includes('Personal Financial Assessment') && (await txt()).includes('Net Worth'));
 
-  await page.click('.ar-switch button:nth-child(2)');
+  await page.click('.ar-switch button:has-text("Advance Recommendation")');
   await page.waitForTimeout(900);
 
   /* ── 2. Prepare ────────────────────────────────────────── */
