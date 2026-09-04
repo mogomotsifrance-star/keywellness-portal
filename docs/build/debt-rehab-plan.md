@@ -468,10 +468,32 @@ Tshenolo's instruction ("apply the gate fix first, then the rest"):
 view until PR #3 merges and the Cloudflare build goes green. The database and
 functions are ahead of the UI by design; nothing on the old UI calls them.
 
+### First live run — 4 Sep 2026, 10:18 UTC
+
+Tshenolo generated v1 for Olorato Maliko from the test site. Function booted in
+27–49 ms, previews and generate all returned 200, the model answered in ~20 s
+(2,228 in / 962 out tokens). Every figure matched compute: DSR 44.72% strained,
+FNB → RENEGOTIATE with the P 4,305.00 cap, both motshelo loans → CONSOLIDATE,
+shortfall P 3,550.00, all-in gap P 9,050.00, vehicle = asset sale (Empty Plot
+Kasane P 40,000.00 + AUDI A3 P 100,000.00; no Advance Recommendation on file).
+
+**One defect, fixed in this commit and redeployed as `debt-rehab-plan` v2.**
+The model returned a good narrative but merged the two motshelo loans into one
+`debt_lines` entry (2 lines for 3 liabilities), and the validator demanded an
+exact match, so the row fell back to deterministic prose
+(`narrative_source = 'fallback'`, error `missing fields`). `debt_lines` now
+accepts any non-empty list; only `phase_paragraphs` keeps an exact count.
+Regenerate creates v2 with the model's prose; v1 stays as generated.
+
+Two facts from the live record worth knowing: the motshelo rates are captured
+as bare "30" and "25", which parse as annual — the Prepare screen's per-month
+switch corrects that per plan — and FNB's balance is P 250,000.00, not the
+P 210,000.00 the fixture reconstructed from the spec's net worth.
+
 ### Not verified from this environment
 
-The Anthropic API and the function endpoints are unreachable from the build
-sandbox, so neither function has been called end-to-end since deployment. **First live run:** sign in on the dev site as an
+Nothing outstanding. The build sandbox still cannot reach the endpoints
+itself; verification above is from the stored row and the function logs. **First live run:** sign in on the dev site as an
 advisor, open Olorato Maliko → Report → Debt Rehab Plan → Generate, then
 `select version, status, narrative_source, model, input_tokens, output_tokens from debt_rehab_plans`
 and the function logs. `narrative_source = 'fallback'` means the log line

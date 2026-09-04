@@ -155,14 +155,19 @@ async function askModel(apiKey: string, c: RehabComputed, notes: string[]): Prom
   try { parsed = JSON.parse(m[0]); } catch { return { narrative: null, raw: text, inTok, outTok, error: "unparsable JSON" }; }
   const n: RehabNarrative = {
     root_causes: clampArr(parsed.root_causes, MAX_ROOT_CAUSES),
-    debt_lines: clampArr(parsed.debt_lines, Math.max(c.liabilities.length, 1)),
+    debt_lines: clampArr(parsed.debt_lines, Math.max(c.liabilities.length, MAX_LINES)),
     budget_paragraph: clampStr(parsed.budget_paragraph),
     lever_bullets: clampArr(parsed.lever_bullets, MAX_LINES),
     phase_paragraphs: clampArr(parsed.phase_paragraphs, 3, MAX_FIELD_CHARS),
     trigger_lines: clampArr(parsed.trigger_lines, MAX_LINES),
     closing_sentence: clampStr(parsed.closing_sentence),
   };
-  const usable = n.root_causes.length && n.debt_lines.length === c.liabilities.length && n.budget_paragraph
+  // The model is asked for one debt line per liability, but it will merge
+  // two lenders it sees as one case (Olorato's two motshelo loans, 4 Sep 2026)
+  // and the first live run discarded a good narrative for that. The lines
+  // render as bullets, so any non-empty list is usable; only the fragments
+  // with a fixed shape (three phases) are held to an exact count.
+  const usable = n.root_causes.length && n.debt_lines.length >= 1 && n.budget_paragraph
     && n.lever_bullets.length && n.phase_paragraphs.length === 3 && n.trigger_lines.length && n.closing_sentence;
   if (!usable) return { narrative: null, raw: parsed, inTok, outTok, error: "missing fields" };
   return { narrative: n, raw: parsed, inTok, outTok };
