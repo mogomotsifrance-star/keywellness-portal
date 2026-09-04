@@ -1,6 +1,6 @@
 # Debt Rehab Plan — build record
 
-**Status: BUILT, 3 Sep 2026 — files in the repo, nothing applied live.** The plan
+**Status: BUILT 3 Sep 2026; APPLIED LIVE 4 Sep 2026 (database + Edge Functions; `advisor.html` lands with PR #3).** The plan
 in §0–§7 was approved by Tshenolo on 3 Sep on the basis "go with the
 recommendations; the prompt's author amends later". §8 records the decisions
 taken, §9 the build and its verification, §10 the deploy note, §11 a security
@@ -450,10 +450,28 @@ all-in cash gap beside the budget shortfall.
 | Sweep (CLAUDE.md ungated `SECURITY DEFINER` query) on the local migrated DB | zero rows; all six `debt_rehab_plan_*` are `anon = false, authenticated = true` |
 | `deno check` on the five pure modules | clean. The two `index.ts` files cannot be checked here: the proxy refuses `deno.land` / `esm.sh`. |
 
+### Applied to the live project — 4 Sep 2026
+
+Applied through the Supabase MCP connection from the same session, on
+Tshenolo's instruction ("apply the gate fix first, then the rest"):
+
+| Step | Result on `tarmpqxsabbehgjaonfz` (PostgreSQL 17.6) |
+|---|---|
+| Probe before the fix | `can_manage_advisor(<advisor>)` as a signed-in non-advisor returned **NULL**; eleven live RPCs gate on it, `advisor_clients_list` and `advisor_client_detail` among them |
+| `fix_can_manage_advisor_null` migration | applied; the same probe returns **false**; grants and comment intact |
+| `debt_rehab_plan` migration | applied; table present, RLS on, **0 policies**, 6 RPCs `anon=false / authenticated=true`, 0 rows |
+| CLAUDE.md sweep on live | exactly the ten known rows; none of the new functions |
+| `debt-rehab-plan` Edge Function | deployed, version 1, `verify_jwt = true`, four files incl. `_shared/kw-finance.ts` |
+| `advance-recommendation` Edge Function | redeployed, version 2 → **3**. Version 2 was still the Hollard-hardcoded build; 3 is `dev`'s employer-generalised code plus the shared module |
+
+`advisor.html` is not yet on `dev`, so the Report tab shows no Debt Rehab
+view until PR #3 merges and the Cloudflare build goes green. The database and
+functions are ahead of the UI by design; nothing on the old UI calls them.
+
 ### Not verified from this environment
 
-`*.supabase.co` and the Anthropic API are unreachable, so the deployed function
-has not been called end-to-end. **First live run:** sign in on the dev site as an
+The Anthropic API and the function endpoints are unreachable from the build
+sandbox, so neither function has been called end-to-end since deployment. **First live run:** sign in on the dev site as an
 advisor, open Olorato Maliko → Report → Debt Rehab Plan → Generate, then
 `select version, status, narrative_source, model, input_tokens, output_tokens from debt_rehab_plans`
 and the function logs. `narrative_source = 'fallback'` means the log line
@@ -493,13 +511,16 @@ Found by the rehab RLS suite ("member: list is refused — it was allowed").
 is_team_lead() or is_admin())`. For a caller with no `advisors` row —
 a member, an HR user, any signed-in non-advisor — `current_advisor_id()` is
 NULL, `p = NULL` is NULL, and the whole expression is **NULL, not FALSE**.
-Policies treat NULL as false, so the SELECT policies hold. But seventeen RPCs
-gate with `if not can_manage_advisor(v_owner) then raise`, and `if not NULL`
+Policies treat NULL as false, so the SELECT policies hold. But eleven live RPCs
+(seventeen call sites across the SQL files on disk, some stale) gate with
+`if not can_manage_advisor(v_owner) then raise`, and `if not NULL`
 does not raise. So today a member who knows their own `advisor_clients.id`
 (readable under `advisor_clients_member_read`) can call
 `advisor_client_notes()` and read the advisor's private notes on themselves,
-call `advisor_note_add()`, and call `advance_recommendation_create()` in their
-own name. `tests/run-can-manage-fix.sh` reproduces the last of these.
+call `advisor_note_add()`, call `advance_recommendation_create()` in their
+own name, and — worse — call `advisor_clients_list()` and
+`advisor_client_detail()` for any advisor id. `tests/run-can-manage-fix.sh`
+reproduces the AR case. **Closed on live 4 Sep 2026** (see §9).
 
 Fix: `supabase_fix_can_manage_advisor_null.sql` wraps the gate in
 `coalesce(…, false)`. One function, same signature and grants, every call site
