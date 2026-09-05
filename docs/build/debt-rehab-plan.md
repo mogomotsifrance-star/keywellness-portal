@@ -486,9 +486,34 @@ accepts any non-empty list; only `phase_paragraphs` keeps an exact count.
 Regenerate creates v2 with the model's prose; v1 stays as generated.
 
 Two facts from the live record worth knowing: the motshelo rates are captured
-as bare "30" and "25", which parse as annual — the Prepare screen's per-month
-switch corrects that per plan — and FNB's balance is P 250,000.00, not the
-P 210,000.00 the fixture reconstructed from the spec's net worth.
+as bare "30" and "25", which v1/v2 parsed as annual (fixed the next day — see
+below), and FNB's balance is P 250,000.00, not the P 210,000.00 the fixture
+reconstructed from the spec's net worth.
+
+### Motshelo rates are per month — 5 Sep 2026
+
+The advisor confirmed that motshelo interest is quoted per month, so a bare
+"30" on a motshelo is 30% a month (360% p.a. equivalent), not 30% a year.
+`suggestClassification()` in `_shared/kw-finance.ts` now defaults a bare
+number to **per month when the lender matches `INFORMAL_HINTS`** (motshelo,
+mashonisa, cash loan, microlender, family) and to per year otherwise, via the
+new `ratePeriodFor()`. Text still wins in both directions: `parseRate()` now
+recognises annual wording ("p.a.", "per annum", "per year", "annual") as well
+as monthly, and an explicit period is never overridden. The Prepare screens
+are unchanged — the dropdown still lets the advisor flip either way — and a
+defaulted period says so in the suggestion reason ("rate read as per month").
+
+Because the shared module is bundled into both functions, this changes the
+Advance Recommendation as well: Tumelo's "Motshelo 30" and "Close Friends
+Microlender 25" now render as per-month rates with `has_monthly_compounding`
+on. The advance amount is unaffected (it is sized on balances), and every
+existing check in both suites still passes (22 / 32 advance, 29 / 33 rehab).
+Deployed as `debt-rehab-plan` v3 and `advance-recommendation` v4.
+
+**Olorato's v1 draft is not corrected by this.** Regenerate seeds the Prepare
+screen from the previous plan's confirmed choices, which carry `annual` for
+both motshelo rows. Either flip the two dropdowns to *per month* on Prepare,
+or discard the v1 draft and press Generate so the new defaults apply.
 
 ### Not verified from this environment
 

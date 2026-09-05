@@ -112,15 +112,29 @@ export function calcAnnualTax(annual: number): number {
 export const calcMonthlyPAYE = (monthlyGross: number) => calcAnnualTax(pf(monthlyGross) * 12) / 12;
 
 // Parse the free-text rate the Liabilities tab stores ("12", "25%",
-// "30% per month", "2.5 pm"). Returns the number and whether the text
-// itself says monthly. Blank → null.
-export function parseRate(raw: unknown): { value: number | null; says_monthly: boolean } {
-  if (isBlank(raw)) return { value: null, says_monthly: false };
+// "30% per month", "2.5 pm", "18 p.a."). Returns the number and whether
+// the text itself names a period. Blank → null.
+export function parseRate(raw: unknown): { value: number | null; says_monthly: boolean; says_annual: boolean } {
+  if (isBlank(raw)) return { value: null, says_monthly: false, says_annual: false };
   const s = String(raw).toLowerCase();
   const m = s.match(/-?\d+(?:[.,]\d+)?/);
   const value = m ? parseFloat(m[0].replace(",", ".")) : null;
   const says_monthly = /(per\s*month|monthly|p\.?\s*m\b|\/\s*m(?:onth)?\b|a month)/.test(s);
-  return { value: value != null && isFinite(value) ? value : null, says_monthly };
+  const says_annual = !says_monthly && /(per\s*(?:annum|year)|annual|yearly|p\.?\s*a\b|\/\s*(?:yr|y|a)\b|a year)/.test(s);
+  return { value: value != null && isFinite(value) ? value : null, says_monthly, says_annual };
+}
+
+// Which period a bare number means. Formal lenders quote per year, so
+// "12" on a bank loan is 12% p.a. Motshelo, mashonisa and family loans
+// are quoted per month in Botswana ("30" on a motshelo is 30% a month —
+// confirmed by the advisor on 5 Sep 2026 after Olorato's plan read it as
+// annual), so a bare number on an informal lender is monthly unless the
+// text says otherwise. The advisor can still flip it on the Prepare screen.
+export function ratePeriodFor(rate: { value: number | null; says_monthly: boolean; says_annual: boolean }, informalLender: boolean): RatePeriod | null {
+  if (rate.value == null) return null;
+  if (rate.says_monthly) return "monthly";
+  if (rate.says_annual) return "annual";
+  return informalLender ? "monthly" : "annual";
 }
 
 // The same test panelReport() uses to decide a liability row is real and
@@ -141,9 +155,11 @@ export function suggestClassification(raw: RawLiability): { classification: Clas
   const inst = String(raw.institution || "").toLowerCase();
   const item = String(raw.item || "").toLowerCase();
   const rate = parseRate(raw.interestRate);
-  const rate_period: RatePeriod | null = rate.value == null ? null : (rate.says_monthly ? "monthly" : "annual");
-  if (INFORMAL_HINTS.some((h) => inst.includes(h) || item.includes(h))) {
-    return { classification: "informal", rate_period, reason: "Informal or family/friend lender" };
+  const informalLender = INFORMAL_HINTS.some((h) => inst.includes(h) || item.includes(h));
+  const rate_period = ratePeriodFor(rate, informalLender);
+  if (informalLender) {
+    const defaulted = rate_period === "monthly" && !rate.says_monthly;
+    return { classification: "informal", rate_period, reason: `Informal or family/friend lender${defaulted ? " — rate read as per month" : ""}` };
   }
   if (rate.value != null) {
     const pa = rate_period === "monthly" ? rate.value * 12 : rate.value;
