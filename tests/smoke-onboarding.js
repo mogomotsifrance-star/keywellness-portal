@@ -52,10 +52,9 @@ function installStub(page, profile) {
       if (table === 'profiles') return window.__profile;
       return null;
     };
-    // Fixtures for the dashboard cases carry an assessment row. Until P0-2
-    // lands, a member without one is held on renderFirstAssessmentLock() and
-    // never reaches the dashboard at all; afterwards it simply keeps these
-    // cases about the welcome card rather than about the empty state.
+    // Fixtures for the dashboard cases carry an assessment row, so those cases
+    // stay about the welcome card rather than about the empty state. Cases that
+    // deliberately have none (the P0-2 group) pass no __assessments.
     const lists = (table) => {
       if (table === 'assessments') return window.__profile?.__assessments || [];
       return [];
@@ -337,6 +336,38 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
     await page.close();
   }
 
+  /* ── 2b. P0-2: no route is locked behind a first assessment ────
+     An onboarded member with NO assessments row. Every one of these views used
+     to render "One quick step first" with dead navigation. */
+  {
+    const ONBOARDED_NO_ASSESSMENT = {
+      id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true, welcome_seen: true,
+    };
+    const { page, errors } = await boot(browser, ONBOARDED_NO_ASSESSMENT);
+
+    const dash = await page.evaluate(() => document.getElementById('page-content').textContent);
+    check('40 a member with no assessment is not held on "One quick step first"',
+      !/One quick step first/.test(dash), dash.slice(0, 120));
+    check('41 they get the dashboard itself', /Financial Hub|Your picture/.test(dash), dash.slice(0, 160));
+
+    /* Every member route renders, not just the dashboard. */
+    const views = ['learn', 'tools', 'booking', 'emergency', 'progress', 'badges', 'profile', 'my-bookings', 'checkin'];
+    const blocked = [];
+    for (const v of views) {
+      await page.evaluate(view => { window.location.hash = view; }, v);
+      await page.waitForTimeout(250);
+      const t = await page.evaluate(() => document.getElementById('page-content').textContent.trim());
+      if (/One quick step first/.test(t) || t.length === 0) blocked.push(v + (t.length === 0 ? ' (empty)' : ' (locked)'));
+    }
+    check('42 and every other member route renders too', blocked.length === 0, blocked.join(', '));
+
+    check('43 renderFirstAssessmentLock no longer exists',
+      await page.evaluate(() => typeof window.renderFirstAssessmentLock === 'undefined'));
+    check('44 no uncaught errors walking the portal without an assessment',
+      errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
   /* ── 3. The welcome video is a card, not a gate ──────────────── */
   {
     const { page } = await boot(browser, {
@@ -345,7 +376,7 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
     });
     await page.waitForTimeout(600);
     const card = await page.evaluate(() => document.getElementById('page-content').textContent);
-    check('40 the dashboard offers the welcome video as a dismissible card',
+    check('45 the dashboard offers the welcome video as a dismissible card',
       /Watch the 2-minute welcome from the team/.test(card));
 
     /* Opening it shows a close control immediately — it used to be withheld
@@ -357,9 +388,9 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
       closeShown: getComputedStyle(document.getElementById('welcome-start-wrap')).display !== 'none',
       label: document.querySelector('#welcome-start-wrap button')?.textContent.trim(),
     }));
-    check('41 the video modal opens with its close button already there',
+    check('46 the video modal opens with its close button already there',
       open.visible === true && open.closeShown === true);
-    check('42 and the button closes rather than launching the assessment',
+    check('47 and the button closes rather than launching the assessment',
       open.label === 'Close', open.label);
 
     await page.click('#welcome-start-wrap button');
@@ -369,9 +400,9 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
       ls: localStorage.getItem('kw_welcome_seen'),
       card: document.getElementById('page-content').textContent,
     }));
-    check('43 closing it opens nothing', afterClose.navs === 0);
-    check('44 remembers it was seen', afterClose.ls === 'true');
-    check('45 and the card is gone', !/Watch the 2-minute welcome/.test(afterClose.card));
+    check('48 closing it opens nothing', afterClose.navs === 0);
+    check('49 remembers it was seen', afterClose.ls === 'true');
+    check('50 and the card is gone', !/Watch the 2-minute welcome/.test(afterClose.card));
     await page.close();
   }
   {
@@ -386,7 +417,7 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
       ls: localStorage.getItem('kw_welcome_seen'),
       card: document.getElementById('page-content').textContent,
     }));
-    check('46 Dismiss retires the card without watching', dismissed.ls === 'true' &&
+    check('51 Dismiss retires the card without watching', dismissed.ls === 'true' &&
       !/Watch the 2-minute welcome/.test(dismissed.card));
     await page.close();
   }

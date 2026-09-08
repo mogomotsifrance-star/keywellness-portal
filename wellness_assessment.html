@@ -185,10 +185,6 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
       <p>Botswana Pula (BWP) · 8 dimensions · Personalised score &amp; action plan</p>
     </div>
   </div>
-  <!-- Compulsory first-assessment note (shown only on a member's very first run) -->
-  <div id="firstAssessmentNote" style="display:none;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.82rem;color:#065f46;line-height:1.6">
-    📋 <strong>Let's set your baseline.</strong> This quick assessment gives you your wellness score baseline and powers your Financial Hub on the dashboard.
-  </div>
   <!-- Progress -->
   <div class="progress-wrap" id="progressWrap">
     <div class="progress-label">
@@ -1357,13 +1353,12 @@ async function _flushPendingAssessments(_sb, uid) {
       });
       applyReassessmentMode();
     } else {
-      // First assessment (compulsory): lock the escape hatch and show the
-      // baseline note. The portal itself is also locked (index.html route())
-      // until this assessment is saved; the top "Back to Portal" link is hidden
-      // here so there is no way to skip it. Draft auto-save lets the user resume.
-      document.getElementById('backToPortalTop')?.style.setProperty('display','none');
-      document.getElementById('firstAssessmentNote')?.style.setProperty('display','block');
-      window._isFirstCompulsory = true;
+      // P0-2 (audit F2): a first assessment is no longer compulsory, so nothing
+      // here hides "Back to Portal". This branch used to remove that link and
+      // show a "let's set your baseline" note, because index.html's route() held
+      // the whole portal until an assessment row existed — between them there was
+      // no way out of this page. Both are gone; the member can leave at any point
+      // and their draft is still auto-saved.
       // First assessment: pre-fill figures from profile
       if (prof?.age) { const el=document.getElementById('age'); if(el&&!el.value) el.value=prof.age; }
       if (prof?.gross_income) {
