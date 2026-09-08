@@ -650,7 +650,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
     <h2 style="margin-bottom:6px">🔒 Data Protection &amp; Confidentiality</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Please read and accept our data protection statement before accessing the portal.</p>
-    <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px;max-height:280px;overflow-y:auto;border:1px solid var(--border)">
+    <!-- id is load-bearing: the onboarding wizard's "Read the full Data Protection
+         statement" link reads this element's innerHTML rather than carrying its own
+         copy, so the legal text has exactly one home and the two cannot drift. -->
+    <div id="consent-statement" style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px;max-height:280px;overflow-y:auto;border:1px solid var(--border)">
       <p style="font-weight:700;margin-bottom:8px">How We Protect Your Information</p>
       <p style="margin-bottom:10px">Key Wellness is committed to protecting your personal and financial data. By using this portal, you agree to the following:</p>
       <ul style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
@@ -676,8 +679,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 <div id="welcome-modal">
   <div class="welcome-modal-box">
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Welcome to Key Wellness</div>
-    <h2 id="welcome-heading">You're all set! 🎉</h2>
-    <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
+    <h2 id="welcome-heading">Welcome to Key Wellness 🎉</h2>
+    <p>A two-minute introduction from the team.</p>
     <div id="welcome-video-area">
       <!-- Vimeo-hosted (see KW_WELCOME_VIMEO). The Player API fills this box —
            the 56.25% padding keeps the 16:9 frame before the iframe lands. -->
@@ -685,12 +688,14 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
         <div id="welcome-vimeo" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>
       </div>
     </div>
-    <div id="welcome-start-wrap" style="display:none;margin-top:8px">
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
+    <!-- P0-1: the close button is present from the moment the modal opens. It
+         used to be hidden until the video ended ("your assessment unlocks when
+         it finishes"), which made a welcome into a gate — and on a slow or
+         Vimeo-blocked connection, a blank box with no way out. -->
+    <div id="welcome-start-wrap" style="margin-top:8px">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Close</button>
     </div>
-    <div id="welcome-wait-msg" style="margin-top:10px;text-align:center;font-size:12px;color:var(--muted)">
-      Watch the video to continue — your assessment unlocks when it finishes.
-    </div>
+    <div id="welcome-wait-msg" style="display:none;margin-top:10px;text-align:center;font-size:12px;color:var(--muted)"></div>
   </div>
 </div>
 
@@ -1509,7 +1514,9 @@ async function confirmSession() {
   initProfileUI();
   loadNotifications();
   route();
-  maybePromptBackfill();  // company → department → gender backfill after password re-confirm
+  // P0-1: no backfill modal here. Company/department are no longer asked of the
+  // member at all, and gender is captured in the onboarding wizard — a returning
+  // member must never be interrupted by a pop-up on sign-in.
 }
 
 async function switchAccount() {
@@ -2075,7 +2082,10 @@ function route() {
   touchSessionTrust(currentUser.id);
   showAuthScreen(false);
   let view = window.location.hash.replace('#', '') || 'dashboard';
-  const hasOnboarded = state.user?.onboarded === true || !!state.user?.first_name;
+  // P0-1: `onboarded` only. Accepting "has a first name" as onboarded is what let
+  // the deleted name pop-up bypass the wizard entirely (audit F1) — a member who
+  // signed up before this change but never finished the wizard sees it once now.
+  const hasOnboarded = state.user?.onboarded === true;
   if (!hasOnboarded && view !== 'onboarding') view = 'onboarding';
   // Compulsory first assessment: once onboarded, the portal is locked until the
   // member's first assessment is recorded in Supabase. Server-authoritative
@@ -2365,220 +2375,236 @@ function kwChart(canvas, config) {
 // ══════════════════════════════════════════════════
 //  VIEW: ONBOARDING
 // ══════════════════════════════════════════════════
+// P0-1 (audit F1, F4, F5): ONE onboarding sequence, two screens, no modals.
+//
+// This replaces the old 4-to-6 step wizard AND the four pop-ups that used to
+// fire over the top of it (name, consent, gender, welcome video). What was
+// removed and why:
+//   · name + gender steps were duplicated by pop-ups, and the name pop-up's
+//     save set onboarded = true, so the wizard was skipped entirely (F1);
+//   · the company / department steps asked the member for an attribute only an
+//     admin table reads, and told them HR was watching before they had seen a
+//     single screen (F3). org_id still arrives from the invite code via the DB
+//     trigger, so nothing here needs to set it;
+//   · consent was a 380-word modal at the moment of maximum anxiety (F5). Same
+//     legal text, now behind a three-line plain-language summary on screen 1.
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], org_unit_id:null, department_id:null, gender:'' };
+  // Gender defaults to "prefer not to say" — it is optional, and the default
+  // must not be a disclosure the member did not choose to make.
+  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], gender:'prefer_not_to_say' };
+  let consentOk = false;
+  let showFullStatement = false;
 
-  let steps = [
-    { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
-    { q:'How old are you?', hint:'Your exact age helps us calculate accurate retirement projections and tailor advice to your life stage.', key:'age', type:'age' },
-    { q:'What is your employment status?', hint:'We will personalise your plan.', key:'employment', type:'single',
-      opts:[{i:'🏢',l:'Employed (full-time)'},{i:'⏰',l:'Employed (part-time)'},{i:'💼',l:'Self-employed'},{i:'📚',l:'Student'},{i:'🏡',l:'Not currently employed'}] },
-    { q:'What are your financial goals?', hint:'Select all that apply.', key:'goals', type:'multi',
-      opts:[{i:'💳',l:'Pay off debt'},{i:'🏦',l:'Build savings'},{i:'🏠',l:'Buy property'},{i:'🆘',l:'Emergency fund'},{i:'🎯',l:'Retirement planning'},{i:'📈',l:'Invest & grow wealth'}] },
+  const EMPLOYMENT = [
+    {i:'🏢',l:'Employed (full-time)'},{i:'⏰',l:'Employed (part-time)'},{i:'💼',l:'Self-employed'},
+    {i:'📚',l:'Student'},{i:'🏡',l:'Not currently employed'},
   ];
+  const GOALS = [
+    {i:'💳',l:'Pay off debt'},{i:'🏦',l:'Build savings'},{i:'🏠',l:'Buy property'},
+    {i:'🆘',l:'Emergency fund'},{i:'🎯',l:'Retirement planning'},{i:'📈',l:'Invest & grow wealth'},
+  ];
+  const GENDERS = [['male','Male'],['female','Female'],['prefer_not_to_say','Prefer not to say']];
 
-  function render() {
-    const s = steps[step];
-    const isNames = s.type === 'names';
+  // The full statement is read out of the existing #consent-modal markup rather
+  // than copied, so the legal text has exactly one home and cannot drift.
+  function fullStatementHtml() {
+    return document.getElementById('consent-statement')?.innerHTML
+      || '<p>The full statement is temporarily unavailable. Please contact wellness@keywellness.co.bw.</p>';
+  }
+
+  function stepChrome(title, sub) {
+    return `
+      <div class="wsteps">${[0,1].map(i=>`<div class="wstep${i<step?' done':i===step?' active':''}"></div>`).join('')}</div>
+      <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of 2</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${sub}</div>`;
+  }
+
+  function renderConsent() {
     el.innerHTML = `
       <div class="wizard">
         <div class="card" style="padding:32px">
-          <div class="wsteps">${steps.map((_,i)=>`<div class="wstep${i<step?' done':i===step?' active':''}"></div>`).join('')}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of ${steps.length}</div>
-          <div style="font-size:20px;font-weight:700;margin-bottom:6px">${s.q}</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${s.hint}</div>
-          ${s.type==='age' ? `
-            <div style="max-width:200px;margin-bottom:8px">
-              <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
-                style="width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:24px;font-weight:700;background:var(--cream);outline:none;font-family:'DM Mono',monospace;text-align:center"
-                oninput="document.getElementById('onb-age-err').style.display='none';document.getElementById('w-next').disabled=!this.value"
-                onkeydown="if(event.key==='Enter')wNext()">
-              <div style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">years old</div>
+          ${stepChrome('Before you start', 'Thirty seconds on what we will ask you for, and who can see it.')}
+          <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">What we will ask</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">Over the coming weeks we will invite you to enter your budget, savings and any loans. Every number is optional, and you can delete it any time.</div>
             </div>
-            <p id="onb-age-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ Please enter your age (18–80).</p>
-          ` : isNames ? `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
-              <div>
-                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First Name <span style="color:var(--gold)">*</span></label>
-                <input type="text" id="onb-first" value="${escHtml(profile.first_name||'')}" placeholder="e.g. Kagiso" maxlength="60"
-                  autocomplete="given-name"
-                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
-                  oninput="document.getElementById('onb-name-err').style.display='none'"
-                  onkeydown="if(event.key==='Enter')wNext()">
-              </div>
-              <div>
-                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last Name</label>
-                <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
-                  autocomplete="family-name"
-                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
-                  onkeydown="if(event.key==='Enter')wNext()">
-              </div>
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">Who can see it</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">You. A Key Wellness coach, only if you choose to share with them. Your employer sees results for groups of five or more people — never your name, never your figures.</div>
             </div>
-            <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ First name is required.</p>
-            <div style="margin-top:14px">
-              <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--gold)">*</span></label>
-              <div id="onb-gender" style="display:flex;flex-wrap:wrap;gap:8px">
-                ${[['male','Male'],['female','Female'],['prefer_not_to_say','Prefer not to say']].map(([v,l])=>`<button type="button" class="choice-btn${profile.gender===v?' selected':''}" data-g="${v}" onclick="wGender('${v}')" style="flex:0 1 auto;padding:9px 16px">${l}</button>`).join('')}
-              </div>
-              <p id="onb-gender-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please select an option to continue.</p>
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">What we never do</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">We never sell your data, never share it with lenders, and never show it to your manager or HR by name.</div>
             </div>
-          ` : s.type==='company' ? `<div id="cg-company"></div><p id="onb-company-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your company to continue.</p>`
-            : s.type==='department' ? `<div id="cg-dept"></div><p id="onb-dept-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your department to continue.</p>` : `<div class="choice-grid" id="cg"></div>`}
-          <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
-            ${step>0?`<button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>`:'<span></span>'}
-            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${isNames?'':' disabled'}>
-              ${step===steps.length-1?'Complete Setup →':'Next →'}
-            </button>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:12px">
+            <input type="checkbox" id="onb-consent" ${consentOk?'checked':''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="wConsent(this.checked)">
+            <span style="font-size:13.5px;font-weight:600;color:var(--navy)">I understand.</span>
+          </label>
+          <button type="button" onclick="wToggleStatement()"
+            style="background:none;border:0;padding:0;color:var(--gold);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline">
+            ${showFullStatement ? 'Hide the full Data Protection statement' : 'Read the full Data Protection statement'}
+          </button>
+          ${showFullStatement ? `
+          <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-top:12px;max-height:300px;overflow-y:auto;border:1px solid var(--border)">
+            ${fullStatementHtml()}
+          </div>` : ''}
+          <div style="display:flex;justify-content:flex-end;margin-top:24px">
+            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${consentOk?'':'disabled'}>Continue →</button>
           </div>
         </div>
       </div>`;
-    if (s.type === 'age') {
-      document.getElementById('w-next').disabled = !profile.age;
-      setTimeout(()=>document.getElementById('onb-age')?.focus(), 50);
-    } else if (s.type === 'company') {
-      kwRenderUnitPicker(document.getElementById('cg-company'), {
-        units: s.units,
-        selectedId: profile.org_unit_id,
-        onSelect: id => {
-          // Changing company invalidates any previously chosen department.
-          if (id !== profile.org_unit_id) profile.department_id = null;
-          profile.org_unit_id = id;
-          document.getElementById('w-next').disabled = !id;
-          const e = document.getElementById('onb-company-err'); if (e) e.style.display = 'none';
-        }
-      });
-      document.getElementById('w-next').disabled = !profile.org_unit_id;
-    } else if (s.type === 'department') {
-      const box = document.getElementById('cg-dept');
-      box.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading departments…</div>';
-      const nextBtn = document.getElementById('w-next');
-      nextBtn.disabled = true;
-      s.deptOptional = false;
-      (async () => {
-        const { departments, error } = await kwFetchDepartments(profile.org_unit_id);
-        // Guard against the user having navigated away before the fetch resolved.
-        if (steps[step] !== s) return;
-        if (error) {
-          box.innerHTML = '<div style="color:var(--red);font-size:13px">⚠ Could not load departments. Please check your connection and go Back, then try again.</div>';
-          return;
-        }
-        if (!departments || !departments.length) {
-          // Unit has no departments — allow proceeding (department stays null).
-          box.innerHTML = '<div style="color:var(--muted);font-size:13px">No departments are listed for your company — you can continue.</div>';
-          profile.department_id = null;
-          s.deptOptional = true;
-          nextBtn.disabled = false;
-          return;
-        }
-        kwRenderDeptPicker(box, {
-          departments,
-          selectedId: profile.department_id,
-          onSelect: id => {
-            profile.department_id = id;
-            nextBtn.disabled = !id;
-            const e = document.getElementById('onb-dept-err'); if (e) e.style.display = 'none';
-          }
-        });
-        nextBtn.disabled = !profile.department_id;
-      })();
-    } else if (!isNames) {
-      const cg = document.getElementById('cg');
-      const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
-      cg.innerHTML = s.opts.map((o,i)=>`
-        <button class="choice-btn${s.type==='multi'?(cur.includes(o.l)?' selected':''):(cur===o.l?' selected':'')}" onclick="wPick(${i})">
-          <span class="ci">${o.i}</span>${o.l}
-        </button>`).join('');
-      const val = profile[s.key];
-      document.getElementById('w-next').disabled = s.type==='multi' ? !(val&&val.length) : !val;
-    } else {
-      setTimeout(()=>document.getElementById('onb-first')?.focus(), 50);
-    }
   }
 
-  window.wPick = function (i) {
-    const s = steps[step];
-    if (s.type==='multi') {
-      if (!profile[s.key]) profile[s.key]=[];
-      const idx = profile[s.key].indexOf(s.opts[i].l);
-      if (idx>=0) profile[s.key].splice(idx,1); else profile[s.key].push(s.opts[i].l);
-    } else { profile[s.key] = s.opts[i].l; }
-    render();
+  function renderAbout() {
+    const inputCss = "width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit";
+    el.innerHTML = `
+      <div class="wizard">
+        <div class="card" style="padding:32px">
+          ${stepChrome('About you', 'Four quick things so the portal can put first things first. No figures here.')}
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First name <span style="color:var(--gold)">*</span></label>
+            <input type="text" id="onb-first" value="${escHtml(profile.first_name||'')}" placeholder="e.g. Kagiso" maxlength="60"
+              autocomplete="given-name" style="${inputCss};max-width:280px"
+              oninput="document.getElementById('onb-name-err').style.display='none'">
+            <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">⚠ First name is required.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Your age <span style="color:var(--gold)">*</span></label>
+            <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
+              style="${inputCss};max-width:140px;font-family:'DM Mono',monospace;font-weight:700"
+              oninput="document.getElementById('onb-age-err').style.display='none'">
+            <div style="font-size:12px;color:var(--muted);margin-top:5px">Used for retirement projections and to tailor advice to your life stage.</div>
+            <p id="onb-age-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">⚠ Please enter your age (18–80).</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">Your employment status <span style="color:var(--gold)">*</span></label>
+            <div class="choice-grid" id="onb-emp">
+              ${EMPLOYMENT.map((o,i)=>`<button type="button" class="choice-btn${profile.employment===o.l?' selected':''}" onclick="wEmp(${i})"><span class="ci">${o.i}</span>${o.l}</button>`).join('')}
+            </div>
+            <p id="onb-emp-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please choose one to continue.</p>
+          </div>
+
+          <div style="margin-bottom:20px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">What do you want to work on? <span style="color:var(--gold)">*</span></label>
+            <div class="choice-grid" id="onb-goals">
+              ${GOALS.map((o,i)=>`<button type="button" class="choice-btn${(profile.goals||[]).includes(o.l)?' selected':''}" onclick="wGoal(${i})"><span class="ci">${o.i}</span>${o.l}</button>`).join('')}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Select all that apply.</div>
+            <p id="onb-goals-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please choose at least one.</p>
+          </div>
+
+          <hr style="border:0;border-top:1px solid var(--border);margin:24px 0 18px">
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last name <span style="color:var(--muted);font-weight:500">(optional)</span></label>
+            <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
+              autocomplete="family-name" style="${inputCss};max-width:280px">
+          </div>
+
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--muted);font-weight:500">(optional)</span></label>
+            <div id="onb-gender" style="display:flex;flex-wrap:wrap;gap:8px">
+              ${GENDERS.map(([v,l])=>`<button type="button" class="choice-btn${profile.gender===v?' selected':''}" data-g="${v}" onclick="wGender('${v}')" style="flex:0 1 auto;padding:9px 16px">${l}</button>`).join('')}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Helps us report fairly across the programme — only ever as a group.</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;margin-top:26px;gap:12px">
+            <button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>
+            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()">Finish →</button>
+          </div>
+        </div>
+      </div>`;
+    setTimeout(()=>document.getElementById('onb-first')?.focus(), 50);
+  }
+
+  function render() { step === 0 ? renderConsent() : renderAbout(); }
+
+  window.wConsent = function (checked) {
+    consentOk = !!checked;
+    const b = document.getElementById('w-next'); if (b) b.disabled = !consentOk;
   };
-  // Gender is picked without a full re-render (which would wipe the unsaved
-  // name inputs, since those are only committed to `profile` on wNext).
+  window.wToggleStatement = function () { showFullStatement = !showFullStatement; render(); };
+  // Employment / goals / gender all repaint in place rather than re-rendering the
+  // step: a full render would wipe the name and age inputs, which are only read
+  // into `profile` on Finish.
+  window.wEmp = function (i) {
+    profile.employment = EMPLOYMENT[i].l;
+    document.querySelectorAll('#onb-emp .choice-btn').forEach((b,j)=>b.classList.toggle('selected', j===i));
+    const e = document.getElementById('onb-emp-err'); if (e) e.style.display = 'none';
+  };
+  window.wGoal = function (i) {
+    const label = GOALS[i].l;
+    if (!profile.goals) profile.goals = [];
+    const at = profile.goals.indexOf(label);
+    if (at >= 0) profile.goals.splice(at,1); else profile.goals.push(label);
+    document.querySelectorAll('#onb-goals .choice-btn')[i]?.classList.toggle('selected', at < 0);
+    const e = document.getElementById('onb-goals-err'); if (e) e.style.display = 'none';
+  };
   window.wGender = function (v) {
     profile.gender = v;
     document.querySelectorAll('#onb-gender .choice-btn').forEach(b =>
       b.classList.toggle('selected', b.getAttribute('data-g') === v));
-    const e = document.getElementById('onb-gender-err'); if (e) e.style.display = 'none';
   };
-  window.wNext = function () {
-    const s = steps[step];
-    if (s.type === 'names') {
-      const first = document.getElementById('onb-first')?.value.trim() || '';
-      const last  = document.getElementById('onb-last')?.value.trim()  || '';
-      if (!first) { document.getElementById('onb-name-err').style.display=''; return; }
-      if (!profile.gender) { document.getElementById('onb-gender-err').style.display=''; return; }
-      profile.first_name = first;
-      profile.last_name  = last;
-    } else if (s.type === 'age') {
-      const ageVal = parseInt(document.getElementById('onb-age')?.value || '');
-      if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; return; }
-      profile.age = ageVal;
-    } else if (s.type === 'company') {
-      if (!profile.org_unit_id) { const e = document.getElementById('onb-company-err'); if (e) e.style.display = ''; return; }
-    } else if (s.type === 'department') {
-      // department may legitimately be null only when the unit has no departments
-      if (!profile.department_id && !s.deptOptional) { const e = document.getElementById('onb-dept-err'); if (e) e.style.display = ''; return; }
-    }
-    if (step < steps.length-1) { step++; render(); }
-    else { finishOnboarding(); }
-  };
-  window.wPrev = function () { if (step>0) { step--; render(); } };
+  window.wPrev = function () { if (step > 0) { step--; render(); } };
 
-  // Insert the mandatory company step after "names" when the member's org has
-  // active units. Fetched before first paint; Test Co (no units) is untouched.
-  el.innerHTML = '<div class="wizard"><div class="card" style="padding:32px;text-align:center;color:var(--muted);font-size:14px">Loading…</div></div>';
-  (async () => {
-    const { units } = await kwFetchOrgUnits();
-    if (units && units.length) {
-      steps.splice(1, 0,
-        {
-          q:'Which company are you with?',
-          hint:'Your company under the Sedimosa programme. This determines your wellness reports.',
-          key:'org_unit_id', type:'company', units
-        },
-        {
-          q:'Which department are you in?',
-          hint:'This helps your HR team understand wellness across teams — always shown in aggregate, never individually.',
-          key:'department_id', type:'department'
-        }
-      );
+  window.wNext = async function () {
+    if (step === 0) {
+      if (!consentOk) return;
+      const btn = document.getElementById('w-next');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      // Consent is a compliance record — do not advance if it could not be stored.
+      const ok = await recordConsent();
+      if (!ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Continue →'; }
+        return;
+      }
+      step = 1; render(); return;
     }
-    render();
-  })();
+    const first = document.getElementById('onb-first')?.value.trim() || '';
+    const last  = document.getElementById('onb-last')?.value.trim()  || '';
+    const ageVal = parseInt(document.getElementById('onb-age')?.value || '', 10);
+    let ok = true;
+    if (!first) { document.getElementById('onb-name-err').style.display=''; ok = false; }
+    if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; ok = false; }
+    if (!profile.employment) { document.getElementById('onb-emp-err').style.display=''; ok = false; }
+    if (!profile.goals || !profile.goals.length) { document.getElementById('onb-goals-err').style.display=''; ok = false; }
+    if (!ok) { document.querySelector('.wizard .card')?.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    profile.first_name = first;
+    profile.last_name  = last;
+    profile.age        = ageVal;
+    finishOnboarding();
+  };
+
+  render();
 
   async function finishOnboarding() {
-    state.user = { ...profile, id: currentUser.id, onboarded: true, joined_at: new Date().toISOString() };
+    // Spread the loaded profile first. saveUser() writes a whitelist that
+    // includes consent_accepted with a `?? false` default, so replacing
+    // state.user wholesale here would silently un-record the consent that step 1
+    // just wrote to the database.
+    state.user = { ...(state.user || {}), ...profile, id: currentUser.id, onboarded: true,
+                   joined_at: state.user?.joined_at || new Date().toISOString() };
     const savedOk = await saveUser();
     if (savedOk === false) { showToast('⚠️ Could not save your details. Please try again.'); return; }
-    // org_unit_id / department_id / gender are NOT in saveUser()'s whitelist
-    // (they are set-once, admin-mediated dims) — persist them with a dedicated
-    // update, and do NOT advance if it fails (no silent failure).
-    const _dims = {};
-    if (profile.org_unit_id)   _dims.org_unit_id   = profile.org_unit_id;
-    if (profile.department_id) _dims.department_id = profile.department_id;
-    if (profile.gender)        _dims.gender        = profile.gender;
-    if (Object.keys(_dims).length) {
-      const { error: _dimErr } = await sb.from('profiles').update(_dims).eq('id', currentUser.id);
-      if (_dimErr) {
-        console.error('onboarding dims save failed:', _dimErr);
+    // gender is not in saveUser()'s whitelist — persist it separately, and do
+    // not advance on failure (no silent loss).
+    if (profile.gender) {
+      const { error: _gErr } = await sb.from('profiles').update({ gender: profile.gender }).eq('id', currentUser.id);
+      if (_gErr) {
+        console.error('onboarding gender save failed:', _gErr);
         showToast('⚠️ Could not save your details. Please try again.');
         return;
       }
-      Object.assign(state.user, _dims);
+      state.user.gender = profile.gender;
     }
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
@@ -2593,16 +2619,9 @@ VIEWS['onboarding'] = function () {
     KWBadges.recordPoints('onboarding_complete').then(res => {
       if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
     });
-    // Show consent → welcome video for new users, checking localStorage first
-    const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
-    const _lsWelcome = localStorage.getItem('kw_welcome_seen') === 'true';
-    if (!_lsConsent && !state.user?.consent_accepted) {
-      showConsentModal();
-    } else if (!_lsWelcome && !state.user?.welcome_seen) {
-      showWelcomeVideo();
-    } else {
-      go('dashboard');
-    }
+    // Straight to the habits check. No consent modal (done on step 1) and no
+    // welcome-video gate — the video is now a dismissible dashboard card.
+    openTool('wellness_assessment.html');
   }
 };
 
@@ -3302,6 +3321,26 @@ VIEWS['dashboard'] = async function () {
       <div style="font-size:13px;color:var(--muted);margin-top:3px">Here's your financial wellness overview.</div>
     </div>
 
+    ${(() => {
+      // P0-1: the welcome video, as an offer rather than a gate (audit F4). It
+      // used to be a modal that withheld its own close button until the video
+      // finished. Dismissal is remembered in kw_welcome_seen, the same key
+      // closeWelcome() writes, so watching it also retires the card.
+      const _wSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
+      if (_wSeen) return '';
+      return `<div class="card" style="margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-size:26px;flex-shrink:0">🎬</span>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px">Watch the 2-minute welcome from the team</div>
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.5">A short introduction to what the portal does and how to get the most from it.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-primary btn-sm" onclick="showWelcomeVideo()">Watch</button>
+          <button class="btn btn-outline btn-sm" onclick="dismissWelcomeCard()">Dismiss</button>
+        </div>
+      </div>`;
+    })()}
+
     ${(()=>{
       const now = new Date();
       const confirmed = (state.bookings||[]).filter(b=>b.status==='confirmed' && !b.client_seen_confirmation);
@@ -3478,55 +3517,69 @@ VIEWS['dashboard'] = async function () {
 // ══════════════════════════════════════════════════
 //  DATA PROTECTION CONSENT
 // ══════════════════════════════════════════════════
+// P0-1: the modal is NO LONGER SHOWN TO MEMBERS — consent is step 1 of the
+// onboarding wizard. Its markup stays in the DOM because #consent-statement is
+// where the full legal text lives, and the wizard reads it from there.
 function showConsentModal() {
   const el = document.getElementById('consent-modal');
   if (el) el.style.display = 'flex';
 }
 
-window.acceptConsent = async function () {
-  const el = document.getElementById('consent-modal');
-  if (el) el.style.display = 'none';
+// The single write path for consent, shared by the wizard's step 1 and the
+// (now unused) modal. Returns true only when the record actually landed —
+// consent is a compliance record, so a caller must not advance on false.
+async function recordConsent() {
   const now = new Date().toISOString();
-  // Save to localStorage immediately as fast-path for future loads
-  localStorage.setItem('kw_consent_accepted', 'true');
   if (state.user) {
+    const _prevAccepted = state.user.consent_accepted;
+    const _prevDate     = state.user.consent_date;
     state.user.consent_accepted = true;
     state.user.consent_date = now;
-    await saveUser();
+    const ok = await saveUser();
+    if (ok === false) {
+      state.user.consent_accepted = _prevAccepted;
+      state.user.consent_date = _prevDate;
+      showToast('⚠️ We couldn\'t record your consent — please check your connection and try again.');
+      return false;
+    }
   } else if (currentUser) {
-    // Consent is a compliance record — surface (don't swallow) a write failure.
     const { error: _consentErr } = await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
-    if (_consentErr) { console.error('consent save failed:', _consentErr); showToast('⚠️ We couldn\'t record your consent on the server — please check your connection.'); }
-  }
-  // Only show welcome video if user hasn't already seen it
-  const welcomeSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
-  if (!welcomeSeen) {
-    showWelcomeVideo();
+    if (_consentErr) {
+      console.error('consent save failed:', _consentErr);
+      showToast('⚠️ We couldn\'t record your consent — please check your connection and try again.');
+      return false;
+    }
+    // Seed state.user so the flag survives the next saveUser(). Without this, a
+    // member whose profiles row had not materialised yet would have consent
+    // recorded here and then written back as `consent_accepted: false` by
+    // finishOnboarding's upsert, which defaults every absent key.
+    state.user = { ...(state.user || {}), consent_accepted: true, consent_date: now };
   } else {
-    go('dashboard');
+    return false;
   }
+  // localStorage is only a fast-path for later loads, so it is set after the
+  // server write succeeds — never as a stand-in for it.
+  localStorage.setItem('kw_consent_accepted', 'true');
+  return true;
+}
+
+window.acceptConsent = async function () {
+  if (!await recordConsent()) return;
+  const el = document.getElementById('consent-modal');
+  if (el) el.style.display = 'none';
+  go('dashboard');
 };
 
 // ══════════════════════════════════════════════════
 //  WELCOME VIDEO
 // ══════════════════════════════════════════════════
-function _showStartButton() {
-  const btn  = document.getElementById('welcome-start-wrap');
-  const wait = document.getElementById('welcome-wait-msg');
-  if (btn && btn.style.display === 'none') {
-    btn.style.display = '';
-    btn.style.opacity = '0';
-    btn.style.transition = 'opacity 0.5s';
-    setTimeout(() => { btn.style.opacity = '1'; }, 50);
-  }
-  if (wait) wait.style.display = 'none';
-}
-
-// ── Onboarding welcome video ───────────────────────────────────────
+// ── Welcome video ──────────────────────────────────────────────────
 // Vimeo-hosted, in line with the Vimeo hosting decision for portal video.
-// Held here rather than in a Supabase content_items row: this is the one
-// video every new member must see before they can start, so it should not
-// depend on a data row being present and correctly configured.
+// Held here rather than in a Supabase content_items row so it does not depend
+// on a data row being present and correctly configured.
+//
+// P0-1: this is an OPTIONAL card on the dashboard, not a gate. It no longer
+// blocks the assessment and no longer opens itself.
 //
 // Accepts '<id>' or '<id>/<privacy-hash>' — see lpParseVimeoRef(). To swap the
 // video, change this line only; embedding is restricted to the portal's domains
@@ -3545,29 +3598,26 @@ function showWelcomeVideo(){
   const _wn  = state.user?.first_name || _wlp.firstName || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
-  // Reset button state
+  // The close button is visible from the outset (see the modal markup) — reset
+  // it in case an earlier open left it mid-fade.
   const _sw = document.getElementById('welcome-start-wrap');
-  if (_sw) { _sw.style.display = 'none'; _sw.style.opacity = '0'; }
+  if (_sw) { _sw.style.display = ''; _sw.style.opacity = '1'; }
   const _wm = document.getElementById('welcome-wait-msg');
-  if (_wm) _wm.style.display = '';
+  if (_wm) { _wm.style.display = 'none'; _wm.textContent = ''; }
   document.getElementById('welcome-modal').classList.add('visible');
 
-  // Reveal the "Start My Assessment" button ONLY when the welcome video ends.
-  // The button stays hidden during playback so it never appears at the start
-  // (no skip control — watching the intro is intentionally required).
   const box = document.getElementById('welcome-vimeo');
   _kwDestroyWelcomePlayer();
   if (box) box.innerHTML = '';
 
-  // Fail open. This modal sits between a new member and their first assessment,
-  // so anything that stops the video reaching us — Vimeo blocked on a corporate
-  // network, the API script never loading, a bad reference — must release the
-  // button rather than leave them staring at a black box.
+  // Say so when the video cannot be reached — Vimeo blocked on a corporate
+  // network, the API script never loading, a bad reference — rather than leaving
+  // the member looking at a black box. Nothing is gated on this any more; the
+  // close button is already there.
   const failOpen = (why) => {
     if (why) console.warn('Welcome video unavailable:', why);
     const wait = document.getElementById('welcome-wait-msg');
-    if (wait) wait.textContent = 'The welcome video could not load — you can continue to your assessment.';
-    _showStartButton();
+    if (wait) { wait.textContent = 'The welcome video could not load — you can close this and carry on.'; wait.style.display = ''; }
   };
 
   const ref = lpParseVimeoRef(KW_WELCOME_VIMEO);
@@ -3580,7 +3630,6 @@ function showWelcomeVideo(){
         ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
         : { id: Number(ref.id), responsive: true };
       _kwWelcomePlayer = new Vimeo.Player(box, opts);
-      _kwWelcomePlayer.on('ended', () => _showStartButton());
       _kwWelcomePlayer.on('error', e => failOpen(e));
       _kwWelcomePlayer.ready().catch(e => failOpen(e));
     } catch (e) { failOpen(e); }
@@ -3592,10 +3641,6 @@ function showWelcomeVideo(){
   _kwWelcomeApiTimer = setTimeout(() => {
     if (!_kwWelcomePlayer) failOpen('player.js did not load in time');
   }, 15000);
-
-  // Safety net: if 'ended' never fires (e.g. the video can't load), reveal the
-  // button after ~6 minutes so a member is never permanently stuck.
-  setTimeout(_showStartButton, 360000);
 }
 
 window.closeWelcome = async function(){
@@ -3609,7 +3654,18 @@ window.closeWelcome = async function(){
   } else if (currentUser) {
     sb.from('profiles').update({ welcome_seen: true }).eq('id', currentUser.id).then(()=>{}).catch(()=>{});
   }
-  openTool('wellness_assessment.html');
+  // P0-1: closing the video returns the member to where they were. It used to
+  // push them into the assessment, which is what made a "welcome" a gate.
+  if ((location.hash.replace('#','') || 'dashboard') === 'dashboard') route();
+};
+
+// Dismiss the dashboard welcome card without watching. Writes the same
+// kw_welcome_seen key as closeWelcome(), so the two cannot disagree.
+window.dismissWelcomeCard = async function () {
+  localStorage.setItem('kw_welcome_seen', 'true');
+  if (state.user) { state.user.welcome_seen = true; saveUser().catch(()=>{}); }
+  else if (currentUser) { sb.from('profiles').update({ welcome_seen: true }).eq('id', currentUser.id).then(()=>{}).catch(()=>{}); }
+  if ((location.hash.replace('#','') || 'dashboard') === 'dashboard') route();
 };
 
 // ══════════════════════════════════════════════════
@@ -3640,7 +3696,9 @@ window.saveNameModal = function () {
   if (state.user) {
     state.user.first_name = first;
     state.user.last_name  = last;
-    state.user.onboarded  = true;   // M-1: capturing a name counts as onboarded so the flag is authoritative
+    // P0-1: does NOT set onboarded. Capturing a name is not onboarding — treating
+    // it as such is exactly what let this modal skip the wizard's age, employment
+    // and goals steps, so the portal never collected them (audit F1).
     saveUser().catch(()=>{});
   } else {
     // Fallback: update Supabase auth metadata
@@ -3649,9 +3707,6 @@ window.saveNameModal = function () {
 
   initProfileUI();
   document.getElementById('name-modal').classList.remove('visible');
-  // Continue the backfill chain (company → department → gender) for anything
-  // still missing, now that the name modal has closed.
-  maybePromptBackfill();
 };
 
 // ══════════════════════════════════════════════════
@@ -3908,8 +3963,16 @@ function _processBackfillQueue(queue, i) {
 }
 
 // Prompt the backfill chain for whichever of company → department → gender is
-// missing. Idempotent and safe to call on every member landing. Company &
-// department only apply to unit-enabled orgs; gender applies to everyone.
+// missing. Company & department only apply to unit-enabled orgs; gender applies
+// to everyone.
+//
+// P0-1: NOTHING CALLS THIS AUTOMATICALLY, AND NOTHING MAY. It used to run on
+// every member landing — after sign-in, after a password re-confirm, and off the
+// back of the name modal — which is three of the four pop-ups a new member met
+// before they had seen a single screen (audit F3, F4). It is kept, and exposed
+// on `window`, only so an admin can trigger a backfill deliberately from the
+// console for a member who asks for their details to be corrected. If you find
+// yourself adding a call site on a member path, that is the bug.
 async function maybePromptBackfill() {
   if (!state.user) return;
   if (document.querySelector('#name-modal.visible, #company-modal.visible, #department-modal.visible, #gender-modal.visible')) return;
@@ -3922,6 +3985,8 @@ async function maybePromptBackfill() {
   if (!queue.length) return;
   _processBackfillQueue(queue, 0);
 }
+// Admin-only entry point — see the warning above.
+window.maybePromptBackfill = maybePromptBackfill;
 
 // Record a read article (by title), persist to Supabase, and refresh learning badge.
 async function markArticleRead(title) {
@@ -7460,23 +7525,19 @@ function registerAuthListener() {
       loadNotifications();
       route();
       if (state.user) {
-        const _lp = safeParseLS('kw_profile', {});
-        const _hasName = !!(_lp.firstName || _lp.displayName || state.user.first_name);
-        // Show name-capture modal for existing users who have no name set yet.
-        // Its save() chains into maybePromptBackfill() for the remaining dims.
-        if (!_hasName) {
-          setTimeout(showNameModal, 700);
+        // P0-1: NOTHING POPS UP ON SIGN-IN. This block used to launch the name
+        // modal at 700 ms and the consent modal at 800 ms, then chain the
+        // company → department → gender backfill behind them — four interruptions
+        // stacked over the onboarding wizard before the member saw a screen
+        // (audit F1, F4). A member who is not onboarded now goes to the wizard,
+        // which route() has already decided; a member who is, goes to their
+        // dashboard. Both are screens, not modals.
+        //
+        // Consent still syncs its localStorage fast-path from the server value,
+        // so a member who consented on another device is not asked again.
+        if (state.user.consent_accepted && localStorage.getItem('kw_consent_accepted') !== 'true') {
+          localStorage.setItem('kw_consent_accepted', 'true');
         }
-        // Consent check: localStorage is fast-path; Supabase is fallback
-        const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
-        if (_lsConsent || state.user.consent_accepted) {
-          if (!_lsConsent) localStorage.setItem('kw_consent_accepted', 'true');
-        } else {
-          setTimeout(showConsentModal, 800);
-        }
-        // Backfill company → department → gender for pre-existing members.
-        // Skipped here when the name modal is showing; it chains from there.
-        if (_hasName) maybePromptBackfill();
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       // User arrived via the reset-link email — show set-new-password form
@@ -7542,7 +7603,7 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
-      maybePromptBackfill();  // company → department → gender backfill for returning members
+      // P0-1: no backfill modal for returning members — see maybePromptBackfill().
     } else {
       // External visit or new tab — require password to prove identity.
       document.getElementById('sc-email').textContent = currentUser.email || '';
