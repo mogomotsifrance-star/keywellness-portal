@@ -1,12 +1,14 @@
 // Key Wellness — admin-support Edge Function
 // ============================================================
 // Member support for Lone and Michelle, from ops.html: find a person, send
-// them a password-reset link, resend a booking confirmation.
+// them a password-reset link, resend a booking confirmation, and — since
+// Sept 2026 — send an invitation to a person staged by invite_stage().
 //
 // Deploy:  supabase functions deploy admin-support
 //
-// REQUIRES supabase_support_audit.sql — run it BEFORE deploying, or every
-// call returns ok:false because the RPCs it depends on do not exist.
+// REQUIRES supabase_support_audit.sql AND supabase_member_invites.sql — run
+// them BEFORE deploying, or calls return ok:false because the RPCs they
+// depend on do not exist.
 //
 // ── THE THREE RULES, AND THE ONE THIS BREAKS ────────────────
 //
@@ -34,14 +36,15 @@
 //
 // Only two things a database cannot do: verify a JWT, and call the Auth admin
 // API. Every authorisation decision and every audit row goes through RPCs
-// called AS THE SIGNED-IN USER, so is_ops_admin() is evaluated against the
-// real caller and not against a key that can do anything.
+// called AS THE SIGNED-IN USER, so the gate is evaluated against the real
+// caller and not against a key that can do anything.
 //
 // ── WHO MAY ─────────────────────────────────────────────────
 //
-// is_ops_admin(), never is_admin() directly. Today they are the same function.
-// When M3 lands, France keeps his admin role and LOSES this capability, and
-// nothing in this file changes.
+// The database decides, in support_can() and the invite_* functions. Their
+// gate is is_admin() today (is_ops_admin() was removed by M4a — see CLAUDE.md);
+// when an ops/psychosocial split arrives, it changes there and this file does
+// not.
 // ============================================================
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
@@ -63,7 +66,20 @@ export function corsHeaders(req: Request): Record<string, string> {
   };
 }
 
-const ACTIONS = ["lookup", "send_password_reset", "resend_booking_confirmation", "list_recent"];
+const ACTIONS = ["lookup", "send_password_reset", "resend_booking_confirmation", "list_recent", "send_invite"];
+
+// ── send_invite AND RULE 2 ──────────────────────────────────
+// An invite is the action most tempted to break Rule 2: the person does not
+// exist yet, so where else would the address come from? Answer: the database.
+// ops.html stages the pasted list through invite_stage() (validated, gated,
+// written as the caller), and sends us an INVITE ID. invite_to_send(id), run
+// as the caller, hands back the address. A body carrying "email" is still
+// refused. The mail is Supabase's own invite template; nothing here builds
+// HTML. See supabase_member_invites.sql.
+//
+// The invite link lands on REDIRECT_TO like the reset link does; index.html
+// treats type=invite like type=recovery, so the member chooses a password
+// before seeing anything else.
 
 /** Where the reset link lands. The portal subdomain is not live yet — see the
  *  note on KW_PORTAL_URL in _shared/kw-email.ts. */
@@ -243,6 +259,72 @@ export async function handle(req: Request, deps: Deps): Promise<Response> {
         p_detail: String((payload as Record<string, unknown>).email ?? ""),
       });
       return json({ ok: true, sent_to: (payload as Record<string, unknown>).email ?? null });
+    }
+
+    // ── send_invite ──────────────────────────────────────
+    // Body: { action:'send_invite', invite_id }. Everything else — address,
+    // name, organisation, site, department — is read back from the invite row
+    // AS THE CALLER. If the caller is not an admin, invite_to_send() raises
+    // and nothing is sent.
+    if (action === "send_invite") {
+      const inviteId = String(body.invite_id || "");
+      if (!inviteId) return json({ ok: false, error: "invite_id required" }, 400);
+
+      const gate = await allowed(caller, "send_invite", null);
+      if (!gate.allowed) {
+        await caller.rpc("support_log", {
+          p_action: "send_invite", p_outcome: "denied", p_detail: `${inviteId} ${gate.reason}`,
+        });
+        return json({ ok: false, error: gate.reason }, 429);
+      }
+
+      const { data: inv, error: iErr } = await caller.rpc("invite_to_send", { p_invite_id: inviteId });
+      if (iErr || !inv) {
+        await caller.rpc("support_log", {
+          p_action: "send_invite", p_outcome: "error",
+          p_detail: `${inviteId} ${(iErr?.message || "no invite").slice(0, 160)}`,
+        });
+        return json({ ok: false, error: iErr?.message || "invite not found" }, 403);
+      }
+      const row = inv as Record<string, string | null>;
+      const email = String(row.email || "");
+
+      // The Auth admin API creates the account (no password yet) and mails
+      // Supabase's invite template. The metadata rides along so
+      // handle_new_user() can find the invite row even if the address on the
+      // account is later normalised differently from the one we staged.
+      const { error: sErr } = await deps.admin.auth.admin.inviteUserByEmail(email, {
+        redirectTo: REDIRECT_TO,
+        data: {
+          invite_id:  row.invite_id,
+          first_name: row.first_name || undefined,
+          last_name:  row.last_name  || undefined,
+          full_name:  [row.first_name, row.last_name].filter(Boolean).join(" ") || undefined,
+        },
+      });
+
+      if (sErr) {
+        // "already registered" is the one expected failure: the person made
+        // an account between staging and sending. The invite is closed as
+        // failed with that reason, so the screen says so rather than retrying.
+        await caller.rpc("invite_mark", {
+          p_invite_id: inviteId, p_outcome: "failed", p_error: sErr.message.slice(0, 300),
+        });
+        await caller.rpc("support_log", {
+          p_action: "send_invite", p_outcome: "error", p_detail: `${email} ${sErr.message.slice(0, 160)}`,
+        });
+        const already = /already|exists|registered/i.test(sErr.message);
+        return json({
+          ok: false,
+          error: already ? "this address already has an account" : "could not send the invitation",
+        }, already ? 409 : 502);
+      }
+
+      await caller.rpc("invite_mark", { p_invite_id: inviteId, p_outcome: "sent" });
+      await caller.rpc("support_log", {
+        p_action: "send_invite", p_outcome: "ok", p_detail: email,
+      });
+      return json({ ok: true, sent_to: email });
     }
 
     return json({ ok: false, error: "unknown action" }, 400);
