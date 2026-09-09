@@ -148,20 +148,29 @@ function route() {
 }
 
 /* ══ SUPPORT ══════════════════════════════════════════════════
-   Password-reset links and confirmation resends, for Lone and Michelle.
+   Password-reset links, confirmation resends, and — since Sept 2026 —
+   adding a group of people to an organisation, for Lone and Michelle.
 
    The audit log is the LEFT COLUMN, not a hidden table: a support tool
    nobody can see the use of is a support tool nobody can hold to account.
 
-   No yellow anywhere on this screen. Yellow means "needs a decision", and
-   nothing here does. No red either — the palette has none.
+   Yellow appears on this screen in ONE place: a row in a pasted list that
+   was skipped and needs a person to decide (fix the address, or drop it).
+   Nothing else here is a decision. No red — the palette has none.
 
    Everything goes through the admin-support Edge Function. The body carries
-   a user_id that came from ITS OWN lookup, never an address; the recipient is
-   resolved server-side from auth.users. See the function's header. */
+   a user_id that came from ITS OWN lookup, or an invite_id that came from
+   invite_stage() — never an address. See the function's header and
+   supabase_member_invites.sql for why the list is staged in the database
+   before a single mail is sent. */
 
 const SUPPORT_FN = KW.url + '/functions/v1/admin-support';
-let SUP = { q:'', results:[], recent:[], picked:null, confirming:null, msg:'' };
+let SUP = { mode:'find', q:'', results:[], recent:[], picked:null, confirming:null, msg:'' };
+
+/* Add-members state. orgs/units are read directly — an admin already sees
+   both tables — and the parsed rows live here between "check" and "send". */
+let ADD = { orgs:[], units:[], orgId:'', unitId:'', text:'', rows:null, sending:false,
+            ledger:[], msg:'' };
 
 async function supportCall(payload) {
   const { data: { session } } = await sb.auth.getSession();
@@ -181,6 +190,7 @@ async function renderSupport() {
   const v = document.getElementById('view');
   const recent = await supportCall({ action:'list_recent' });
   SUP.recent = (recent && recent.ok) ? (recent.results || []) : [];
+  if (SUP.mode === 'add') await addLoad();
 
   v.innerHTML = `<div class="board">
     <div class="col-left">
@@ -188,15 +198,31 @@ async function renderSupport() {
       ${SUP.recent.length ? SUP.recent.map(r => `<div class="row" style="display:block">
           <div>${esc(r.action.replace(/_/g,' '))}</div>
           <div class="muted">${esc(fmtShort((r.at||'').slice(0,10)))} · ${esc(r.actor||'')}
-            ${r.target ? '· ' + esc(r.target) : ''}
+            ${r.target ? '· ' + esc(r.target) : (r.action === 'send_invite' && r.detail ? '· ' + esc(r.detail) : '')}
             ${r.outcome !== 'ok' ? '· ' + esc(r.outcome) : ''}</div>
         </div>`).join('')
         : '<p class="slot">Nothing yet.</p>'}
     </div>
 
     <div class="col-mid">
-      <p class="kicker">Member support</p>
-      <h1 class="client-name">Find someone</h1>
+      <p class="kicker">Member support ·
+        <button class="dest" ${SUP.mode==='find' ? 'aria-current="page"' : ''} onclick="supMode('find')">Find someone</button>
+        &nbsp;·&nbsp;
+        <button class="dest" ${SUP.mode==='add' ? 'aria-current="page"' : ''} onclick="supMode('add')">Add members</button>
+      </p>
+      ${SUP.mode === 'add' ? addMid() : supFindMid()}
+    </div>
+
+    <div class="col-right">
+      ${SUP.mode === 'add' ? addRight() : `<p class="label">Selected</p><hr class="rule">${supPanel()}`}
+    </div>
+  </div>`;
+}
+
+function supMode(m) { SUP.mode = m; renderSupport(); }
+
+function supFindMid() {
+  return `<h1 class="client-name">Find someone</h1>
       <input class="action-input" id="supQ" style="max-width:520px"
              placeholder="Email or name, at least three characters…"
              value="${esc(SUP.q)}" onkeydown="if(event.key==='Enter')supSearch()">
@@ -210,14 +236,7 @@ async function renderSupport() {
           <button class="dest" style="height:auto;line-height:1.4"
                   onclick="supPick('${esc(r.user_id)}')">Select</button>
         </div>`).join('')
-        : '<p class="slot">No one selected yet. Search above.</p>'}
-    </div>
-
-    <div class="col-right">
-      <p class="label">Selected</p><hr class="rule">
-      ${supPanel()}
-    </div>
-  </div>`;
+        : '<p class="slot">No one selected yet. Search above.</p>'}`;
 }
 
 function supPanel() {
@@ -271,6 +290,181 @@ async function supReset() {
   await renderSupport();
   const m = document.getElementById('supMsg');
   if (m) m.textContent = SUP.msg;
+}
+
+/* ── Add members ────────────────────────────────────────────
+   Three steps, all on one screen, top to bottom: choose where they belong,
+   paste the list, check it; then one button sends. "Check" writes the rows
+   to member_invites and comes back with a verdict per line; nothing is
+   mailed until the second button. A skipped line is the only yellow here. */
+
+async function addLoad() {
+  if (!ADD.orgs.length) {
+    const { data } = await sb.from('organizations').select('id,name,invite_code,is_test')
+      .eq('is_active', true).order('name');
+    ADD.orgs = data || [];
+  }
+  if (ADD.orgId) {
+    const { data } = await sb.from('org_units').select('id,name,parent_unit_id,is_active')
+      .eq('org_id', ADD.orgId).eq('is_active', true).order('name');
+    const all = data || [];
+    /* Leaves only: a member attaches to a site, never to a company that has
+       sites — invite_stage() refuses the latter, so do not offer it. */
+    const parents = new Set(all.map(u => u.parent_unit_id).filter(Boolean));
+    ADD.units = all.filter(u => !parents.has(u.id));
+    const { data: led } = await sb.rpc('invite_list', { p_org_id: ADD.orgId, p_limit: 200 });
+    ADD.ledger = led || [];
+  } else { ADD.units = []; ADD.ledger = []; }
+}
+
+function addMid() {
+  const org = ADD.orgs.find(o => o.id === ADD.orgId);
+  const staged  = (ADD.rows || []).filter(r => r.status === 'staged');
+  const skipped = (ADD.rows || []).filter(r => r.status !== 'staged');
+  const sent    = (ADD.rows || []).filter(r => r.sent === 'ok');
+  return `<h1 class="client-name">Add members</h1>
+    <p class="notice">Each person gets Key Wellness's invitation email with a link to choose
+       their own password. They arrive already attached to the organisation, site and
+       department below — no invite code to type. Nobody here ever sees a password.</p>
+
+    <p class="label">1 · Where they belong</p><hr class="rule">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;max-width:720px">
+      <select class="action-input" style="flex:1;min-width:240px;margin-top:8px" id="addOrg" onchange="addOrg(this.value)">
+        <option value="">Organisation…</option>
+        ${ADD.orgs.map(o => `<option value="${esc(o.id)}" ${o.id===ADD.orgId?'selected':''}>${esc(o.name)}${o.is_test?' (test)':''}</option>`).join('')}
+      </select>
+      <select class="action-input" style="flex:1;min-width:240px;margin-top:8px" id="addUnit" onchange="addUnit(this.value)" ${ADD.orgId ? '' : 'disabled'}>
+        <option value="">${ADD.units.length ? 'Site…' : (ADD.orgId ? 'No sites — whole organisation' : 'Site…')}</option>
+        ${ADD.units.map(u => `<option value="${esc(u.id)}" ${u.id===ADD.unitId?'selected':''}>${esc(u.name)}</option>`).join('')}
+      </select>
+    </div>
+    ${org && ADD.units.length && !ADD.unitId
+      ? `<p class="slot">${esc(org.name)} has sites. Choose the one these people work at; the department list comes from it.</p>` : ''}
+
+    <p class="label">2 · The list</p><hr class="rule">
+    <p class="notice">One person per line, in this order: <strong>First name, Surname, Email, Department</strong>.
+       Paste straight from a spreadsheet — tabs or commas both work. A line with no email
+       cannot be invited; leave those people off and see the note on the right.</p>
+    <textarea class="action-input" id="addText" rows="8" spellcheck="false"
+      style="max-width:720px;font-family:'DM Mono',ui-monospace,monospace;font-size:13px;resize:vertical"
+      placeholder="Pitso, Isake, isake77@gmail.com, Mining&#10;Ronnie, Tsele, ronnietsele@gmail.com, Engineering"
+      oninput="ADD.text=this.value">${esc(ADD.text)}</textarea>
+    <div>
+      <button class="start-btn" onclick="addCheck()" ${ADD.orgId && !ADD.sending ? '' : 'disabled'}>Check the list</button>
+      ${ADD.rows ? `<button class="dest" style="margin-left:14px" onclick="addClear()">Start over</button>` : ''}
+    </div>
+    <p class="slot" id="addMsg">${esc(ADD.msg)}</p>
+
+    ${ADD.rows ? `
+    <p class="label">3 · Checked — ${staged.length} ready${skipped.length ? `, ${skipped.length} skipped` : ''}</p><hr class="rule">
+    ${ADD.rows.map((r, i) => `<div class="row" id="addRow${i}">
+        <span class="text">${r.status !== 'staged' ? '<span class="flag" style="margin-right:8px"></span>' : ''}
+          <strong>${esc([r.first_name, r.last_name].filter(Boolean).join(' ') || '(no name)')}</strong>
+          · ${esc(r.email || '—')}${r.department ? ' · ' + esc(r.department) : ''}
+          ${r.warning ? `<div class="muted">${esc(r.warning)}</div>` : ''}</span>
+        <span class="state">${esc(addState(r))}</span>
+      </div>`).join('')}
+    ${staged.length && !sent.length
+      ? `<button class="start-btn" onclick="addSend()" ${ADD.sending ? 'disabled' : ''}>
+           ${ADD.sending ? 'Sending…' : `Send ${staged.length} invitation${staged.length===1?'':'s'}`}</button>`
+      : ''}
+    ${sent.length ? `<p class="notice" style="margin-top:14px">${sent.length} of ${staged.length} sent.
+        Anyone who does not receive it can be resent from the right, up to three times.</p>` : ''}
+    ` : ''}`;
+}
+
+const ADD_STATUS = {
+  staged: 'ready', exists: 'already has an account', already_invited: 'already invited — see right',
+  duplicate: 'repeated in this list', invalid_email: 'not an email address'
+};
+function addState(r) {
+  if (r.sent === 'ok')  return 'sent';
+  if (r.sent === 'busy') return 'sending…';
+  if (r.sent)           return 'not sent: ' + r.sent;
+  return ADD_STATUS[r.status] || r.status;
+}
+
+async function addOrg(id)  { ADD.orgId = id; ADD.unitId = ''; ADD.rows = null; ADD.msg = ''; await renderSupport(); }
+async function addUnit(id) { ADD.unitId = id; ADD.rows = null; ADD.msg = ''; await renderSupport(); }
+function addClear() { ADD.rows = null; ADD.msg = ''; renderSupport(); }
+
+/* Tabs if any line has one, else commas. A line that puts the address in a
+   different column is still understood — the column with an @ is the email,
+   the rest are name, name, department in order. */
+function addParse(text) {
+  return text.split(/\r?\n/).map(l => l.trim()).filter(Boolean).map(line => {
+    const cells = (line.includes('\t') ? line.split('\t') : line.split(',')).map(c => c.trim());
+    const ei = cells.findIndex(c => c.includes('@'));
+    const email = ei >= 0 ? cells.splice(ei, 1)[0] : '';
+    return { first_name: cells[0] || '', last_name: cells[1] || '', email, department: cells[2] || '' };
+  });
+}
+
+async function addCheck() {
+  const rows = addParse(document.getElementById('addText').value || '');
+  if (!rows.length) { ADD.msg = 'Nothing to check — paste the list first.'; renderSupport(); return; }
+  if (ADD.units.length && !ADD.unitId) { ADD.msg = 'Choose the site first.'; renderSupport(); return; }
+  ADD.msg = 'Checking…';
+  document.getElementById('addMsg').textContent = ADD.msg;
+  const { data, error } = await sb.rpc('invite_stage', {
+    p_org_id: ADD.orgId, p_org_unit_id: ADD.unitId || null, p_rows: rows
+  });
+  if (error) { ADD.msg = error.message || 'Could not check the list.'; ADD.rows = null; }
+  else { ADD.rows = data || []; ADD.msg = ''; }
+  await renderSupport();
+}
+
+/* One at a time, in order, each its own audited call. A batch endpoint would
+   be faster and would also mean one bad row could take the others with it. */
+async function addSend() {
+  if (!ADD.rows || ADD.sending) return;
+  ADD.sending = true;
+  await renderSupport();
+  for (const r of ADD.rows) {
+    if (r.status !== 'staged' || r.sent) continue;
+    r.sent = 'busy'; await renderSupport();
+    const res = await supportCall({ action:'send_invite', invite_id: r.invite_id });
+    r.sent = res.ok ? 'ok' : (res.error || 'could not send');
+  }
+  ADD.sending = false;
+  await renderSupport();
+}
+
+async function addResend(id) {
+  const led = ADD.ledger.find(l => l.invite_id === id);
+  if (!led) return;
+  ADD.msg = 'Resending to ' + led.email + '…';
+  const res = await supportCall({ action:'send_invite', invite_id: id });
+  ADD.msg = res.ok ? 'Resent to ' + (res.sent_to || led.email) : (res.error || 'Could not resend.');
+  await renderSupport();
+}
+
+function addRight() {
+  const org = ADD.orgs.find(o => o.id === ADD.orgId);
+  const unit = ADD.units.find(u => u.id === ADD.unitId);
+  const fmtAt = s => s ? new Date(s).toLocaleDateString('en-GB', { day:'2-digit', month:'short' }) : '';
+  const state = l =>
+    l.status === 'accepted' ? 'accepted ' + fmtAt(l.accepted_at)
+    : l.status === 'sent'   ? 'sent ' + fmtAt(l.sent_at) + (l.sent_count > 1 ? ' ×' + l.sent_count : '')
+    : l.status === 'failed' ? 'not sent: ' + (l.last_error || 'error')
+    : l.status;
+  return `<p class="label">Invitations${org ? ' · ' + esc(org.name) : ''}</p><hr class="rule">
+    ${!org ? '<p class="slot">Choose an organisation to see who has been invited.</p>'
+      : !ADD.ledger.length ? '<p class="slot">No one invited yet.</p>'
+      : ADD.ledger.map(l => `<div class="row" style="display:block">
+          <div><strong>${esc(l.name || l.email)}</strong>${l.name ? ' <span class="muted">· ' + esc(l.email) + '</span>' : ''}</div>
+          <div class="muted">${esc([l.unit_name, l.department].filter(Boolean).join(' · '))}</div>
+          <div class="muted">${esc(state(l))}
+            ${(l.status === 'sent' || l.status === 'failed') && l.sent_count < 3
+              ? ` · <button class="dest" style="height:auto;line-height:1.4" onclick="addResend('${esc(l.invite_id)}')">Resend</button>` : ''}
+          </div>
+        </div>`).join('')}
+
+    ${org ? `<p class="label">No email address?</p><hr class="rule">
+    <p class="notice">Someone without email can still register themselves on the portal
+       with a phone number and the company code <strong class="mono">${esc(org.invite_code)}</strong>${unit ? `, then choose <strong>${esc(unit.name)}</strong> as their site` : ''}.
+       There is no way for us to make that account for them without choosing their
+       password — which is the one thing this screen exists to avoid.</p>` : ''}`;
 }
 
 /* ── Reminders ──────────────────────────────────────────────
