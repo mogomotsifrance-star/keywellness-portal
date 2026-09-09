@@ -38,9 +38,13 @@ const shot = async (page, name, opts) => { if (SHOT) await page.screenshot({ pat
 const ME = '11111111-1111-4111-8111-111111111111';
 const CLIENT_ID = 'f460e2df-bd48-42aa-9976-f481a955b2c2';
 
-/* Tumelo, exactly as advisor_clients.assessment holds him on 31 Aug 2026. */
+/* Tumelo, as advisor_clients.assessment holds her, linked to an organisation
+   that runs an advance programme. The org link — not the typed Employer —
+   is what opens the Advance Recommendation view. */
 const TUMELO = {
   id: CLIENT_ID, first_name: 'Tumelo', last_name: 'Kgamayane', email: '', phone: '',
+  org_id: 'org-hollard', org_name: 'Hollard', org_unit_id: null, unit_label: null,
+  no_org: false, offers_advances: true,
   advisor_id: 'adv-france', is_mine: true, created_at: '2026-08-28T08:00:00Z', updated_at: '2026-08-28T09:00:00Z',
   assessment: {
     personal:{ name:'Tumelo', surname:'Kgamayane', employer:'Hollard', maritalStatus:'Married', regime:'In Community of Property', age:'41' },
@@ -159,13 +163,17 @@ function stub(page) {
   /* ── 1. Reach the view ─────────────────────────────────── */
   await page.evaluate((id) => { openClient(id); switchTab('report'); }, CLIENT_ID);
   await page.waitForTimeout(300);
-  check('1  Report tab shows the two-view switch, PFA first',
-    await page.evaluate(() => document.querySelectorAll('.ar-switch button').length === 2
-      && document.querySelector('.ar-switch button.active').textContent.includes('Personal Financial')));
+  // Tumelo's DSR (45.43%) also offers the Debt Rehab Plan, so the switch now
+  // carries three options; this suite cares only that PFA is first and active
+  // and that the Advance Recommendation is offered.
+  check('1  Report tab shows the view switch, PFA first and active, Advance Recommendation offered',
+    await page.evaluate(() => document.querySelectorAll('.ar-switch button').length >= 2
+      && document.querySelector('.ar-switch button.active').textContent.includes('Personal Financial')
+      && Array.from(document.querySelectorAll('.ar-switch button')).some(b => b.textContent.trim() === 'Advance Recommendation')));
   check('2  the Personal Financial Assessment still renders unchanged underneath',
     (await txt()).includes('Personal Financial Assessment') && (await txt()).includes('Net Worth'));
 
-  await page.click('.ar-switch button:nth-child(2)');
+  await page.click('.ar-switch button:has-text("Advance Recommendation")');
   await page.waitForTimeout(900);
 
   /* ── 2. Prepare ────────────────────────────────────────── */
@@ -292,6 +300,42 @@ function stub(page) {
   await page.waitForTimeout(800);
   check('27 a refused call surfaces the server\'s message instead of a blank screen',
     /generation allowance/.test(await txt()));
+
+  /* ── 9. Gating: who may be offered an advance recommendation ─────
+     The pill used to render for every client, so a Hollard-headed
+     document could be produced for any organisation's employee, or for
+     a private client with no programme at all. ── */
+  const reportTabHtml = async () => {
+    await page.evaluate(() => { reportView = 'pfa'; switchTab('report'); });
+    await page.waitForTimeout(250);
+    return page.evaluate(() => document.getElementById('page-content').innerHTML);
+  };
+
+  await page.evaluate((id) => { const c = clients.find(x => x.id === id);
+                                c._org.offersAdvances = false; }, CLIENT_ID);
+  check('29 an organisation that runs no advance programme is not offered the view',
+    !/Advance Recommendation<\/button>/.test(await reportTabHtml()));
+
+  await page.evaluate((id) => { const c = clients.find(x => x.id === id);
+                                c._org.offersAdvances = true; c._org.id = null; c._org.noOrg = true; }, CLIENT_ID);
+  check('30 a private client with no organisation is not offered the view',
+    !/Advance Recommendation<\/button>/.test(await reportTabHtml()));
+
+  await page.evaluate((id) => { const c = clients.find(x => x.id === id);
+                                c._org.id = 'org-hollard'; c._org.noOrg = false; }, CLIENT_ID);
+  check('31 the assessment still renders for a client who cannot have an advance',
+    /Personal Financial Assessment/.test(await reportTabHtml()));
+
+  check('32 an unlinked client is warned about on the Personal tab, not silently counted',
+    await page.evaluate((id) => {
+      const c = clients.find(x => x.id === id);
+      const saved = { id: c._org.id, noOrg: c._org.noOrg };
+      c._org.id = null; c._org.noOrg = false;
+      switchTab('personal');
+      const hit = /company reporting will not count them/i.test(document.getElementById('page-content').innerHTML);
+      c._org.id = saved.id; c._org.noOrg = saved.noOrg;
+      return hit;
+    }, CLIENT_ID));
 
   check('28 no JavaScript errors during the whole run', errors.length === 0, errors.join(' | '));
 

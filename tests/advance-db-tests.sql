@@ -116,3 +116,44 @@ select t_check('grants: anon cannot execute any advance_recommendation_* functio
   not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and p.proname like 'advance_recommendation_%'
                 and has_function_privilege('anon', p.oid, 'EXECUTE')));
+
+-- 8. The advance gate: only an organisation that runs a programme
+-- The UI hides the view for these two cases; this is the check that binds,
+-- so a hand-made REST call cannot produce an employer's advance document for
+-- a client who is not on that employer's programme.
+set role authenticated;
+select t_as('a0000000-0000-4000-8000-000000000001', 'france@example.test');
+
+do $$
+declare v_msg text; v_ok boolean;
+begin
+  begin
+    perform advance_recommendation_create(
+      'c0000000-0000-4000-8000-000000000002',
+      '{"prep":{}}'::jsonb, '{"tier":"AMBER","term_months":24}'::jsonb,
+      null, '{"meta":{}}'::jsonb, '[]'::jsonb, 'test', 1, 1, 'model');
+    v_ok := false; v_msg := 'it was allowed';
+  exception when others then
+    v_msg := SQLERRM;
+    v_ok  := v_msg like '%does not run an employee advance programme%';
+  end;
+  raise notice '  (refusal said: %)', v_msg;
+  perform t_check('gate: an organisation with no advance programme is refused', v_ok);
+end $$;
+
+do $$
+declare v_msg text; v_ok boolean;
+begin
+  begin
+    perform advance_recommendation_create(
+      'c0000000-0000-4000-8000-000000000003',
+      '{"prep":{}}'::jsonb, '{"tier":"AMBER","term_months":24}'::jsonb,
+      null, '{"meta":{}}'::jsonb, '[]'::jsonb, 'test', 1, 1, 'model');
+    v_ok := false; v_msg := 'it was allowed';
+  exception when others then
+    v_msg := SQLERRM;
+    v_ok  := v_msg like '%not on a company programme%';
+  end;
+  raise notice '  (refusal said: %)', v_msg;
+  perform t_check('gate: a private client with no organisation is refused', v_ok);
+end $$;

@@ -9,7 +9,7 @@
 # build runs — starts a throwaway cluster, runs the suite, and stops it.
 #
 # Linux x64 only. psql comes from PATH; a 16 client against a 17 server is
-# fine. Usage: tests/run-advance-db-pg17.sh [port]   (default 5434)
+# fine. Usage: [SUITE=run-rehab-db.sh] tests/run-advance-db-pg17.sh [port]   (default 5434)
 set -e
 PORT="${1:-5434}"
 PGVER=17.6.0-beta.15
@@ -46,4 +46,6 @@ trap 'run "$BIN/pg_ctl -D $BASE/data stop" >/dev/null 2>&1 || true' EXIT
 for _ in $(seq 1 30); do pg_isready -h "$SOCK" -p "$PORT" >/dev/null 2>&1 && break; sleep 1; done
 echo "→ $(psql -h "$SOCK" -p "$PORT" -U postgres -tAc 'select version()' | cut -c1-40)"
 
-PGUSER=postgres "$HERE/run-advance-db.sh" "$SOCK" "$PORT"
+# SUITE picks the suite to run on the cluster: the Advance Recommendation's by
+# default, or SUITE=run-rehab-db.sh for the Debt Rehab Plan's.
+PGUSER=postgres "$HERE/${SUITE:-run-advance-db.sh}" "$SOCK" "$PORT"

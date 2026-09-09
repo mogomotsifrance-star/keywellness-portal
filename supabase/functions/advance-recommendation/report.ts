@@ -10,10 +10,24 @@ import { fmtP, fmtPct } from "./compute.ts";
 import type { Computed } from "./compute.ts";
 
 export const MAX_BULLETS = 6;
-export const PROGRAMME = "Hollard Employee Financial Wellness Program";
 export const ADVANCE_TYPE = "Salary / Incentive Advance";
-export const CONFIDENTIALITY =
-  "This report contains only the professional recommendation from the Financial Wellness Consultation, to support Hollard's advance approval process. Underlying financial details remain confidential between the employee and the Consultant, disclosed only as required by law or with consent.";
+
+// The employer is named four times in a finished report: the programme
+// heading, the payroll line on the debt table, the confidentiality statement,
+// and the header field. All four used to say "Hollard" literally, and the
+// header fell back to "Hollard" when the employer was blank — so a client
+// with no employer captured got a document asserting a Hollard programme.
+//
+// Only an organisation with organizations.offers_advances may reach this
+// code now, and the employer name comes from the client's record. For a
+// Hollard client every string below is byte-identical to what it produced
+// before; for anyone else it is correct instead of wrong.
+export const EMPLOYER_UNKNOWN = "Not captured";
+export const programmeFor = (employer: string) =>
+  `${employer} Employee Financial Wellness Program`;
+export const payrollLineFor = (employer: string) => `${employer} (payroll)`;
+export const confidentialityFor = (employer: string) =>
+  `This report contains only the professional recommendation from the Financial Wellness Consultation, to support ${employer}'s advance approval process. Underlying financial details remain confidential between the employee and the Consultant, disclosed only as required by law or with consent.`;
 
 // ── Deterministic content skeleton ──────────────────────────────
 // Tables and fixed text. Prose slots start with the fallback narrative
@@ -65,6 +79,7 @@ export function fallbackNarrative(c: Computed): Narrative {
 
 export function buildContent(c: Computed, meta: { consultant: string; consultation_date: string; recommendation_date: string }, n: Narrative) {
   const adv = c.advance, aft = c.after;
+  const employerName = (c.employee.employer || "").trim() || EMPLOYER_UNKNOWN;
   const settled = new Set(adv ? adv.settles : []);
   const debtRows = c.liabilities.map((l) => ({
     debt: l.item, institution: l.institution || "—", interest: l.rate_text,
@@ -72,13 +87,13 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
     status: settled.has(l.index) ? "Settled by advance" : l.classification === "informal" ? "Informal – balance not captured" : "Unchanged",
   }));
   if (adv) debtRows.push({
-    debt: "New advance", institution: "Hollard (payroll)", interest: "0%", balance: fmtP(adv.amount),
+    debt: "New advance", institution: payrollLineFor(employerName), interest: "0%", balance: fmtP(adv.amount),
     instalment: "—", status: `${fmtP(adv.instalment)} / month for ${c.term_months} months`,
   });
   return {
     meta: {
-      programme: PROGRAMME,
-      employee_name: c.employee.name, employer: c.employee.employer || "Hollard",
+      programme: programmeFor(employerName),
+      employee_name: c.employee.name, employer: employerName,
       consultation_date: meta.consultation_date, recommendation_date: meta.recommendation_date,
       consultant: meta.consultant, advance_type: ADVANCE_TYPE,
       recommended_amount: adv ? fmtP(adv.amount) : "None",
@@ -101,7 +116,7 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
       risk: { tier: c.tier, text: n.risk_sentences },
       recommendation: { decision: c.decision, intro: n.recommendation_intro, closing: n.closing_sentence },
       gaps: c.gaps,
-      confidentiality: CONFIDENTIALITY,
+      confidentiality: confidentialityFor(employerName),
     },
   };
 }

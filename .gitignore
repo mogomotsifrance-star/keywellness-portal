@@ -14,3 +14,7 @@ supabase/.temp/
 
 # node — test tooling only; the site itself has no build step
 node_modules/
+
+# browser test bundles built by tests/run-advance.sh and tests/run-rehab.sh
+tests/.ar-browser.js
+tests/.drp-browser.js

@@ -7437,6 +7437,18 @@ window.addCustomReminder = function () {
 // unconditionally (not only on the no-session path) so that logout, mid-session
 // token expiry, and password-recovery events are handled for returning users
 // who arrive with a stored session too.
+// The one set-password form, for both the reset link and the invitation link.
+function showSetPasswordForm(title, blurb) {
+  showAuthScreen(true);
+  document.getElementById('auth-login-form').style.display = 'none';
+  document.getElementById('auth-signup-form').style.display = 'none';
+  document.getElementById('forgot-panel').style.display = 'none';
+  document.getElementById('auth-reset-form').style.display = '';
+  document.querySelector('.auth-tabs').style.display = 'none';
+  document.querySelector('.auth-box h2').textContent = title;
+  document.querySelector('.auth-box > p').textContent = blurb;
+}
+
 function registerAuthListener() {
   if (window._kwAuthListener) return;
   window._kwAuthListener = true;
@@ -7445,6 +7457,14 @@ function registerAuthListener() {
     // stored-session case synchronously, so ignore it here.
     if (event === 'INITIAL_SESSION') return;
     if (event === 'SIGNED_IN') {
+      // An invited member has a session but no password yet. Keep the
+      // set-password form up; doResetPassword() reloads through init() once
+      // it is saved, and the flag is gone by then.
+      if (window._kwInviteLanding) {
+        showSetPasswordForm('Welcome to Key Wellness',
+          'Your organisation has invited you. Choose a password to finish setting up your account.');
+        return;
+      }
       // Ignore a duplicate SIGNED_IN for the already-active, already-loaded user
       // (e.g. a token refresh) — only a genuine new sign-in reloads below.
       if (currentUser && session?.user?.id === currentUser.id && state.user) return;
@@ -7480,14 +7500,7 @@ function registerAuthListener() {
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       // User arrived via the reset-link email — show set-new-password form
-      showAuthScreen(true);
-      document.getElementById('auth-login-form').style.display = 'none';
-      document.getElementById('auth-signup-form').style.display = 'none';
-      document.getElementById('forgot-panel').style.display = 'none';
-      document.getElementById('auth-reset-form').style.display = '';
-      document.querySelector('.auth-tabs').style.display = 'none';
-      document.querySelector('.auth-box h2').textContent = 'Set New Password';
-      document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
+      showSetPasswordForm('Set New Password', 'Choose a new password for your account.');
     } else if (event === 'SIGNED_OUT') {
       clearLocalUserCache();
       currentUser = null;
@@ -7504,15 +7517,19 @@ async function init() {
 
   // Handle Supabase password-recovery redirect (hash contains access_token + type=recovery)
   const _hash = window.location.hash;
+  // An invitation sent from the ops workspace (admin-support → send_invite)
+  // lands here with type=invite. The account exists but has NO password yet,
+  // so it is handled exactly like a recovery link: choose a password first.
+  // The SDK fires SIGNED_IN (not PASSWORD_RECOVERY) for an invite, so the
+  // flag below tells the listener to hold the set-password form up.
+  if (_hash.includes('type=invite') && _hash.includes('access_token')) {
+    window._kwInviteLanding = true;
+    showSetPasswordForm('Welcome to Key Wellness',
+      'Your organisation has invited you. Choose a password to finish setting up your account.');
+    return;
+  }
   if (_hash.includes('type=recovery') && _hash.includes('access_token')) {
-    showAuthScreen(true);
-    document.getElementById('auth-login-form').style.display = 'none';
-    document.getElementById('auth-signup-form').style.display = 'none';
-    document.getElementById('forgot-panel').style.display = 'none';
-    document.getElementById('auth-reset-form').style.display = '';
-    document.querySelector('.auth-tabs').style.display = 'none';
-    document.querySelector('.auth-box h2').textContent = 'Set New Password';
-    document.querySelector('.auth-box > p').textContent = 'Choose a new password for your account.';
+    showSetPasswordForm('Set New Password', 'Choose a new password for your account.');
     return; // Supabase SDK will fire PASSWORD_RECOVERY event via onAuthStateChange below
   }
 

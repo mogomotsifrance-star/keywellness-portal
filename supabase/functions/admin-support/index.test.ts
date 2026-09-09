@@ -29,6 +29,11 @@ interface StubOpts {
   lookupThrows?: string | null;
   /** the address getUserById resolves to */
   targetEmail?: string | null;
+  /** what invite_to_send() returns, or the error it raises */
+  invite?: Record<string, unknown> | null;
+  inviteThrows?: string | null;
+  /** does inviteUserByEmail fail, and how */
+  inviteSendError?: string | null;
 }
 
 function stub(opts: StubOpts = {}) {
@@ -37,11 +42,15 @@ function stub(opts: StubOpts = {}) {
     can: { allowed: true, reason: null },
     lookupThrows: null,
     targetEmail: "member@example.test",
+    invite: { invite_id: "inv-1", email: "staged@onfile.test", first_name: "Pitso", last_name: "Isake" },
+    inviteThrows: null,
+    inviteSendError: null,
     ...opts,
   };
   const calls: { rpc: string; args: unknown }[] = [];
   const sent: { to: string }[] = [];
   const notifications: unknown[] = [];
+  const invited: { to: string; data: unknown }[] = [];
 
   const callerClient = {
     rpc: (name: string, args: unknown) => {
@@ -54,6 +63,12 @@ function stub(opts: StubOpts = {}) {
       }
       if (name === "support_recent") return Promise.resolve({ data: [], error: null });
       if (name === "support_log") return Promise.resolve({ data: "log-1", error: null });
+      if (name === "invite_to_send") {
+        return o.inviteThrows
+          ? Promise.resolve({ data: null, error: { message: o.inviteThrows } })
+          : Promise.resolve({ data: o.invite, error: null });
+      }
+      if (name === "invite_mark") return Promise.resolve({ data: null, error: null });
       if (name === "booking_notify_payload") {
         return Promise.resolve({ data: { email: "member@example.test", user_id: "u-1" }, error: null });
       }
@@ -70,6 +85,11 @@ function stub(opts: StubOpts = {}) {
       admin: {
         getUserById: (_id: string) =>
           Promise.resolve({ data: { user: o.targetEmail ? { email: o.targetEmail } : null }, error: null }),
+        inviteUserByEmail: (email: string, opts: { data: unknown }) => {
+          if (o.inviteSendError) return Promise.resolve({ data: null, error: { message: o.inviteSendError } });
+          invited.push({ to: email, data: opts.data });
+          return Promise.resolve({ data: { user: { id: "new-1" } }, error: null });
+        },
       },
       resetPasswordForEmail: (email: string) => {
         sent.push({ to: email });
@@ -81,7 +101,7 @@ function stub(opts: StubOpts = {}) {
   };
 
   const deps = { admin, asCaller: (_jwt: string) => callerClient } as unknown as Deps;
-  return { deps, calls, sent, notifications };
+  return { deps, calls, sent, notifications, invited };
 }
 
 function post(body: unknown, jwt = "a.valid.jwt") {
@@ -222,4 +242,67 @@ Deno.test("OPTIONS is answered for the allowed origins only", async () => {
   assertEquals(res.status, 200);
   // An unlisted origin is not echoed back.
   assert(res.headers.get("Access-Control-Allow-Origin") !== "https://evil.test");
+});
+
+/* ── ★ The invite path — Rule 2 restated for a person who does not exist yet ── */
+
+Deno.test("★ send_invite refuses a body carrying an address, even with an invite_id", async () => {
+  const { deps, invited } = stub();
+  const res = await handle(post({ action: "send_invite", invite_id: "inv-1", email: "attacker@evil.test" }), deps);
+  assertEquals(res.status, 400);
+  assertEquals(invited.length, 0);
+});
+
+Deno.test("★ the invite address comes from invite_to_send(), run as the caller", async () => {
+  const { deps, invited, calls } = stub({ invite: { invite_id: "inv-1", email: "fromdb@onfile.test", first_name: "A", last_name: "B" } });
+  const res = await handle(post({ action: "send_invite", invite_id: "inv-1" }), deps);
+  assertEquals(res.status, 200);
+  assertEquals(invited.length, 1);
+  assertEquals(invited[0].to, "fromdb@onfile.test");
+  assert(calls.some((c) => c.rpc === "invite_to_send"), "invite_to_send was not consulted");
+  // metadata carries the invite id so handle_new_user() can find the row
+  assertEquals((invited[0].data as Record<string, string>).invite_id, "inv-1");
+});
+
+Deno.test("★ a non-admin is refused by the database gate and recorded", async () => {
+  const { deps, invited, calls } = stub({ can: { allowed: false, reason: "not authorised" } });
+  const res = await handle(post({ action: "send_invite", invite_id: "inv-1" }), deps);
+  assertEquals(res.status, 429);
+  assertEquals(invited.length, 0);
+  assert(calls.some((c) => c.rpc === "support_log" &&
+    (c.args as Record<string, string>).p_outcome === "denied" &&
+    (c.args as Record<string, string>).p_action === "send_invite"));
+});
+
+Deno.test("an accepted or unknown invite is an error, nothing sent", async () => {
+  const { deps, invited } = stub({ inviteThrows: "this invite is accepted" });
+  const res = await handle(post({ action: "send_invite", invite_id: "inv-1" }), deps);
+  assertEquals(res.status, 403);
+  assertEquals(invited.length, 0);
+});
+
+Deno.test("a send is recorded ok and the invite marked sent", async () => {
+  const { deps, calls } = stub();
+  await handle(post({ action: "send_invite", invite_id: "inv-1" }), deps);
+  const mark = calls.find((c) => c.rpc === "invite_mark");
+  assert(mark, "invite_mark was not called");
+  assertEquals((mark!.args as Record<string, string>).p_outcome, "sent");
+  assert(calls.some((c) => c.rpc === "support_log" &&
+    (c.args as Record<string, string>).p_action === "send_invite" &&
+    (c.args as Record<string, string>).p_outcome === "ok"));
+});
+
+Deno.test("an address that already registered closes the invite as failed with the reason", async () => {
+  const { deps, calls } = stub({ inviteSendError: "A user with this email address has already been registered" });
+  const res = await handle(post({ action: "send_invite", invite_id: "inv-1" }), deps);
+  assertEquals(res.status, 409);
+  assert(/already has an account/.test((await res.json()).error));
+  const mark = calls.find((c) => c.rpc === "invite_mark");
+  assertEquals((mark!.args as Record<string, string>).p_outcome, "failed");
+});
+
+Deno.test("send_invite without an invite_id is a bad request", async () => {
+  const { deps, invited } = stub();
+  assertEquals((await handle(post({ action: "send_invite" }), deps)).status, 400);
+  assertEquals(invited.length, 0);
 });

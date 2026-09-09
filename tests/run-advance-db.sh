@@ -11,6 +11,11 @@ DB=kw_advance_test
 $PSQL -d postgres -c "drop database if exists $DB" >/dev/null
 $PSQL -d postgres -c "create database $DB" >/dev/null
 $PSQL -d $DB -f "$HERE/advance-fixture.sql"
+# offers_advances first: advance_recommendation_create() reads the column, so
+# it must exist before that body is compiled. The fixture ships a cut-down
+# organizations table, so only the column and the gate are exercised here —
+# the two list RPCs the real migration patches do not exist in the fixture.
+$PSQL -d $DB -c "alter table organizations add column if not exists offers_advances boolean not null default false"
 $PSQL -d $DB -f "$ROOT/supabase_advance_recommendation.sql"
 $PSQL -d $DB -f "$ROOT/supabase_advance_recommendation.sql"      # idempotent
 $PSQL -d $DB -f "$HERE/advance-db-tests.sql" 2>&1 | grep -E "PASS|FAIL|ERROR" || true
