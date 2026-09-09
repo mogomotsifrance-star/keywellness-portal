@@ -554,6 +554,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 .ic-opt .ic-ic{font-size:24px;line-height:1}
 .ic-opt .ic-t{font-size:15px;font-weight:700;color:var(--navy)}
 .ic-opt .ic-d{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+/* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
+.kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
 </style>
 </head>
 <body>
@@ -650,7 +652,10 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Key Wellness</div>
     <h2 style="margin-bottom:6px">🔒 Data Protection &amp; Confidentiality</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Please read and accept our data protection statement before accessing the portal.</p>
-    <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px;max-height:280px;overflow-y:auto;border:1px solid var(--border)">
+    <!-- id is load-bearing: the onboarding wizard's "Read the full Data Protection
+         statement" link reads this element's innerHTML rather than carrying its own
+         copy, so the legal text has exactly one home and the two cannot drift. -->
+    <div id="consent-statement" style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-bottom:18px;max-height:280px;overflow-y:auto;border:1px solid var(--border)">
       <p style="font-weight:700;margin-bottom:8px">How We Protect Your Information</p>
       <p style="margin-bottom:10px">Key Wellness is committed to protecting your personal and financial data. By using this portal, you agree to the following:</p>
       <ul style="padding-left:18px;display:flex;flex-direction:column;gap:8px">
@@ -676,8 +681,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 <div id="welcome-modal">
   <div class="welcome-modal-box">
     <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Welcome to Key Wellness</div>
-    <h2 id="welcome-heading">You're all set! 🎉</h2>
-    <p>Watch this short welcome video from our team, then take your first financial wellness assessment.</p>
+    <h2 id="welcome-heading">Welcome to Key Wellness 🎉</h2>
+    <p>A two-minute introduction from the team.</p>
     <div id="welcome-video-area">
       <!-- Vimeo-hosted (see KW_WELCOME_VIMEO). The Player API fills this box —
            the 56.25% padding keeps the 16:9 frame before the iframe lands. -->
@@ -685,12 +690,14 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
         <div id="welcome-vimeo" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>
       </div>
     </div>
-    <div id="welcome-start-wrap" style="display:none;margin-top:8px">
-      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Start My Assessment →</button>
+    <!-- P0-1: the close button is present from the moment the modal opens. It
+         used to be hidden until the video ended ("your assessment unlocks when
+         it finishes"), which made a welcome into a gate — and on a slow or
+         Vimeo-blocked connection, a blank box with no way out. -->
+    <div id="welcome-start-wrap" style="margin-top:8px">
+      <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="closeWelcome()">Close</button>
     </div>
-    <div id="welcome-wait-msg" style="margin-top:10px;text-align:center;font-size:12px;color:var(--muted)">
-      Watch the video to continue — your assessment unlocks when it finishes.
-    </div>
+    <div id="welcome-wait-msg" style="display:none;margin-top:10px;text-align:center;font-size:12px;color:var(--muted)"></div>
   </div>
 </div>
 
@@ -1509,7 +1516,9 @@ async function confirmSession() {
   initProfileUI();
   loadNotifications();
   route();
-  maybePromptBackfill();  // company → department → gender backfill after password re-confirm
+  // P0-1: no backfill modal here. Company/department are no longer asked of the
+  // member at all, and gender is captured in the onboarding wizard — a returning
+  // member must never be interrupted by a pop-up on sign-in.
 }
 
 async function switchAccount() {
@@ -2075,25 +2084,21 @@ function route() {
   touchSessionTrust(currentUser.id);
   showAuthScreen(false);
   let view = window.location.hash.replace('#', '') || 'dashboard';
-  const hasOnboarded = state.user?.onboarded === true || !!state.user?.first_name;
+  // P0-1: `onboarded` only. Accepting "has a first name" as onboarded is what let
+  // the deleted name pop-up bypass the wizard entirely (audit F1) — a member who
+  // signed up before this change but never finished the wizard sees it once now.
+  const hasOnboarded = state.user?.onboarded === true;
   if (!hasOnboarded && view !== 'onboarding') view = 'onboarding';
-  // Compulsory first assessment: once onboarded, the portal is locked until the
-  // member's first assessment is recorded in Supabase. Server-authoritative
-  // (state.assessments comes from loadAllData) so a cleared cache can neither
-  // bypass the lock nor falsely re-lock a completed member. Staff never hit this.
-  // Advisors count as staff too — the lock is meant for members only, and an
-  // advisor browsing their own portal was previously forced to sit an
-  // assessment before they could open any view.
-  const _isStaff = window._isAdmin || window._employerOrgId || window._advisor;
-  const _firstAssessmentDone = Array.isArray(state.assessments) && state.assessments.length > 0;
-  if (!_isStaff && hasOnboarded && !_firstAssessmentDone && view !== 'onboarding') {
-    buildNav(view);
-    document.getElementById('page-title').textContent = 'Welcome';
-    document.getElementById('header-actions').innerHTML = '';
-    document.getElementById('page-content').innerHTML = '';
-    renderFirstAssessmentLock();
-    return;
-  }
+  // P0-2 (audit F2): THERE IS NO FIRST-ASSESSMENT LOCK. Every member route
+  // renders whether or not an assessment row exists. What used to be here held
+  // the entire portal — articles, booking, every tool — behind "One quick step
+  // first", whose only way forward was an assessment demanding gross salary,
+  // take-home pay and total spending. A member who closed it to think about the
+  // numbers could not read an article or book a session.
+  //
+  // The habits check is now the first dashboard nudge instead, and still earns
+  // its badge, so the HR "completed assessment" funnel step keeps its source.
+  // Do not reintroduce a route-level gate here.
   buildNav(view);
   const info = NAV.find(n => n.id === view) || { label: 'Dashboard' };
   document.getElementById('page-title').textContent = info.label;
@@ -2118,28 +2123,6 @@ function route() {
         <button class="btn btn-primary" onclick="go('dashboard')">Back to Dashboard</button>
       </div>`;
   }
-}
-
-// Portal-lock screen shown until the member completes their compulsory first
-// assessment. The only way forward is to start the assessment; there is no
-// "Back to Portal" link (that link is also hidden inside the assessment for the
-// first run). Draft auto-save in wellness_assessment.html lets them resume.
-function renderFirstAssessmentLock() {
-  const el = document.getElementById('page-content');
-  const _nm = state.user?.first_name ? `, ${escHtml(state.user.first_name)}` : '';
-  el.innerHTML = `
-    <div class="wizard">
-      <div class="card" style="padding:36px 32px;text-align:center;max-width:560px;margin:24px auto">
-        <div style="font-size:44px;margin-bottom:10px">📋</div>
-        <h2 style="margin-bottom:10px">One quick step first${_nm}</h2>
-        <p style="color:var(--muted);font-size:14px;line-height:1.6;margin-bottom:24px">
-          This quick assessment gives you your wellness score baseline and powers your Financial Hub on the dashboard.
-        </p>
-        <button class="btn btn-primary" style="padding:12px 28px;justify-content:center" onclick="openTool('wellness_assessment.html')">
-          Start my assessment →
-        </button>
-      </div>
-    </div>`;
 }
 
 // ══════════════════════════════════════════════════
@@ -2365,220 +2348,236 @@ function kwChart(canvas, config) {
 // ══════════════════════════════════════════════════
 //  VIEW: ONBOARDING
 // ══════════════════════════════════════════════════
+// P0-1 (audit F1, F4, F5): ONE onboarding sequence, two screens, no modals.
+//
+// This replaces the old 4-to-6 step wizard AND the four pop-ups that used to
+// fire over the top of it (name, consent, gender, welcome video). What was
+// removed and why:
+//   · name + gender steps were duplicated by pop-ups, and the name pop-up's
+//     save set onboarded = true, so the wizard was skipped entirely (F1);
+//   · the company / department steps asked the member for an attribute only an
+//     admin table reads, and told them HR was watching before they had seen a
+//     single screen (F3). org_id still arrives from the invite code via the DB
+//     trigger, so nothing here needs to set it;
+//   · consent was a 380-word modal at the moment of maximum anxiety (F5). Same
+//     legal text, now behind a three-line plain-language summary on screen 1.
 VIEWS['onboarding'] = function () {
   const el = document.getElementById('page-content');
   let step = 0;
-  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], org_unit_id:null, department_id:null, gender:'' };
+  // Gender defaults to "prefer not to say" — it is optional, and the default
+  // must not be a disclosure the member did not choose to make.
+  const profile = { first_name:'', last_name:'', age:'', employment:'', goals:[], gender:'prefer_not_to_say' };
+  let consentOk = false;
+  let showFullStatement = false;
 
-  let steps = [
-    { q:"What's your name?", hint:'So we can personalise your experience and address you properly.', key:'first_name', type:'names' },
-    { q:'How old are you?', hint:'Your exact age helps us calculate accurate retirement projections and tailor advice to your life stage.', key:'age', type:'age' },
-    { q:'What is your employment status?', hint:'We will personalise your plan.', key:'employment', type:'single',
-      opts:[{i:'🏢',l:'Employed (full-time)'},{i:'⏰',l:'Employed (part-time)'},{i:'💼',l:'Self-employed'},{i:'📚',l:'Student'},{i:'🏡',l:'Not currently employed'}] },
-    { q:'What are your financial goals?', hint:'Select all that apply.', key:'goals', type:'multi',
-      opts:[{i:'💳',l:'Pay off debt'},{i:'🏦',l:'Build savings'},{i:'🏠',l:'Buy property'},{i:'🆘',l:'Emergency fund'},{i:'🎯',l:'Retirement planning'},{i:'📈',l:'Invest & grow wealth'}] },
+  const EMPLOYMENT = [
+    {i:'🏢',l:'Employed (full-time)'},{i:'⏰',l:'Employed (part-time)'},{i:'💼',l:'Self-employed'},
+    {i:'📚',l:'Student'},{i:'🏡',l:'Not currently employed'},
   ];
+  const GOALS = [
+    {i:'💳',l:'Pay off debt'},{i:'🏦',l:'Build savings'},{i:'🏠',l:'Buy property'},
+    {i:'🆘',l:'Emergency fund'},{i:'🎯',l:'Retirement planning'},{i:'📈',l:'Invest & grow wealth'},
+  ];
+  const GENDERS = [['male','Male'],['female','Female'],['prefer_not_to_say','Prefer not to say']];
 
-  function render() {
-    const s = steps[step];
-    const isNames = s.type === 'names';
+  // The full statement is read out of the existing #consent-modal markup rather
+  // than copied, so the legal text has exactly one home and cannot drift.
+  function fullStatementHtml() {
+    return document.getElementById('consent-statement')?.innerHTML
+      || '<p>The full statement is temporarily unavailable. Please contact wellness@keywellness.co.bw.</p>';
+  }
+
+  function stepChrome(title, sub) {
+    return `
+      <div class="wsteps">${[0,1].map(i=>`<div class="wstep${i<step?' done':i===step?' active':''}"></div>`).join('')}</div>
+      <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of 2</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:6px">${title}</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${sub}</div>`;
+  }
+
+  function renderConsent() {
     el.innerHTML = `
       <div class="wizard">
         <div class="card" style="padding:32px">
-          <div class="wsteps">${steps.map((_,i)=>`<div class="wstep${i<step?' done':i===step?' active':''}"></div>`).join('')}</div>
-          <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:10px">Step ${step+1} of ${steps.length}</div>
-          <div style="font-size:20px;font-weight:700;margin-bottom:6px">${s.q}</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:22px">${s.hint}</div>
-          ${s.type==='age' ? `
-            <div style="max-width:200px;margin-bottom:8px">
-              <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
-                style="width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:24px;font-weight:700;background:var(--cream);outline:none;font-family:'DM Mono',monospace;text-align:center"
-                oninput="document.getElementById('onb-age-err').style.display='none';document.getElementById('w-next').disabled=!this.value"
-                onkeydown="if(event.key==='Enter')wNext()">
-              <div style="font-size:12px;color:var(--muted);margin-top:6px;text-align:center">years old</div>
+          ${stepChrome('Before you start', 'Thirty seconds on what we will ask you for, and who can see it.')}
+          <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:20px">
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">What we will ask</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">Over the coming weeks we will invite you to enter your budget, savings and any loans. Every number is optional, and you can delete it any time.</div>
             </div>
-            <p id="onb-age-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ Please enter your age (18–80).</p>
-          ` : isNames ? `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px">
-              <div>
-                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First Name <span style="color:var(--gold)">*</span></label>
-                <input type="text" id="onb-first" value="${escHtml(profile.first_name||'')}" placeholder="e.g. Kagiso" maxlength="60"
-                  autocomplete="given-name"
-                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
-                  oninput="document.getElementById('onb-name-err').style.display='none'"
-                  onkeydown="if(event.key==='Enter')wNext()">
-              </div>
-              <div>
-                <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last Name</label>
-                <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
-                  autocomplete="family-name"
-                  style="width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit"
-                  onkeydown="if(event.key==='Enter')wNext()">
-              </div>
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">Who can see it</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">You. A Key Wellness coach, only if you choose to share with them. Your employer sees results for groups of five or more people — never your name, never your figures.</div>
             </div>
-            <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">⚠ First name is required.</p>
-            <div style="margin-top:14px">
-              <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--gold)">*</span></label>
-              <div id="onb-gender" style="display:flex;flex-wrap:wrap;gap:8px">
-                ${[['male','Male'],['female','Female'],['prefer_not_to_say','Prefer not to say']].map(([v,l])=>`<button type="button" class="choice-btn${profile.gender===v?' selected':''}" data-g="${v}" onclick="wGender('${v}')" style="flex:0 1 auto;padding:9px 16px">${l}</button>`).join('')}
-              </div>
-              <p id="onb-gender-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please select an option to continue.</p>
+            <div style="border-left:3px solid var(--gold);padding-left:14px">
+              <div style="font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:3px">What we never do</div>
+              <div style="font-size:13px;color:var(--muted);line-height:1.6">We never sell your data, never share it with lenders, and never show it to your manager or HR by name.</div>
             </div>
-          ` : s.type==='company' ? `<div id="cg-company"></div><p id="onb-company-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your company to continue.</p>`
-            : s.type==='department' ? `<div id="cg-dept"></div><p id="onb-dept-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none">⚠ Please choose your department to continue.</p>` : `<div class="choice-grid" id="cg"></div>`}
-          <div style="display:flex;justify-content:space-between;margin-top:24px;gap:12px">
-            ${step>0?`<button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>`:'<span></span>'}
-            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${isNames?'':' disabled'}>
-              ${step===steps.length-1?'Complete Setup →':'Next →'}
-            </button>
+          </div>
+          <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:12px">
+            <input type="checkbox" id="onb-consent" ${consentOk?'checked':''} style="margin-top:3px;width:16px;height:16px;accent-color:var(--gold);flex-shrink:0" onchange="wConsent(this.checked)">
+            <span style="font-size:13.5px;font-weight:600;color:var(--navy)">I understand.</span>
+          </label>
+          <button type="button" onclick="wToggleStatement()"
+            style="background:none;border:0;padding:0;color:var(--gold);font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;text-decoration:underline">
+            ${showFullStatement ? 'Hide the full Data Protection statement' : 'Read the full Data Protection statement'}
+          </button>
+          ${showFullStatement ? `
+          <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;font-size:13px;line-height:1.7;color:var(--text);margin-top:12px;max-height:300px;overflow-y:auto;border:1px solid var(--border)">
+            ${fullStatementHtml()}
+          </div>` : ''}
+          <div style="display:flex;justify-content:flex-end;margin-top:24px">
+            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()" ${consentOk?'':'disabled'}>Continue →</button>
           </div>
         </div>
       </div>`;
-    if (s.type === 'age') {
-      document.getElementById('w-next').disabled = !profile.age;
-      setTimeout(()=>document.getElementById('onb-age')?.focus(), 50);
-    } else if (s.type === 'company') {
-      kwRenderUnitPicker(document.getElementById('cg-company'), {
-        units: s.units,
-        selectedId: profile.org_unit_id,
-        onSelect: id => {
-          // Changing company invalidates any previously chosen department.
-          if (id !== profile.org_unit_id) profile.department_id = null;
-          profile.org_unit_id = id;
-          document.getElementById('w-next').disabled = !id;
-          const e = document.getElementById('onb-company-err'); if (e) e.style.display = 'none';
-        }
-      });
-      document.getElementById('w-next').disabled = !profile.org_unit_id;
-    } else if (s.type === 'department') {
-      const box = document.getElementById('cg-dept');
-      box.innerHTML = '<div style="color:var(--muted);font-size:13px">Loading departments…</div>';
-      const nextBtn = document.getElementById('w-next');
-      nextBtn.disabled = true;
-      s.deptOptional = false;
-      (async () => {
-        const { departments, error } = await kwFetchDepartments(profile.org_unit_id);
-        // Guard against the user having navigated away before the fetch resolved.
-        if (steps[step] !== s) return;
-        if (error) {
-          box.innerHTML = '<div style="color:var(--red);font-size:13px">⚠ Could not load departments. Please check your connection and go Back, then try again.</div>';
-          return;
-        }
-        if (!departments || !departments.length) {
-          // Unit has no departments — allow proceeding (department stays null).
-          box.innerHTML = '<div style="color:var(--muted);font-size:13px">No departments are listed for your company — you can continue.</div>';
-          profile.department_id = null;
-          s.deptOptional = true;
-          nextBtn.disabled = false;
-          return;
-        }
-        kwRenderDeptPicker(box, {
-          departments,
-          selectedId: profile.department_id,
-          onSelect: id => {
-            profile.department_id = id;
-            nextBtn.disabled = !id;
-            const e = document.getElementById('onb-dept-err'); if (e) e.style.display = 'none';
-          }
-        });
-        nextBtn.disabled = !profile.department_id;
-      })();
-    } else if (!isNames) {
-      const cg = document.getElementById('cg');
-      const cur = s.type==='multi' ? (profile[s.key]||[]) : profile[s.key];
-      cg.innerHTML = s.opts.map((o,i)=>`
-        <button class="choice-btn${s.type==='multi'?(cur.includes(o.l)?' selected':''):(cur===o.l?' selected':'')}" onclick="wPick(${i})">
-          <span class="ci">${o.i}</span>${o.l}
-        </button>`).join('');
-      const val = profile[s.key];
-      document.getElementById('w-next').disabled = s.type==='multi' ? !(val&&val.length) : !val;
-    } else {
-      setTimeout(()=>document.getElementById('onb-first')?.focus(), 50);
-    }
   }
 
-  window.wPick = function (i) {
-    const s = steps[step];
-    if (s.type==='multi') {
-      if (!profile[s.key]) profile[s.key]=[];
-      const idx = profile[s.key].indexOf(s.opts[i].l);
-      if (idx>=0) profile[s.key].splice(idx,1); else profile[s.key].push(s.opts[i].l);
-    } else { profile[s.key] = s.opts[i].l; }
-    render();
+  function renderAbout() {
+    const inputCss = "width:100%;padding:10px 12px;border:2px solid var(--border);border-radius:var(--radius-sm);font-size:14px;background:var(--cream);outline:none;font-family:inherit";
+    el.innerHTML = `
+      <div class="wizard">
+        <div class="card" style="padding:32px">
+          ${stepChrome('About you', 'Four quick things so the portal can put first things first. No figures here.')}
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">First name <span style="color:var(--gold)">*</span></label>
+            <input type="text" id="onb-first" value="${escHtml(profile.first_name||'')}" placeholder="e.g. Kagiso" maxlength="60"
+              autocomplete="given-name" style="${inputCss};max-width:280px"
+              oninput="document.getElementById('onb-name-err').style.display='none'">
+            <p id="onb-name-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">⚠ First name is required.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Your age <span style="color:var(--gold)">*</span></label>
+            <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
+              style="${inputCss};max-width:140px;font-family:'DM Mono',monospace;font-weight:700"
+              oninput="document.getElementById('onb-age-err').style.display='none'">
+            <div style="font-size:12px;color:var(--muted);margin-top:5px">Used for retirement projections and to tailor advice to your life stage.</div>
+            <p id="onb-age-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">⚠ Please enter your age (18–80).</p>
+          </div>
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">Your employment status <span style="color:var(--gold)">*</span></label>
+            <div class="choice-grid" id="onb-emp">
+              ${EMPLOYMENT.map((o,i)=>`<button type="button" class="choice-btn${profile.employment===o.l?' selected':''}" onclick="wEmp(${i})"><span class="ci">${o.i}</span>${o.l}</button>`).join('')}
+            </div>
+            <p id="onb-emp-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please choose one to continue.</p>
+          </div>
+
+          <div style="margin-bottom:20px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:8px">What do you want to work on? <span style="color:var(--gold)">*</span></label>
+            <div class="choice-grid" id="onb-goals">
+              ${GOALS.map((o,i)=>`<button type="button" class="choice-btn${(profile.goals||[]).includes(o.l)?' selected':''}" onclick="wGoal(${i})"><span class="ci">${o.i}</span>${o.l}</button>`).join('')}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Select all that apply.</div>
+            <p id="onb-goals-err" style="color:var(--red);font-size:12px;margin-top:8px;display:none">⚠ Please choose at least one.</p>
+          </div>
+
+          <hr style="border:0;border-top:1px solid var(--border);margin:24px 0 18px">
+
+          <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last name <span style="color:var(--muted);font-weight:500">(optional)</span></label>
+            <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
+              autocomplete="family-name" style="${inputCss};max-width:280px">
+          </div>
+
+          <div>
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--muted);font-weight:500">(optional)</span></label>
+            <div id="onb-gender" style="display:flex;flex-wrap:wrap;gap:8px">
+              ${GENDERS.map(([v,l])=>`<button type="button" class="choice-btn${profile.gender===v?' selected':''}" data-g="${v}" onclick="wGender('${v}')" style="flex:0 1 auto;padding:9px 16px">${l}</button>`).join('')}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:6px">Helps us report fairly across the programme — only ever as a group.</div>
+          </div>
+
+          <div style="display:flex;justify-content:space-between;margin-top:26px;gap:12px">
+            <button class="btn btn-outline btn-sm" onclick="wPrev()">← Back</button>
+            <button class="btn btn-primary btn-sm" id="w-next" onclick="wNext()">Finish →</button>
+          </div>
+        </div>
+      </div>`;
+    setTimeout(()=>document.getElementById('onb-first')?.focus(), 50);
+  }
+
+  function render() { step === 0 ? renderConsent() : renderAbout(); }
+
+  window.wConsent = function (checked) {
+    consentOk = !!checked;
+    const b = document.getElementById('w-next'); if (b) b.disabled = !consentOk;
   };
-  // Gender is picked without a full re-render (which would wipe the unsaved
-  // name inputs, since those are only committed to `profile` on wNext).
+  window.wToggleStatement = function () { showFullStatement = !showFullStatement; render(); };
+  // Employment / goals / gender all repaint in place rather than re-rendering the
+  // step: a full render would wipe the name and age inputs, which are only read
+  // into `profile` on Finish.
+  window.wEmp = function (i) {
+    profile.employment = EMPLOYMENT[i].l;
+    document.querySelectorAll('#onb-emp .choice-btn').forEach((b,j)=>b.classList.toggle('selected', j===i));
+    const e = document.getElementById('onb-emp-err'); if (e) e.style.display = 'none';
+  };
+  window.wGoal = function (i) {
+    const label = GOALS[i].l;
+    if (!profile.goals) profile.goals = [];
+    const at = profile.goals.indexOf(label);
+    if (at >= 0) profile.goals.splice(at,1); else profile.goals.push(label);
+    document.querySelectorAll('#onb-goals .choice-btn')[i]?.classList.toggle('selected', at < 0);
+    const e = document.getElementById('onb-goals-err'); if (e) e.style.display = 'none';
+  };
   window.wGender = function (v) {
     profile.gender = v;
     document.querySelectorAll('#onb-gender .choice-btn').forEach(b =>
       b.classList.toggle('selected', b.getAttribute('data-g') === v));
-    const e = document.getElementById('onb-gender-err'); if (e) e.style.display = 'none';
   };
-  window.wNext = function () {
-    const s = steps[step];
-    if (s.type === 'names') {
-      const first = document.getElementById('onb-first')?.value.trim() || '';
-      const last  = document.getElementById('onb-last')?.value.trim()  || '';
-      if (!first) { document.getElementById('onb-name-err').style.display=''; return; }
-      if (!profile.gender) { document.getElementById('onb-gender-err').style.display=''; return; }
-      profile.first_name = first;
-      profile.last_name  = last;
-    } else if (s.type === 'age') {
-      const ageVal = parseInt(document.getElementById('onb-age')?.value || '');
-      if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; return; }
-      profile.age = ageVal;
-    } else if (s.type === 'company') {
-      if (!profile.org_unit_id) { const e = document.getElementById('onb-company-err'); if (e) e.style.display = ''; return; }
-    } else if (s.type === 'department') {
-      // department may legitimately be null only when the unit has no departments
-      if (!profile.department_id && !s.deptOptional) { const e = document.getElementById('onb-dept-err'); if (e) e.style.display = ''; return; }
-    }
-    if (step < steps.length-1) { step++; render(); }
-    else { finishOnboarding(); }
-  };
-  window.wPrev = function () { if (step>0) { step--; render(); } };
+  window.wPrev = function () { if (step > 0) { step--; render(); } };
 
-  // Insert the mandatory company step after "names" when the member's org has
-  // active units. Fetched before first paint; Test Co (no units) is untouched.
-  el.innerHTML = '<div class="wizard"><div class="card" style="padding:32px;text-align:center;color:var(--muted);font-size:14px">Loading…</div></div>';
-  (async () => {
-    const { units } = await kwFetchOrgUnits();
-    if (units && units.length) {
-      steps.splice(1, 0,
-        {
-          q:'Which company are you with?',
-          hint:'Your company under the Sedimosa programme. This determines your wellness reports.',
-          key:'org_unit_id', type:'company', units
-        },
-        {
-          q:'Which department are you in?',
-          hint:'This helps your HR team understand wellness across teams — always shown in aggregate, never individually.',
-          key:'department_id', type:'department'
-        }
-      );
+  window.wNext = async function () {
+    if (step === 0) {
+      if (!consentOk) return;
+      const btn = document.getElementById('w-next');
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+      // Consent is a compliance record — do not advance if it could not be stored.
+      const ok = await recordConsent();
+      if (!ok) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Continue →'; }
+        return;
+      }
+      step = 1; render(); return;
     }
-    render();
-  })();
+    const first = document.getElementById('onb-first')?.value.trim() || '';
+    const last  = document.getElementById('onb-last')?.value.trim()  || '';
+    const ageVal = parseInt(document.getElementById('onb-age')?.value || '', 10);
+    let ok = true;
+    if (!first) { document.getElementById('onb-name-err').style.display=''; ok = false; }
+    if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; ok = false; }
+    if (!profile.employment) { document.getElementById('onb-emp-err').style.display=''; ok = false; }
+    if (!profile.goals || !profile.goals.length) { document.getElementById('onb-goals-err').style.display=''; ok = false; }
+    if (!ok) { document.querySelector('.wizard .card')?.scrollIntoView({behavior:'smooth',block:'start'}); return; }
+    profile.first_name = first;
+    profile.last_name  = last;
+    profile.age        = ageVal;
+    finishOnboarding();
+  };
+
+  render();
 
   async function finishOnboarding() {
-    state.user = { ...profile, id: currentUser.id, onboarded: true, joined_at: new Date().toISOString() };
+    // Spread the loaded profile first. saveUser() writes a whitelist that
+    // includes consent_accepted with a `?? false` default, so replacing
+    // state.user wholesale here would silently un-record the consent that step 1
+    // just wrote to the database.
+    state.user = { ...(state.user || {}), ...profile, id: currentUser.id, onboarded: true,
+                   joined_at: state.user?.joined_at || new Date().toISOString() };
     const savedOk = await saveUser();
     if (savedOk === false) { showToast('⚠️ Could not save your details. Please try again.'); return; }
-    // org_unit_id / department_id / gender are NOT in saveUser()'s whitelist
-    // (they are set-once, admin-mediated dims) — persist them with a dedicated
-    // update, and do NOT advance if it fails (no silent failure).
-    const _dims = {};
-    if (profile.org_unit_id)   _dims.org_unit_id   = profile.org_unit_id;
-    if (profile.department_id) _dims.department_id = profile.department_id;
-    if (profile.gender)        _dims.gender        = profile.gender;
-    if (Object.keys(_dims).length) {
-      const { error: _dimErr } = await sb.from('profiles').update(_dims).eq('id', currentUser.id);
-      if (_dimErr) {
-        console.error('onboarding dims save failed:', _dimErr);
+    // gender is not in saveUser()'s whitelist — persist it separately, and do
+    // not advance on failure (no silent loss).
+    if (profile.gender) {
+      const { error: _gErr } = await sb.from('profiles').update({ gender: profile.gender }).eq('id', currentUser.id);
+      if (_gErr) {
+        console.error('onboarding gender save failed:', _gErr);
         showToast('⚠️ Could not save your details. Please try again.');
         return;
       }
-      Object.assign(state.user, _dims);
+      state.user.gender = profile.gender;
     }
     // Persist name to kw_profile localStorage so all tools can read it immediately
     if (profile.first_name) {
@@ -2593,16 +2592,9 @@ VIEWS['onboarding'] = function () {
     KWBadges.recordPoints('onboarding_complete').then(res => {
       if (res && typeof res.total === 'number') state.points = { ...state.points, total: res.total, season: state.points?.season || 0 };
     });
-    // Show consent → welcome video for new users, checking localStorage first
-    const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
-    const _lsWelcome = localStorage.getItem('kw_welcome_seen') === 'true';
-    if (!_lsConsent && !state.user?.consent_accepted) {
-      showConsentModal();
-    } else if (!_lsWelcome && !state.user?.welcome_seen) {
-      showWelcomeVideo();
-    } else {
-      go('dashboard');
-    }
+    // Straight to the habits check. No consent modal (done on step 1) and no
+    // welcome-video gate — the video is now a dismissible dashboard card.
+    openTool('wellness_assessment.html');
   }
 };
 
@@ -3081,58 +3073,130 @@ VIEWS['dashboard'] = async function () {
   const insCount = _insAssess?._insCount ?? snap.assessment?.insCount ?? null;
   const insScore = (_insAssess && typeof _insAssess.insurance === 'number') ? _insAssess.insurance : null;
 
-  // ── Nudge generation ──
-  const nudges = [];
+  // ── P0-4: the six sources, the score gate, and the two-nudge rule ─────────
+  //
+  // The dashboard used to push up to nine nudges at once, ordered by the order
+  // they happened to be written, and show a score out of 100 built on figures
+  // the member had mostly not given (audit F9, F10). Both are replaced here by
+  // one ordered list, evaluated top-down, of which only the first two unmet
+  // items are ever shown.
   const curMonth = new Date().toISOString().slice(0,7);
-  if (!hasAssessment) {
-    nudges.push({ pri:'high', icon:'📋', title:'Start your wellness assessment', desc:"Your financial health score hasn't been set — takes 5 minutes.", cta:'Start Now', click:`openTool('wellness_assessment.html')` });
-  } else if (snapAge.assessment !== null && snapAge.assessment >= 30) {
-    nudges.push({ pri:'medium', icon:'🔄', title:'Time to reassess', desc:`Last assessed ${snapAge.assessment} days ago. A fresh assessment (recommended every 30 days) measures your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
-  }
-  if (!hasBudgetTool) {
-    nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
-  } else if (budgetLabel && budgetLabel < curMonth) {
-    nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${budgetLabel}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
-  } else if (snapAge.budget !== null && snapAge.budget > 30) {
-    nudges.push({ pri:'medium', icon:'📊', title:'Budget not updated recently', desc:`Last saved ${snapAge.budget} days ago. Refresh your income and expenses.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
-  }
-  if (!hasStress) {
-    nudges.push({ pri:'medium', icon:'😰', title:'Log your first stress check-in', desc:'Fortnightly stress tracking shows trends and helps your advisor spot patterns.', cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
-  } else if (snapAge.stress !== null && snapAge.stress > 14) {
-    nudges.push({ pri:'low', icon:'😰', title:'Stress check-in overdue', desc:`Last logged ${snapAge.stress} days ago. Your fortnightly check-in is due.`, cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
-  }
-  if (!hasDTI && hasBudget) {
-    nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
-  }
-  if (!hasNWTool) {
-    nudges.push({ pri:'medium', icon:'💎', title:'Track your net worth', desc:'Enter your assets and liabilities to see your true financial position — updated every time you save.', cta:'Open Net Worth', click:`openTool('net_worth_tracker.html')` });
-  }
-  if (!hasEF) {
-    nudges.push({ pri:'high', icon:'🆘', title:'Set up your emergency fund', desc:'An emergency fund is your #1 financial safety net. Set a target and start tracking your progress.', cta:'Set Up Now', click:`go('emergency')` });
-  }
-  // Once the fund is set up, progress (incl. "below 3 months") is shown on the Hub card —
-  // no Action Required nudge, so the banner clears the moment the user saves their plan.
-  if (totalGoals === 0) {
-    nudges.push({ pri:'medium', icon:'🎯', title:'Add your first financial goal', desc:'Goals give your money direction. Set a target — a home, education, holiday — and track progress.', cta:'Add Goal', click:`openTool('goal_planner.html')` });
-  }
-  if (!retSnap && hasAssessment) {
-    nudges.push({ pri:'low', icon:'🏖️', title:'Run the retirement calculator', desc:'See if you are on track for retirement. Enter your age, salary, and current savings — takes 2 minutes.', cta:'Calculate', click:`openTool('retirement_calculator.html')` });
-  }
-  if (insCount === null && insScore === null && hasAssessment) {
-    nudges.push({ pri:'medium', icon:'🛡️', title:'Check your insurance coverage', desc:'Re-take the assessment to see how many of the 6 key insurance types you currently hold.', cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
-  } else if (insCount !== null && insCount < 3) {
-    nudges.push({ pri:'medium', icon:'🛡️', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps to address.', cta:'Learn More', click:`go('learn')` });
-  }
 
-  // ── Employment-tailored nudges ──
+  // "I have no debts" is a real answer, not an absence of one. The DTI tool
+  // writes it to localStorage rather than a profiles column — P0-5 adds the
+  // button — so the debts source can complete without a debt register existing.
+  const noDebts = (() => {
+    try { return localStorage.getItem('kw_no_debts') === 'true'; } catch { return false; }
+  })();
+
+  // The member's picture, as six things they have told us. Order matters: it is
+  // the order the nudges ask for them, and the order the checklist renders.
+  const SOURCES = [
+    { id:'habits',     label:'Habits check',   done: state.assessments.length > 0 },
+    { id:'budget',     label:'Budget',         done: hasBudgetTool },
+    { id:'emergency',  label:'Emergency fund', done: hasEF },
+    { id:'debts',      label:'Debts',          done: hasDTI || noDebts },
+    { id:'networth',   label:'Net worth',      done: hasNWTool },
+    { id:'retirement', label:'Retirement',     done: !!retSnap },
+  ];
+  const sourcesDone = SOURCES.filter(s => s.done).length;
+
+  // ── Score gate ────────────────────────────────────────────────────────────
+  // A score out of 100 is shown only once the four sources it actually depends
+  // on exist. Before that the member sees what they have told us so far and the
+  // written starting point from their habits check — not a number that looks
+  // authoritative and is not.
+  //
+  // The exception is the reason this is not simply `sourcesDone >= 4`: a member
+  // assessed BEFORE this change gave their figures inside the assessment, so
+  // their score was honestly earned and must not vanish. `_habits_only` marks
+  // rows written by the new behaviour-only check (P0-3); a row without it is a
+  // pre-change assessment and satisfies the gate on its own for 90 days, by
+  // which time the nudges will have collected the real figures.
+  const _latestRow    = state.assessments?.[0] || null;
+  const _rowIsHabits  = _latestRow?.answers?._habits_only === true;
+  const _rowAgeDays   = _latestRow?.created_at ? daysSince(_latestRow.created_at) : null;
+  const grandfathered = !!_latestRow && !_rowIsHabits && _rowAgeDays !== null && _rowAgeDays <= 90;
+  const scoreReady    = grandfathered ||
+    (SOURCES[0].done && SOURCES[1].done && SOURCES[2].done && SOURCES[3].done);
+  const showScore     = scoreReady && wellScore !== null;
+
+  // The written starting point from the habits check, for the gauge slot.
+  const startingPoint = (() => {
+    if (Array.isArray(state.user?.starting_point)) return state.user.starting_point;
+    try {
+      const sp = safeParseLS('kw_assessment_result', {}).startingPoint;
+      return Array.isArray(sp) ? sp : null;
+    } catch { return null; }
+  })();
+
+  // ── The nudge ladder ──────────────────────────────────────────────────────
+  // Evaluated top-down; the first two unmet items are rendered, plus one "done"
+  // line for the most recently completed source. Each says what it will ask and
+  // what it already knows, so nothing reads as a second request for the same
+  // figure.
+  const _bd        = _toolMap['budget_planner'];
+  const _bdCur     = _bd?.currentKey && _bd?.budgets?.[_bd.currentKey] ? _bd.budgets[_bd.currentKey] : null;
+  const _bdDebtMin = Number(_bdCur?.expenses?.debt_min || 0);
+  const _habitDebt = _latestRow?.answers?.debtMgmt;
+  const _budgetThisMonth = hasBudgetTool && budgetLabel === curMonth;
+  const _goalsSeeded = totalGoals > 0 && goalsOnTrack === 0 &&
+    (_toolMap['goal_planner']?.goals || []).every(g => !g.target);
+
+  // Employment folds into the emergency-fund ask rather than standing as its own
+  // nudge: variable income means a 6-month target, which is a property of THAT
+  // ask, not a separate thing to do.
   const _emp = (state.user?.employment || '').toLowerCase();
-  if (_emp.includes('self-employed')) {
-    nudges.push({ pri:'medium', icon:'💼', title:'Self-employed: plan your retirement & tax', desc:'Consider a Retirement Annuity (RA) — no employer pension means it is on you. Remember provisional tax with BURS twice a year.', cta:'Retirement Calculator', click:`openTool('retirement_calculator.html')` });
-  } else if (_emp.includes('student')) {
-    nudges.push({ pri:'medium', icon:'📚', title:'Start strong: build the savings habit now', desc:'Even P100–P200/month invested consistently from a young age compounds into significant wealth. An emergency fund is your first milestone.', cta:'Set Up Emergency Fund', click:`go('emergency')` });
-  } else if (_emp.includes('not currently employed')) {
-    nudges.push({ pri:'high', icon:'🏡', title:'Focus on your emergency fund first', desc:'With variable income, 3–6 months of essential expenses in a separate account is your most important financial buffer.', cta:'Emergency Fund', click:`go('emergency')` });
-  }
+  const _variableIncome = _emp.includes('self-employed') || _emp.includes('not currently employed');
+  const _efMonthsTarget = _variableIncome ? 6 : 3;
+
+  const NUDGE_LADDER = [
+    { id:'habits', unmet: state.assessments.length === 0 ||
+        (_rowAgeDays !== null && _rowAgeDays > 90),
+      icon:'📋', title:'Habits check', desc:'Three minutes, no numbers.',
+      cta:'Start', click:`openTool('wellness_assessment.html')` },
+
+    { id:'budget', unmet: !_budgetThisMonth,
+      icon:'📊', title:'Budget',
+      desc:'Your take-home pay and what you spend it on — the one place you will ever type your income.',
+      cta:'Open budget', click:`openTool('budget_planner.html')` },
+
+    { id:'emergency', unmet: hasBudgetTool && !hasEF,
+      icon:'🆘', title:'Emergency fund',
+      desc:`One number: what you could reach within 48 hours. Your essential costs are already here${_variableIncome ? ', and with variable income we aim for ' + _efMonthsTarget + ' months' : ''}.`,
+      cta:'Add balance', click:`go('emergency')` },
+
+    { id:'debts', unmet: (_bdDebtMin > 0 || (typeof _habitDebt !== 'undefined' && Number(_habitDebt) <= 1)) &&
+        !hasDTI && !noDebts,
+      icon:'💳', title:'Debts',
+      desc:'List each loan once. Your debt-to-income comes out of it.',
+      cta:'List debts', click:`openTool('dti_calculator.html')` },
+
+    { id:'networth', unmet: hasEF && (hasDTI || noDebts) && !hasNWTool,
+      icon:'💎', title:'Net worth',
+      desc:'Your loans are already listed. Add what you own.',
+      cta:'Add assets', click:`openTool('net_worth_tracker.html')` },
+
+    { id:'retirement', unmet: hasBudgetTool && !retSnap,
+      icon:'🏖️', title:'Retirement',
+      desc:'Two questions — your salary is already here.',
+      cta:'Run it', click:`openTool('retirement_calculator.html')` },
+
+    { id:'stress', unmet: hasBudgetTool && (!hasStress || (snapAge.stress !== null && snapAge.stress > 14)),
+      icon:'😰', title:'Stress check-in',
+      desc:'Thirty seconds: how is money feeling this fortnight?',
+      cta:'Log it', click:`openTool('financial_stress_tracker.html')` },
+
+    { id:'goals', unmet: hasBudgetTool && _goalsSeeded,
+      icon:'🎯', title:'Goals',
+      desc:'You said what you want to work on. Put a number and a date on each — your income is already here.',
+      cta:'Set targets', click:`openTool('goal_planner.html')` },
+  ];
+  const nudges = NUDGE_LADDER.filter(n => n.unmet).slice(0, 2);
+
+  // One "done" line for momentum — the most recently completed source, so the
+  // strip is never only demands.
+  const _doneSource = [...SOURCES].reverse().find(s => s.done) || null;
 
   // ── Helper formatters ──
   const fmtP = v => {
@@ -3143,15 +3207,23 @@ VIEWS['dashboard'] = async function () {
   };
 
   // ── Build summary hub cards ──
+  // P0-4: an empty card reads "not yet" in navy, never "—" in a warning colour.
+  // A dash in red or orange states a problem about a figure the member has not
+  // been asked for yet; "not yet" states the truth, which is that we do not know.
   const hubCards = [];
 
-  // Wellness score
-  if (wellScore !== null) {
+  // P0-4: the Wellness Score card appears only once the gate is satisfied.
+  // Until then its slot shows how much of the picture exists, which is a true
+  // statement, where a score built on one source out of six is not.
+  if (showScore) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
     hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh: wellIsLive ? '⚡ Live — updates with your tools' : freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
+    const _next = SOURCES.find(x => !x.done);
+    hubCards.push({ cls:'gold', lbl:'Your picture', val:`${sourcesDone} of 6`,
+      sub: _next ? `Next: ${_next.label.toLowerCase()}` : 'Building your picture',
+      click:`go('dashboard')` });
   }
 
   // Budget surplus
@@ -3160,7 +3232,7 @@ VIEWS['dashboard'] = async function () {
     const isBudgetStale = snap.budget?.month && snap.budget.month < curMonth;
     hubCards.push({ cls, lbl:'Budget Surplus', val:fmtP(budgetSurplus), sub:budgetLabel || 'This month', fresh:freshLabel(snapAge.budget), stale: isBudgetStale, click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Budget Surplus', val:'—', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Budget Surplus', val:'not yet', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
   }
 
   // Net worth
@@ -3168,7 +3240,7 @@ VIEWS['dashboard'] = async function () {
     const cls = netWorth >= 0 ? 'green' : 'red';
     hubCards.push({ cls, lbl:'Net Worth', val:fmtP(netWorth), sub:netWorth >= 0 ? 'Positive' : 'Negative', click:`openTool('net_worth_tracker.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Net Worth', val:'—', sub:'Track your wealth', click:`openTool('net_worth_tracker.html')` });
+    hubCards.push({ cls:'navy', lbl:'Net Worth', val:'not yet', sub:'Track your wealth', click:`openTool('net_worth_tracker.html')` });
   }
 
   // Emergency fund
@@ -3178,7 +3250,7 @@ VIEWS['dashboard'] = async function () {
   } else if (hasEF) {
     hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved — add your monthly expenses to see months of cover', click:`go('emergency')` });
   } else {
-    hubCards.push({ cls:'orange', lbl:'Emergency Fund', val:'—', sub:'Set up your fund', click:`go('emergency')` });
+    hubCards.push({ cls:'navy', lbl:'Emergency Fund', val:'not yet', sub:'Set up your fund', click:`go('emergency')` });
   }
 
   // Goals
@@ -3186,7 +3258,7 @@ VIEWS['dashboard'] = async function () {
     const cls = goalsOnTrack === totalGoals ? 'green' : goalsOnTrack > 0 ? 'gold' : 'orange';
     hubCards.push({ cls, lbl:'Goals On Track', val:`${goalsOnTrack}/${totalGoals}`, sub:'Financial goals', click:`openTool('goal_planner.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Financial Goals', val:'—', sub:'Add your goals', click:`openTool('goal_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Financial Goals', val:'not yet', sub:'Add your goals', click:`openTool('goal_planner.html')` });
   }
 
   // Stress score
@@ -3195,7 +3267,7 @@ VIEWS['dashboard'] = async function () {
     const lbl = stressScore <= 3 ? 'Low stress' : stressScore <= 6 ? 'Moderate' : 'High stress';
     hubCards.push({ cls, lbl:'Financial Stress', val:`${stressScore}/10`, sub:lbl, fresh:freshLabel(snapAge.stress), stale: snapAge.stress > 14, click:`openTool('financial_stress_tracker.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
+    hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'not yet', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
 
   // DTI — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
@@ -3204,9 +3276,9 @@ VIEWS['dashboard'] = async function () {
     const dtiSub  = budgetDTI <= 35 ? 'Healthy' : budgetDTI <= 50 ? 'Acceptable' : budgetDTI <= 65 ? 'High Risk' : 'Critical';
     hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
   } else if (hasBudget) {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
   }
 
   // Savings Rate — computed from Supabase budget data (budgetSavRate already set above, snap fallback applied)
@@ -3215,7 +3287,7 @@ VIEWS['dashboard'] = async function () {
     const srSub = budgetSavRate >= 20 ? 'On target (20% rule)' : budgetSavRate >= 10 ? 'Building — aim for 20%' : budgetSavRate > 0 ? 'Low — increase contributions' : 'No savings budgeted';
     hubCards.push({ cls:srCls, lbl:'Savings Rate', val:`${budgetSavRate}%`, sub:srSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'not yet', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
   // Insurance Coverage — explicit count (newer assessments) → dimension score (older) → prompt only if no assessment
@@ -3228,7 +3300,7 @@ VIEWS['dashboard'] = async function () {
     const insSub = insScore >= 75 ? 'Well covered' : insScore >= 50 ? 'Some gaps' : 'Significant gaps';
     hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insScore}/100`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
+    hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'not yet', sub:'Do the habits check', click:`openTool('wellness_assessment.html')` });
   }
 
   // Retirement Readiness — from retirement snapshot (retSnap declared above nudges)
@@ -3239,7 +3311,7 @@ VIEWS['dashboard'] = async function () {
     const retAge  = retSnap.lastUpdated ?? snap.retirement?.lastUpdated;
     hubCards.push({ cls:retCls, lbl:'Retirement Readiness', val:`${retPct}%`, sub:retSub, fresh:freshLabel(daysSince(retAge)), click:`openTool('retirement_calculator.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'—', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
+    hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'not yet', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
   }
 
   // Estate Planning — driven by profiles.will_status (set in the assessment's
@@ -3254,18 +3326,29 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Build "What to do next" actions ──
+  // P0-4: these are OBSERVATIONS about figures the member has given — a deficit,
+  // a high DTI — not requests for more. Requests belong to the nudge ladder
+  // above, and the two used to duplicate each other: "Complete your wellness
+  // assessment" appeared here at the same moment nudge 1 was asking for it.
+  // Capped at three so the page has one clear next thing, not four.
   const actions = [];
-  if (!hasAssessment) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
+  if (!hasAssessment && !nudges.some(n => n.id === 'habits')) actions.push({ color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
   if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
   if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (!hasNWTool) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
   if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
-  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
+  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
-  if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+  if (actions.length === 0) {
+    // Only claim this when the picture is actually complete. With one source of
+    // six there is nothing to be on top of yet, and saying so would be the same
+    // false confidence as a score built on no figures.
+    if (sourcesDone === SOURCES.length) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+    else actions.push({ color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
+  }
 
   // ── Dashboard greeting ──
   const _dProf = safeParseLS('kw_profile', {});
@@ -3301,6 +3384,26 @@ VIEWS['dashboard'] = async function () {
       <div style="font-family:'Nunito',sans-serif;font-size:29px;font-weight:800;letter-spacing:-0.015em;color:var(--kw-ink)">${_greet}${_dFirst ? `, ${_dFirst}` : ''} 👋</div>
       <div style="font-size:13px;color:var(--muted);margin-top:3px">Here's your financial wellness overview.</div>
     </div>
+
+    ${(() => {
+      // P0-1: the welcome video, as an offer rather than a gate (audit F4). It
+      // used to be a modal that withheld its own close button until the video
+      // finished. Dismissal is remembered in kw_welcome_seen, the same key
+      // closeWelcome() writes, so watching it also retires the card.
+      const _wSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
+      if (_wSeen) return '';
+      return `<div class="card" style="margin-bottom:18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-size:26px;flex-shrink:0">🎬</span>
+        <div style="flex:1;min-width:200px">
+          <div style="font-size:14px;font-weight:700;color:var(--navy);margin-bottom:2px">Watch the 2-minute welcome from the team</div>
+          <div style="font-size:12.5px;color:var(--muted);line-height:1.5">A short introduction to what the portal does and how to get the most from it.</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn btn-primary btn-sm" onclick="showWelcomeVideo()">Watch</button>
+          <button class="btn btn-outline btn-sm" onclick="dismissWelcomeCard()">Dismiss</button>
+        </div>
+      </div>`;
+    })()}
 
     ${(()=>{
       const now = new Date();
@@ -3351,18 +3454,25 @@ VIEWS['dashboard'] = async function () {
       return banners.join('');
     })()}
 
-    ${nudges.length ? `
-    <!-- Nudge strip -->
+    ${(nudges.length || _doneSource) ? `
+    <!-- P0-4: at most two live nudges, ordered by what each unlocks for the
+         others, plus one "done" line for momentum. This replaces a strip headed
+         "Action Required" that could carry nine at once — which is no sequence
+         at all, and reads as a list of failures on a member's first day. -->
     <div style="margin-bottom:18px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:13px;font-weight:700;color:var(--navy)">🔔 Action Required</span>
-        <span style="font-size:11px;background:var(--gold);color:#fff;border-radius:20px;padding:1px 8px;font-weight:700">${nudges.length}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--navy)">🧭 Your next step${nudges.length > 1 ? 's' : ''}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">${sourcesDone} of 6 done</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${nudges.map(n=>{
-          const border = n.pri==='high' ? 'var(--red)' : n.pri==='medium' ? 'var(--gold)' : 'var(--navy2)';
-          const bg     = n.pri==='high' ? '#fff5f5' : n.pri==='medium' ? '#fffbf0' : '#f5f7ff';
-          return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border-left:4px solid ${border};background:${bg};cursor:pointer" onclick="${n.click}">
+      <div id="kw-nudge-strip" style="display:flex;flex-direction:column;gap:8px">
+        ${_doneSource ? `<div data-kw-done="1" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;border-left:4px solid var(--green);background:#f2f9f4">
+          <span style="font-size:16px;flex-shrink:0">✓</span>
+          <div style="flex:1;min-width:0;font-size:12.5px;color:var(--navy)"><strong>${_doneSource.label}</strong> — done. That fills in the tools that come after it.</div>
+        </div>` : ''}
+        ${nudges.map((n,i)=>{
+          const border = i===0 ? 'var(--gold)' : 'var(--navy2)';
+          const bg     = i===0 ? '#fffbf0' : '#f5f7ff';
+          return `<div data-kw-nudge="${n.id}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border-left:4px solid ${border};background:${bg};cursor:pointer" onclick="${n.click}">
             <span style="font-size:20px;flex-shrink:0">${n.icon}</span>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px">${n.title}</div>
@@ -3376,18 +3486,36 @@ VIEWS['dashboard'] = async function () {
 
     <!-- Score + Category row -->
     <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;margin-bottom:18px;align-items:start">
+      ${showScore ? `
       <div class="card" style="text-align:center;min-width:180px">
         <div class="card-title" style="margin-bottom:10px">Wellness Score</div>
-        ${wellScore !== null ? svgGauge(wellScore, scoreBand(wellScore).color) : `<div style="font-size:42px;padding:20px 0">📋</div>`}
-        ${wellScore !== null
-          ? `<div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
-             <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
-             ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
-             <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-assess</button>`
-          : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Take the assessment<br>to see your score</p>
-             <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>`
-        }
-      </div>
+        ${svgGauge(wellScore, scoreBand(wellScore).color)}
+        <div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+        ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
+        <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-check habits</button>
+      </div>` : `
+      <!-- P0-4: the gauge slot before the score is earned. A checklist of what
+           the member has told us, and the written starting point from their
+           habits check — both true, where a number out of 100 built on one
+           source of six is not. -->
+      <div class="card" style="min-width:260px;max-width:320px">
+        <div class="card-title" style="margin-bottom:4px">Your picture — ${sourcesDone} of 6</div>
+        <p style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:12px">Your score appears once your budget, emergency fund and debts are here — until then a number would be guesswork.</p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${startingPoint ? '14px' : '0'}">
+          ${SOURCES.map(src=>`
+            <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:${src.done?'var(--navy)':'var(--muted)'}">
+              <span style="flex-shrink:0;width:16px;text-align:center;color:${src.done?'var(--green)':'var(--border)'};font-weight:700">${src.done?'✓':'○'}</span>
+              <span style="flex:1">${src.label}</span>
+              <span style="font-size:11px;color:var(--muted)">${src.done?'done':'not yet'}</span>
+            </div>`).join('')}
+        </div>
+        ${startingPoint ? `
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Your starting point</div>
+          <div style="font-size:12.5px;color:var(--text);line-height:1.6">${startingPoint.map(t=>`<p style="margin-bottom:6px">${escHtml(t)}</p>`).join('')}</div>
+        </div>` : ''}
+      </div>`}
       <div class="card" style="min-height:200px">
         <div class="card-title" style="margin-bottom:14px">Your Financial Hub</div>
         <div class="hub-summary">
@@ -3406,7 +3534,7 @@ VIEWS['dashboard'] = async function () {
     <div class="card" style="margin-bottom:18px">
       <div class="card-title">🧭 What To Do Next</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Personalised based on your live tool data.</p>
-      ${actions.slice(0,4).map(a=>`
+      ${actions.slice(0,3).map(a=>`
         <div class="next-action" onclick="${a.click}" style="cursor:pointer">
           <div class="na-dot" style="background:${a.color}"></div>
           <div>
@@ -3478,55 +3606,69 @@ VIEWS['dashboard'] = async function () {
 // ══════════════════════════════════════════════════
 //  DATA PROTECTION CONSENT
 // ══════════════════════════════════════════════════
+// P0-1: the modal is NO LONGER SHOWN TO MEMBERS — consent is step 1 of the
+// onboarding wizard. Its markup stays in the DOM because #consent-statement is
+// where the full legal text lives, and the wizard reads it from there.
 function showConsentModal() {
   const el = document.getElementById('consent-modal');
   if (el) el.style.display = 'flex';
 }
 
-window.acceptConsent = async function () {
-  const el = document.getElementById('consent-modal');
-  if (el) el.style.display = 'none';
+// The single write path for consent, shared by the wizard's step 1 and the
+// (now unused) modal. Returns true only when the record actually landed —
+// consent is a compliance record, so a caller must not advance on false.
+async function recordConsent() {
   const now = new Date().toISOString();
-  // Save to localStorage immediately as fast-path for future loads
-  localStorage.setItem('kw_consent_accepted', 'true');
   if (state.user) {
+    const _prevAccepted = state.user.consent_accepted;
+    const _prevDate     = state.user.consent_date;
     state.user.consent_accepted = true;
     state.user.consent_date = now;
-    await saveUser();
+    const ok = await saveUser();
+    if (ok === false) {
+      state.user.consent_accepted = _prevAccepted;
+      state.user.consent_date = _prevDate;
+      showToast('⚠️ We couldn\'t record your consent — please check your connection and try again.');
+      return false;
+    }
   } else if (currentUser) {
-    // Consent is a compliance record — surface (don't swallow) a write failure.
     const { error: _consentErr } = await sb.from('profiles').update({ consent_accepted: true, consent_date: now }).eq('id', currentUser.id);
-    if (_consentErr) { console.error('consent save failed:', _consentErr); showToast('⚠️ We couldn\'t record your consent on the server — please check your connection.'); }
-  }
-  // Only show welcome video if user hasn't already seen it
-  const welcomeSeen = localStorage.getItem('kw_welcome_seen') === 'true' || state.user?.welcome_seen === true;
-  if (!welcomeSeen) {
-    showWelcomeVideo();
+    if (_consentErr) {
+      console.error('consent save failed:', _consentErr);
+      showToast('⚠️ We couldn\'t record your consent — please check your connection and try again.');
+      return false;
+    }
+    // Seed state.user so the flag survives the next saveUser(). Without this, a
+    // member whose profiles row had not materialised yet would have consent
+    // recorded here and then written back as `consent_accepted: false` by
+    // finishOnboarding's upsert, which defaults every absent key.
+    state.user = { ...(state.user || {}), consent_accepted: true, consent_date: now };
   } else {
-    go('dashboard');
+    return false;
   }
+  // localStorage is only a fast-path for later loads, so it is set after the
+  // server write succeeds — never as a stand-in for it.
+  localStorage.setItem('kw_consent_accepted', 'true');
+  return true;
+}
+
+window.acceptConsent = async function () {
+  if (!await recordConsent()) return;
+  const el = document.getElementById('consent-modal');
+  if (el) el.style.display = 'none';
+  go('dashboard');
 };
 
 // ══════════════════════════════════════════════════
 //  WELCOME VIDEO
 // ══════════════════════════════════════════════════
-function _showStartButton() {
-  const btn  = document.getElementById('welcome-start-wrap');
-  const wait = document.getElementById('welcome-wait-msg');
-  if (btn && btn.style.display === 'none') {
-    btn.style.display = '';
-    btn.style.opacity = '0';
-    btn.style.transition = 'opacity 0.5s';
-    setTimeout(() => { btn.style.opacity = '1'; }, 50);
-  }
-  if (wait) wait.style.display = 'none';
-}
-
-// ── Onboarding welcome video ───────────────────────────────────────
+// ── Welcome video ──────────────────────────────────────────────────
 // Vimeo-hosted, in line with the Vimeo hosting decision for portal video.
-// Held here rather than in a Supabase content_items row: this is the one
-// video every new member must see before they can start, so it should not
-// depend on a data row being present and correctly configured.
+// Held here rather than in a Supabase content_items row so it does not depend
+// on a data row being present and correctly configured.
+//
+// P0-1: this is an OPTIONAL card on the dashboard, not a gate. It no longer
+// blocks the assessment and no longer opens itself.
 //
 // Accepts '<id>' or '<id>/<privacy-hash>' — see lpParseVimeoRef(). To swap the
 // video, change this line only; embedding is restricted to the portal's domains
@@ -3545,29 +3687,26 @@ function showWelcomeVideo(){
   const _wn  = state.user?.first_name || _wlp.firstName || '';
   const _wh  = document.getElementById('welcome-heading');
   if (_wh && _wn) _wh.textContent = `Welcome, ${_wn}! 🎉`;
-  // Reset button state
+  // The close button is visible from the outset (see the modal markup) — reset
+  // it in case an earlier open left it mid-fade.
   const _sw = document.getElementById('welcome-start-wrap');
-  if (_sw) { _sw.style.display = 'none'; _sw.style.opacity = '0'; }
+  if (_sw) { _sw.style.display = ''; _sw.style.opacity = '1'; }
   const _wm = document.getElementById('welcome-wait-msg');
-  if (_wm) _wm.style.display = '';
+  if (_wm) { _wm.style.display = 'none'; _wm.textContent = ''; }
   document.getElementById('welcome-modal').classList.add('visible');
 
-  // Reveal the "Start My Assessment" button ONLY when the welcome video ends.
-  // The button stays hidden during playback so it never appears at the start
-  // (no skip control — watching the intro is intentionally required).
   const box = document.getElementById('welcome-vimeo');
   _kwDestroyWelcomePlayer();
   if (box) box.innerHTML = '';
 
-  // Fail open. This modal sits between a new member and their first assessment,
-  // so anything that stops the video reaching us — Vimeo blocked on a corporate
-  // network, the API script never loading, a bad reference — must release the
-  // button rather than leave them staring at a black box.
+  // Say so when the video cannot be reached — Vimeo blocked on a corporate
+  // network, the API script never loading, a bad reference — rather than leaving
+  // the member looking at a black box. Nothing is gated on this any more; the
+  // close button is already there.
   const failOpen = (why) => {
     if (why) console.warn('Welcome video unavailable:', why);
     const wait = document.getElementById('welcome-wait-msg');
-    if (wait) wait.textContent = 'The welcome video could not load — you can continue to your assessment.';
-    _showStartButton();
+    if (wait) { wait.textContent = 'The welcome video could not load — you can close this and carry on.'; wait.style.display = ''; }
   };
 
   const ref = lpParseVimeoRef(KW_WELCOME_VIMEO);
@@ -3580,7 +3719,6 @@ function showWelcomeVideo(){
         ? { url: `https://vimeo.com/${ref.id}/${ref.hash}`, responsive: true }
         : { id: Number(ref.id), responsive: true };
       _kwWelcomePlayer = new Vimeo.Player(box, opts);
-      _kwWelcomePlayer.on('ended', () => _showStartButton());
       _kwWelcomePlayer.on('error', e => failOpen(e));
       _kwWelcomePlayer.ready().catch(e => failOpen(e));
     } catch (e) { failOpen(e); }
@@ -3592,10 +3730,6 @@ function showWelcomeVideo(){
   _kwWelcomeApiTimer = setTimeout(() => {
     if (!_kwWelcomePlayer) failOpen('player.js did not load in time');
   }, 15000);
-
-  // Safety net: if 'ended' never fires (e.g. the video can't load), reveal the
-  // button after ~6 minutes so a member is never permanently stuck.
-  setTimeout(_showStartButton, 360000);
 }
 
 window.closeWelcome = async function(){
@@ -3609,7 +3743,18 @@ window.closeWelcome = async function(){
   } else if (currentUser) {
     sb.from('profiles').update({ welcome_seen: true }).eq('id', currentUser.id).then(()=>{}).catch(()=>{});
   }
-  openTool('wellness_assessment.html');
+  // P0-1: closing the video returns the member to where they were. It used to
+  // push them into the assessment, which is what made a "welcome" a gate.
+  if ((location.hash.replace('#','') || 'dashboard') === 'dashboard') route();
+};
+
+// Dismiss the dashboard welcome card without watching. Writes the same
+// kw_welcome_seen key as closeWelcome(), so the two cannot disagree.
+window.dismissWelcomeCard = async function () {
+  localStorage.setItem('kw_welcome_seen', 'true');
+  if (state.user) { state.user.welcome_seen = true; saveUser().catch(()=>{}); }
+  else if (currentUser) { sb.from('profiles').update({ welcome_seen: true }).eq('id', currentUser.id).then(()=>{}).catch(()=>{}); }
+  if ((location.hash.replace('#','') || 'dashboard') === 'dashboard') route();
 };
 
 // ══════════════════════════════════════════════════
@@ -3640,7 +3785,9 @@ window.saveNameModal = function () {
   if (state.user) {
     state.user.first_name = first;
     state.user.last_name  = last;
-    state.user.onboarded  = true;   // M-1: capturing a name counts as onboarded so the flag is authoritative
+    // P0-1: does NOT set onboarded. Capturing a name is not onboarding — treating
+    // it as such is exactly what let this modal skip the wizard's age, employment
+    // and goals steps, so the portal never collected them (audit F1).
     saveUser().catch(()=>{});
   } else {
     // Fallback: update Supabase auth metadata
@@ -3649,9 +3796,6 @@ window.saveNameModal = function () {
 
   initProfileUI();
   document.getElementById('name-modal').classList.remove('visible');
-  // Continue the backfill chain (company → department → gender) for anything
-  // still missing, now that the name modal has closed.
-  maybePromptBackfill();
 };
 
 // ══════════════════════════════════════════════════
@@ -3908,8 +4052,16 @@ function _processBackfillQueue(queue, i) {
 }
 
 // Prompt the backfill chain for whichever of company → department → gender is
-// missing. Idempotent and safe to call on every member landing. Company &
-// department only apply to unit-enabled orgs; gender applies to everyone.
+// missing. Company & department only apply to unit-enabled orgs; gender applies
+// to everyone.
+//
+// P0-1: NOTHING CALLS THIS AUTOMATICALLY, AND NOTHING MAY. It used to run on
+// every member landing — after sign-in, after a password re-confirm, and off the
+// back of the name modal — which is three of the four pop-ups a new member met
+// before they had seen a single screen (audit F3, F4). It is kept, and exposed
+// on `window`, only so an admin can trigger a backfill deliberately from the
+// console for a member who asks for their details to be corrected. If you find
+// yourself adding a call site on a member path, that is the bug.
 async function maybePromptBackfill() {
   if (!state.user) return;
   if (document.querySelector('#name-modal.visible, #company-modal.visible, #department-modal.visible, #gender-modal.visible')) return;
@@ -3922,6 +4074,8 @@ async function maybePromptBackfill() {
   if (!queue.length) return;
   _processBackfillQueue(queue, 0);
 }
+// Admin-only entry point — see the warning above.
+window.maybePromptBackfill = maybePromptBackfill;
 
 // Record a read article (by title), persist to Supabase, and refresh learning badge.
 async function markArticleRead(title) {
@@ -5768,6 +5922,7 @@ VIEWS['emergency'] = async function () {
   el.innerHTML = `
     <div style="max-width:660px">
       <div class="notice notice-gold">🆘 <strong>Emergency Fund Planner</strong> — Know your target. Track your progress.</div>
+      <div class="kw-trust">Stays in your account. Your employer only ever sees averages across 5 or more colleagues.</div>
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">💡 Recommended Targets (from your profile)</div>
@@ -7480,23 +7635,19 @@ function registerAuthListener() {
       loadNotifications();
       route();
       if (state.user) {
-        const _lp = safeParseLS('kw_profile', {});
-        const _hasName = !!(_lp.firstName || _lp.displayName || state.user.first_name);
-        // Show name-capture modal for existing users who have no name set yet.
-        // Its save() chains into maybePromptBackfill() for the remaining dims.
-        if (!_hasName) {
-          setTimeout(showNameModal, 700);
+        // P0-1: NOTHING POPS UP ON SIGN-IN. This block used to launch the name
+        // modal at 700 ms and the consent modal at 800 ms, then chain the
+        // company → department → gender backfill behind them — four interruptions
+        // stacked over the onboarding wizard before the member saw a screen
+        // (audit F1, F4). A member who is not onboarded now goes to the wizard,
+        // which route() has already decided; a member who is, goes to their
+        // dashboard. Both are screens, not modals.
+        //
+        // Consent still syncs its localStorage fast-path from the server value,
+        // so a member who consented on another device is not asked again.
+        if (state.user.consent_accepted && localStorage.getItem('kw_consent_accepted') !== 'true') {
+          localStorage.setItem('kw_consent_accepted', 'true');
         }
-        // Consent check: localStorage is fast-path; Supabase is fallback
-        const _lsConsent = localStorage.getItem('kw_consent_accepted') === 'true';
-        if (_lsConsent || state.user.consent_accepted) {
-          if (!_lsConsent) localStorage.setItem('kw_consent_accepted', 'true');
-        } else {
-          setTimeout(showConsentModal, 800);
-        }
-        // Backfill company → department → gender for pre-existing members.
-        // Skipped here when the name modal is showing; it chains from there.
-        if (_hasName) maybePromptBackfill();
       }
     } else if (event === 'PASSWORD_RECOVERY') {
       // User arrived via the reset-link email — show set-new-password form
@@ -7559,7 +7710,7 @@ async function init() {
       initProfileUI();
       loadNotifications();
       route();
-      maybePromptBackfill();  // company → department → gender backfill for returning members
+      // P0-1: no backfill modal for returning members — see maybePromptBackfill().
     } else {
       // External visit or new tab — require password to prove identity.
       document.getElementById('sc-email').textContent = currentUser.email || '';

@@ -184,16 +184,18 @@
       <div class="field">
         <label>Current Age</label>
         <div class="input-wrap">
-          <input type="number" id="currentAge" value="30" min="18" max="70" step="1">
+          <input type="number" id="currentAge" value="" placeholder="e.g. 34" min="18" max="70" step="1">
           <span class="input-suffix">yrs</span>
         </div>
+        <div class="hint" id="currentAgeHint">From your profile, if we have it</div>
       </div>
       <div class="field">
         <label>Retirement Age</label>
         <div class="input-wrap">
-          <input type="number" id="retirementAge" value="65" min="40" max="80" step="1">
+          <input type="number" id="retirementAge" value="" placeholder="e.g. 60" min="40" max="80" step="1">
           <span class="input-suffix">yrs</span>
         </div>
+        <div class="hint">When you want to stop working — your decision, not a default</div>
       </div>
       <div class="field">
         <label>Life Expectancy</label>
@@ -201,7 +203,7 @@
           <input type="number" id="lifeExpectancy" value="75" min="60" max="110" step="1">
           <span class="input-suffix">yrs</span>
         </div>
-        <div class="hint">Auto-set from a Botswana life-expectancy estimate — adjust if you wish. Determines how long your pension must last.</div>
+        <div class="hint"><strong>Assumption</strong> — a Botswana life-expectancy estimate, not your figure. Adjust if you wish; it sets how long your pension must last.</div>
       </div>
       <div class="field">
         <label>Target Replacement Rate</label>
@@ -209,12 +211,16 @@
           <input type="number" id="replacementRate" value="70" min="30" max="100" step="5">
           <span class="input-suffix">%</span>
         </div>
-        <div class="hint">% of last salary as monthly pension (standard: 70%)</div>
+        <div class="hint"><strong>Assumption</strong> — the standard 70% of final salary. Not your figure; change it if you have a target of your own.</div>
       </div>
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <!-- P0-5 (audit F7): this said "Income pulled from your Budget Planner" as
+       static markup, whatever the real source was — and on this page nothing
+       ever displayed it, so the claim was both wrong and dead. It is filled by
+       KWSource at prefill time now, which checks before it names anything. -->
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;"></div>
 
   <!-- ── CARD 2: INCOME ── -->
   <div class="card">
@@ -224,9 +230,10 @@
         <label>Current Monthly Salary (Gross)</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="monthlySalary" value="15,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="monthlySalary" value="" placeholder="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
+        <div class="hint" id="monthlySalaryHint">Your gross monthly pay</div>
       </div>
       <div class="field">
         <label>Annual Salary Growth Rate</label>
@@ -234,7 +241,7 @@
           <input type="number" id="salaryGrowth" value="5" min="0" max="30" step="0.5">
           <span class="input-suffix">%</span>
         </div>
-        <div class="hint">Expected annual raises, promotions &amp; cost-of-living adjustments (COLAs)</div>
+        <div class="hint"><strong>Assumption</strong> — expected annual raises, promotions &amp; cost-of-living adjustments (COLAs).</div>
       </div>
       <div class="field">
         <label>Annual Inflation Rate</label>
@@ -242,7 +249,7 @@
           <input type="number" id="inflationRate" value="5.5" min="0" max="20" step="0.5">
           <span class="input-suffix">%</span>
         </div>
-        <div class="hint">Used to convert future money to today's purchasing power</div>
+        <div class="hint"><strong>Assumption</strong> — used to convert future money to today's purchasing power.</div>
       </div>
     </div>
   </div>
@@ -255,7 +262,7 @@
         <label>Current Retirement Savings</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="currentSavings" value="50,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="currentSavings" value="" placeholder="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
         <div class="hint">BPOPF balance, unit trusts, savings — all combined</div>
@@ -264,7 +271,7 @@
         <label>Monthly Contribution</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="monthlyContrib" value="3,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="monthlyContrib" value="" placeholder="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
         <div class="hint">Pension deduction + personal savings per month</div>
@@ -287,6 +294,10 @@
       </div>
     </div>
   </div>
+
+  <!-- Shown when a figure only the member can give is missing, in place of a
+       projection built on substituted ages (P0-5). -->
+  <div id="ret-needs-input" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.8rem;color:#23261f;margin-bottom:14px;"></div>
 
   <button class="btn-calc" onclick="calculate()">
     <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
@@ -396,9 +407,37 @@ let projData = [];
 
 // ── Main calculation ─────────────────────────────────────────
 function calculate() {
+  // P0-5 (audit F8): NO SUBSTITUTED AGES. These used to fall back to 30 and 65,
+  // which then flowed into the saved snapshot and the dashboard's Retirement
+  // Readiness card the moment the member touched any field — a readiness
+  // percentage computed for a 30-year-old the member is not. With either age
+  // missing there is no projection to make, so the page says so instead.
+  const _ageRaw    = parseInt(document.getElementById('currentAge').value, 10);
+  const _retireRaw = parseInt(document.getElementById('retirementAge').value, 10);
+  const _salaryRaw = parseField('monthlySalary');
+  const _missing = [];
+  if (!(_ageRaw    > 0)) _missing.push('your age');
+  if (!(_retireRaw > 0)) _missing.push('the age you want to retire');
+  if (!(_salaryRaw > 0)) _missing.push('your monthly salary');
+  const _gate = document.getElementById('ret-needs-input');
+  if (_missing.length) {
+    if (_gate) {
+      _gate.textContent = 'Add ' + _missing.join(', ').replace(/, ([^,]*)$/, ' and $1') +
+        ' above and this will work out your retirement position.';
+      _gate.style.display = '';
+    }
+    const _res = document.getElementById('resultsSection');
+    if (_res) _res.style.display = 'none';
+    window._retLastSnap = null;      // never leave a stale readiness behind
+    return;
+  }
+  if (_gate) _gate.style.display = 'none';
+  const _resShow = document.getElementById('resultsSection');
+  if (_resShow) _resShow.style.display = '';
+
   // Inputs
-  const currentAge    = parseInt(document.getElementById('currentAge').value)     || 30;
-  const retireAge     = parseInt(document.getElementById('retirementAge').value)   || 65;
+  const currentAge    = _ageRaw;
+  const retireAge     = _retireRaw;
   const lifeExp       = parseInt(document.getElementById('lifeExpectancy').value)  || 85;
   const replRate      = (parseFloat(document.getElementById('replacementRate').value) || 70) / 100;
   const salary0       = parseField('monthlySalary');
@@ -717,11 +756,24 @@ window._retSave = function(){
         const initEl = document.getElementById('tool-user-initial');
         if (nameEl) nameEl.textContent = window._toolFullName;
         if (initEl) initEl.textContent = (window._toolFullName)[0].toUpperCase();
-        if (data.age) { const el = document.getElementById('currentAge'); if (el) el.value = data.age; }
+        if (data.age) {
+          const el = document.getElementById('currentAge');
+          if (el && !el.value) el.value = data.age;
+          const hint = document.getElementById('currentAgeHint');
+          if (hint) hint.textContent = 'From your profile — change it if it is out of date.';
+        }
       }
     });
     await KWProfile.load();
-    KWProfile.prefill(_RET_MAPPINGS);
+    const _filled = KWProfile.prefill(_RET_MAPPINGS);
+    if (_filled.length) {
+      await KWSource.apply('income-prefill-notice', KWProfile.get('fin_updated_at') ? { fin_updated_at: true } : null,
+        ' — you can adjust it below.');
+      const _sh = document.getElementById('monthlySalaryHint');
+      if (_sh && _filled.some(f => f.inputId === 'monthlySalary')) {
+        _sh.textContent = KWSource.line({ fin_updated_at: KWProfile.get('fin_updated_at') }, await KWSource.budgetSaved());
+      }
+    }
     // Cross-device: restore saved inputs (source of truth — overrides profile prefill), then persist on change
     const _apply = (_inp) => { if (!_inp) return false; Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); return true; };
     const _local = () => { try { const j = JSON.parse(localStorage.getItem('kw_tool_retirement')||'null'); return j && j.inputs; } catch(_){ return null; } };

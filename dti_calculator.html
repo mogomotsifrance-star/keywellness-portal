@@ -182,6 +182,8 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
   .gauge-wrap { width: 180px; height: 98px; }
   .gauge-pct-val { font-size: 1.5rem; }
 }
+/* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
+.kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
 </style>
 </head>
 <body>
@@ -213,10 +215,13 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
     <div>
       <h1>Debt-to-Income Calculator</h1>
       <p>Botswana Pula (BWP) &middot; DTI ratio &middot; Lending benchmarks &middot; Affordability analysis</p>
+      <div class="kw-trust">Only you and, if you choose, your coach. Never your employer, never a lender.</div>
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <!-- P0-5 (audit F7): the static text here claimed the Budget Planner as the
+       source whatever had actually written the figure. Filled by KWSource now. -->
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;"></div>
 
   <!-- ── INCOME ── -->
   <div class="card">
@@ -305,7 +310,16 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
         Add Debt
       </button>
       <button class="btn-primary" onclick="clearDebtForm()" style="background:#f5f7fa;color:var(--slate);font-weight:600;">Clear</button>
+      <!-- P0-4/P0-5: "no debts" is an ANSWER, not an absence of one. Without a
+           way to say it, a debt-free member is nudged to list debts forever and
+           their dashboard picture can never complete. Stored in localStorage,
+           deliberately — no profiles column is added for this. -->
+      <button class="btn-primary" id="noDebtsBtn" onclick="toggleNoDebts()"
+        style="background:#f5f7fa;color:var(--slate);font-weight:600;">I have no debts</button>
       <span id="debtError" style="font-size:.78rem;color:var(--red);display:none;"></span>
+    </div>
+    <div id="noDebtsNote" style="display:none;margin-top:12px;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:.8rem;color:#065f46;line-height:1.6">
+      ✓ <strong>Noted — no debts.</strong> Your debt-to-income is 0% and your dashboard will stop asking. Add a debt above at any time and this clears itself.
     </div>
 
     <!-- Debt list -->
@@ -601,10 +615,43 @@ function removeDebt(id) {
   saveData();
 }
 
+// The "I have no debts" flag. The dashboard's debts source (P0-4) counts this
+// as done, so a debt-free member's picture can reach 6 of 6.
+const LS_NO_DEBTS = 'kw_no_debts';
+function noDebtsSet() { try { return localStorage.getItem(LS_NO_DEBTS) === 'true'; } catch { return false; } }
+function setNoDebts(on) {
+  try { on ? localStorage.setItem(LS_NO_DEBTS, 'true') : localStorage.removeItem(LS_NO_DEBTS); } catch (_) {}
+  renderNoDebts();
+}
+function renderNoDebts() {
+  const on = noDebtsSet();
+  const btn = document.getElementById('noDebtsBtn');
+  const note = document.getElementById('noDebtsNote');
+  if (note) note.style.display = on ? '' : 'none';
+  if (btn) {
+    btn.textContent = on ? 'I do have debts' : 'I have no debts';
+    btn.style.background = on ? 'var(--navy)' : '#f5f7fa';
+    btn.style.color = on ? '#fff' : 'var(--slate)';
+  }
+}
+function toggleNoDebts() {
+  if (!noDebtsSet() && debts.length) {
+    if (!confirm('You have ' + debts.length + ' debt' + (debts.length !== 1 ? 's' : '') +
+      ' listed. Mark yourself as having no debts and remove them?')) return;
+    debts = []; renderDebtList(); saveData();
+  }
+  setNoDebts(!noDebtsSet());
+}
+
 function renderDebtList() {
   const listEl  = document.getElementById('debtList');
   const emptyEl = document.getElementById('emptyDebts');
   const badge   = document.getElementById('debtCountBadge');
+
+  // Adding a debt is itself the answer to "do you have debts?" — the flag must
+  // not survive it and go on telling the dashboard something untrue.
+  if (debts.length && noDebtsSet()) setNoDebts(false);
+  else renderNoDebts();
 
   if (!debts.length) {
     listEl.innerHTML=''; emptyEl.style.display='block';
@@ -930,25 +977,43 @@ KW.reveal('.card');
       localStorage.removeItem(LS_DATA);
       debts = []; nextId = 1;
       renderDebtList();
-      // Prefill income + monthly_debt from shared profile
+      // Prefill income + minimum debt payments from the shared profile.
       await KWProfile.load();
-      KWProfile.prefill(_DTI_INCOME_MAPPINGS);
-      const profDebt = KWProfile.get('monthly_debt');
-      if (profDebt > 0 && !debts.length) {
+      const _filled = KWProfile.prefill(_DTI_INCOME_MAPPINGS);
+      const _fromBudget = await KWSource.budgetSaved();
+      const _src = KWSource.label({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget);
+
+      // P0-5 (audit F7): the seeded row used to be called "Monthly Debt
+      // Obligations (from assessment)" — an anonymous lump whose stated source
+      // was, by then, usually wrong. Prefer the budget's own debt_min category,
+      // and name the row after wherever the figure really came from.
+      let _seedDebt = 0, _seedSrc = _src;
+      try {
+        const { data: _bdRow } = await _sb.from('tool_data').select('data')
+          .eq('user_id', session.user.id).eq('tool', 'budget_planner').maybeSingle();
+        const _bd = _bdRow?.data;
+        const _cur = _bd?.currentKey && _bd?.budgets?.[_bd.currentKey];
+        const _min = _cur ? Number(_cur.expenses?.debt_min || 0) : 0;
+        if (_min > 0) { _seedDebt = _min; _seedSrc = 'from your budget'; }
+      } catch (e) { console.warn('DTI: budget debt_min lookup failed:', e); }
+      if (!_seedDebt) _seedDebt = Number(KWProfile.get('monthly_debt') || 0);
+
+      if (_seedDebt > 0 && !debts.length) {
         debts.push({
           id: nextId++,
           type: 'other',
-          name: 'Monthly Debt Obligations (from assessment)',
-          amount: profDebt,
+          name: `Minimum debt payments (${_seedSrc})`,
+          amount: _seedDebt,
           balance: 0,
           isHousing: false,
         });
         renderDebtList();
-        const noticeEl = document.getElementById('income-prefill-notice');
-        if (noticeEl) {
-          noticeEl.textContent = '💡 Income and debt pre-filled from your profile. Adjust or replace with itemised debts below.';
-          noticeEl.style.display = '';
-        }
+      }
+      const noticeEl = document.getElementById('income-prefill-notice');
+      if (noticeEl && (_filled.length || _seedDebt > 0)) {
+        noticeEl.textContent = '💡 ' + KWSource.line({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget) +
+          '. Adjust it, or list each loan separately below.';
+        noticeEl.style.display = '';
       }
     }
   });

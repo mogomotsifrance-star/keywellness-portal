@@ -181,13 +181,15 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
       </svg>
     </div>
     <div>
-      <h1>Financial Wellness Assessment</h1>
-      <p>Botswana Pula (BWP) · 8 dimensions · Personalised score &amp; action plan</p>
+      <h1>Financial Habits Check</h1>
+      <p>Three minutes · 8 dimensions · No figures to look up</p>
     </div>
   </div>
-  <!-- Compulsory first-assessment note (shown only on a member's very first run) -->
-  <div id="firstAssessmentNote" style="display:none;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.82rem;color:#065f46;line-height:1.6">
-    📋 <strong>Let's set your baseline.</strong> This quick assessment gives you your wellness score baseline and powers your Financial Hub on the dashboard.
+  <!-- P0-3 (audit F2, N0): the habits check is behaviour only. Every Pula field
+       that used to sit above these questions is gone, so nothing here needs a
+       payslip, a bank balance or a pension statement to answer. -->
+  <div id="habitsIntro" style="background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.82rem;color:#065f46;line-height:1.6">
+    ⏱️ <strong>Three minutes, no numbers.</strong> Eleven questions about how you handle money, so the portal can put first things first.
   </div>
   <!-- Progress -->
   <div class="progress-wrap" id="progressWrap">
@@ -197,6 +199,12 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
     </div>
     <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div class="step-dots" id="stepDots"></div>
+    <!-- The way out, on every step. The draft stays in kw_assessment_v2, so
+         coming back later resumes rather than restarts. -->
+    <div style="text-align:center;margin-top:10px">
+      <a href="index.html#dashboard" id="doThisLater"
+         style="font-size:.78rem;color:var(--muted);text-decoration:underline;cursor:pointer">Do this later</a>
+    </div>
   </div>
 
   <!-- STEP 0 — ABOUT YOU -->
@@ -206,40 +214,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#f0f4ff;">💼</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 1 of 8 <span class="section-num">About You</span></div>
-          <h2>Income &amp; Basic Financial Profile</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Gross Monthly Salary</label>
-          <div class="input-wrap" id="wrap_grossSalary"><span class="input-prefix">P</span>
-            <input type="text" id="grossSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);onGrossChange()" onblur="finalizeInput(this);onGrossChange()" onfocus="this.select()">
-          </div>
-          <div class="hint">Before tax (PAYE)</div>
-          <div class="field-error" id="err_grossSalary">Please enter your salary.</div>
-        </div>
-        <div class="field">
-          <label>Net Monthly Take-home Pay</label>
-          <div class="input-wrap" id="wrap_netSalary"><span class="input-prefix">P</span>
-            <input type="text" id="netSalary" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);onNetManual()" onblur="finalizeInput(this)" onfocus="this.select()">
-          </div>
-          <div class="hint">Estimated take-home (gross minus PAYE tax). Adjust if you know your exact net pay.</div>
-          <div class="field-error" id="err_netSalary">Please enter your take-home pay.</div>
-        </div>
-        <div class="field">
-          <label>Other Monthly Income</label>
-          <div class="input-wrap"><span class="input-prefix">P</span>
-            <input type="text" id="otherIncome" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
-          </div>
-          <div class="hint">Rental, side business, dividends</div>
-        </div>
-        <div class="field">
-          <label>Total Monthly Expenses</label>
-          <div class="input-wrap" id="wrap_expenses"><span class="input-prefix">P</span>
-            <input type="text" id="expenses" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
-          </div>
-          <div class="hint">All spending incl. debt payments</div>
-          <div class="field-error" id="err_expenses">Please enter your total expenses.</div>
+          <h2>Your income, as you experience it</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -263,19 +238,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#f0faf5;">🏦</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 2 of 8 <span class="section-num">Savings</span></div>
-          <h2>Savings Rate &amp; Habits</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Total Savings &amp; Investments (current balance)</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalSavings" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Bank savings, unit trusts, bonds, etc.</div>
-        </div>
-        <div class="field">
-          <label>Amount Saved per Month</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="monthlySavings" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Regular monthly savings contribution</div>
+          <h2>How you save</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -302,19 +265,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#fffbeb;">🛡️</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 3 of 8 <span class="section-num">Emergency Fund</span></div>
-          <h2>Financial Safety Net</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Emergency Fund Balance</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="emergencyFund" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Cash you can access within 48 hours</div>
-        </div>
-        <div class="field">
-          <label>Monthly Essential Expenses</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="essentialExpenses" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Rent, food, transport, utilities</div>
+          <h2>Your safety net</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -341,19 +292,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#fef2f2;">💳</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 4 of 8 <span class="section-num">Debt</span></div>
-          <h2>Debt Load &amp; Management</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Total Monthly Debt Payments</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalDebtPayments" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">All loans, credit cards, HP, store accounts</div>
-        </div>
-        <div class="field">
-          <label>Total Outstanding Debt Balance</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalDebtBalance" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Combined principal still owed</div>
+          <h2>How you handle debt</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -380,27 +319,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#f0faf5;">🏖️</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 5 of 8 <span class="section-num">Retirement</span></div>
-          <h2>Retirement Readiness</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Pension / Retirement Fund Balance</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="retirementBalance" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">BPOPF, employer fund, private pension</div>
-        </div>
-        <div class="field">
-          <label>Monthly Pension Contribution</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="monthlyPension" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Your share (employee + employer)</div>
-        </div>
-        <div class="field">
-          <label>Your Age</label>
-          <div class="input-wrap"><input type="text" id="age" inputmode="numeric" placeholder="e.g. 32" style="padding-left:14px;" onfocus="this.select()"></div>
-        </div>
-        <div class="field">
-          <label>Planned Retirement Age</label>
-          <div class="input-wrap"><input type="text" id="retireAge" inputmode="numeric" placeholder="e.g. 60" style="padding-left:14px;" onfocus="this.select()"></div>
+          <h2>How you think about retirement</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -502,19 +421,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         <div class="card-icon" style="background:#f5f3ff;">📊</div>
         <div class="card-title-wrap">
           <div class="card-title">Section 8 of 8 <span class="section-num">Spending &amp; Net Worth</span></div>
-          <h2>Spending Habits &amp; Overall Net Worth</h2>
-        </div>
-      </div>
-      <div class="form-grid" style="margin-bottom:20px;">
-        <div class="field">
-          <label>Total Assets (market value)</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalAssets" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Property, vehicles, savings, investments, pension</div>
-        </div>
-        <div class="field">
-          <label>Total Liabilities (what you owe)</label>
-          <div class="input-wrap"><span class="input-prefix">P</span><input type="text" id="totalLiabilities" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()"></div>
-          <div class="hint">Mortgage, loans, credit cards, store accounts</div>
+          <h2>How you spend, and how often you look</h2>
         </div>
       </div>
       <div class="sub-question">
@@ -595,7 +502,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
       <button class="btn-primary btn-back" onclick="showStep(7)"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg> Back</button>
       <button class="btn-primary" onclick="calculateWellness()" style="gap:8px;">
         <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        View My Wellness Score
+        See my starting point
       </button>
     </div>
   </div>
@@ -605,9 +512,9 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
     <div class="results-header">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;">
         <div>
-          <h2>Your Financial Wellness Report</h2>
+          <h2 id="reportHeading">Your Financial Wellness Report</h2>
           <p id="reportClient" style="font-size:.78rem;font-weight:600;color:rgba(255,255,255,.85);margin-bottom:2px;display:none"></p>
-          <p>Botswana Pula · <span id="reportDate"></span></p>
+          <p><span id="reportSubtitle">Botswana Pula · </span><span id="reportDate"></span></p>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="restart-btn" onclick="restartAssessment()">Retake Assessment</button>
@@ -619,7 +526,15 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
         </div>
       </div>
     </div>
-    <div class="card">
+    <!-- P0-3: habits mode shows "Your starting point" here instead of a score out
+         of 100. A ring built from behaviour answers alone looks like the old
+         figure-backed score and would be read as one. -->
+    <div class="card" id="startingPointCard" style="display:none">
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:8px;">Where you are now</div>
+      <h2 style="font-size:1.35rem;margin-bottom:12px;">Your starting point</h2>
+      <div id="startingPointText" style="font-size:.95rem;line-height:1.7;color:var(--kw-ink);max-width:60ch"></div>
+    </div>
+    <div class="card" id="scoreCard">
       <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:center;justify-content:center;">
         <div class="score-ring-wrap">
           <svg class="score-ring-svg" viewBox="0 0 180 180">
@@ -640,7 +555,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
     </div>
     <div class="summary-strip" id="summaryStrip"></div>
     <div class="card" style="margin-bottom:22px;">
-      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:18px;">Score Breakdown by Dimension</div>
+      <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);margin-bottom:18px;" id="dimGridHeading">Score Breakdown by Dimension</div>
       <div class="dim-grid" id="dimGrid"></div>
     </div>
     <div style="font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--navy);margin-bottom:12px;">Key Insights</div>
@@ -650,7 +565,7 @@ body { font-family:'Nunito',sans-serif; background:var(--cream); color:var(--nav
       <div class="action-list" id="actionList"></div>
     </div>
     <div style="text-align:center;margin-top:28px;">
-      <a href="index.html" class="btn-primary" style="text-decoration:none;display:inline-flex;">← Return to Portal</a>
+      <a href="index.html#dashboard" class="btn-primary" style="text-decoration:none;display:inline-flex;">Go to my dashboard →</a>
     </div>
   </div>
 </div>
@@ -704,6 +619,11 @@ function monthlyNetFromGross(monthlyGross) {
   const annualTax = bursAnnualTax(monthlyGross * 12);
   return Math.max(0, monthlyGross - annualTax / 12);
 }
+// P0-3: the gross and net fields these drive are gone, so nothing calls
+// onGrossChange / onNetManual any more. They and the BURS tax table above are
+// kept because the gross→net estimate is the piece of real domain knowledge in
+// this file and is wanted by the budget planner's take-home row; both already
+// return early on a missing element, so they are inert where they sit.
 // Auto-fill net from gross (only when user hasn't manually edited net)
 function onGrossChange() {
   const grossEl = document.getElementById('grossSalary');
@@ -784,8 +704,12 @@ function updateProgress(n) {
 function nextStep(from) { if(!validateStep(from)) return; currentStep=from+1; saveDraft(); showStep(currentStep); }
 function prevStep(from) { currentStep=from-1; showStep(currentStep); }
 
+// P0-3: MCQs only. Step 0 used to require grossSalary, netSalary and expenses
+// all > 0 before a member could reach question two — the screen Debswana called
+// intimidating (audit F2). `fields` is kept on every entry so the validator
+// below needs no change and a future numeric step can be added back knowingly.
 const STEP_REQUIRED = {
-  0:{fields:['grossSalary','netSalary','expenses'],questions:['incomeStability']},
+  0:{fields:[],questions:['incomeStability']},
   1:{fields:[],questions:['savingsHabit']},
   2:{fields:[],questions:['emergencyMonths']},
   3:{fields:[],questions:['debtMgmt']},
@@ -824,10 +748,10 @@ function showToast(msg){
   toastTimer=setTimeout(()=>t.classList.remove('show'), isWarn ? 5000 : 1800);
 }
 function saveDraft(){
-  const fields=['grossSalary','netSalary','otherIncome','expenses','totalSavings','monthlySavings','emergencyFund','essentialExpenses','totalDebtPayments','totalDebtBalance','retirementBalance','monthlyPension','age','retireAge','totalAssets','totalLiabilities'];
-  const vals={};
-  fields.forEach(id=>{const el=document.getElementById(id);if(el)vals[id]=el.value;});
-  localStorage.setItem(LS_KEY,JSON.stringify({answers,insurance:[...insuranceSet],step:currentStep,vals}));
+  // P0-3: there are no numeric inputs left to draft. `vals` is still written, as
+  // an empty object, so a draft saved by the previous version still loads
+  // (loadDraft reads d.vals defensively) and the shape stays stable.
+  localStorage.setItem(LS_KEY,JSON.stringify({answers,insurance:[...insuranceSet],step:currentStep,vals:{}}));
   showToast();
 }
 function loadDraft(){
@@ -844,56 +768,92 @@ function loadDraft(){
 
 function calculateWellness(){
   if(!validateStep(7))return;
+
+  // ── P0-3: habits-only scoring ──────────────────────────────────────────────
+  // Detected, not assumed: true when the page carries no numeric inputs. Today
+  // that is always — every Pula field was removed — but writing it as a probe
+  // means re-adding a figure field cannot silently leave the scoring in habits
+  // mode, and the reassessment path below still works either way.
+  //
+  // THE RULE THIS ENCODES: a figure we were never given is UNKNOWN, not zero.
+  // The old formulas blended an MCQ with a ratio (e.g. emergency = months/6 *
+  // 0.5 + answer/4 * 0.5), so a member who skipped the optional savings and
+  // pension fields was scored as if their balances were nil and told they were
+  // "Critical" on dimensions they had never answered (audit F10). In habits mode
+  // each dimension is its MCQ component alone, rescaled to fill 0–100, so a
+  // score means "this is how you handle money", not "this is what you own".
+  const NUMERIC_IDS=['grossSalary','netSalary','otherIncome','expenses','totalSavings',
+    'monthlySavings','emergencyFund','essentialExpenses','totalDebtPayments','totalDebtBalance',
+    'retirementBalance','monthlyPension','age','retireAge','totalAssets','totalLiabilities'];
+  const habitsOnly=NUMERIC_IDS.every(id=>!document.getElementById(id));
+
   let gross,net,other,expenses,monthlySavings,emergencyFund,essentialExp,
       totalDebtPayments,totalDebtBalance,retirementBal,monthlyPension,
       age,retireAge,totalAssets,totalLiabilities;
-  if(window._isReassessment){
-    const f=window._resolvedFigures||resolveAssessmentFigures();
-    gross=f.gross||0; net=f.net||f.gross||0; other=0; expenses=f.expenses||0;
-    monthlySavings=f.monthlySavings||0; emergencyFund=f.emergencyFund||0;
-    essentialExp=f.essentialExpenses||expenses*0.6;
-    totalDebtPayments=f.totalDebtPayments||0; totalDebtBalance=f.totalDebtBalance||0;
-    retirementBal=f.retirementBalance||0; monthlyPension=f.monthlyPension||0;
-    age=f.age||30; retireAge=f.retireAge||60;
-    totalAssets=f.totalAssets||0; totalLiabilities=f.totalLiabilities||0;
-  } else {
-    gross=pf('grossSalary'); net=pf('netSalary'); other=pf('otherIncome'); expenses=pf('expenses');
-    monthlySavings=pf('monthlySavings'); emergencyFund=pf('emergencyFund');
-    essentialExp=pf('essentialExpenses')||expenses*0.6;
-    totalDebtPayments=pf('totalDebtPayments'); totalDebtBalance=pf('totalDebtBalance');
-    retirementBal=pf('retirementBalance'); monthlyPension=pf('monthlyPension');
-    age=pfi('age')||30; retireAge=pfi('retireAge')||60;
-    totalAssets=pf('totalAssets'); totalLiabilities=pf('totalLiabilities');
-  }
-  const totalIncome=gross+other;
-  const netWorth=totalAssets-totalLiabilities;
-
-  const surplusRatio=totalIncome>0?Math.max(0,totalIncome-expenses)/totalIncome:0;
-  const incomeScore=clamp(Math.round((surplusRatio*0.6+(answers.incomeStability??0)/3*0.4)*100),0,100);
-
-  const savingsRate=totalIncome>0?monthlySavings/totalIncome:0;
-  const savingsRateScore=clamp(Math.round((Math.min(savingsRate/0.20,1)*0.6+(answers.savingsHabit??0)/3*0.4)*100),0,100);
-
-  const emMonths=essentialExp>0?emergencyFund/essentialExp:0;
-  const emScore=clamp(Math.round((Math.min(emMonths/6,1)*0.5+(answers.emergencyMonths??0)/4*0.5)*100),0,100);
-
-  const dti=totalIncome>0?totalDebtPayments/totalIncome:0;
-  const dtiRatio=clamp(1-dti/0.65,0,1);
-  const debtScore=clamp(Math.round((dtiRatio*0.6+(answers.debtMgmt??0)/3*0.4)*100),0,100);
-
-  const yrsToRetire=Math.max(1,retireAge-age),targetFund=gross*12*10;
-  const r=0.06/12,n=yrsToRetire*12;
-  const projFund=retirementBal*Math.pow(1+r,n)+monthlyPension*(Math.pow(1+r,n)-1)/r;
-  const fundRatio=targetFund>0?Math.min(projFund/targetFund,1):0;
-  const retScore=clamp(Math.round((fundRatio*0.5+(answers.retirementEngagement??0)/3*0.5)*100),0,100);
+  let incomeScore,savingsRateScore,emScore,debtScore,retScore,spendScore;
+  // Derived figures. In habits mode they stay null — NOT 0 — so every consumer
+  // (results strip, insights, actions, PDF) has to decide what to do about a
+  // figure it does not have, rather than printing a confident 0.0%.
+  let totalIncome=null,netWorth=null,savingsRate=null,emMonths=null,dti=null;
 
   const insCount=insuranceSet.size,insCovScore=Math.min(insCount/4,1);
   const insScore=clamp(Math.round((insCovScore*0.5+(answers.insuranceConfidence??0)/3*0.5)*100),0,100);
-
   const goalsScore=clamp(Math.round(((answers.goalsClarity??0)/3*0.6+(answers.goalsTracking??0)/3*0.4)*100),0,100);
 
-  const netWorthRatio=totalAssets>0?clamp(netWorth/totalAssets,0,1):(netWorth>0?0.5:0);
-  const spendScore=clamp(Math.round((netWorthRatio*0.3+(answers.spendingHabits??0)/3*0.5+(answers.netWorthReview??0)/3*0.2)*100),0,100);
+  if(habitsOnly){
+    gross=net=other=expenses=monthlySavings=emergencyFund=essentialExp=null;
+    totalDebtPayments=totalDebtBalance=retirementBal=monthlyPension=null;
+    age=retireAge=totalAssets=totalLiabilities=null;
+    incomeScore     =clamp(Math.round((answers.incomeStability??0)/3*100),0,100);
+    savingsRateScore=clamp(Math.round((answers.savingsHabit??0)/3*100),0,100);
+    emScore         =clamp(Math.round((answers.emergencyMonths??0)/4*100),0,100);
+    debtScore       =clamp(Math.round((answers.debtMgmt??0)/3*100),0,100);
+    retScore        =clamp(Math.round((answers.retirementEngagement??0)/3*100),0,100);
+    spendScore      =clamp(Math.round(((answers.spendingHabits??0)/3*0.7+(answers.netWorthReview??0)/3*0.3)*100),0,100);
+  } else {
+    if(window._isReassessment){
+      const f=window._resolvedFigures||resolveAssessmentFigures();
+      gross=f.gross||0; net=f.net||f.gross||0; other=0; expenses=f.expenses||0;
+      monthlySavings=f.monthlySavings||0; emergencyFund=f.emergencyFund||0;
+      essentialExp=f.essentialExpenses||expenses*0.6;
+      totalDebtPayments=f.totalDebtPayments||0; totalDebtBalance=f.totalDebtBalance||0;
+      retirementBal=f.retirementBalance||0; monthlyPension=f.monthlyPension||0;
+      age=f.age||30; retireAge=f.retireAge||60;
+      totalAssets=f.totalAssets||0; totalLiabilities=f.totalLiabilities||0;
+    } else {
+      gross=pf('grossSalary'); net=pf('netSalary'); other=pf('otherIncome'); expenses=pf('expenses');
+      monthlySavings=pf('monthlySavings'); emergencyFund=pf('emergencyFund');
+      essentialExp=pf('essentialExpenses')||expenses*0.6;
+      totalDebtPayments=pf('totalDebtPayments'); totalDebtBalance=pf('totalDebtBalance');
+      retirementBal=pf('retirementBalance'); monthlyPension=pf('monthlyPension');
+      age=pfi('age')||30; retireAge=pfi('retireAge')||60;
+      totalAssets=pf('totalAssets'); totalLiabilities=pf('totalLiabilities');
+    }
+    totalIncome=gross+other;
+    netWorth=totalAssets-totalLiabilities;
+
+    const surplusRatio=totalIncome>0?Math.max(0,totalIncome-expenses)/totalIncome:0;
+    incomeScore=clamp(Math.round((surplusRatio*0.6+(answers.incomeStability??0)/3*0.4)*100),0,100);
+
+    savingsRate=totalIncome>0?monthlySavings/totalIncome:0;
+    savingsRateScore=clamp(Math.round((Math.min(savingsRate/0.20,1)*0.6+(answers.savingsHabit??0)/3*0.4)*100),0,100);
+
+    emMonths=essentialExp>0?emergencyFund/essentialExp:0;
+    emScore=clamp(Math.round((Math.min(emMonths/6,1)*0.5+(answers.emergencyMonths??0)/4*0.5)*100),0,100);
+
+    dti=totalIncome>0?totalDebtPayments/totalIncome:0;
+    const dtiRatio=clamp(1-dti/0.65,0,1);
+    debtScore=clamp(Math.round((dtiRatio*0.6+(answers.debtMgmt??0)/3*0.4)*100),0,100);
+
+    const yrsToRetire=Math.max(1,retireAge-age),targetFund=gross*12*10;
+    const r=0.06/12,n=yrsToRetire*12;
+    const projFund=retirementBal*Math.pow(1+r,n)+monthlyPension*(Math.pow(1+r,n)-1)/r;
+    const fundRatio=targetFund>0?Math.min(projFund/targetFund,1):0;
+    retScore=clamp(Math.round((fundRatio*0.5+(answers.retirementEngagement??0)/3*0.5)*100),0,100);
+
+    const netWorthRatio=totalAssets>0?clamp(netWorth/totalAssets,0,1):(netWorth>0?0.5:0);
+    spendScore=clamp(Math.round((netWorthRatio*0.3+(answers.spendingHabits??0)/3*0.5+(answers.netWorthReview??0)/3*0.2)*100),0,100);
+  }
 
   const dims=[
     {id:'income',label:'Income & Cash Flow',icon:'💼',score:incomeScore,w:12.5},
@@ -925,25 +885,38 @@ function calculateWellness(){
   pushTiers('budget_master',      dimScore('spending'));
   KWBadges.award(_earnedBadges);
 
+  // The written starting point — two or three plain sentences naming the habits
+  // worth changing first. This is what the dashboard shows in place of a score
+  // until enough real figures exist for one (P0-4), so it is stored, not just
+  // rendered.
+  const startingPoint = buildStartingPoint(dims);
+
   // Save result to localStorage for dashboard sync
   const _now = new Date().toISOString();
+  // P0-3: in habits mode the figure-derived keys are OMITTED rather than written
+  // as 0. Writing `savingsRate: null*100` would put a confident 0.0% in the
+  // cache that the dashboard and the EF planner would then read back as fact.
   localStorage.setItem('kw_assessment_result', JSON.stringify({
     score: totalScore,
     dims: dims.map(d=>({id:d.id,label:d.label,score:d.score})),
     date: _now,
-    savingsRate: savingsRate*100,
-    dti: dti*100,
-    emMonths,
-    netWorth,
     insCount,
-    // Raw pula figures (always numbers, never formatted strings) so tools can
-    // prefill without re-asking — EF planner and Budget Planner read these.
-    figures: {
-      netSalary: net,
-      otherIncome: other,
-      essentialExpenses: essentialExp,
-      emergencyFund: emergencyFund
-    }
+    habitsOnly,
+    startingPoint,
+    ...(habitsOnly ? {} : {
+      savingsRate: savingsRate*100,
+      dti: dti*100,
+      emMonths,
+      netWorth,
+      // Raw pula figures (always numbers, never formatted strings) so tools can
+      // prefill without re-asking — EF planner and Budget Planner read these.
+      figures: {
+        netSalary: net,
+        otherIncome: other,
+        essentialExpenses: essentialExp,
+        emergencyFund: emergencyFund
+      }
+    })
   }));
   // ── kw_snapshot ──
   try {
@@ -964,11 +937,17 @@ function calculateWellness(){
     const catScores = {};
     dims.forEach(d => { catScores[d.id] = d.score; });
     catScores._insCount = insuranceSet.size;   // persist so dashboard doesn't need localStorage
+    // P0-3: mark the row as behaviour-only. The dashboard's score gate reads this
+    // to tell a habits row from a pre-change assessment that carried real
+    // figures, and grandfathers the latter for 90 days (P0-4). Carried inside
+    // `answers` deliberately — the INSERT shape is a contract with HR reporting
+    // and must not gain a column.
+    const answersOut = { ...answers, ...(habitsOnly ? { _habits_only: true } : {}) };
     const { data: inserted, error: insertErr } = await _sb.from('assessments').insert({
       user_id: _user.id,
       score: totalScore,
       cat_scores: catScores,
-      answers: answers,
+      answers: answersOut,
       created_at: _now
     }).select().single();
     if (insertErr) {
@@ -976,7 +955,7 @@ function calculateWellness(){
       // Queue the payload so it's retried on next load instead of being lost.
       try {
         const _q = JSON.parse(localStorage.getItem('kw_assessment_pending')||'[]');
-        _q.push({ user_id: _user.id, score: totalScore, cat_scores: catScores, answers: answers, created_at: _now });
+        _q.push({ user_id: _user.id, score: totalScore, cat_scores: catScores, answers: answersOut, created_at: _now });
         localStorage.setItem('kw_assessment_pending', JSON.stringify(_q.slice(-5)));
       } catch(_){}
       showToast('Saved on this device — we\'ll sync it to the cloud automatically.');
@@ -992,13 +971,19 @@ function calculateWellness(){
           .catch(() => {});
       }
     }
-    // Seed ALL shared financial figures into the profile (single source of truth)
-    const _totSavings = pf('totalSavings');
-    const _netIsManual = document.getElementById('netSalary')?._netIsManual === true;
-    const { error: profileErr } = await _sb.from('profiles')
-      .update({
-        last_score:           totalScore,
-        last_cat_scores:      catScores,
+    // P0-3: in habits mode this page writes NOTHING financial to the profile.
+    //
+    // It has no figures to write, and the columns it used to seed are now owned
+    // by the tools that actually ask for them — the budget owns income and
+    // spending, the EF planner owns the emergency balance, and so on. Writing
+    // `gross_income: null` here would not be neutral: these columns are the
+    // prefill source for DTI, Retirement, Goals and Affordability, so a member
+    // retaking the habits check would silently blank the figures their budget
+    // had filled in, and every tool would go back to asking.
+    const _finPatch = habitsOnly ? {} : (() => {
+      const _totSavings = pf('totalSavings');
+      const _netIsManual = document.getElementById('netSalary')?._netIsManual === true;
+      return {
         // Shared financial figures — assessment is authoritative seed (most-recent-edit-wins)
         gross_income:         gross                  || null,
         net_income:           net                    || null,
@@ -1014,6 +999,13 @@ function calculateWellness(){
         monthly_savings:      monthlySavings         || null,
         net_is_manual:        _netIsManual,
         fin_updated_at:       _now,
+      };
+    })();
+    const { error: profileErr } = await _sb.from('profiles')
+      .update({
+        last_score:           totalScore,
+        last_cat_scores:      catScores,
+        ..._finPatch,
         // Estate planning (informational): only write when answered, so a retake
         // that skips the estate section never clobbers an existing will_status.
         ...(answers.estate_will ? { will_status: answers.estate_will } : {}),
@@ -1038,55 +1030,117 @@ function calculateWellness(){
   const _clientEl=document.getElementById('reportClient');
   if(_clientEl&&window._toolFullName){_clientEl.textContent='Client: '+window._toolFullName;_clientEl.style.display='';}
 
-  const circumference=477.5,offset=circumference-(totalScore/100)*circumference;
-  const ringColor=totalScore>=70?'var(--green)':totalScore>=50?'var(--orange)':'var(--red)';
-  const ring=document.getElementById('scoreRing');
-  ring.style.stroke=ringColor; ring.style.strokeDashoffset=circumference;
-  setTimeout(()=>{ring.style.strokeDashoffset=offset;},100);
-  KW.countUp(document.getElementById('scoreNumber'), totalScore);
-  document.getElementById('scoreNumber').style.color=ringColor;
-  document.getElementById('scoreGrade').textContent=grade.label;
-  document.getElementById('scoreGrade').style.color=grade.color;
-  document.getElementById('scoreTagline').textContent=grade.tagline;
-  KW.reveal('.step.active .card');
+  const dti_pct=habitsOnly?null:(totalIncome>0?(totalDebtPayments/totalIncome*100):0);
+  const savRate=habitsOnly?null:(totalIncome>0?(monthlySavings/totalIncome*100):0);
 
-  const dti_pct=totalIncome>0?(totalDebtPayments/totalIncome*100):0;
-  const savRate=totalIncome>0?(monthlySavings/totalIncome*100):0;
-  document.getElementById('summaryStrip').innerHTML=`
-    <div class="stat-box navy"><div class="stat-label">Wellness Score</div><div class="stat-value" style="color:${ringColor}">${totalScore}/100</div><div class="stat-sub">${grade.label}</div></div>
-    <div class="stat-box gold"><div class="stat-label">Savings Rate</div><div class="stat-value">${savRate.toFixed(1)}%</div><div class="stat-sub">Ideal ≥ 20% of gross</div></div>
-    <div class="stat-box ${dti_pct<=35?'green':dti_pct<=50?'orange':'red'}"><div class="stat-label">Debt-to-Income</div><div class="stat-value">${dti_pct.toFixed(1)}%</div><div class="stat-sub">Botswana norm ≤ 35%</div></div>
-    <div class="stat-box ${netWorth>=0?'green':'red'}"><div class="stat-label">Net Worth</div><div class="stat-value">${fmtK(Math.abs(netWorth))}</div><div class="stat-sub">${netWorth>=0?'Positive':'Negative'}</div></div>
-    <div class="stat-box ${emMonths>=6?'green':emMonths>=3?'orange':'red'}"><div class="stat-label">Emergency Cover</div><div class="stat-value">${emMonths.toFixed(1)} mo</div><div class="stat-sub">Target: 6 months</div></div>
-    <div class="stat-box navy"><div class="stat-label">Insurance Items</div><div class="stat-value">${insCount} / 6</div><div class="stat-sub">Covers held</div></div>`;
+  const ringColor=totalScore>=70?'var(--green)':totalScore>=50?'var(--orange)':'var(--red)';
+  document.getElementById('startingPointCard').style.display = habitsOnly ? '' : 'none';
+  document.getElementById('scoreCard').style.display        = habitsOnly ? 'none' : '';
+  document.getElementById('summaryStrip').style.display     = habitsOnly ? 'none' : '';
+
+  if(habitsOnly){
+    document.getElementById('startingPointText').innerHTML =
+      startingPoint.map(p=>`<p style="margin-bottom:10px">${p}</p>`).join('');
+    document.getElementById('reportHeading').textContent = 'Your Financial Habits Check';
+    document.getElementById('reportSubtitle').textContent = '';
+    // The bars are habit answers, not a position — say so on the label rather
+    // than leaving a reader to assume the old figure-backed breakdown.
+    document.getElementById('dimGridHeading').textContent = 'Your habits, dimension by dimension';
+  } else {
+    const circumference=477.5,offset=circumference-(totalScore/100)*circumference;
+    const ring=document.getElementById('scoreRing');
+    ring.style.stroke=ringColor; ring.style.strokeDashoffset=circumference;
+    setTimeout(()=>{ring.style.strokeDashoffset=offset;},100);
+    KW.countUp(document.getElementById('scoreNumber'), totalScore);
+    document.getElementById('scoreNumber').style.color=ringColor;
+    document.getElementById('scoreGrade').textContent=grade.label;
+    document.getElementById('scoreGrade').style.color=grade.color;
+    document.getElementById('scoreTagline').textContent=grade.tagline;
+    document.getElementById('summaryStrip').innerHTML=`
+      <div class="stat-box navy"><div class="stat-label">Wellness Score</div><div class="stat-value" style="color:${ringColor}">${totalScore}/100</div><div class="stat-sub">${grade.label}</div></div>
+      <div class="stat-box gold"><div class="stat-label">Savings Rate</div><div class="stat-value">${savRate.toFixed(1)}%</div><div class="stat-sub">Ideal ≥ 20% of gross</div></div>
+      <div class="stat-box ${dti_pct<=35?'green':dti_pct<=50?'orange':'red'}"><div class="stat-label">Debt-to-Income</div><div class="stat-value">${dti_pct.toFixed(1)}%</div><div class="stat-sub">Botswana norm ≤ 35%</div></div>
+      <div class="stat-box ${netWorth>=0?'green':'red'}"><div class="stat-label">Net Worth</div><div class="stat-value">${fmtK(Math.abs(netWorth))}</div><div class="stat-sub">${netWorth>=0?'Positive':'Negative'}</div></div>
+      <div class="stat-box ${emMonths>=6?'green':emMonths>=3?'orange':'red'}"><div class="stat-label">Emergency Cover</div><div class="stat-value">${emMonths.toFixed(1)} mo</div><div class="stat-sub">Target: 6 months</div></div>
+      <div class="stat-box navy"><div class="stat-label">Insurance Items</div><div class="stat-value">${insCount} / 6</div><div class="stat-sub">Covers held</div></div>`;
+  }
+  KW.reveal('.step.active .card');
 
   const dimColor=s=>s>=70?'var(--green)':s>=50?'var(--orange)':'var(--red)';
   document.getElementById('dimGrid').innerHTML=dims.map(d=>`
     <div class="dim-row">
       <div class="dim-header">
-        <div class="dim-name"><span class="dim-icon">${d.icon}</span>${d.label}</div>
+        <div class="dim-name"><span class="dim-icon">${d.icon}</span>${d.label}${habitsOnly?' <span style="font-size:.7rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">habits</span>':''}</div>
         <div class="dim-score" style="color:${dimColor(d.score)}">${d.score}/100</div>
       </div>
       <div class="dim-track"><div class="dim-fill" style="width:0%;background:${dimColor(d.score)}" data-target="${d.score}%"></div></div>
     </div>`).join('');
   setTimeout(()=>{document.querySelectorAll('.dim-fill').forEach(el=>{el.style.width=el.dataset.target;});},120);
 
-  const insights=buildInsights(dims,{gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,insCount});
+  const insights=buildInsights(dims,{habitsOnly,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,insCount});
   document.getElementById('insightGrid').innerHTML=insights.map(i=>`
     <div class="insight-card ${i.cls}"><div class="insight-icon">${i.icon}</div><div class="insight-title">${i.title}</div><div class="insight-text">${i.text}</div></div>`).join('');
 
-  const actions=buildActions(dims,{gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,essentialExp,insCount});
+  const actions=buildActions(dims,{habitsOnly,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,totalDebtBalance,essentialExp,insCount});
   document.getElementById('actionList').innerHTML=actions.map(a=>`
     <div class="action-row">
       <span class="action-priority ${a.priority==='High'?'priority-high':a.priority==='Medium'?'priority-medium':'priority-low'}">${a.priority}</span>
       <div class="action-text"><div class="action-title">${a.title}</div><div class="action-desc">${a.desc}</div></div>
     </div>`).join('');
 
-  window._wellnessResult={totalScore,grade,dims,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,insCount,totalDebtBalance,totalDebtPayments};
+  window._wellnessResult={habitsOnly,startingPoint,totalScore,grade,dims,gross,totalIncome,expenses,savingsRate,savRate,dti_pct,emMonths,netWorth,insCount,totalDebtBalance,totalDebtPayments};
+}
+
+// P0-3: the written starting point. Two or three sentences naming the lowest two
+// habit dimensions, in the member's language and with no Pula figure in them —
+// this is what stands in for a score until the tools have supplied real numbers.
+// Deliberately not a grade: "Critical" on eleven behaviour answers is a verdict
+// the answers cannot support.
+const HABIT_NOTES = {
+  income:     { low:'your income does not feel dependable month to month',       lead:'Knowing what actually lands in your account each month is the first thing to pin down.' },
+  savings:    { low:'you save what is left rather than saving first',            lead:'Moving even a small amount on payday, before anything else, is the single habit that changes this.' },
+  emergency:  { low:'a surprise bill would be hard to absorb right now',         lead:'A buffer you can reach within 48 hours matters more than its size — start it, then grow it.' },
+  debt:       { low:'your debt is being managed month to month rather than reduced', lead:'Listing every loan once, in one place, is what turns that around.' },
+  retirement: { low:'retirement has not had much of your attention yet',         lead:'Two questions in the retirement planner will tell you where you stand.' },
+  insurance:  { low:'there are gaps in what you are covered for',                lead:'Medical aid and income protection are the two worth closing first.' },
+  goals:      { low:'your goals are not yet written down with numbers and dates',lead:'A goal with a date attached behaves very differently from one without.' },
+  spending:   { low:'you do not often review where the money went',              lead:'Twenty minutes at month end is usually enough to find the leak.' },
+};
+function buildStartingPoint(dims){
+  const sorted=[...dims].sort((a,b)=>a.score-b.score);
+  const lowest=sorted.slice(0,2).filter(d=>HABIT_NOTES[d.id]);
+  const strongest=sorted[sorted.length-1];
+  const out=[];
+  if(!lowest.length) return ['Thank you — your answers are saved. Add your budget next and the portal will start filling in the rest.'];
+  if(lowest.length===2){
+    out.push(`From your answers, two things stand out: ${HABIT_NOTES[lowest[0].id].low}, and ${HABIT_NOTES[lowest[1].id].low}.`);
+  } else {
+    out.push(`From your answers, one thing stands out: ${HABIT_NOTES[lowest[0].id].low}.`);
+  }
+  out.push(HABIT_NOTES[lowest[0].id].lead);
+  if(strongest && strongest.score>=60 && HABIT_NOTES[strongest.id] && strongest.id!==lowest[0].id){
+    out.push(`You are already doing well on ${strongest.label.toLowerCase()} — that is worth keeping while you work on the rest.`);
+  }
+  return out;
 }
 
 function buildInsights(dims,d){
   const ins=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
+  // P0-3: every insight below reads a figure. In habits mode there are none, and
+  // a null compares as 0 in JS (`null < 10` is true), so without this guard the
+  // member would be told their savings rate is "0.0%" and their net worth "P0" —
+  // asserted as fact about figures they were never asked for.
+  if(d.habitsOnly){
+    const sorted=[...dims].sort((a,b)=>a.score-b.score);
+    sorted.slice(0,3).forEach(x=>{
+      const n=HABIT_NOTES[x.id]; if(!n) return;
+      ins.push({icon:'🎯',cls:x.score<34?'orange':'blue',title:x.label,text:`Your answers suggest ${n.low}. ${n.lead}`});
+    });
+    if(d.insCount<3)ins.push({icon:'🩺',cls:'orange',title:'Insurance Gaps',text:`You hold <strong>${d.insCount}</strong> of 6 recommended covers. Medical aid and life/income protection are the highest priorities.`});
+    const best=sorted[sorted.length-1];
+    if(best&&best.score>=60)ins.push({icon:'💚',cls:'green',title:`Strength: ${best.label}`,text:'This is the habit you already have. Keep it while you build the others.'});
+    return ins.slice(0,6);
+  }
   if(d.gross>0&&d.expenses>0){const surplus=d.totalIncome-d.expenses;if(surplus>0)ins.push({icon:'💚',cls:'green',title:'Positive Cash Flow',text:`You have a monthly surplus of <strong>${fmt(surplus)}</strong>. Direct this toward savings or debt reduction.`});else ins.push({icon:'⚠️',cls:'red',title:'Spending Exceeds Income',text:`Your expenses exceed income by <strong>${fmt(Math.abs(surplus))}</strong>/mo. This is unsustainable — review discretionary spending immediately.`});}
   if(d.savRate<10)ins.push({icon:'💡',cls:'orange',title:'Low Savings Rate',text:`Your savings rate of <strong>${d.savRate.toFixed(1)}%</strong> is below the recommended 20%. Even increasing by 2–3% per month makes a significant long-term difference.`});
   else if(d.savRate>=20)ins.push({icon:'🌟',cls:'green',title:'Excellent Savings Rate',text:`Saving <strong>${d.savRate.toFixed(1)}%</strong> of income puts you ahead of most. Ensure savings are in growth-oriented instruments.`});
@@ -1102,6 +1156,27 @@ function buildInsights(dims,d){
 
 function buildActions(dims,d){
   const actions=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
+  // Same guard as buildInsights: the figure-driven actions below quote amounts
+  // (`fmt(d.essentialExp*6)`), which in habits mode would render as "P 0.00".
+  // The habit actions are ordered by the member's own weakest answers.
+  if(d.habitsOnly){
+    const sorted=[...dims].sort((a,b)=>a.score-b.score);
+    const HABIT_ACTIONS={
+      emergency: {title:'Start an emergency fund',            desc:'Open a separate account you can reach within 48 hours and set an automatic debit, however small. Your budget will tell you the target.'},
+      debt:      {title:'List every debt in one place',       desc:'Balance and monthly payment for each loan or account. Your debt-to-income comes out of that list without another form.'},
+      savings:   {title:'Move savings to payday, not month end', desc:'An automatic debit on the day you are paid is the difference between saving what is left and saving first.'},
+      spending:  {title:'Review last month before planning this one', desc:'Twenty minutes with your bank statement, categorised. The budget planner does the arithmetic.'},
+      retirement:{title:'Find out where your retirement stands', desc:'Two questions in the retirement planner — your salary and pension balance come from your other tools.'},
+      goals:     {title:'Put a number and a date on each goal', desc:'A goal without those two things is a wish. The goal planner tracks the rest.'},
+      income:    {title:'Build your budget first',            desc:'Your take-home pay and what you spend it on. This is the one place you will ever type your income.'},
+      insurance: {title:'Close the biggest cover gaps',        desc:'Medical aid and income protection protect against the two most financially devastating risks. Get quotes this month.'},
+    };
+    sorted.forEach((x,i)=>{
+      const act=HABIT_ACTIONS[x.id]; if(!act) return;
+      actions.push({priority:i<2?'High':i<4?'Medium':'Low',...act});
+    });
+    return actions.slice(0,8);
+  }
   if(d.emMonths<3)actions.push({priority:'High',title:'Build your emergency fund first',desc:`Target: ${fmt(d.essentialExp*6)}. Open a separate notice account and auto-debit even P200/month. This is your financial safety net.`});
   if(d.dti_pct>50)actions.push({priority:'High',title:'Reduce debt-to-income ratio below 35%',desc:`You need to free ${fmt(d.totalIncome*(d.dti_pct/100-0.35))}/mo. Contact lenders for consolidation options or accelerate repayments on the highest-interest accounts first.`});
   if(d.savRate<10)actions.push({priority:'High',title:'Increase savings rate to at least 10%',desc:`That's ${fmt(d.gross*0.10)}/mo. Set up an automatic debit on payday. Even P500 more per month compounds significantly over 10 years.`});
@@ -1134,20 +1209,35 @@ function exportPDF(){
   // name can't overflow the header into the score badge.
   const _pdfName = String(window._toolFullName || '').replace(/[^\x20-\x7E]/g,'').trim().slice(0,42);
   if (_pdfName) { doc.setFontSize(7);doc.setFont('helvetica','bold');doc.setTextColor(200,210,220);doc.text('Client: '+_pdfName,14,18); }
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);doc.text(`Botswana Pula  ·  Generated: ${today}`,14,_pdfName?24:18);
-  const scoreColor=r.totalScore>=70?[57,126,43]:r.totalScore>=50?[217,119,6]:[192,57,43];
-  doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,5,34,22,3,3,'F');
-  doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
-  doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});
-  doc.setTextColor(...NAVY);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(r.grade.label.replace(/[^\w\s]/g,'').trim(),14,38);
-  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...SLATE);
-  const tagLines=doc.splitTextToSize(r.grade.tagline,pageW-28);doc.text(tagLines,14,44);
-  let y=44+tagLines.length*5+8;
-  const stats=[['Savings Rate',r.savRate.toFixed(1)+'%'],['Debt-to-Income',r.dti_pct.toFixed(1)+'%'],['Emergency Cover',r.emMonths.toFixed(1)+' months'],['Net Worth',fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (neg)':'')],['Insurance Covers',r.insCount+' / 6']];
-  const sw=(pageW-28)/stats.length;
-  stats.forEach((s,i)=>{const x=14+i*sw;doc.setFillColor(...CREAM);doc.roundedRect(x,y,sw-2,16,2,2,'F');doc.setFillColor(...NAVY);doc.roundedRect(x,y,2,16,1,1,'F');doc.setTextColor(...SLATE);doc.setFontSize(5.5);doc.setFont('helvetica','bold');doc.text(s[0].toUpperCase(),x+4,y+5.5);doc.setTextColor(...NAVY);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.text(s[1],x+4,y+12);});
-  y+=22;
-  doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('SCORE BY DIMENSION',14,y);y+=3;
+  doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(200,210,220);
+  // P0-3: a habits report has no Pula in it, so the header does not claim any.
+  doc.text(r.habitsOnly?`Habits check  ·  Generated: ${today}`:`Botswana Pula  ·  Generated: ${today}`,14,_pdfName?24:18);
+  let y;
+  if(r.habitsOnly){
+    // No score badge, no grade, no stat strip — the same reasoning as the
+    // on-screen results: eleven behaviour answers do not support a verdict, and
+    // the five stats would each read as a figure we were never given.
+    doc.setTextColor(...NAVY);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text('Your starting point',14,38);
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...SLATE);
+    const spLines=doc.splitTextToSize((r.startingPoint||[]).join(' ').replace(/<[^>]+>/g,''),pageW-28);
+    doc.text(spLines,14,44);
+    y=44+spLines.length*4.6+10;
+    doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('YOUR HABITS, DIMENSION BY DIMENSION',14,y);y+=3;
+  } else {
+    const scoreColor=r.totalScore>=70?[57,126,43]:r.totalScore>=50?[217,119,6]:[192,57,43];
+    doc.setFillColor(...scoreColor);doc.roundedRect(pageW-42,5,34,22,3,3,'F');
+    doc.setTextColor(...WHITE);doc.setFontSize(18);doc.setFont('helvetica','bold');doc.text(String(r.totalScore),pageW-25,15,{align:'center'});
+    doc.setFontSize(6);doc.setFont('helvetica','normal');doc.text('/ 100',pageW-25,20,{align:'center'});
+    doc.setTextColor(...NAVY);doc.setFontSize(13);doc.setFont('helvetica','bold');doc.text(r.grade.label.replace(/[^\w\s]/g,'').trim(),14,38);
+    doc.setFontSize(8);doc.setFont('helvetica','normal');doc.setTextColor(...SLATE);
+    const tagLines=doc.splitTextToSize(r.grade.tagline,pageW-28);doc.text(tagLines,14,44);
+    y=44+tagLines.length*5+8;
+    const stats=[['Savings Rate',r.savRate.toFixed(1)+'%'],['Debt-to-Income',r.dti_pct.toFixed(1)+'%'],['Emergency Cover',r.emMonths.toFixed(1)+' months'],['Net Worth',fmtK(Math.abs(r.netWorth))+(r.netWorth<0?' (neg)':'')],['Insurance Covers',r.insCount+' / 6']];
+    const sw=(pageW-28)/stats.length;
+    stats.forEach((s,i)=>{const x=14+i*sw;doc.setFillColor(...CREAM);doc.roundedRect(x,y,sw-2,16,2,2,'F');doc.setFillColor(...NAVY);doc.roundedRect(x,y,2,16,1,1,'F');doc.setTextColor(...SLATE);doc.setFontSize(5.5);doc.setFont('helvetica','bold');doc.text(s[0].toUpperCase(),x+4,y+5.5);doc.setTextColor(...NAVY);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.text(s[1],x+4,y+12);});
+    y+=22;
+    doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('SCORE BY DIMENSION',14,y);y+=3;
+  }
   doc.setDrawColor(...GOLD);doc.setLineWidth(.35);doc.line(14,y,pageW-14,y);y+=5;
   r.dims.forEach(d=>{
     const barW=(pageW-28-50),sc=d.score,c=sc>=70?GREEN:sc>=50?ORANGE:RED;
@@ -1159,7 +1249,7 @@ function exportPDF(){
   y+=4;
   doc.setTextColor(...GOLD);doc.setFontSize(7);doc.setFont('helvetica','bold');doc.text('ACTION PLAN',14,y);y+=3;
   doc.setDrawColor(...GOLD);doc.line(14,y,pageW-14,y);y+=5;
-  const actions=buildActions(r.dims,{...r,essentialExp:1});
+  const actions=buildActions(r.dims,{...r,essentialExp:r.essentialExp||1});
   actions.slice(0,6).forEach(a=>{
     if(y>pageH-18){doc.addPage();y=18;}
     const pc=a.priority==='High'?RED:a.priority==='Medium'?ORANGE:GREEN;
@@ -1249,23 +1339,31 @@ function resolveAssessmentFigures() {
 // ── Apply reassessment UI (MCQ-only mode) ─────────────────────────────────────
 function applyReassessmentMode() {
   if(!window._isReassessment) return;
-  // Resolve figures immediately so banner can show sources
+
+  // P0-3: every branch below is now a no-op held for safety rather than effect.
+  // This function existed to turn a figures-and-questions form into a
+  // questions-only one; since the figure fields were removed outright, the form
+  // is already questions-only for everybody, first run or fifth. Kept, with null
+  // guards, so re-adding a numeric step cannot silently leave reassessment
+  // asking for figures the tools already hold — and so the "figures came from
+  // your tools" banner below still tells the member where its data came from.
   resolveAssessmentFigures();
 
-  // Hide numeric input grids in all steps that have them
+  // No .form-grid survives in the steps; querySelector returns null and this
+  // does nothing. It stays as the hook a future numeric step would need.
   [0,1,2,3,4,7].forEach(n=>{
     const fg=document.querySelector(`#step${n} .form-grid`);
     if(fg) fg.style.display='none';
   });
 
-  // Remove required field validation for step 0 (only step with required fields)
-  STEP_REQUIRED[0].fields=[];
+  // Already empty (see STEP_REQUIRED) — belt and braces.
+  if(STEP_REQUIRED[0]) STEP_REQUIRED[0].fields=[];
 
   // Update page header
   const h1=document.querySelector('.header h1');
-  if(h1) h1.textContent='Wellness Reassessment';
+  if(h1) h1.textContent='Habits Re-check';
   const hp=document.querySelector('.header p');
-  if(hp) hp.textContent='Behavioural questions only · Figures sourced from your tools';
+  if(hp) hp.textContent='Three minutes · The same eleven questions · No figures to look up';
 
   // Inject an info banner into step 0
   const step0Card=document.querySelector('#step0 .card');
@@ -1274,7 +1372,7 @@ function applyReassessmentMode() {
     const srcNote=srcVals.length?`<br><span style="color:var(--muted)">Figures from: <strong>${srcVals.join(', ')}</strong></span>`:'';
     const banner=document.createElement('div');
     banner.style.cssText='background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:.8rem;color:#065f46;line-height:1.6;';
-    banner.innerHTML=`✅ <strong>Quick reassessment.</strong> Just answer the questions below — we'll use your latest tool data for the financial figures so you don't have to re-enter numbers.${srcNote}`;
+    banner.innerHTML=`✅ <strong>Quick re-check.</strong> The same eleven questions about how you handle money. Your figures stay where you entered them — in your tools — and your dashboard keeps using them.${srcNote}`;
     step0Card.insertBefore(banner,step0Card.firstChild);
   }
 }
@@ -1357,23 +1455,15 @@ async function _flushPendingAssessments(_sb, uid) {
       });
       applyReassessmentMode();
     } else {
-      // First assessment (compulsory): lock the escape hatch and show the
-      // baseline note. The portal itself is also locked (index.html route())
-      // until this assessment is saved; the top "Back to Portal" link is hidden
-      // here so there is no way to skip it. Draft auto-save lets the user resume.
-      document.getElementById('backToPortalTop')?.style.setProperty('display','none');
-      document.getElementById('firstAssessmentNote')?.style.setProperty('display','block');
-      window._isFirstCompulsory = true;
-      // First assessment: pre-fill figures from profile
-      if (prof?.age) { const el=document.getElementById('age'); if(el&&!el.value) el.value=prof.age; }
-      if (prof?.gross_income) {
-        const el=document.getElementById('grossSalary');
-        if(el&&!el.value) el.value=Number(prof.gross_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
-      }
-      if (prof?.net_income) {
-        const el=document.getElementById('netSalary');
-        if(el&&!el.value) el.value=Number(prof.net_income).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
-      }
+      // P0-2 (audit F2): a first assessment is no longer compulsory, so nothing
+      // here hides "Back to Portal". This branch used to remove that link and
+      // show a "let's set your baseline" note, because index.html's route() held
+      // the whole portal until an assessment row existed — between them there was
+      // no way out of this page. Both are gone; the member can leave at any point
+      // and their draft is still auto-saved.
+      // P0-3: the age / gross / net prefill that stood here is gone with the
+      // fields it targeted. Those figures now live in the tools that ask for
+      // them, and the dashboard's live score reads them from there.
     }
   });
 })();
