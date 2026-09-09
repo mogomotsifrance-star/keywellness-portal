@@ -13,7 +13,9 @@
    computed and stored for a salary the member does not earn (audit F8).
 
    Also asserted: a source line never names the Budget Planner unless a budget
-   actually exists (audit F7), and the two dead prefill blocks stay dead.
+   actually exists (audit F7), the two dead prefill blocks stay dead, and the
+   P0-6 "who sees this" line is present, muted and correctly worded on each of
+   the five screens that ask for money (audit F5).
 
    Usage:  node tests/smoke-prefill.js
 */
@@ -340,6 +342,59 @@ const valOf = (page, id) => page.evaluate(i => document.getElementById(i)?.value
     check('47 adding a debt clears the flag rather than leaving it lying',
       off.rows > 0 && off.flag === null && /I have no debts/.test(off.label), JSON.stringify(off));
     await page.close();
+  }
+
+  /* ── 7. P0-6: the "who sees this" line, at the field ──────────
+     The audit's point (F5, §8) is that this is where a member's "who is using
+     my data" question is actually answered — beside the field, when it is
+     asked, not in 380 words before they have seen anything. Two wordings: the
+     money tools say what the employer sees, the debt tools also rule out a
+     lender, because "will this reach a bank" is the specific fear there. */
+  {
+    const STAYS = /Stays in your account\. Your employer only ever sees averages across 5 or more colleagues\./;
+    const COACH = /Only you and, if you choose, your coach\. Never your employer, never a lender\./;
+
+    const seen = {};
+    for (const [file, re, label] of [
+      ['budget_planner.html', STAYS, 'Budget Planner'],
+      ['net_worth_tracker.html', STAYS, 'Net Worth'],
+      ['dti_calculator.html', COACH, 'DTI'],
+      ['debt_management_planner.html', COACH, 'Debt Planner'],
+    ]) {
+      const { page } = await open(browser, file, { profile: { id: UID } });
+      const got = await page.evaluate(() => {
+        const el = document.querySelector('.kw-trust');
+        if (!el) return null;
+        const cs = getComputedStyle(el);
+        return { text: el.textContent.trim(), size: parseFloat(cs.fontSize),
+                 visible: cs.display !== 'none' && el.offsetParent !== null,
+                 icons: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(el.textContent) };
+      });
+      seen[label] = got;
+      await page.close();
+    }
+    check('48 the Budget Planner carries the employer-averages line',
+      STAYS.test(seen['Budget Planner']?.text || ''), JSON.stringify(seen['Budget Planner']));
+    check('49 so does Net Worth', STAYS.test(seen['Net Worth']?.text || ''), JSON.stringify(seen['Net Worth']));
+    check('50 DTI carries the coach-and-never-a-lender line',
+      COACH.test(seen['DTI']?.text || ''), JSON.stringify(seen['DTI']));
+    check('51 so does the Debt Planner', COACH.test(seen['Debt Planner']?.text || ''), JSON.stringify(seen['Debt Planner']));
+    check('52 each is visible, muted and carries no icon',
+      Object.values(seen).every(g => g && g.visible && g.size <= 12 && !g.icons),
+      JSON.stringify(Object.entries(seen).map(([k, v]) => [k, v && { s: v.size, v: v.visible, i: v.icons }])));
+    /* The debt tools must not carry the softer wording: on a debt register the
+       lender question is the one being asked. */
+    check('53 the debt tools do not use the money-tool wording',
+      !STAYS.test(seen['DTI']?.text || '') && !STAYS.test(seen['Debt Planner']?.text || ''));
+  }
+  {
+    /* The fifth place is a view inside index.html, not its own page. */
+    const fs2 = require('fs');
+    const idx = fs2.readFileSync(path.join(REPO, 'index.html'), 'utf8');
+    check('54 the Emergency Fund view carries it too',
+      /class="kw-trust">Stays in your account\. Your employer only ever sees averages across 5 or more colleagues\./.test(idx));
+    check('55 and index.html defines the shared style rather than inlining it',
+      /^\.kw-trust\{/m.test(idx));
   }
 
   await browser.close();

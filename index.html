@@ -554,6 +554,8 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 .ic-opt .ic-ic{font-size:24px;line-height:1}
 .ic-opt .ic-t{font-size:15px;font-weight:700;color:var(--navy)}
 .ic-opt .ic-d{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
+/* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
+.kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
 </style>
 </head>
 <body>
@@ -5920,6 +5922,7 @@ VIEWS['emergency'] = async function () {
   el.innerHTML = `
     <div style="max-width:660px">
       <div class="notice notice-gold">🆘 <strong>Emergency Fund Planner</strong> — Know your target. Track your progress.</div>
+      <div class="kw-trust">Stays in your account. Your employer only ever sees averages across 5 or more colleagues.</div>
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">💡 Recommended Targets (from your profile)</div>
