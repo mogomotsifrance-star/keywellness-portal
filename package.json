@@ -4,10 +4,11 @@
   "private": true,
   "description": "Key Wellness portal \u2014 static HTML site. This manifest exists only to run the headless browser test suites; the site itself has no build step and ships no npm dependencies.",
   "scripts": {
-    "test": "node tests/smoke-account.js && node tests/smoke-picker.js && node tests/smoke-routing.js && node tests/smoke-onboarding.js && node tests/smoke-habits.js && node tests/smoke-ops.js && npm run test:advance && npm run test:rehab && npm run test:edge",
+    "test": "node tests/smoke-account.js && node tests/smoke-picker.js && node tests/smoke-routing.js && node tests/smoke-onboarding.js && node tests/smoke-habits.js && node tests/smoke-dashboard.js && node tests/smoke-ops.js && npm run test:advance && npm run test:rehab && npm run test:edge",
     "test:account": "node tests/smoke-account.js",
     "test:onboarding": "node tests/smoke-onboarding.js",
     "test:habits": "node tests/smoke-habits.js",
+    "test:dashboard": "node tests/smoke-dashboard.js",
     "test:picker": "node tests/smoke-picker.js",
     "test:routing": "node tests/smoke-routing.js",
     "test:ops": "node tests/smoke-ops.js",

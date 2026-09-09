@@ -305,7 +305,16 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
         Add Debt
       </button>
       <button class="btn-primary" onclick="clearDebtForm()" style="background:#f5f7fa;color:var(--slate);font-weight:600;">Clear</button>
+      <!-- P0-4/P0-5: "no debts" is an ANSWER, not an absence of one. Without a
+           way to say it, a debt-free member is nudged to list debts forever and
+           their dashboard picture can never complete. Stored in localStorage,
+           deliberately — no profiles column is added for this. -->
+      <button class="btn-primary" id="noDebtsBtn" onclick="toggleNoDebts()"
+        style="background:#f5f7fa;color:var(--slate);font-weight:600;">I have no debts</button>
       <span id="debtError" style="font-size:.78rem;color:var(--red);display:none;"></span>
+    </div>
+    <div id="noDebtsNote" style="display:none;margin-top:12px;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:.8rem;color:#065f46;line-height:1.6">
+      ✓ <strong>Noted — no debts.</strong> Your debt-to-income is 0% and your dashboard will stop asking. Add a debt above at any time and this clears itself.
     </div>
 
     <!-- Debt list -->
@@ -601,10 +610,43 @@ function removeDebt(id) {
   saveData();
 }
 
+// The "I have no debts" flag. The dashboard's debts source (P0-4) counts this
+// as done, so a debt-free member's picture can reach 6 of 6.
+const LS_NO_DEBTS = 'kw_no_debts';
+function noDebtsSet() { try { return localStorage.getItem(LS_NO_DEBTS) === 'true'; } catch { return false; } }
+function setNoDebts(on) {
+  try { on ? localStorage.setItem(LS_NO_DEBTS, 'true') : localStorage.removeItem(LS_NO_DEBTS); } catch (_) {}
+  renderNoDebts();
+}
+function renderNoDebts() {
+  const on = noDebtsSet();
+  const btn = document.getElementById('noDebtsBtn');
+  const note = document.getElementById('noDebtsNote');
+  if (note) note.style.display = on ? '' : 'none';
+  if (btn) {
+    btn.textContent = on ? 'I do have debts' : 'I have no debts';
+    btn.style.background = on ? 'var(--navy)' : '#f5f7fa';
+    btn.style.color = on ? '#fff' : 'var(--slate)';
+  }
+}
+function toggleNoDebts() {
+  if (!noDebtsSet() && debts.length) {
+    if (!confirm('You have ' + debts.length + ' debt' + (debts.length !== 1 ? 's' : '') +
+      ' listed. Mark yourself as having no debts and remove them?')) return;
+    debts = []; renderDebtList(); saveData();
+  }
+  setNoDebts(!noDebtsSet());
+}
+
 function renderDebtList() {
   const listEl  = document.getElementById('debtList');
   const emptyEl = document.getElementById('emptyDebts');
   const badge   = document.getElementById('debtCountBadge');
+
+  // Adding a debt is itself the answer to "do you have debts?" — the flag must
+  // not survive it and go on telling the dashboard something untrue.
+  if (debts.length && noDebtsSet()) setNoDebts(false);
+  else renderNoDebts();
 
   if (!debts.length) {
     listEl.innerHTML=''; emptyEl.style.display='block';

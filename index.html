@@ -3071,58 +3071,130 @@ VIEWS['dashboard'] = async function () {
   const insCount = _insAssess?._insCount ?? snap.assessment?.insCount ?? null;
   const insScore = (_insAssess && typeof _insAssess.insurance === 'number') ? _insAssess.insurance : null;
 
-  // ── Nudge generation ──
-  const nudges = [];
+  // ── P0-4: the six sources, the score gate, and the two-nudge rule ─────────
+  //
+  // The dashboard used to push up to nine nudges at once, ordered by the order
+  // they happened to be written, and show a score out of 100 built on figures
+  // the member had mostly not given (audit F9, F10). Both are replaced here by
+  // one ordered list, evaluated top-down, of which only the first two unmet
+  // items are ever shown.
   const curMonth = new Date().toISOString().slice(0,7);
-  if (!hasAssessment) {
-    nudges.push({ pri:'high', icon:'📋', title:'Start your wellness assessment', desc:"Your financial health score hasn't been set — takes 5 minutes.", cta:'Start Now', click:`openTool('wellness_assessment.html')` });
-  } else if (snapAge.assessment !== null && snapAge.assessment >= 30) {
-    nudges.push({ pri:'medium', icon:'🔄', title:'Time to reassess', desc:`Last assessed ${snapAge.assessment} days ago. A fresh assessment (recommended every 30 days) measures your progress.`, cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
-  }
-  if (!hasBudgetTool) {
-    nudges.push({ pri:'high', icon:'📊', title:'No budget set up yet', desc:'Build your monthly budget to track income and spending.', cta:'Open Budget', click:`openTool('budget_planner.html')` });
-  } else if (budgetLabel && budgetLabel < curMonth) {
-    nudges.push({ pri:'high', icon:'📊', title:`New month — update your budget`, desc:`Your last budget was for ${budgetLabel}. Set up ${curMonth} now.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
-  } else if (snapAge.budget !== null && snapAge.budget > 30) {
-    nudges.push({ pri:'medium', icon:'📊', title:'Budget not updated recently', desc:`Last saved ${snapAge.budget} days ago. Refresh your income and expenses.`, cta:'Update Budget', click:`openTool('budget_planner.html')` });
-  }
-  if (!hasStress) {
-    nudges.push({ pri:'medium', icon:'😰', title:'Log your first stress check-in', desc:'Fortnightly stress tracking shows trends and helps your advisor spot patterns.', cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
-  } else if (snapAge.stress !== null && snapAge.stress > 14) {
-    nudges.push({ pri:'low', icon:'😰', title:'Stress check-in overdue', desc:`Last logged ${snapAge.stress} days ago. Your fortnightly check-in is due.`, cta:'Log Now', click:`openTool('financial_stress_tracker.html')` });
-  }
-  if (!hasDTI && hasBudget) {
-    nudges.push({ pri:'low', icon:'🧮', title:'Calculate your debt-to-income ratio', desc:'Know your borrowing capacity before your next credit application.', cta:'Calculate DTI', click:`openTool('dti_calculator.html')` });
-  }
-  if (!hasNWTool) {
-    nudges.push({ pri:'medium', icon:'💎', title:'Track your net worth', desc:'Enter your assets and liabilities to see your true financial position — updated every time you save.', cta:'Open Net Worth', click:`openTool('net_worth_tracker.html')` });
-  }
-  if (!hasEF) {
-    nudges.push({ pri:'high', icon:'🆘', title:'Set up your emergency fund', desc:'An emergency fund is your #1 financial safety net. Set a target and start tracking your progress.', cta:'Set Up Now', click:`go('emergency')` });
-  }
-  // Once the fund is set up, progress (incl. "below 3 months") is shown on the Hub card —
-  // no Action Required nudge, so the banner clears the moment the user saves their plan.
-  if (totalGoals === 0) {
-    nudges.push({ pri:'medium', icon:'🎯', title:'Add your first financial goal', desc:'Goals give your money direction. Set a target — a home, education, holiday — and track progress.', cta:'Add Goal', click:`openTool('goal_planner.html')` });
-  }
-  if (!retSnap && hasAssessment) {
-    nudges.push({ pri:'low', icon:'🏖️', title:'Run the retirement calculator', desc:'See if you are on track for retirement. Enter your age, salary, and current savings — takes 2 minutes.', cta:'Calculate', click:`openTool('retirement_calculator.html')` });
-  }
-  if (insCount === null && insScore === null && hasAssessment) {
-    nudges.push({ pri:'medium', icon:'🛡️', title:'Check your insurance coverage', desc:'Re-take the assessment to see how many of the 6 key insurance types you currently hold.', cta:'Re-assess', click:`openTool('wellness_assessment.html')` });
-  } else if (insCount !== null && insCount < 3) {
-    nudges.push({ pri:'medium', icon:'🛡️', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps to address.', cta:'Learn More', click:`go('learn')` });
-  }
 
-  // ── Employment-tailored nudges ──
+  // "I have no debts" is a real answer, not an absence of one. The DTI tool
+  // writes it to localStorage rather than a profiles column — P0-5 adds the
+  // button — so the debts source can complete without a debt register existing.
+  const noDebts = (() => {
+    try { return localStorage.getItem('kw_no_debts') === 'true'; } catch { return false; }
+  })();
+
+  // The member's picture, as six things they have told us. Order matters: it is
+  // the order the nudges ask for them, and the order the checklist renders.
+  const SOURCES = [
+    { id:'habits',     label:'Habits check',   done: state.assessments.length > 0 },
+    { id:'budget',     label:'Budget',         done: hasBudgetTool },
+    { id:'emergency',  label:'Emergency fund', done: hasEF },
+    { id:'debts',      label:'Debts',          done: hasDTI || noDebts },
+    { id:'networth',   label:'Net worth',      done: hasNWTool },
+    { id:'retirement', label:'Retirement',     done: !!retSnap },
+  ];
+  const sourcesDone = SOURCES.filter(s => s.done).length;
+
+  // ── Score gate ────────────────────────────────────────────────────────────
+  // A score out of 100 is shown only once the four sources it actually depends
+  // on exist. Before that the member sees what they have told us so far and the
+  // written starting point from their habits check — not a number that looks
+  // authoritative and is not.
+  //
+  // The exception is the reason this is not simply `sourcesDone >= 4`: a member
+  // assessed BEFORE this change gave their figures inside the assessment, so
+  // their score was honestly earned and must not vanish. `_habits_only` marks
+  // rows written by the new behaviour-only check (P0-3); a row without it is a
+  // pre-change assessment and satisfies the gate on its own for 90 days, by
+  // which time the nudges will have collected the real figures.
+  const _latestRow    = state.assessments?.[0] || null;
+  const _rowIsHabits  = _latestRow?.answers?._habits_only === true;
+  const _rowAgeDays   = _latestRow?.created_at ? daysSince(_latestRow.created_at) : null;
+  const grandfathered = !!_latestRow && !_rowIsHabits && _rowAgeDays !== null && _rowAgeDays <= 90;
+  const scoreReady    = grandfathered ||
+    (SOURCES[0].done && SOURCES[1].done && SOURCES[2].done && SOURCES[3].done);
+  const showScore     = scoreReady && wellScore !== null;
+
+  // The written starting point from the habits check, for the gauge slot.
+  const startingPoint = (() => {
+    if (Array.isArray(state.user?.starting_point)) return state.user.starting_point;
+    try {
+      const sp = safeParseLS('kw_assessment_result', {}).startingPoint;
+      return Array.isArray(sp) ? sp : null;
+    } catch { return null; }
+  })();
+
+  // ── The nudge ladder ──────────────────────────────────────────────────────
+  // Evaluated top-down; the first two unmet items are rendered, plus one "done"
+  // line for the most recently completed source. Each says what it will ask and
+  // what it already knows, so nothing reads as a second request for the same
+  // figure.
+  const _bd        = _toolMap['budget_planner'];
+  const _bdCur     = _bd?.currentKey && _bd?.budgets?.[_bd.currentKey] ? _bd.budgets[_bd.currentKey] : null;
+  const _bdDebtMin = Number(_bdCur?.expenses?.debt_min || 0);
+  const _habitDebt = _latestRow?.answers?.debtMgmt;
+  const _budgetThisMonth = hasBudgetTool && budgetLabel === curMonth;
+  const _goalsSeeded = totalGoals > 0 && goalsOnTrack === 0 &&
+    (_toolMap['goal_planner']?.goals || []).every(g => !g.target);
+
+  // Employment folds into the emergency-fund ask rather than standing as its own
+  // nudge: variable income means a 6-month target, which is a property of THAT
+  // ask, not a separate thing to do.
   const _emp = (state.user?.employment || '').toLowerCase();
-  if (_emp.includes('self-employed')) {
-    nudges.push({ pri:'medium', icon:'💼', title:'Self-employed: plan your retirement & tax', desc:'Consider a Retirement Annuity (RA) — no employer pension means it is on you. Remember provisional tax with BURS twice a year.', cta:'Retirement Calculator', click:`openTool('retirement_calculator.html')` });
-  } else if (_emp.includes('student')) {
-    nudges.push({ pri:'medium', icon:'📚', title:'Start strong: build the savings habit now', desc:'Even P100–P200/month invested consistently from a young age compounds into significant wealth. An emergency fund is your first milestone.', cta:'Set Up Emergency Fund', click:`go('emergency')` });
-  } else if (_emp.includes('not currently employed')) {
-    nudges.push({ pri:'high', icon:'🏡', title:'Focus on your emergency fund first', desc:'With variable income, 3–6 months of essential expenses in a separate account is your most important financial buffer.', cta:'Emergency Fund', click:`go('emergency')` });
-  }
+  const _variableIncome = _emp.includes('self-employed') || _emp.includes('not currently employed');
+  const _efMonthsTarget = _variableIncome ? 6 : 3;
+
+  const NUDGE_LADDER = [
+    { id:'habits', unmet: state.assessments.length === 0 ||
+        (_rowAgeDays !== null && _rowAgeDays > 90),
+      icon:'📋', title:'Habits check', desc:'Three minutes, no numbers.',
+      cta:'Start', click:`openTool('wellness_assessment.html')` },
+
+    { id:'budget', unmet: !_budgetThisMonth,
+      icon:'📊', title:'Budget',
+      desc:'Your take-home pay and what you spend it on — the one place you will ever type your income.',
+      cta:'Open budget', click:`openTool('budget_planner.html')` },
+
+    { id:'emergency', unmet: hasBudgetTool && !hasEF,
+      icon:'🆘', title:'Emergency fund',
+      desc:`One number: what you could reach within 48 hours. Your essential costs are already here${_variableIncome ? ', and with variable income we aim for ' + _efMonthsTarget + ' months' : ''}.`,
+      cta:'Add balance', click:`go('emergency')` },
+
+    { id:'debts', unmet: (_bdDebtMin > 0 || (typeof _habitDebt !== 'undefined' && Number(_habitDebt) <= 1)) &&
+        !hasDTI && !noDebts,
+      icon:'💳', title:'Debts',
+      desc:'List each loan once. Your debt-to-income comes out of it.',
+      cta:'List debts', click:`openTool('dti_calculator.html')` },
+
+    { id:'networth', unmet: hasEF && (hasDTI || noDebts) && !hasNWTool,
+      icon:'💎', title:'Net worth',
+      desc:'Your loans are already listed. Add what you own.',
+      cta:'Add assets', click:`openTool('net_worth_tracker.html')` },
+
+    { id:'retirement', unmet: hasBudgetTool && !retSnap,
+      icon:'🏖️', title:'Retirement',
+      desc:'Two questions — your salary is already here.',
+      cta:'Run it', click:`openTool('retirement_calculator.html')` },
+
+    { id:'stress', unmet: hasBudgetTool && (!hasStress || (snapAge.stress !== null && snapAge.stress > 14)),
+      icon:'😰', title:'Stress check-in',
+      desc:'Thirty seconds: how is money feeling this fortnight?',
+      cta:'Log it', click:`openTool('financial_stress_tracker.html')` },
+
+    { id:'goals', unmet: hasBudgetTool && _goalsSeeded,
+      icon:'🎯', title:'Goals',
+      desc:'You said what you want to work on. Put a number and a date on each — your income is already here.',
+      cta:'Set targets', click:`openTool('goal_planner.html')` },
+  ];
+  const nudges = NUDGE_LADDER.filter(n => n.unmet).slice(0, 2);
+
+  // One "done" line for momentum — the most recently completed source, so the
+  // strip is never only demands.
+  const _doneSource = [...SOURCES].reverse().find(s => s.done) || null;
 
   // ── Helper formatters ──
   const fmtP = v => {
@@ -3133,15 +3205,23 @@ VIEWS['dashboard'] = async function () {
   };
 
   // ── Build summary hub cards ──
+  // P0-4: an empty card reads "not yet" in navy, never "—" in a warning colour.
+  // A dash in red or orange states a problem about a figure the member has not
+  // been asked for yet; "not yet" states the truth, which is that we do not know.
   const hubCards = [];
 
-  // Wellness score
-  if (wellScore !== null) {
+  // P0-4: the Wellness Score card appears only once the gate is satisfied.
+  // Until then its slot shows how much of the picture exists, which is a true
+  // statement, where a score built on one source out of six is not.
+  if (showScore) {
     const b = scoreBand(wellScore);
     const cls = wellScore >= 76 ? 'green' : wellScore >= 51 ? 'gold' : wellScore >= 26 ? 'orange' : 'red';
     hubCards.push({ cls, lbl:'Wellness Score', val:`${wellScore}/100`, sub:b.label, fresh: wellIsLive ? '⚡ Live — updates with your tools' : freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Wellness Score', val:'—', sub:'Take assessment', click:`openTool('wellness_assessment.html')` });
+    const _next = SOURCES.find(x => !x.done);
+    hubCards.push({ cls:'gold', lbl:'Your picture', val:`${sourcesDone} of 6`,
+      sub: _next ? `Next: ${_next.label.toLowerCase()}` : 'Building your picture',
+      click:`go('dashboard')` });
   }
 
   // Budget surplus
@@ -3150,7 +3230,7 @@ VIEWS['dashboard'] = async function () {
     const isBudgetStale = snap.budget?.month && snap.budget.month < curMonth;
     hubCards.push({ cls, lbl:'Budget Surplus', val:fmtP(budgetSurplus), sub:budgetLabel || 'This month', fresh:freshLabel(snapAge.budget), stale: isBudgetStale, click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Budget Surplus', val:'—', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Budget Surplus', val:'not yet', sub:'Open Budget Tool', click:`openTool('budget_planner.html')` });
   }
 
   // Net worth
@@ -3158,7 +3238,7 @@ VIEWS['dashboard'] = async function () {
     const cls = netWorth >= 0 ? 'green' : 'red';
     hubCards.push({ cls, lbl:'Net Worth', val:fmtP(netWorth), sub:netWorth >= 0 ? 'Positive' : 'Negative', click:`openTool('net_worth_tracker.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Net Worth', val:'—', sub:'Track your wealth', click:`openTool('net_worth_tracker.html')` });
+    hubCards.push({ cls:'navy', lbl:'Net Worth', val:'not yet', sub:'Track your wealth', click:`openTool('net_worth_tracker.html')` });
   }
 
   // Emergency fund
@@ -3168,7 +3248,7 @@ VIEWS['dashboard'] = async function () {
   } else if (hasEF) {
     hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved — add your monthly expenses to see months of cover', click:`go('emergency')` });
   } else {
-    hubCards.push({ cls:'orange', lbl:'Emergency Fund', val:'—', sub:'Set up your fund', click:`go('emergency')` });
+    hubCards.push({ cls:'navy', lbl:'Emergency Fund', val:'not yet', sub:'Set up your fund', click:`go('emergency')` });
   }
 
   // Goals
@@ -3176,7 +3256,7 @@ VIEWS['dashboard'] = async function () {
     const cls = goalsOnTrack === totalGoals ? 'green' : goalsOnTrack > 0 ? 'gold' : 'orange';
     hubCards.push({ cls, lbl:'Goals On Track', val:`${goalsOnTrack}/${totalGoals}`, sub:'Financial goals', click:`openTool('goal_planner.html')` });
   } else {
-    hubCards.push({ cls:'gold', lbl:'Financial Goals', val:'—', sub:'Add your goals', click:`openTool('goal_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Financial Goals', val:'not yet', sub:'Add your goals', click:`openTool('goal_planner.html')` });
   }
 
   // Stress score
@@ -3185,7 +3265,7 @@ VIEWS['dashboard'] = async function () {
     const lbl = stressScore <= 3 ? 'Low stress' : stressScore <= 6 ? 'Moderate' : 'High stress';
     hubCards.push({ cls, lbl:'Financial Stress', val:`${stressScore}/10`, sub:lbl, fresh:freshLabel(snapAge.stress), stale: snapAge.stress > 14, click:`openTool('financial_stress_tracker.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'—', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
+    hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'not yet', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
 
   // DTI — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
@@ -3194,9 +3274,9 @@ VIEWS['dashboard'] = async function () {
     const dtiSub  = budgetDTI <= 35 ? 'Healthy' : budgetDTI <= 50 ? 'Acceptable' : budgetDTI <= 65 ? 'High Risk' : 'Critical';
     hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
   } else if (hasBudget) {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'—', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
   }
 
   // Savings Rate — computed from Supabase budget data (budgetSavRate already set above, snap fallback applied)
@@ -3205,7 +3285,7 @@ VIEWS['dashboard'] = async function () {
     const srSub = budgetSavRate >= 20 ? 'On target (20% rule)' : budgetSavRate >= 10 ? 'Building — aim for 20%' : budgetSavRate > 0 ? 'Low — increase contributions' : 'No savings budgeted';
     hubCards.push({ cls:srCls, lbl:'Savings Rate', val:`${budgetSavRate}%`, sub:srSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'—', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Savings Rate', val:'not yet', sub:'Set up your budget', click:`openTool('budget_planner.html')` });
   }
 
   // Insurance Coverage — explicit count (newer assessments) → dimension score (older) → prompt only if no assessment
@@ -3218,7 +3298,7 @@ VIEWS['dashboard'] = async function () {
     const insSub = insScore >= 75 ? 'Well covered' : insScore >= 50 ? 'Some gaps' : 'Significant gaps';
     hubCards.push({ cls:insCls, lbl:'Insurance Cover', val:`${insScore}/100`, sub:insSub, fresh:freshLabel(snapAge.assessment), stale: snapAge.assessment > 90, click:`openTool('wellness_assessment.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'—', sub:'Complete assessment', click:`openTool('wellness_assessment.html')` });
+    hubCards.push({ cls:'navy', lbl:'Insurance Cover', val:'not yet', sub:'Do the habits check', click:`openTool('wellness_assessment.html')` });
   }
 
   // Retirement Readiness — from retirement snapshot (retSnap declared above nudges)
@@ -3229,7 +3309,7 @@ VIEWS['dashboard'] = async function () {
     const retAge  = retSnap.lastUpdated ?? snap.retirement?.lastUpdated;
     hubCards.push({ cls:retCls, lbl:'Retirement Readiness', val:`${retPct}%`, sub:retSub, fresh:freshLabel(daysSince(retAge)), click:`openTool('retirement_calculator.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'—', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
+    hubCards.push({ cls:'navy', lbl:'Retirement Readiness', val:'not yet', sub:'Run retirement calculator', click:`openTool('retirement_calculator.html')` });
   }
 
   // Estate Planning — driven by profiles.will_status (set in the assessment's
@@ -3244,18 +3324,29 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Build "What to do next" actions ──
+  // P0-4: these are OBSERVATIONS about figures the member has given — a deficit,
+  // a high DTI — not requests for more. Requests belong to the nudge ladder
+  // above, and the two used to duplicate each other: "Complete your wellness
+  // assessment" appeared here at the same moment nudge 1 was asking for it.
+  // Capped at three so the page has one clear next thing, not four.
   const actions = [];
-  if (!hasAssessment) actions.push({ color:'var(--red)', title:'Complete your wellness assessment', desc:'Your personalised financial score and action plan awaits.', click:`openTool('wellness_assessment.html')` });
+  if (!hasAssessment && !nudges.some(n => n.id === 'habits')) actions.push({ color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
   if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
   if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
   if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (!hasNWTool) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
   if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
-  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`openTool('wellness_assessment.html')` });
+  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
-  if (actions.length === 0) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+  if (actions.length === 0) {
+    // Only claim this when the picture is actually complete. With one source of
+    // six there is nothing to be on top of yet, and saying so would be the same
+    // false confidence as a score built on no figures.
+    if (sourcesDone === SOURCES.length) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+    else actions.push({ color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
+  }
 
   // ── Dashboard greeting ──
   const _dProf = safeParseLS('kw_profile', {});
@@ -3361,18 +3452,25 @@ VIEWS['dashboard'] = async function () {
       return banners.join('');
     })()}
 
-    ${nudges.length ? `
-    <!-- Nudge strip -->
+    ${(nudges.length || _doneSource) ? `
+    <!-- P0-4: at most two live nudges, ordered by what each unlocks for the
+         others, plus one "done" line for momentum. This replaces a strip headed
+         "Action Required" that could carry nine at once — which is no sequence
+         at all, and reads as a list of failures on a member's first day. -->
     <div style="margin-bottom:18px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-        <span style="font-size:13px;font-weight:700;color:var(--navy)">🔔 Action Required</span>
-        <span style="font-size:11px;background:var(--gold);color:#fff;border-radius:20px;padding:1px 8px;font-weight:700">${nudges.length}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--navy)">🧭 Your next step${nudges.length > 1 ? 's' : ''}</span>
+        <span style="font-size:11px;color:var(--muted);font-weight:600">${sourcesDone} of 6 done</span>
       </div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${nudges.map(n=>{
-          const border = n.pri==='high' ? 'var(--red)' : n.pri==='medium' ? 'var(--gold)' : 'var(--navy2)';
-          const bg     = n.pri==='high' ? '#fff5f5' : n.pri==='medium' ? '#fffbf0' : '#f5f7ff';
-          return `<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border-left:4px solid ${border};background:${bg};cursor:pointer" onclick="${n.click}">
+      <div id="kw-nudge-strip" style="display:flex;flex-direction:column;gap:8px">
+        ${_doneSource ? `<div data-kw-done="1" style="display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;border-left:4px solid var(--green);background:#f2f9f4">
+          <span style="font-size:16px;flex-shrink:0">✓</span>
+          <div style="flex:1;min-width:0;font-size:12.5px;color:var(--navy)"><strong>${_doneSource.label}</strong> — done. That fills in the tools that come after it.</div>
+        </div>` : ''}
+        ${nudges.map((n,i)=>{
+          const border = i===0 ? 'var(--gold)' : 'var(--navy2)';
+          const bg     = i===0 ? '#fffbf0' : '#f5f7ff';
+          return `<div data-kw-nudge="${n.id}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;border-left:4px solid ${border};background:${bg};cursor:pointer" onclick="${n.click}">
             <span style="font-size:20px;flex-shrink:0">${n.icon}</span>
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:2px">${n.title}</div>
@@ -3386,18 +3484,36 @@ VIEWS['dashboard'] = async function () {
 
     <!-- Score + Category row -->
     <div style="display:grid;grid-template-columns:auto 1fr;gap:18px;margin-bottom:18px;align-items:start">
+      ${showScore ? `
       <div class="card" style="text-align:center;min-width:180px">
         <div class="card-title" style="margin-bottom:10px">Wellness Score</div>
-        ${wellScore !== null ? svgGauge(wellScore, scoreBand(wellScore).color) : `<div style="font-size:42px;padding:20px 0">📋</div>`}
-        ${wellScore !== null
-          ? `<div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
-             <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
-             ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
-             <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-assess</button>`
-          : `<p style="font-size:12px;color:var(--muted);margin-bottom:12px">Take the assessment<br>to see your score</p>
-             <button class="btn btn-primary btn-sm" onclick="openTool('wellness_assessment.html')">Start Assessment →</button>`
-        }
-      </div>
+        ${svgGauge(wellScore, scoreBand(wellScore).color)}
+        <div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+        ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
+        <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-check habits</button>
+      </div>` : `
+      <!-- P0-4: the gauge slot before the score is earned. A checklist of what
+           the member has told us, and the written starting point from their
+           habits check — both true, where a number out of 100 built on one
+           source of six is not. -->
+      <div class="card" style="min-width:260px;max-width:320px">
+        <div class="card-title" style="margin-bottom:4px">Your picture — ${sourcesDone} of 6</div>
+        <p style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:12px">Your score appears once your budget, emergency fund and debts are here — until then a number would be guesswork.</p>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:${startingPoint ? '14px' : '0'}">
+          ${SOURCES.map(src=>`
+            <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:${src.done?'var(--navy)':'var(--muted)'}">
+              <span style="flex-shrink:0;width:16px;text-align:center;color:${src.done?'var(--green)':'var(--border)'};font-weight:700">${src.done?'✓':'○'}</span>
+              <span style="flex:1">${src.label}</span>
+              <span style="font-size:11px;color:var(--muted)">${src.done?'done':'not yet'}</span>
+            </div>`).join('')}
+        </div>
+        ${startingPoint ? `
+        <div style="border-top:1px solid var(--border);padding-top:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Your starting point</div>
+          <div style="font-size:12.5px;color:var(--text);line-height:1.6">${startingPoint.map(t=>`<p style="margin-bottom:6px">${escHtml(t)}</p>`).join('')}</div>
+        </div>` : ''}
+      </div>`}
       <div class="card" style="min-height:200px">
         <div class="card-title" style="margin-bottom:14px">Your Financial Hub</div>
         <div class="hub-summary">
@@ -3416,7 +3532,7 @@ VIEWS['dashboard'] = async function () {
     <div class="card" style="margin-bottom:18px">
       <div class="card-title">🧭 What To Do Next</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Personalised based on your live tool data.</p>
-      ${actions.slice(0,4).map(a=>`
+      ${actions.slice(0,3).map(a=>`
         <div class="next-action" onclick="${a.click}" style="cursor:pointer">
           <div class="na-dot" style="background:${a.color}"></div>
           <div>
