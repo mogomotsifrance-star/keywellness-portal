@@ -216,7 +216,9 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <!-- P0-5 (audit F7): the static text here claimed the Budget Planner as the
+       source whatever had actually written the figure. Filled by KWSource now. -->
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;"></div>
 
   <!-- ── INCOME ── -->
   <div class="card">
@@ -972,25 +974,43 @@ KW.reveal('.card');
       localStorage.removeItem(LS_DATA);
       debts = []; nextId = 1;
       renderDebtList();
-      // Prefill income + monthly_debt from shared profile
+      // Prefill income + minimum debt payments from the shared profile.
       await KWProfile.load();
-      KWProfile.prefill(_DTI_INCOME_MAPPINGS);
-      const profDebt = KWProfile.get('monthly_debt');
-      if (profDebt > 0 && !debts.length) {
+      const _filled = KWProfile.prefill(_DTI_INCOME_MAPPINGS);
+      const _fromBudget = await KWSource.budgetSaved();
+      const _src = KWSource.label({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget);
+
+      // P0-5 (audit F7): the seeded row used to be called "Monthly Debt
+      // Obligations (from assessment)" — an anonymous lump whose stated source
+      // was, by then, usually wrong. Prefer the budget's own debt_min category,
+      // and name the row after wherever the figure really came from.
+      let _seedDebt = 0, _seedSrc = _src;
+      try {
+        const { data: _bdRow } = await _sb.from('tool_data').select('data')
+          .eq('user_id', session.user.id).eq('tool', 'budget_planner').maybeSingle();
+        const _bd = _bdRow?.data;
+        const _cur = _bd?.currentKey && _bd?.budgets?.[_bd.currentKey];
+        const _min = _cur ? Number(_cur.expenses?.debt_min || 0) : 0;
+        if (_min > 0) { _seedDebt = _min; _seedSrc = 'from your budget'; }
+      } catch (e) { console.warn('DTI: budget debt_min lookup failed:', e); }
+      if (!_seedDebt) _seedDebt = Number(KWProfile.get('monthly_debt') || 0);
+
+      if (_seedDebt > 0 && !debts.length) {
         debts.push({
           id: nextId++,
           type: 'other',
-          name: 'Monthly Debt Obligations (from assessment)',
-          amount: profDebt,
+          name: `Minimum debt payments (${_seedSrc})`,
+          amount: _seedDebt,
           balance: 0,
           isHousing: false,
         });
         renderDebtList();
-        const noticeEl = document.getElementById('income-prefill-notice');
-        if (noticeEl) {
-          noticeEl.textContent = '💡 Income and debt pre-filled from your profile. Adjust or replace with itemised debts below.';
-          noticeEl.style.display = '';
-        }
+      }
+      const noticeEl = document.getElementById('income-prefill-notice');
+      if (noticeEl && (_filled.length || _seedDebt > 0)) {
+        noticeEl.textContent = '💡 ' + KWSource.line({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget) +
+          '. Adjust it, or list each loan separately below.';
+        noticeEl.style.display = '';
       }
     }
   });

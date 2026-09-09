@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-profile-sync.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
@@ -514,17 +515,19 @@ function showToast(msg='Saved', dur=1600){
 }
 function save(){
   localStorage.setItem(LS_KEY, JSON.stringify({budgets, currentKey}));
-  // ── Sync income + expenses to Supabase profile (silent, no confirmation needed — budget is the source of truth) ──
-  if (window._toolUser && currentKey && budgets[currentKey]) {
-    const _t = calcTotals(budgets[currentKey]);
-    const _profilePatch = {};
-    if (_t.totalIncome  > 0) _profilePatch.monthly_income   = _t.totalIncome;
-    if (_t.totalExpenses > 0) _profilePatch.monthly_expenses = _t.totalExpenses;
-    if (Object.keys(_profilePatch).length) {
-      _profilePatch.fin_updated_at = new Date().toISOString();
-      window._toolSb && window._toolSb.from('profiles').update(_profilePatch).eq('id', window._toolUser.id).then(() => {}).catch(() => {});
-    }
-  }
+  // ── Sync the shared figures to the profile — ASKING FIRST ──
+  //
+  // P0-5 (audit F7): this used to write silently on every save, which is how a
+  // member's shared income could change without them knowing they had changed
+  // it. Every other tool asks; the budget now asks too, with Yes as the obvious
+  // answer because the budget IS the source of truth for these figures.
+  //
+  // Two figures are added to what it writes. net_income comes from the
+  // "Salary (take-home)" row, and essential_expenses from the Needs group —
+  // between them they are what DTI, Affordability and the Emergency Fund view
+  // prefill from, so the budget filling them is what stops those three asking
+  // the member for figures the budget already holds.
+  kwSyncProfileFromBudget();
   // ── Upsert full budget state to Supabase tool_data ──
   (async function() {
     const _sb = window._toolSb;
@@ -640,6 +643,50 @@ function sortedKeys(){ return Object.keys(budgets).sort(); }
 // Categories for a group within a specific budget — the "Other" group also
 // carries that month's user-added custom expenses (b.customCats).
 function groupCats(b,g){ return g.id==='other' ? g.cats.concat(b.customCats||[]) : g.cats; }
+
+// Collect the shared figures a saved budget can supply, ask once, then write.
+// Returns early on anything missing rather than writing a partial patch.
+let _kwSyncPending = false;
+async function kwSyncProfileFromBudget(){
+  if (!window._toolUser || !window._toolSb || !currentKey || !budgets[currentKey]) return;
+  if (_kwSyncPending) return;                // one prompt per save, not one per keystroke
+  const b = budgets[currentKey];
+  const _t = calcTotals(b);
+  // The take-home row by its label — the same label seedFromAssessment writes.
+  // Absent (a member who renamed or removed it) simply means no net_income to
+  // offer, not a guess at which row is salary.
+  const _netRow = (b.income || []).find(r => /take-home/i.test(r.label || ''));
+  const patch = {};
+  if (_t.totalIncome   > 0) patch.monthly_income     = _t.totalIncome;
+  if (_t.totalExpenses > 0) patch.monthly_expenses   = _t.totalExpenses;
+  if (_netRow && pf(_netRow.amount) > 0) patch.net_income = pf(_netRow.amount);
+  if (_t.needsAmt      > 0) patch.essential_expenses = _t.needsAmt;
+  const cols = Object.keys(patch);
+  if (!cols.length) return;
+
+  // Nothing to ask about if none of it actually changed.
+  const changed = cols.filter(c => {
+    const prev = window._kwProfileSnapshot ? window._kwProfileSnapshot[c] : undefined;
+    return prev == null || Math.abs(Number(prev) - Number(patch[c])) >= 0.01;
+  });
+  if (!changed.length) return;
+
+  _kwSyncPending = true;
+  try {
+    const ok = await KWProfile.confirm(changed.map(c => ({ col: c, newVal: patch[c] })), {
+      title: 'Update your shared profile?',
+      body: 'Your budget is where these figures live. Saving them here fills in your debt-to-income, affordability and emergency fund so none of them has to ask you again.',
+      yesLabel: 'Yes, update',
+      noLabel: 'Just this budget',
+      defaultYes: true,
+    });
+    if (!ok) return;
+    patch.fin_updated_at = new Date().toISOString();
+    const { error } = await window._toolSb.from('profiles').update(patch).eq('id', window._toolUser.id);
+    if (error) { console.warn('Budget profile sync failed:', error); return; }
+    window._kwProfileSnapshot = { ...(window._kwProfileSnapshot || {}), ...patch };
+  } finally { _kwSyncPending = false; }
+}
 
 function calcTotals(b){
   const acts = b.actuals||{};
@@ -1531,8 +1578,14 @@ KW.reveal('.month-bar, #mainContent .card');
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
     // Load profile for header
-    _sb.from('profiles').select('first_name, last_name, monthly_income, net_income, other_income').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+    _sb.from('profiles').select('first_name, last_name, monthly_income, net_income, other_income, monthly_expenses, essential_expenses').eq('id', session.user.id).maybeSingle().then(({ data }) => {
       window._toolProfile = data;
+      // Seed the baseline the save-time sync compares against, so a budget that
+      // already matches the profile does not prompt for a change that is not one.
+      if (data) window._kwProfileSnapshot = {
+        monthly_income: data.monthly_income, monthly_expenses: data.monthly_expenses,
+        net_income: data.net_income, essential_expenses: data.essential_expenses,
+      };
       if (data) {
         const name = [data.first_name, data.last_name].filter(Boolean).join(' ');
         window._toolFullName = name || session.user.email;

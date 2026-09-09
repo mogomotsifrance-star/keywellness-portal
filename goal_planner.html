@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-profile-sync.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
@@ -264,10 +265,10 @@
         <label>Your Current Monthly Income</label>
         <div class="input-wrap">
           <span class="input-prefix">P</span>
-          <input type="text" id="monthlyIncome" value="15,000.00" inputmode="decimal" autocomplete="off"
+          <input type="text" id="monthlyIncome" value="" placeholder="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
-        <div class="hint">Used to show goals as % of income</div>
+        <div class="hint" id="monthlyIncomeHint">Used to show goals as % of income</div>
       </div>
     </div>
   </div>
@@ -468,7 +469,8 @@ function loadGoals() {
     if (data.settings) {
       document.getElementById('globalInflation').value = data.settings.inflation || '5.5';
       document.getElementById('globalReturn').value    = data.settings.ret       || '8';
-      document.getElementById('monthlyIncome').value   = data.settings.income    || '15,000.00';
+      // P0-5: empty, never a placeholder figure. A saved blank stays blank.
+      document.getElementById('monthlyIncome').value   = data.settings.income    || '';
     }
     renderAll();
   } catch { goals = []; }
@@ -1202,8 +1204,22 @@ document.getElementById('monthlyIncome').addEventListener('blur',    () => { if 
   _sb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) { window.location.href = 'index.html'; return; }
     window._toolUser = session.user;
-    const { data: profileData } = await _sb.from('profiles').select('first_name, last_name, monthly_income, goals').eq('id', session.user.id).maybeSingle();
+    const { data: profileData } = await _sb.from('profiles').select('first_name, last_name, net_income, monthly_income, goals, fin_updated_at').eq('id', session.user.id).maybeSingle();
     window._toolProfile = profileData;
+    // P0-5 (audit F7, F8): income was selected here and never used, while the
+    // field opened on an invented P15,000. Prefill it from the member's own
+    // figure and SAY WHERE IT CAME FROM — an unattributed number in a money
+    // field reads as one the member entered themselves.
+    await (async () => {
+      const el = document.getElementById('monthlyIncome');
+      if (!el || el.value.trim()) return;                 // never overwrite a saved figure
+      const val = Number(profileData?.net_income || profileData?.monthly_income || 0);
+      if (!(val > 0)) return;
+      el.value = val.toLocaleString('en-BW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const hint = document.getElementById('monthlyIncomeHint');
+      if (hint) hint.textContent = KWSource.line(profileData, await KWSource.budgetSaved()) +
+        ' — adjust if it has changed. Used to show goals as % of income.';
+    })();
     if (profileData) {
       const name = [profileData.first_name, profileData.last_name].filter(Boolean).join(' ');
       window._toolFullName = name || session.user.email;
