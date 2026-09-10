@@ -703,8 +703,15 @@ rollout on its own.
 - **Stays** — Live-score computation (already recomputes from tools). Existing
   members keep their scores.
 - **If wrong** — Existing members with only an old assessment see "not yet" on
-  dimensions they had scores for. Mitigation: treat a pre-change assessment as 3
-  sources for 90 days.
+  dimensions they had scores for. Mitigation: a pre-change assessment satisfies
+  the score gate on its own, **indefinitely** — there is no expiry. (The audit as
+  first written put a 90-day limit on that; it was wrong, and was removed on
+  10 Sep 2026. Taking a score away at day 91 punishes a member for going quiet,
+  and the figures behind it are still the last ones they gave us. An old score is
+  dated, not false.) What it gets instead is its date, shown beneath the gauge —
+  "from your assessment on 20 June" — with the budget nudge left live so
+  refreshing it is one click. Dimensions with no data still read "not yet"; the
+  grandfather rule opens the gate, it does not invent figures.
 - **Undo** — Front-end only; revert. Rows written by the habits check are ordinary
   assessment rows.
 

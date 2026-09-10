@@ -5,8 +5,10 @@
      · the score gate. A wellness score out of 100 is shown only once the four
        sources it depends on exist — EXCEPT for a member assessed before P0-3,
        whose figures were given inside the assessment and whose score must not
-       vanish. That exception is time-limited to 90 days, and must not apply to
-       a habits-only row. Three separate ways to get this wrong, all asserted;
+       vanish. That exception has NO expiry: an old assessment is dated, not
+       false, and a score is not taken away from someone who went quiet. What it
+       gets instead is its date on the gauge and a live budget nudge. It must
+       still not apply to a habits-only row. Four ways to get this wrong;
      · the two-nudge rule. The strip used to carry up to nine at once, ordered
        by the order they happened to be written;
      · an absent figure reads "not yet", never a dash in a warning colour. A red
@@ -232,21 +234,65 @@ async function nudgeIds(page) {
       view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
   }
 
-  /* ── 5. The grandfather rule, three ways ─────────────────────── */
+  /* ── 5. The grandfather rule ──────────────────────────────────
+     It has no expiry. A score earned from figures the member typed into the old
+     assessment stays theirs; what it carries is a date, so they can judge its
+     age themselves, and a budget nudge, so refreshing it is one click. */
   {
-    const { view } = await dash(browser, { assessments: [legacyRow(10)] });
+    const { page, view } = await dash(browser, { assessments: [legacyRow(10)] });
     check('25 a pre-change assessment keeps its score with no other source',
       view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
+    check('25b and the score is shown with the date it came from',
+      /from your assessment on \d{1,2} [A-Z][a-z]+/.test(view.text),
+      view.text.slice(0, 200));
+    const titles = await nudgeIds(page);
+    check('25c with the budget nudge still live beside it',
+      titles.includes('budget'), JSON.stringify(titles));
+    await page.close();
   }
   {
+    /* The case the 90-day rule used to break: two years dormant. The score is
+       still the last true thing the member told us, so it stays — dated. */
+    const { page, view } = await dash(browser, { assessments: [legacyRow(730)] });
+    check('26 and it never expires, however old the assessment is',
+      view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
+    check('26b a date from an earlier year carries its year',
+      /from your assessment on \d{1,2} [A-Z][a-z]+ \d{4}/.test(view.text),
+      view.text.slice(0, 200));
+    const titles = await nudgeIds(page);
+    check('26c the budget nudge is live here too',
+      titles.includes('budget'), JSON.stringify(titles));
+    await page.close();
+  }
+  {
+    /* Dimensions are not backfilled by the grandfather rule: a source the member
+       has never given still reads "not yet" in the hub, not a number or a dash. */
     const { view } = await dash(browser, { assessments: [legacyRow(120)] });
-    check('26 but not once it is over 90 days old',
-      view.gauge === false && /Your picture/.test(view.text), view.text.slice(0, 140));
+    const empties = view.cards.filter(c => c.val === 'not yet').map(c => c.lbl);
+    check('26d dimensions with no data still read "not yet"',
+      empties.length >= 3 && !view.cards.some(c => c.val === '—'),
+      JSON.stringify(view.cards.map(c => c.lbl + '=' + c.val)));
+  }
+  {
+    /* Once the four sources are in, the score stands on its own and the date
+       line would be telling the member to refresh what they just refreshed. */
+    const { view } = await dash(browser, {
+      assessments: [legacyRow(120)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI },
+    });
+    check('26e once the sources are in, the score drops the "from your assessment" line',
+      view.gauge === true && !/from your assessment on/.test(view.text),
+      view.text.slice(0, 200));
   }
   {
     const { view } = await dash(browser, { assessments: [habitsRow(10)] });
     check('27 and a habits-only row never grandfathers, however recent',
       view.gauge === false && /Your picture — 1 of 6/.test(view.text), view.text.slice(0, 140));
+  }
+  {
+    const { view } = await dash(browser, { assessments: [habitsRow(400)] });
+    check('27b nor an old one — age was never what made a row count',
+      view.gauge === false && /Your picture/.test(view.text), view.text.slice(0, 140));
   }
 
   /* ── 6. A full picture ───────────────────────────────────────── */

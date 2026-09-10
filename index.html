@@ -3111,15 +3111,41 @@ VIEWS['dashboard'] = async function () {
   // assessed BEFORE this change gave their figures inside the assessment, so
   // their score was honestly earned and must not vanish. `_habits_only` marks
   // rows written by the new behaviour-only check (P0-3); a row without it is a
-  // pre-change assessment and satisfies the gate on its own for 90 days, by
-  // which time the nudges will have collected the real figures.
+  // pre-change assessment and satisfies the gate on its own.
+  //
+  // INDEFINITELY, with no expiry. An earlier draft let the grandfather lapse at
+  // 90 days, which would have taken a real score away from a member who had done
+  // nothing wrong — the figures behind it were still the last ones they gave us,
+  // and going quiet is not the same as the score becoming false. What that score
+  // needs is not deletion but a DATE: it is shown with the day it was assessed
+  // (`_scoreFromOldAssessment` below), so the member can see how old it is and
+  // decide, and the budget nudge stays live in the strip above so refreshing it
+  // is the obvious next step. Dimensions with no data still read "not yet".
   const _latestRow    = state.assessments?.[0] || null;
   const _rowIsHabits  = _latestRow?.answers?._habits_only === true;
   const _rowAgeDays   = _latestRow?.created_at ? daysSince(_latestRow.created_at) : null;
-  const grandfathered = !!_latestRow && !_rowIsHabits && _rowAgeDays !== null && _rowAgeDays <= 90;
-  const scoreReady    = grandfathered ||
-    (SOURCES[0].done && SOURCES[1].done && SOURCES[2].done && SOURCES[3].done);
+  const grandfathered = !!_latestRow && !_rowIsHabits;
+  const _sourcesReady = SOURCES[0].done && SOURCES[1].done && SOURCES[2].done && SOURCES[3].done;
+  const scoreReady    = grandfathered || _sourcesReady;
   const showScore     = scoreReady && wellScore !== null;
+
+  // True only while the score is standing on that pre-change row ALONE. Once the
+  // four sources are in, the score is current in its own right and the date line
+  // would be telling the member to refresh something they have just refreshed.
+  const _scoreFromOldAssessment = showScore && grandfathered && !_sourcesReady && !wellIsLive;
+
+  // "20 June", or "20 June 2025" once it is not this year — a bare day and month
+  // on a two-year-old assessment reads as recent, which is the opposite of the
+  // point of showing it.
+  const _oldAssessDate = (() => {
+    const iso = _latestRow?.created_at;
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    const sameYear = d.getFullYear() === new Date().getFullYear();
+    return d.toLocaleDateString('en-GB',
+      sameYear ? { day:'numeric', month:'long' } : { day:'numeric', month:'long', year:'numeric' });
+  })();
 
   // The written starting point from the habits check, for the gauge slot.
   const startingPoint = (() => {
@@ -3491,7 +3517,15 @@ VIEWS['dashboard'] = async function () {
         <div class="card-title" style="margin-bottom:10px">Wellness Score</div>
         ${svgGauge(wellScore, scoreBand(wellScore).color)}
         <div style="font-size:14px;font-weight:700;color:${scoreBand(wellScore).color};margin-top:4px">${scoreBand(wellScore).label}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>
+        <!-- P0-4: where the score comes from. A score standing on a pre-change
+             assessment alone is real but dated, so it is shown WITH its date and
+             what would refresh it, rather than expiring silently. -->
+        ${_scoreFromOldAssessment && _oldAssessDate ? `
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.5">
+          from your assessment on ${escHtml(_oldAssessDate)}<br>
+          <span style="color:var(--gold);font-weight:600">Add your budget to bring it up to date</span>
+        </div>` : `
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${wellDate ? 'Assessed '+fmtDate(wellDate) : ''}</div>`}
         ${wellIsLive ? `<div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:4px" title="Recalculated from your latest tool figures — was ${state.liveWellness?.assessedScore} at assessment">⚡ Live — updates as you use your tools</div>` : ''}
         <button class="btn btn-outline btn-sm" style="margin-top:12px" onclick="openTool('wellness_assessment.html')">Re-check habits</button>
       </div>` : `

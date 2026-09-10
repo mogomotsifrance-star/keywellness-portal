@@ -22,9 +22,14 @@ schema-side verification is already done and recorded below.**
 | Member RLS permits the whole P0 write path | ✅ `assessments_own`, `profiles_own`, `tool_data_self`, `ef_own` are all `ALL` |
 | Rows already carrying `_habits_only` | 0 — nothing has run the new code yet |
 
-**Grandfather rule, against real data:** 29 members have an assessment; the
-latest row for **all 29** is within 90 days, so **no existing member loses their
-score on the day this ships**. See the open issue below about what happens next.
+**Grandfather rule, against real data:** 29 members have an assessment, and none
+of them loses their score — **not on ship day and not later**. The rule has no
+expiry (changed 10 Sep 2026; the 90-day limit in the original spec was wrong).
+An old assessment is dated, not false, so the score stays and carries its date
+on the gauge — "from your assessment on 20 June" — with the budget nudge live
+beside it. The oldest latest assessment is 80 days and 13 of the 29 are past 60;
+under the old rule they would each have gone scoreless as they crossed 90, in
+the middle of the Debswana rollout.
 
 ---
 
@@ -81,8 +86,10 @@ Record the address — it has to be deleted afterwards.
 
 ### The regression check that matters most
 Log in as an **existing member with an old full assessment**. Their score must
-still show. (Verified structurally above — all 29 are inside the window — but
-worth seeing once.)
+still show, with **"from your assessment on <date>"** beneath the gauge and the
+**budget nudge still live** in the strip above. Dimensions they have no data for
+still read "not yet" — the grandfather rule opens the score gate, it does not
+invent figures.
 
 ### Afterwards
 Send me the account email and I will verify the written rows via Supabase MCP —
