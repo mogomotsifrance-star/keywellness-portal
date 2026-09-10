@@ -32,6 +32,28 @@ score on the day this ships**. See the open issue below about what happens next.
 
 Ten minutes, one fresh account, on the **test site** (not live).
 
+### Prerequisite — already applied to live (10 Sep 2026)
+
+Two SQL files, in this order. Both are done; this records what was run and how
+to check it, not work for you.
+
+| File | What it does | Why the walk needs it |
+|---|---|---|
+| `supabase_fix_admin_unit_create_toplevel.sql` | Fixes `admin_unit_create()`, which could not create a top-level company at all | The seed below is exactly that call |
+| `supabase_seed_test_org_units.sql` | Adds "Test Co Head Office" under Test Co, with departments "Finance" and "Operations" | Gives `TEST-1234` a unit and departments, so step 3 proves the removal |
+
+Confirm before you start (the verification query at the foot of the seed file):
+
+```
+unit               | Test Co Head Office | (top level — a leaf) | true
+dept               | Finance             | Test Co Head Office  | true
+dept               | Operations          | Test Co Head Office  | true
+members_on_a_unit  | 0                   | (expect 0 — nothing was reassigned)
+```
+
+Verified live on 10 Sep 2026: exactly those four rows. Test Co's 22 existing
+members still have `org_unit_id` null — nothing was reassigned.
+
 ### Setup
 Use a real mailbox you control. Email confirmation is **off** (see
 `doSignup()` in `index.html`), so signup hands back a live session immediately.
@@ -43,7 +65,7 @@ Record the address — it has to be deleted afterwards.
 |---|---|---|
 | 1 | Sign up with company code `TEST-1234` | Straight into "Before you start". **No pop-up at any point** — not name, consent, gender or video |
 | 2 | "Before you start" | Three lines; Continue disabled until "I understand" is ticked; the full statement expands inline |
-| 3 | "About you" | One screen: first name, age, employment, goals, then last name and gender below a rule with "Prefer not to say" pre-selected. **No company or department question. No Pula field** |
+| 3 | "About you" | One screen: first name, age, employment, goals, then last name and gender below a rule with "Prefer not to say" pre-selected. **No company or department question** — even though Test Co now has both (see Prerequisite). **No Pula field** |
 | 4 | Finish | Lands on the habits check |
 | 5 | Habits check — use "Do this later" | Returns to the dashboard. Nothing lost; reopening resumes the draft |
 | 6 | Dashboard | Reads **"Your picture — 0 of 6"**. **No score.** At most two nudges. Left navigation fully live |
@@ -70,8 +92,11 @@ admin.html → Users → Delete, which routes to `admin_user_delete()`. Do not
 delete by hand: `CLAUDE.md` records twenty-one foreign keys and two tables with
 no key at all.
 
-### One thing this walk cannot prove
-**Test Co has no `org_units`**, so the company/department steps never fired for
-`TEST-1234` even before P0-1 removed them. To see that removal exercised you
-need an org that has units — Sedimosa. Worth one extra pass there if the
-department question is the part Debswana specifically objected to.
+### The department removal is now provable under Test Co
+Test Co used to have **zero `org_units`**, so the company and department steps
+never fired for `TEST-1234` even before P0-1 removed them — the removal Debswana
+specifically objected to was unverifiable. The prerequisite seed above fixes
+that: Test Co now has one unit carrying two departments, so step 3's "no company
+or department question" is a real check against an org that *has* both, not an
+org that never asked. **Do not walk this under Sedimosa or Debswana instead** —
+a test account would land in that client's member list and their aggregates.
