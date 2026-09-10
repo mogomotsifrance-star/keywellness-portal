@@ -1448,6 +1448,9 @@ async function syncProgressBadges() {
     if (def.id === 'investor' && mm.detail?.quarters) snapshot[def.id].quarters = mm.detail.quarters;
   }
   state.badgeProgress = snapshot;
+  // Badges (and the points behind them) were just awarded, after the dashboard
+  // finished painting. Repaint the row so it agrees with the sidebar.
+  try { kwPaintStatRow(); } catch (_) {}
   KWBadges.saveProgress(snapshot);
 }
 
@@ -2042,7 +2045,30 @@ function buildNav(current) {
     </div>`).join('');
   document.getElementById('sb-pts').textContent = (state.points && state.points.total) || 0;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
+  kwPaintStatRow();
   kwRenderRoleSwitcher();
+}
+
+// The dashboard's Points / Badges / Assessments / Check-ins row, painted from
+// the same `state` the sidebar chip above reads, by the same function.
+//
+// It used to read 0 / 0 / 0 while the sidebar said 150, which is not a
+// formatting problem: the row is painted once, inside the dashboard's async
+// render, and two things land AFTER that. loadBadgeData() -> syncProgressBadges()
+// is deliberately not awaited (a slow query must not hold up the dashboard) and
+// it is what awards badges and points; and the video-progress path bumps the
+// sidebar chip's text directly. So by the time a member came back from the
+// habits check, the sidebar had the new total and the row still held the values
+// from before the award.
+//
+// Painting from one function called on every buildNav() means the two cannot
+// disagree. It is a no-op on any view that is not the dashboard.
+function kwPaintStatRow() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('stat-val-points',   (state.points && state.points.total) || 0);
+  set('stat-val-badges',   badgeStats().earnedCount);
+  set('stat-val-assess',   (state.assessments || []).length);
+  set('stat-val-checkins', (state.checkins || []).length);
 }
 
 // Mobile "More" sheet — makes every sidebar page reachable on mobile without crowding the bottom bar
@@ -3642,10 +3668,10 @@ VIEWS['dashboard'] = async function () {
 
     <!-- Stats row -->
     <div class="stat-grid">
-      <div class="stat-box gold"><div class="stat-val" id="stat-val-points">0</div><div class="stat-lbl">Points</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-badges">0</div><div class="stat-lbl">Badges</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-assess">0</div><div class="stat-lbl">Assessments</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-checkins">0</div><div class="stat-lbl">Check-ins</div></div>
+      <div class="stat-box gold"><div class="stat-val" id="stat-val-points">${(state.points && state.points.total) || 0}</div><div class="stat-lbl">Points</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-badges">${badgeStats().earnedCount}</div><div class="stat-lbl">Badges</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-assess">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-checkins">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
     </div>
 
     <!-- Quick actions -->
@@ -3661,6 +3687,10 @@ VIEWS['dashboard'] = async function () {
 
     KW.reveal('.hub-card');
     KW.reveal('.stat-box', { stagger: 60 });
+    // The figures are already in the markup above, so this is decoration. If
+    // requestAnimationFrame never runs (background tab, reduced motion, a
+    // re-render mid-animation) the correct number is what stays on screen —
+    // which is the opposite of before, when a skipped animation left "0".
     KW.countUp(document.getElementById('stat-val-points'), (state.points && state.points.total) || 0);
     KW.countUp(document.getElementById('stat-val-badges'), badgeStats().earnedCount);
     KW.countUp(document.getElementById('stat-val-assess'), state.assessments.length);
@@ -4928,8 +4958,13 @@ async function lpSendProgressPing(force) {
     state.lp.watch[id] = Math.max(state.lp.watch[id] || 0, pos);
     if (data && data.credited) {
       showToast(`+${data.points_awarded} pts · Learning`);
+      // Move `state` first, then paint from it. Bumping only the chip's text
+      // left state.points behind, so the dashboard stats row (and anything else
+      // reading state) disagreed with the sidebar until the next full load.
+      state.points = { ...state.points, total: ((state.points && state.points.total) || 0) + (data.points_awarded || 0) };
       const el = document.getElementById('sb-pts');
-      if (el) { const cur = parseInt(el.textContent, 10); if (!isNaN(cur)) el.textContent = cur + (data.points_awarded || 0); }
+      if (el) el.textContent = (state.points && state.points.total) || 0;
+      try { kwPaintStatRow(); } catch (_) {}
     }
   } catch (e) { /* never interrupt playback for a progress ping */ }
 }
