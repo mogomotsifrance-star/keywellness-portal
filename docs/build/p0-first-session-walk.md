@@ -77,12 +77,25 @@ Record the address — it has to be deleted afterwards.
 | 7 | Open Learn, Tools, Book Session | All render. **No page is locked** |
 | 8 | Habits check — complete it | Eleven asks, no numbers. Ends on "Your starting point" with sentences, no score ring, no Savings Rate / DTI / Net Worth strip |
 | 9 | Dashboard again | "Your picture — 1 of 6" with the starting-point text. Still no score |
+| 9a | Stats row, same screen | **Points / Badges / Assessments agree with the sidebar chip.** Assessments reads 1, not 0. This is the fix of 10 Sep — the row was painted before the badge award landed and never repainted |
+| 9b | "What To Do Next", same screen | Leads with the **same source the nudge above asks for**, not "Calculate your net worth". Three items at most, and nothing here repeats a request the nudge strip is already making |
+| 9c | Notification bell | **No "Complete Your Assessment"** — it is gone once the row exists, and the wording is the habits check either way. No "8-dimension", no promise of a score |
+| 9d | Habits results, scroll to the action plan | **No action contradicts a printed strength.** If it says "Strength: Emergency Fund — this is the habit you already have", "Start an emergency fund" must not appear below it |
 | 10 | Budget planner | Trust line under the heading. Enter income + spending, save |
 | 11 | Save prompt | Asks before writing to your profile, with Yes as the default. Escape declines |
 | 12 | Emergency fund | Essential costs already prefilled from the budget's Needs total |
 | 13 | DTI | Income prefilled, labelled **"from your budget"** (not "from your Budget Planner" as static text). Try "I have no debts" |
 | 14 | Dashboard | Picture advances; score appears only once habits + budget + EF + debts are all in |
 | 15 | Goal Planner / Retirement | **Neither opens with an invented figure.** Retirement refuses to project until you give it an age and a retirement age |
+
+### Re-run 1–9 after the 10 Sep fixes
+
+Four first-session defects were found on a fresh `TEST-1234` walk that morning
+and fixed the same day: the notification panel's stale entries, "What To Do
+Next" leading with the wrong source, the stats row reading 0 against a sidebar
+showing 150, and a habits action contradicting a printed strength. Steps 9a–9d
+above are those four. Nothing else in 1–9 changed, but re-run the lot — three of
+the four were in code the earlier walk passed through without looking at.
 
 ### The regression check that matters most
 Log in as an **existing member with an old full assessment**. Their score must

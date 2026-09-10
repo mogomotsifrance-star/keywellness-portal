@@ -350,6 +350,83 @@ async function answerAll(page, level, covers) {
     await page.close();
   }
 
+  /* ── 6. A strength is not also an instruction ──────────────────
+     The results screen could print "Strength: Emergency Fund — this is the
+     habit you already have" and, in the action plan below, "Start an emergency
+     fund". The strength rule lived in buildInsights and the action list simply
+     iterated every dimension, so the two never consulted each other.
+
+     Driven directly against buildInsights/buildActions with a synthetic dims
+     array: it pins the rule itself rather than one route through the form. */
+  {
+    const { page, errors } = await boot(browser, {});
+    const probe = await page.evaluate(() => {
+      /* Emergency clearly the strongest, everything else below it. */
+      const dims = [
+        { id:'emergency',  label:'Emergency Fund',  score: 90 },
+        { id:'income',     label:'Income',          score: 40 },
+        { id:'savings',    label:'Savings',         score: 35 },
+        { id:'debt',       label:'Debt',            score: 30 },
+        { id:'retirement', label:'Retirement',      score: 25 },
+        { id:'goals',      label:'Goals',           score: 20 },
+        { id:'spending',   label:'Spending',        score: 15 },
+        { id:'insurance',  label:'Insurance',       score: 10 },
+      ];
+      const d = { habitsOnly: true, insCount: 3, essentialExp: 1 };
+      return {
+        strengthId: window.habitsStrengthId(dims),
+        insights: window.buildInsights(dims, d).map(i => i.title),
+        actions:  window.buildActions(dims, d).map(a => a.title),
+        /* Nothing clears 60: no strength, so every dimension keeps its action. */
+        noneHigh: (() => {
+          const flat = dims.map(x => ({ ...x, score: 30 }));
+          return { strengthId: window.habitsStrengthId(flat),
+                   actions: window.buildActions(flat, d).map(a => a.title) };
+        })(),
+      };
+    });
+    check('49 the strongest habit above 60 is named the strength',
+      probe.strengthId === 'emergency', JSON.stringify(probe.strengthId));
+    check('50 and the insights say so',
+      probe.insights.some(t => /Strength: Emergency Fund/.test(t)), JSON.stringify(probe.insights));
+    check('51 while the action plan no longer tells them to start one',
+      !probe.actions.includes('Start an emergency fund'), JSON.stringify(probe.actions));
+    check('52 every other dimension keeps its action',
+      probe.actions.length === 7, JSON.stringify(probe.actions));
+    check('53 with nothing above 60 there is no strength to contradict',
+      probe.noneHigh.strengthId === null, JSON.stringify(probe.noneHigh.strengthId));
+    check('54 so the emergency action comes back',
+      probe.noneHigh.actions.includes('Start an emergency fund'), JSON.stringify(probe.noneHigh.actions));
+    check('55 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* And once through the real form, so the wiring is proven too. All-high
+       answers make the last-sorted dimension a strength. */
+    const { page } = await boot(browser, {});
+    await answerAll(page, 'high', 6);
+    await page.evaluate(() => window.calculateWellness());
+    await page.waitForTimeout(600);
+    const seen = await page.evaluate(() => {
+      const txt = document.getElementById('stepResults')?.textContent || '';
+      const m = txt.match(/Strength:\s*([A-Za-z &]+?)\s*This is the habit/);
+      return { strengthLabel: m ? m[1].trim() : null,
+               actions: [...document.querySelectorAll('#stepResults .action-title, #stepResults h4')]
+                          .map(n => n.textContent.trim()),
+               text: txt };
+    });
+    const contradictions = [
+      ['Emergency Fund', 'Start an emergency fund'],
+      ['Debt Management', 'List every debt in one place'],
+      ['Savings',         'Move savings to payday, not month end'],
+    ];
+    const clash = contradictions.find(([label, act]) =>
+      seen.strengthLabel && seen.strengthLabel.includes(label) && seen.text.includes(act));
+    check('56 through the real form, no action contradicts the printed strength',
+      !clash, JSON.stringify({ strength: seen.strengthLabel, clash }));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
