@@ -7395,30 +7395,60 @@ function initProfileUI() {
 // ══════════════════════════════════════════════════
 //  NOTIFICATIONS
 // ══════════════════════════════════════════════════
+// Behavioural nudges for the notification panel.
+//
+// EVERY FLAG HERE READS `state`, NOT localStorage. That is the fix, not a
+// stylistic preference: each of these entries used to test a localStorage cache
+// written by a tool page in THIS browser, so an entry stayed live after the
+// member had done the thing — the cache is written on a different page, or not
+// at all, or the member signed in on a second device. "Complete Your
+// Assessment" persisted after completion for exactly that reason. `state` is
+// loaded from Supabase at login by loadAllData(), so it is what the member
+// actually has, wherever they are signed in.
+//
+// The copy and the thresholds also track the dashboard nudge ladder in
+// VIEWS['dashboard']. Two places asking for the same thing in different words,
+// or at different ages, reads as two different demands.
 function generateSmartNotifs() {
   const notifs = [];
   const now = Date.now();
+  const _daysAgo = iso => iso ? Math.floor((now - new Date(iso).getTime()) / 86400000) : null;
 
-  // Assessment reminder
-  const ar = safeParseLS('kw_assessment_result', null);
-  if (!ar) {
-    notifs.push({id:'n_assess',title:'Complete Your Assessment',desc:'Take the 8-dimension wellness assessment to see your score.',time:'Now',link:'assessment'});
+  // ── Habits check ────────────────────────────────────────────────────────
+  // P0-3 replaced the 16-figure assessment with an 11-question habits check and
+  // P0-4 gated the score behind four sources, so neither half of the old copy
+  // ("the 8-dimension wellness assessment", "to see your score") was true any
+  // more. Wording follows the dashboard's habits nudge.
+  const _latestAssess = state.assessments?.[0] || null;
+  if (!_latestAssess) {
+    notifs.push({id:'n_assess',title:'Habits check',desc:'Three minutes, no numbers — the first thing that builds your picture.',time:'Now',link:'assessment'});
   } else {
-    const daysSince = Math.floor((now - new Date(ar.date).getTime()) / 86400000);
-    if (daysSince >= 30) {
-      notifs.push({id:'n_reassess',title:'Reassess Your Wellness',desc:`Your last assessment was ${daysSince} days ago. Time for a check-in!`,time:`${daysSince}d ago`,link:'assessment'});
+    // 90 days, matching the dashboard ladder. It was 30 here, so the panel
+    // asked for a re-check two months before the dashboard did.
+    const age = _daysAgo(_latestAssess.created_at);
+    if (age !== null && age > 90) {
+      notifs.push({id:'n_reassess',title:'Re-check your habits',desc:`Your last habits check was ${age} days ago. Three minutes to bring it up to date.`,time:`${age}d ago`,link:'assessment'});
     }
   }
 
-  // Emergency fund reminder (legacy cache — coerce, may hold formatted strings)
-  const ef = safeParseLS('kw_ef_cache', null);
-  const _efCacheMonths = ef ? _num(ef.months) : 0;
-  if (ef && ef.months != null && String(ef.months) !== String(_efCacheMonths)) console.warn(`[KW] kw_ef_cache: coerced months "${ef.months}" → ${_efCacheMonths}`);
-  if (ef && ef.months != null && _efCacheMonths < 3) {
-    notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${_efCacheMonths.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+  // ── Emergency fund ──────────────────────────────────────────────────────
+  // Reads the emergency_fund row rather than the kw_ef_cache legacy key, and
+  // only once a monthly figure exists: without one there is no months-of-cover
+  // to report, and "0.0 months saved" about a fund whose size we were never
+  // given is the class of claim P0 exists to stop.
+  const _ef        = state.ef || state._efRow || null;
+  const _efMonthly = _ef ? _num(_ef.monthly) : 0;
+  if (_ef && _efMonthly > 0) {
+    const _efMonths = _num(_ef.current_savings) / _efMonthly;
+    if (_efMonths < 3) {
+      notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${_efMonths.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+    }
   }
 
-  // Goals reminder
+  // ── Goals ───────────────────────────────────────────────────────────────
+  // goal_planner is not among the tool rows loadAllData() caches, so this one
+  // stays on localStorage. The `!g.target` guard already excludes goals seeded
+  // from "About you" with no figure on them, which is what keeps it honest.
   const gd = safeParseLS('kw_goals', {});
   const goals = gd.goals || [];
   const behind = goals.filter(g => {
@@ -7429,15 +7459,20 @@ function generateSmartNotifs() {
     notifs.push({id:'n_goals',title:'Goal Progress Needed',desc:`${behind.length} goal(s) are under 10% funded. Open Goal Planner to review.`,time:'Now',link:'tools'});
   }
 
-  // Stress check-in
-  const sc = safeParseLS('financial_stress_v1', []);
-  if (!sc.length) {
-    notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'checkin'});
+  // ── Stress check-in ─────────────────────────────────────────────────────
+  // Reads stress_logs, and waits for a budget first, exactly as the dashboard
+  // ladder does. Asking a member on their first morning how money is feeling,
+  // before they have entered anything at all, is a demand with nothing behind it.
+  const _bd        = state.toolData?.budget_planner;
+  const _hasBudget = !!(_bd?.currentKey && _bd?.budgets?.[_bd.currentKey]);
+  if (_hasBudget && !(state.stressLogs || []).length) {
+    notifs.push({id:'n_stress',title:'Stress check-in',desc:'Thirty seconds: how is money feeling this fortnight?',time:'Now',link:'checkin'});
   }
 
-  // Booking reminder
-  const bk = safeParseLS('kw_bookings', []);
-  if (!bk.length) {
+  // ── Booking ─────────────────────────────────────────────────────────────
+  // state.bookings, not the kw_bookings cache — which is why this kept asking a
+  // member who had already booked.
+  if (!(state.bookings || []).length) {
     notifs.push({id:'n_book',title:'Book a Coaching Session',desc:'Work 1-on-1 with a Key Wellness coach to accelerate your goals.',time:'Now',link:'booking'});
   }
 
