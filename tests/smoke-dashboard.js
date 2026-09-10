@@ -143,6 +143,22 @@ async function nudgeIds(page) {
     [...document.querySelectorAll('#kw-nudge-strip [data-kw-nudge]')].map(n => n.dataset.kwNudge));
 }
 
+/* "What To Do Next" titles, in the order they are rendered. */
+async function actionTitles(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.next-action .na-title')].map(n => n.textContent.trim()));
+}
+
+/* The Points / Badges / Assessments / Check-ins row. */
+async function statRow(page) {
+  return page.evaluate(() => {
+    const v = id => document.getElementById(id)?.textContent.trim() ?? null;
+    return { points: v('stat-val-points'), badges: v('stat-val-badges'),
+             assess: v('stat-val-assess'), checkins: v('stat-val-checkins'),
+             sidebar: document.getElementById('sb-pts')?.textContent.trim() ?? null };
+  });
+}
+
 (async () => {
   const browser = await chromium.launch();
 
@@ -347,6 +363,106 @@ async function nudgeIds(page) {
       !/Check your insurance coverage/.test(view.text) && !/Re-take the assessment/i.test(view.text));
     const titles = await nudgeIds(page);
     check('36 the ladder is still capped at two', titles.length <= 2, JSON.stringify(titles));
+    await page.close();
+  }
+
+  /* ── 9. "What To Do Next" follows the nudge ladder ────────────
+     The complaint: a member at 1 of 6 was led with "Calculate your net worth"
+     while the nudge directly above asked for their budget. Two panels, two
+     different next steps, three sources apart. */
+  {
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const titles = await actionTitles(page);
+    const nudges = await nudgeIds(page);
+    check('37 the list is capped at three', titles.length <= 3, JSON.stringify(titles));
+    check('38 net worth no longer leads a member at 1 of 6',
+      titles[0] !== 'Calculate your net worth', JSON.stringify(titles));
+    /* At 1 of 6 the ladder's rung is the budget. Net worth is three sources
+       further down and goals further still, so neither is something to do
+       "next" — the panel falls back to the honest line instead. */
+    check('39 nor does it ask for anything the member has not reached',
+      !titles.includes('Calculate your net worth') &&
+      !titles.includes('Set your first financial goal'), JSON.stringify(titles));
+    check('39b what is left says where they are, without inventing a task',
+      titles.includes('Keep building your picture'), JSON.stringify(titles));
+    check('40 nothing here repeats a request the nudge strip is already making',
+      !(nudges.includes('networth') && titles.includes('Calculate your net worth')),
+      JSON.stringify({ nudges, titles }));
+    await page.close();
+  }
+  {
+    /* Five of six: the net-worth nudge is live, so its request must not also
+       appear as an action. This is the case the old `!nudges.some(...)` guard
+       covered for the habits check alone. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI, retirement: RET },
+    });
+    const nudges = await nudgeIds(page);
+    const titles = await actionTitles(page);
+    check('41 with the net-worth nudge live, the action is suppressed',
+      !nudges.includes('networth') || !titles.includes('Calculate your net worth'),
+      JSON.stringify({ nudges, titles }));
+    await page.close();
+  }
+  {
+    /* An OBSERVATION about a figure the member has given is not a duplicate of
+       a request, and must survive. A budget in deficit is a red flag; losing it
+       to tidy the page would be the worse bug. */
+    const DEFICIT = { currentKey: thisMonth,
+      budgets: { [thisMonth]: { income: [{ name: 'Salary', amount: 4000 }],
+                                expenses: { housing: 6000, food: 2000 } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: DEFICIT } });
+    const titles = await actionTitles(page);
+    check('42 a deficit is still reported, request-suppression notwithstanding',
+      titles.includes('Monthly budget is in deficit'), JSON.stringify(titles));
+    await page.close();
+  }
+
+  /* ── 10. The stats row agrees with the sidebar ────────────────
+     It read 0 POINTS / 0 BADGES / 0 ASSESSMENTS straight after the habits
+     check while the sidebar showed 150. The row is painted once, inside the
+     dashboard's async render, and two things land after that: the badge/points
+     award (loadBadgeData -> syncProgressBadges is deliberately not awaited),
+     and the video path, which used to bump the sidebar chip's text directly
+     without moving state.points.
+
+     So the regression is reproduced the way it actually happens — state moves
+     after the paint, and the sidebar is rebuilt. Before the fix the row keeps
+     the old figures and the two disagree; after it, one painter serves both. */
+  {
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const before = await statRow(page);
+    check('43 the first paint shows the real figures, not the markup placeholder',
+      before.assess === '1' && before.points === before.sidebar, JSON.stringify(before));
+
+    const after = await page.evaluate(() => {
+      /* Exactly what a late award does: move state, then rebuild the chrome. */
+      state.points = { ...(state.points || {}), total: 150 };
+      state.assessments = [...state.assessments, { id: 'a9', score: 55, cat_scores: {}, answers: {}, created_at: new Date().toISOString() }];
+      state.checkins = [{ id: 'c1' }];
+      buildNav('dashboard');
+      const v = id => document.getElementById(id)?.textContent.trim() ?? null;
+      return { points: v('stat-val-points'), badges: v('stat-val-badges'),
+               assess: v('stat-val-assess'), checkins: v('stat-val-checkins'),
+               sidebar: document.getElementById('sb-pts')?.textContent.trim() ?? null };
+    });
+    check('44 a late points award reaches the row, not just the sidebar chip',
+      after.points === '150' && after.sidebar === '150', JSON.stringify(after));
+    check('45 and so does a late assessment row',
+      after.assess === '2', JSON.stringify(after));
+    check('46 and a late check-in', after.checkins === '1', JSON.stringify(after));
+    check('47 the row and the sidebar never disagree about points',
+      after.points === after.sidebar, JSON.stringify(after));
+    await page.close();
+  }
+  {
+    /* A member with nothing: 0 is the truth here, not a stale paint. */
+    const { page } = await dash(browser, { assessments: [] });
+    const row = await statRow(page);
+    check('48 a genuine zero still reads zero', row.assess === '0', JSON.stringify(row));
+    check('49 and the sidebar still agrees', row.points === row.sidebar, JSON.stringify(row));
     await page.close();
   }
 

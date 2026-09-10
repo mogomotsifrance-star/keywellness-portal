@@ -3352,28 +3352,68 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Build "What to do next" actions ──
-  // P0-4: these are OBSERVATIONS about figures the member has given — a deficit,
-  // a high DTI — not requests for more. Requests belong to the nudge ladder
-  // above, and the two used to duplicate each other: "Complete your wellness
-  // assessment" appeared here at the same moment nudge 1 was asking for it.
-  // Capped at three so the page has one clear next thing, not four.
+  // P0-4 established that these are OBSERVATIONS about figures the member has
+  // already given — a deficit, a high DTI — while REQUESTS for something new
+  // belong to the nudge ladder above. Two things kept that from holding:
+  //
+  //   1. The list was in the order it happened to be written, so a member at
+  //      1 of 6 was led with "Calculate your net worth" while the nudge
+  //      directly above asked for their budget. Two panels, two different
+  //      next steps, three sources apart.
+  //   2. A few entries here really are requests, and one of them could be the
+  //      same request the ladder was making at that moment.
+  //
+  // So every action now carries `src` — the ladder id it belongs to, which
+  // gives it a position — and requests carry `ask:true`. The list is sorted
+  // into ladder order, and a REQUEST is dropped when it is already live as a
+  // nudge, OR when it sits FURTHER DOWN the ladder than the member has reached.
+  //
+  // That second rule is the one that fixes the reported case, and it is worth
+  // being explicit about. Ordering alone does not: at 1 of 6 the only two
+  // requests are net worth (rank 4) and goals (rank 7), so net worth still led
+  // — three sources ahead of the member, while the nudge above asked for their
+  // budget. The ladder already decides what comes next; this panel has no
+  // business jumping past it. So a request is only shown once the member has
+  // actually got there.
+  //
+  // Observations are never dropped by either rule: "your budget is in deficit"
+  // is not the same statement as "make a budget for this month", and losing a
+  // red flag to tidy the page would be the worse bug.
+  const LADDER_ORDER = ['habits','budget','emergency','debts','networth','retirement','stress','goals'];
+  const _rank = src => { const i = LADDER_ORDER.indexOf(src); return i === -1 ? LADDER_ORDER.length : i; };
+
   const actions = [];
-  if (!hasAssessment && !nudges.some(n => n.id === 'habits')) actions.push({ color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
-  if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
-  if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
-  if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
-  if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
-  if (!hasNWTool) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
-  if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
-  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
-  if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
-  if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
-  if (actions.length === 0) {
+  if (!hasAssessment) actions.push({ src:'habits', ask:true, color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
+  if (efMonths !== null && efMonths < 3) actions.push({ src:'emergency', color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
+  if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ src:'budget', color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
+  if (stressScore !== null && stressScore >= 7) actions.push({ src:'stress', color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
+  if (totalGoals === 0) actions.push({ src:'goals', ask:true, color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
+  if (!hasNWTool) actions.push({ src:'networth', ask:true, color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
+  if (budgetDTI !== null && budgetDTI > 50) actions.push({ src:'debts', color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
+  if (insCount !== null && insCount < 3) actions.push({ src:'insurance', color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
+  if (retSnap && retSnap.readinessPct < 50) actions.push({ src:'retirement', color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
+  if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ src:'budget', color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
+
+  // Drop the duplicates and the get-aheads, then order by the ladder. A stable
+  // sort keeps the written order within one ladder id, so the deficit still
+  // outranks the savings rate under "budget".
+  const _liveNudge = id => nudges.some(n => n.id === id);
+  // The first source the member still owes us — the ladder's current rung.
+  // Undefined at 6 of 6, which ranks past everything, so goals and stress
+  // (which are not sources) become askable exactly when nothing else is left.
+  const _nextRank = _rank((SOURCES.find(x => !x.done) || {}).id);
+  const orderedActions = actions
+    .filter(a => !(a.ask && (_liveNudge(a.src) || _rank(a.src) > _nextRank)))
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (_rank(x.a.src) - _rank(y.a.src)) || (x.i - y.i))
+    .map(x => x.a);
+
+  if (orderedActions.length === 0) {
     // Only claim this when the picture is actually complete. With one source of
     // six there is nothing to be on top of yet, and saying so would be the same
     // false confidence as a score built on no figures.
-    if (sourcesDone === SOURCES.length) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
-    else actions.push({ color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
+    if (sourcesDone === SOURCES.length) orderedActions.push({ src:null, color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+    else orderedActions.push({ src:null, color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
   }
 
   // ── Dashboard greeting ──
@@ -3568,7 +3608,7 @@ VIEWS['dashboard'] = async function () {
     <div class="card" style="margin-bottom:18px">
       <div class="card-title">🧭 What To Do Next</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Personalised based on your live tool data.</p>
-      ${actions.slice(0,3).map(a=>`
+      ${orderedActions.slice(0,3).map(a=>`
         <div class="next-action" onclick="${a.click}" style="cursor:pointer">
           <div class="na-dot" style="background:${a.color}"></div>
           <div>
