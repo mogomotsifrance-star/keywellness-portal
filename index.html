@@ -1448,6 +1448,9 @@ async function syncProgressBadges() {
     if (def.id === 'investor' && mm.detail?.quarters) snapshot[def.id].quarters = mm.detail.quarters;
   }
   state.badgeProgress = snapshot;
+  // Badges (and the points behind them) were just awarded, after the dashboard
+  // finished painting. Repaint the row so it agrees with the sidebar.
+  try { kwPaintStatRow(); } catch (_) {}
   KWBadges.saveProgress(snapshot);
 }
 
@@ -2042,7 +2045,30 @@ function buildNav(current) {
     </div>`).join('');
   document.getElementById('sb-pts').textContent = (state.points && state.points.total) || 0;
   document.getElementById('sb-email').textContent = currentUser?.email || '';
+  kwPaintStatRow();
   kwRenderRoleSwitcher();
+}
+
+// The dashboard's Points / Badges / Assessments / Check-ins row, painted from
+// the same `state` the sidebar chip above reads, by the same function.
+//
+// It used to read 0 / 0 / 0 while the sidebar said 150, which is not a
+// formatting problem: the row is painted once, inside the dashboard's async
+// render, and two things land AFTER that. loadBadgeData() -> syncProgressBadges()
+// is deliberately not awaited (a slow query must not hold up the dashboard) and
+// it is what awards badges and points; and the video-progress path bumps the
+// sidebar chip's text directly. So by the time a member came back from the
+// habits check, the sidebar had the new total and the row still held the values
+// from before the award.
+//
+// Painting from one function called on every buildNav() means the two cannot
+// disagree. It is a no-op on any view that is not the dashboard.
+function kwPaintStatRow() {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('stat-val-points',   (state.points && state.points.total) || 0);
+  set('stat-val-badges',   badgeStats().earnedCount);
+  set('stat-val-assess',   (state.assessments || []).length);
+  set('stat-val-checkins', (state.checkins || []).length);
 }
 
 // Mobile "More" sheet — makes every sidebar page reachable on mobile without crowding the bottom bar
@@ -3352,28 +3378,68 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Build "What to do next" actions ──
-  // P0-4: these are OBSERVATIONS about figures the member has given — a deficit,
-  // a high DTI — not requests for more. Requests belong to the nudge ladder
-  // above, and the two used to duplicate each other: "Complete your wellness
-  // assessment" appeared here at the same moment nudge 1 was asking for it.
-  // Capped at three so the page has one clear next thing, not four.
+  // P0-4 established that these are OBSERVATIONS about figures the member has
+  // already given — a deficit, a high DTI — while REQUESTS for something new
+  // belong to the nudge ladder above. Two things kept that from holding:
+  //
+  //   1. The list was in the order it happened to be written, so a member at
+  //      1 of 6 was led with "Calculate your net worth" while the nudge
+  //      directly above asked for their budget. Two panels, two different
+  //      next steps, three sources apart.
+  //   2. A few entries here really are requests, and one of them could be the
+  //      same request the ladder was making at that moment.
+  //
+  // So every action now carries `src` — the ladder id it belongs to, which
+  // gives it a position — and requests carry `ask:true`. The list is sorted
+  // into ladder order, and a REQUEST is dropped when it is already live as a
+  // nudge, OR when it sits FURTHER DOWN the ladder than the member has reached.
+  //
+  // That second rule is the one that fixes the reported case, and it is worth
+  // being explicit about. Ordering alone does not: at 1 of 6 the only two
+  // requests are net worth (rank 4) and goals (rank 7), so net worth still led
+  // — three sources ahead of the member, while the nudge above asked for their
+  // budget. The ladder already decides what comes next; this panel has no
+  // business jumping past it. So a request is only shown once the member has
+  // actually got there.
+  //
+  // Observations are never dropped by either rule: "your budget is in deficit"
+  // is not the same statement as "make a budget for this month", and losing a
+  // red flag to tidy the page would be the worse bug.
+  const LADDER_ORDER = ['habits','budget','emergency','debts','networth','retirement','stress','goals'];
+  const _rank = src => { const i = LADDER_ORDER.indexOf(src); return i === -1 ? LADDER_ORDER.length : i; };
+
   const actions = [];
-  if (!hasAssessment && !nudges.some(n => n.id === 'habits')) actions.push({ color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
-  if (efMonths !== null && efMonths < 3) actions.push({ color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
-  if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
-  if (stressScore !== null && stressScore >= 7) actions.push({ color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
-  if (totalGoals === 0) actions.push({ color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
-  if (!hasNWTool) actions.push({ color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
-  if (budgetDTI !== null && budgetDTI > 50) actions.push({ color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
-  if (insCount !== null && insCount < 3) actions.push({ color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
-  if (retSnap && retSnap.readinessPct < 50) actions.push({ color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
-  if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
-  if (actions.length === 0) {
+  if (!hasAssessment) actions.push({ src:'habits', ask:true, color:'var(--red)', title:'Start your habits check', desc:'Three minutes, no numbers — it is what orders everything else here.', click:`openTool('wellness_assessment.html')` });
+  if (efMonths !== null && efMonths < 3) actions.push({ src:'emergency', color:'var(--red)', title:'Emergency fund below 3 months', desc:'This is your #1 priority. Build to 6 months of essential expenses.', click:`go('emergency')` });
+  if (budgetSurplus !== null && budgetSurplus < 0) actions.push({ src:'budget', color:'var(--red)', title:'Monthly budget is in deficit', desc:`You're spending more than you earn. Review your budget now.`, click:`openTool('budget_planner.html')` });
+  if (stressScore !== null && stressScore >= 7) actions.push({ src:'stress', color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
+  if (totalGoals === 0) actions.push({ src:'goals', ask:true, color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
+  if (!hasNWTool) actions.push({ src:'networth', ask:true, color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
+  if (budgetDTI !== null && budgetDTI > 50) actions.push({ src:'debts', color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
+  if (insCount !== null && insCount < 3) actions.push({ src:'insurance', color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
+  if (retSnap && retSnap.readinessPct < 50) actions.push({ src:'retirement', color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
+  if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ src:'budget', color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
+
+  // Drop the duplicates and the get-aheads, then order by the ladder. A stable
+  // sort keeps the written order within one ladder id, so the deficit still
+  // outranks the savings rate under "budget".
+  const _liveNudge = id => nudges.some(n => n.id === id);
+  // The first source the member still owes us — the ladder's current rung.
+  // Undefined at 6 of 6, which ranks past everything, so goals and stress
+  // (which are not sources) become askable exactly when nothing else is left.
+  const _nextRank = _rank((SOURCES.find(x => !x.done) || {}).id);
+  const orderedActions = actions
+    .filter(a => !(a.ask && (_liveNudge(a.src) || _rank(a.src) > _nextRank)))
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (_rank(x.a.src) - _rank(y.a.src)) || (x.i - y.i))
+    .map(x => x.a);
+
+  if (orderedActions.length === 0) {
     // Only claim this when the picture is actually complete. With one source of
     // six there is nothing to be on top of yet, and saying so would be the same
     // false confidence as a score built on no figures.
-    if (sourcesDone === SOURCES.length) actions.push({ color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
-    else actions.push({ color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
+    if (sourcesDone === SOURCES.length) orderedActions.push({ src:null, color:'var(--green)', title:'You are on top of your finances! 🎉', desc:'All key areas are tracked. Keep up your fortnightly check-in and review your goals.', click:`go('checkin')` });
+    else orderedActions.push({ src:null, color:'var(--gold)', title:'Keep building your picture', desc:`${sourcesDone} of 6 done. Each one fills in the tools that come after it, so nothing is asked twice.`, click:`go('tools')` });
   }
 
   // ── Dashboard greeting ──
@@ -3568,7 +3634,7 @@ VIEWS['dashboard'] = async function () {
     <div class="card" style="margin-bottom:18px">
       <div class="card-title">🧭 What To Do Next</div>
       <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Personalised based on your live tool data.</p>
-      ${actions.slice(0,3).map(a=>`
+      ${orderedActions.slice(0,3).map(a=>`
         <div class="next-action" onclick="${a.click}" style="cursor:pointer">
           <div class="na-dot" style="background:${a.color}"></div>
           <div>
@@ -3602,10 +3668,10 @@ VIEWS['dashboard'] = async function () {
 
     <!-- Stats row -->
     <div class="stat-grid">
-      <div class="stat-box gold"><div class="stat-val" id="stat-val-points">0</div><div class="stat-lbl">Points</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-badges">0</div><div class="stat-lbl">Badges</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-assess">0</div><div class="stat-lbl">Assessments</div></div>
-      <div class="stat-box"><div class="stat-val" id="stat-val-checkins">0</div><div class="stat-lbl">Check-ins</div></div>
+      <div class="stat-box gold"><div class="stat-val" id="stat-val-points">${(state.points && state.points.total) || 0}</div><div class="stat-lbl">Points</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-badges">${badgeStats().earnedCount}</div><div class="stat-lbl">Badges</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-assess">${state.assessments.length}</div><div class="stat-lbl">Assessments</div></div>
+      <div class="stat-box"><div class="stat-val" id="stat-val-checkins">${state.checkins.length}</div><div class="stat-lbl">Check-ins</div></div>
     </div>
 
     <!-- Quick actions -->
@@ -3621,6 +3687,10 @@ VIEWS['dashboard'] = async function () {
 
     KW.reveal('.hub-card');
     KW.reveal('.stat-box', { stagger: 60 });
+    // The figures are already in the markup above, so this is decoration. If
+    // requestAnimationFrame never runs (background tab, reduced motion, a
+    // re-render mid-animation) the correct number is what stays on screen —
+    // which is the opposite of before, when a skipped animation left "0".
     KW.countUp(document.getElementById('stat-val-points'), (state.points && state.points.total) || 0);
     KW.countUp(document.getElementById('stat-val-badges'), badgeStats().earnedCount);
     KW.countUp(document.getElementById('stat-val-assess'), state.assessments.length);
@@ -4888,8 +4958,13 @@ async function lpSendProgressPing(force) {
     state.lp.watch[id] = Math.max(state.lp.watch[id] || 0, pos);
     if (data && data.credited) {
       showToast(`+${data.points_awarded} pts · Learning`);
+      // Move `state` first, then paint from it. Bumping only the chip's text
+      // left state.points behind, so the dashboard stats row (and anything else
+      // reading state) disagreed with the sidebar until the next full load.
+      state.points = { ...state.points, total: ((state.points && state.points.total) || 0) + (data.points_awarded || 0) };
       const el = document.getElementById('sb-pts');
-      if (el) { const cur = parseInt(el.textContent, 10); if (!isNaN(cur)) el.textContent = cur + (data.points_awarded || 0); }
+      if (el) el.textContent = (state.points && state.points.total) || 0;
+      try { kwPaintStatRow(); } catch (_) {}
     }
   } catch (e) { /* never interrupt playback for a progress ping */ }
 }
@@ -7395,30 +7470,60 @@ function initProfileUI() {
 // ══════════════════════════════════════════════════
 //  NOTIFICATIONS
 // ══════════════════════════════════════════════════
+// Behavioural nudges for the notification panel.
+//
+// EVERY FLAG HERE READS `state`, NOT localStorage. That is the fix, not a
+// stylistic preference: each of these entries used to test a localStorage cache
+// written by a tool page in THIS browser, so an entry stayed live after the
+// member had done the thing — the cache is written on a different page, or not
+// at all, or the member signed in on a second device. "Complete Your
+// Assessment" persisted after completion for exactly that reason. `state` is
+// loaded from Supabase at login by loadAllData(), so it is what the member
+// actually has, wherever they are signed in.
+//
+// The copy and the thresholds also track the dashboard nudge ladder in
+// VIEWS['dashboard']. Two places asking for the same thing in different words,
+// or at different ages, reads as two different demands.
 function generateSmartNotifs() {
   const notifs = [];
   const now = Date.now();
+  const _daysAgo = iso => iso ? Math.floor((now - new Date(iso).getTime()) / 86400000) : null;
 
-  // Assessment reminder
-  const ar = safeParseLS('kw_assessment_result', null);
-  if (!ar) {
-    notifs.push({id:'n_assess',title:'Complete Your Assessment',desc:'Take the 8-dimension wellness assessment to see your score.',time:'Now',link:'assessment'});
+  // ── Habits check ────────────────────────────────────────────────────────
+  // P0-3 replaced the 16-figure assessment with an 11-question habits check and
+  // P0-4 gated the score behind four sources, so neither half of the old copy
+  // ("the 8-dimension wellness assessment", "to see your score") was true any
+  // more. Wording follows the dashboard's habits nudge.
+  const _latestAssess = state.assessments?.[0] || null;
+  if (!_latestAssess) {
+    notifs.push({id:'n_assess',title:'Habits check',desc:'Three minutes, no numbers — the first thing that builds your picture.',time:'Now',link:'assessment'});
   } else {
-    const daysSince = Math.floor((now - new Date(ar.date).getTime()) / 86400000);
-    if (daysSince >= 30) {
-      notifs.push({id:'n_reassess',title:'Reassess Your Wellness',desc:`Your last assessment was ${daysSince} days ago. Time for a check-in!`,time:`${daysSince}d ago`,link:'assessment'});
+    // 90 days, matching the dashboard ladder. It was 30 here, so the panel
+    // asked for a re-check two months before the dashboard did.
+    const age = _daysAgo(_latestAssess.created_at);
+    if (age !== null && age > 90) {
+      notifs.push({id:'n_reassess',title:'Re-check your habits',desc:`Your last habits check was ${age} days ago. Three minutes to bring it up to date.`,time:`${age}d ago`,link:'assessment'});
     }
   }
 
-  // Emergency fund reminder (legacy cache — coerce, may hold formatted strings)
-  const ef = safeParseLS('kw_ef_cache', null);
-  const _efCacheMonths = ef ? _num(ef.months) : 0;
-  if (ef && ef.months != null && String(ef.months) !== String(_efCacheMonths)) console.warn(`[KW] kw_ef_cache: coerced months "${ef.months}" → ${_efCacheMonths}`);
-  if (ef && ef.months != null && _efCacheMonths < 3) {
-    notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${_efCacheMonths.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+  // ── Emergency fund ──────────────────────────────────────────────────────
+  // Reads the emergency_fund row rather than the kw_ef_cache legacy key, and
+  // only once a monthly figure exists: without one there is no months-of-cover
+  // to report, and "0.0 months saved" about a fund whose size we were never
+  // given is the class of claim P0 exists to stop.
+  const _ef        = state.ef || state._efRow || null;
+  const _efMonthly = _ef ? _num(_ef.monthly) : 0;
+  if (_ef && _efMonthly > 0) {
+    const _efMonths = _num(_ef.current_savings) / _efMonthly;
+    if (_efMonths < 3) {
+      notifs.push({id:'n_ef',title:'Emergency Fund Alert',desc:`You have ${_efMonths.toFixed(1)} months saved. Aim for 3–6 months.`,time:'Now',link:'emergency'});
+    }
   }
 
-  // Goals reminder
+  // ── Goals ───────────────────────────────────────────────────────────────
+  // goal_planner is not among the tool rows loadAllData() caches, so this one
+  // stays on localStorage. The `!g.target` guard already excludes goals seeded
+  // from "About you" with no figure on them, which is what keeps it honest.
   const gd = safeParseLS('kw_goals', {});
   const goals = gd.goals || [];
   const behind = goals.filter(g => {
@@ -7429,15 +7534,20 @@ function generateSmartNotifs() {
     notifs.push({id:'n_goals',title:'Goal Progress Needed',desc:`${behind.length} goal(s) are under 10% funded. Open Goal Planner to review.`,time:'Now',link:'tools'});
   }
 
-  // Stress check-in
-  const sc = safeParseLS('financial_stress_v1', []);
-  if (!sc.length) {
-    notifs.push({id:'n_stress',title:'Log Your Stress Level',desc:'Track your financial stress regularly to spot patterns.',time:'Now',link:'checkin'});
+  // ── Stress check-in ─────────────────────────────────────────────────────
+  // Reads stress_logs, and waits for a budget first, exactly as the dashboard
+  // ladder does. Asking a member on their first morning how money is feeling,
+  // before they have entered anything at all, is a demand with nothing behind it.
+  const _bd        = state.toolData?.budget_planner;
+  const _hasBudget = !!(_bd?.currentKey && _bd?.budgets?.[_bd.currentKey]);
+  if (_hasBudget && !(state.stressLogs || []).length) {
+    notifs.push({id:'n_stress',title:'Stress check-in',desc:'Thirty seconds: how is money feeling this fortnight?',time:'Now',link:'checkin'});
   }
 
-  // Booking reminder
-  const bk = safeParseLS('kw_bookings', []);
-  if (!bk.length) {
+  // ── Booking ─────────────────────────────────────────────────────────────
+  // state.bookings, not the kw_bookings cache — which is why this kept asking a
+  // member who had already booked.
+  if (!(state.bookings || []).length) {
     notifs.push({id:'n_book',title:'Book a Coaching Session',desc:'Work 1-on-1 with a Key Wellness coach to accelerate your goals.',time:'Now',link:'booking'});
   }
 

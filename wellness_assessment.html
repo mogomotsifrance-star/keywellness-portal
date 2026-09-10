@@ -1124,6 +1124,22 @@ function buildStartingPoint(dims){
   return out;
 }
 
+// The single dimension the habits results call a STRENGTH, or null.
+//
+// This exists because the rule was written out twice — once to print the
+// strength, once (by omission) in the action list — and the two disagreed. A
+// member could be told "Strength: Emergency Fund — this is the habit you
+// already have" and, four lines below, "Start an emergency fund". Both halves
+// now read the same function, so they cannot drift apart again.
+//
+// Highest-scoring dimension, and only when it clears 60: below that nothing is
+// a strength and every dimension keeps its action.
+function habitsStrengthId(dims){
+  const sorted=[...dims].sort((a,b)=>a.score-b.score);
+  const best=sorted[sorted.length-1];
+  return (best&&best.score>=60)?best.id:null;
+}
+
 function buildInsights(dims,d){
   const ins=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
   // P0-3: every insight below reads a figure. In habits mode there are none, and
@@ -1137,8 +1153,9 @@ function buildInsights(dims,d){
       ins.push({icon:'🎯',cls:x.score<34?'orange':'blue',title:x.label,text:`Your answers suggest ${n.low}. ${n.lead}`});
     });
     if(d.insCount<3)ins.push({icon:'🩺',cls:'orange',title:'Insurance Gaps',text:`You hold <strong>${d.insCount}</strong> of 6 recommended covers. Medical aid and life/income protection are the highest priorities.`});
-    const best=sorted[sorted.length-1];
-    if(best&&best.score>=60)ins.push({icon:'💚',cls:'green',title:`Strength: ${best.label}`,text:'This is the habit you already have. Keep it while you build the others.'});
+    const _strengthId=habitsStrengthId(dims);
+    const best=_strengthId?dims.find(x=>x.id===_strengthId):null;
+    if(best)ins.push({icon:'💚',cls:'green',title:`Strength: ${best.label}`,text:'This is the habit you already have. Keep it while you build the others.'});
     return ins.slice(0,6);
   }
   if(d.gross>0&&d.expenses>0){const surplus=d.totalIncome-d.expenses;if(surplus>0)ins.push({icon:'💚',cls:'green',title:'Positive Cash Flow',text:`You have a monthly surplus of <strong>${fmt(surplus)}</strong>. Direct this toward savings or debt reduction.`});else ins.push({icon:'⚠️',cls:'red',title:'Spending Exceeds Income',text:`Your expenses exceed income by <strong>${fmt(Math.abs(surplus))}</strong>/mo. This is unsustainable — review discretionary spending immediately.`});}
@@ -1171,7 +1188,13 @@ function buildActions(dims,d){
       income:    {title:'Build your budget first',            desc:'Your take-home pay and what you spend it on. This is the one place you will ever type your income.'},
       insurance: {title:'Close the biggest cover gaps',        desc:'Medical aid and income protection protect against the two most financially devastating risks. Get quotes this month.'},
     };
+    // Skip the dimension the insights above called a strength. Telling a member
+    // "this is the habit you already have" and then "start doing it" on the same
+    // screen reads as the portal not having looked at their answers — and it is
+    // the strongest one, so it is the contradiction they are most likely to spot.
+    const _strengthId=habitsStrengthId(dims);
     sorted.forEach((x,i)=>{
+      if(x.id===_strengthId) return;
       const act=HABIT_ACTIONS[x.id]; if(!act) return;
       actions.push({priority:i<2?'High':i<4?'Medium':'Low',...act});
     });
