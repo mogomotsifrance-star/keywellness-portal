@@ -523,7 +523,21 @@ function saveData() {
     // Offer to write changed income fields + total debt back to shared profile
     const incomeChanges = KWProfile.detectChanges(_DTI_INCOME_MAPPINGS);
     const totalDebt = debts.reduce((s, d) => s + (d.amount || 0), 0);  // debts store the monthly payment as `amount`
-    const debtChange = (totalDebt > 0) ? [{ col: 'monthly_debt', newVal: totalDebt }] : [];
+    // Only offer it when it has actually moved. The income fields go through
+    // detectChanges() for exactly this reason; the debt total did not, and now
+    // that Calculate also saves, one edit would be put to the member twice —
+    // add a debt, then press Calculate.
+    //
+    // Two things are checked, and the second is the one that matters. The
+    // profile value catches "they already said yes". `_debtOffered` catches
+    // "they already said NO" — declining is an answer, and re-asking the same
+    // question because they did not answer it the way we hoped is worse than
+    // not asking at all.
+    const _prevDebt = (typeof KWProfile?.get === 'function') ? KWProfile.get('monthly_debt') : null;
+    const _same = v => v != null && Math.abs(Number(v) - totalDebt) < 0.01;
+    const _debtMoved = totalDebt > 0 && !_same(_prevDebt) && !_same(_debtOffered);
+    const debtChange = _debtMoved ? [{ col: 'monthly_debt', newVal: totalDebt }] : [];
+    if (_debtMoved) _debtOffered = totalDebt;
     const allChanges = [...incomeChanges, ...debtChange];
     if (allChanges.length) {
       const ok = await KWProfile.confirm(allChanges);
@@ -557,6 +571,9 @@ function showToast() {
 // ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
+// The debt total last put to the member for their shared profile, whatever
+// they answered. See saveData(): it is what stops one edit asking twice.
+let _debtOffered  = null;
 let debts         = [];
 let nextId        = 1;
 let selectedDebtType = 'mortgage';
@@ -913,6 +930,20 @@ function calculate() {
                   basis, incomeLabel, lastUpdated: new Date().toISOString() };
     localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
   } catch(e){}
+
+  // A successful Calculate IS a save.
+  //
+  // Saving used to fire only on add/remove debt, which left one path with no
+  // record at all: a member arrives from the budget with the debt row already
+  // prefilled, reads it, agrees with it, and presses Calculate. They have
+  // touched nothing, so nothing is written — no `tool_data` row, no
+  // `dti_basis`, no monthly_debt prompt. The dashboard's Debts source never
+  // flips, so their picture stays at 3 of 6 and the score gate cannot be met
+  // by that route, however many times they press the button.
+  //
+  // Accepting a figure we put in front of them is an answer. It is the answer
+  // the prefill was built to make easy, and it has to count like any other.
+  saveData();
 }
 
 // ──────────────────────────────────────────────

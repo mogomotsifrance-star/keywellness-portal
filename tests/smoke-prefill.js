@@ -51,6 +51,7 @@ function installStub(page, { profile = null, tools = {} } = {}) {
   return page.addInitScript(({ profile, tools, uid }) => {
     try { Object.keys(localStorage).filter(k => /^kw_|^budget_planner/.test(k)).forEach(k => localStorage.removeItem(k)); } catch (_) {}
     window.__updates = [];
+    window.__toolWrites = [];
     window.__profile = profile;
     const toolRow = (t) => (tools[t] ? { data: tools[t] } : null);
     let _lastTool = null;
@@ -68,6 +69,7 @@ function installStub(page, { profile = null, tools = {} } = {}) {
         finally: (fn) => settle().finally(fn),
       };
       if (table === 'profiles' && (op === 'update' || op === 'upsert')) window.__updates.push(payload);
+      if (table === 'tool_data' && (op === 'update' || op === 'upsert')) window.__toolWrites.push(payload);
       return c;
     };
     const fake = {
@@ -106,6 +108,14 @@ const addDebtVia = (page, name, amount) => page.evaluate(({ name, amount }) => {
   document.getElementById('debtBalance').value = '0';
   window.addDebt();
 }, { name, amount });
+
+/* KWProfile.confirm() is a real overlay. Answer it so the next action is not
+   reading a page with a modal still up. */
+const dismissProfileModal = async (page) => {
+  await page.waitForTimeout(300);
+  await page.evaluate(() => document.getElementById('kwp-no')?.click());
+  await page.waitForTimeout(150);
+};
 
 (async () => {
   const browser = await chromium.launch();
@@ -589,6 +599,102 @@ const addDebtVia = (page, name, amount) => page.evaluate(({ name, amount }) => {
     check('81 no tool page says "from your assessment"', offenders.length === 0, offenders.join(', '));
     const bad = TOOLS.filter(f => /from your Budget Planner/.test(speech(f)));
     check('82 nor "from your Budget Planner"', bad.length === 0, bad.join(', '));
+  }
+
+  /* ── 8. Accepting a prefilled figure is an answer ──────────────────────────
+
+     The path that had no save at all. A member arrives at DTI from their
+     budget and the page is already complete: the debt row is seeded from
+     `debt_min`, take-home is seeded from the budget's salary row. They read
+     it, agree with it, and press Calculate. They have touched NOTHING, so
+     add/remove never fires — and saving only ever fired on add/remove.
+
+     So: no tool_data row, no dti_basis, no monthly_debt prompt, and the
+     dashboard's Debts source never flips. The score gate could not be met by
+     this route however many times they pressed the button.
+
+     These fixtures add no debt. That is the point — the seeding is the page's
+     own, and accepting it is the member's answer. */
+  const seeded = (browser) => open(browser, 'dti_calculator.html', {
+    profile: { id: UID, net_income: 11000 },
+    tools: { budget_planner: BUDGET },
+  });
+
+  {
+    const { page, errors } = await seeded(browser);
+    const before = await page.evaluate(() => ({
+      debt: document.getElementById('debtList')?.textContent || '',
+      net:  document.getElementById('netSalary')?.value || '',
+      writes: window.__toolWrites.length,
+    }));
+    check('83 the page arrives seeded from the budget, with nothing saved yet',
+      /1,800/.test(before.debt) && /11,000/.test(before.net) && before.writes === 0,
+      JSON.stringify(before).slice(0, 200));
+
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    const out = await page.evaluate(() => ({
+      results: document.getElementById('resultsSection')?.classList.contains('visible') || false,
+      toolWrites: window.__toolWrites.slice(),
+      modalText: document.getElementById('kw-profile-modal')?.textContent || '',
+    }));
+
+    check('84 Calculate alone writes the tool record',
+      out.toolWrites.some(w => w.tool === 'dti_calculator'),
+      JSON.stringify(out.toolWrites).slice(0, 200));
+    check('85 carrying the debt the member accepted without editing',
+      out.toolWrites.some(w => (w.data?.debts || []).some(d => Number(d.amount) === 1800)),
+      JSON.stringify(out.toolWrites[0]?.data?.debts || null));
+    check('86 and the basis it was computed on, so nothing downstream guesses',
+      out.toolWrites.some(w => w.data?.dti_basis === 'take_home'),
+      JSON.stringify(out.toolWrites.map(w => w.data?.dti_basis)));
+    check('87 the monthly_debt offer reaches the member on this path',
+      /profile/i.test(out.modalText), out.modalText.slice(0, 160) || '(no modal)');
+    check('88 the results still render', out.results === true, String(out.results));
+    check('89 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* Accepting the offer writes the column the dashboard and the HR
+       indicators read — and pressing Calculate again does not re-ask. */
+    const { page } = await seeded(browser);
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById('kwp-yes')?.click());
+    await page.waitForTimeout(300);
+    const wrote = await page.evaluate(() => window.__updates.slice());
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    const again = await page.evaluate(() => !!document.getElementById('kw-profile-modal'));
+
+    check('90 accepting writes monthly_debt as the budget figure',
+      wrote.some(w => Number(w.monthly_debt) === 1800), JSON.stringify(wrote));
+    check('91 and a second Calculate does not ask the same question twice',
+      again === false, 'modal re-opened for an unchanged total');
+    await page.close();
+  }
+  {
+    /* Declining is an answer too. Re-asking because they did not answer the
+       way we hoped is worse than not asking. */
+    const { page } = await seeded(browser);
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    await page.evaluate(() => document.getElementById('kwp-no')?.click());
+    await page.waitForTimeout(300);
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    const out = await page.evaluate(() => ({
+      modal: !!document.getElementById('kw-profile-modal'),
+      updates: window.__updates.slice(),
+      writes: window.__toolWrites.length,
+    }));
+    check('92 declining is remembered — Calculate does not ask again',
+      out.modal === false, 'modal re-opened after the member declined');
+    check('93 and nothing was written to the profile behind their back',
+      !out.updates.some(w => 'monthly_debt' in w), JSON.stringify(out.updates));
+    check('94 while the tool record is still saved, which is not theirs to decline',
+      out.writes >= 2, String(out.writes));
+    await page.close();
   }
 
   await browser.close();

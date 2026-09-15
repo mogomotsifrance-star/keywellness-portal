@@ -669,6 +669,43 @@ async function statRow(page) {
     await page.close();
   }
 
+  /* ── B2. The hub tile may not contradict the checklist ────────────────────
+
+     A member with a budget and no DTI run has a Debt-to-Income tile computed
+     from the budget's single `debt_min` line — while the checklist two cards
+     down reads "Debts — not yet", because one budget line is not a debt
+     register. The tile said "Stretched · on take-home": a verdict, above a row
+     saying we have not been told. The member cannot tell which half to
+     believe. */
+  {
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET } });
+    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    check('77 a budget-derived DTI tile names its source',
+      dti && /from your budget/.test(dti.sub), JSON.stringify(dti));
+    check('78 and says what would confirm it',
+      dti && /list each loan/.test(dti.sub), JSON.stringify(dti));
+    check('79 it does not grade a single budget line as a verdict',
+      dti && !/Stretched|Comfortable|Heavy|Healthy|Acceptable|High Risk|Critical/.test(dti.sub),
+      JSON.stringify(dti));
+    check('80 while the checklist still, correctly, says the debts source is unmet',
+      /Debts/.test(view.text) && /1 of 6|2 of 6|3 of 6/.test(view.text),
+      (view.text.match(/\d of 6/g) || []).join(','));
+    await page.close();
+  }
+  {
+    /* A saved DTI run IS a debt register, so the verdict is earned and stays. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET, dti_calculator: DTI } });
+    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    check('81 a saved DTI run is still graded',
+      dti && /Healthy|Acceptable|High Risk|Critical|Comfortable|Stretched|Heavy/.test(dti.sub),
+      JSON.stringify(dti));
+    check('82 and does not claim to come from the budget',
+      dti && !/from your budget/.test(dti.sub), JSON.stringify(dti));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);
