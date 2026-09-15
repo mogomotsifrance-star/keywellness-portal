@@ -394,6 +394,43 @@ floors for the HR dashboard it was written for.
 The exception is **psychosocial, which is floored for everyone, always** —
 `theme_counts()` has no internal view, decided 25 Aug. Do not add one.
 
+**A habits check is not a wellness score, and reporting knows the difference.**
+P0-3 replaced the 16-figure assessment with an 11-question habits check, and
+P0-4 stopped *showing* a score until the four sources behind it exist. That gate
+stopped at the screen: the score was still written to `profiles.live_score` and
+still read by five reporting functions, so a figure too provisional to show its
+owner was averaged into their employer's report. `supabase_habits_only_reporting.sql`
+(B1) closes it. One predicate, spelled identically in all five so it can be
+grepped:
+
+```sql
+coalesce((<answers>->>'_habits_only')::boolean, false) and <profile>.live_score is null
+```
+
+Nulling `live_score` alone is never enough — every one of those functions falls
+back to the assessment's own `score` or `cat_scores`, which on a habits-only row
+is exactly the number that must not be reported.
+
+Three things this deliberately keeps. **`goals` and `income` survive the cut** —
+they are habit questions end to end and mean the same on either kind of row.
+**Engagement still counts them**: `completed_assessment`, `assessed` and the
+activation funnel are unchanged, and the new `engaged_not_scored` is what keeps
+"has not given us enough to score" apart from "never showed up". **A pre-P0-3
+assessment keeps its score indefinitely** — those members gave their figures
+inside the assessment, and 28 live profiles depend on it.
+
+`profiles.picture_sources` (0–6) is written by `persistLiveWellness()` on every
+dashboard pass, gate met or not, and feeds `org_overview`'s `completeness` block.
+**`index.html` has exactly one definition of the six sources, `kwPictureSources()`,
+and both the dashboard checklist and the server-side gate read it.** Do not add a
+second — the checklist the member reads and the rule their employer's report
+obeys have to be the same rule.
+
+**`kw_fn_backup` holds the pre-change bodies and is the rollback's only source.**
+Restoring `_org_report_period_data` or `_dept_metrics` from disk would undo the
+M3 split; the rollback restores from this table instead. RLS on, no policies, no
+grants beyond `postgres` / `service_role`. Do not drop it.
+
 **`_org_report_period_data` and `_dept_metrics` are NOT what their files
 say.** M3 Part 2 rewrote them in place via `pg_get_functiondef` to count
 `service_line = 'financial'` only. Re-running
@@ -571,4 +608,6 @@ inventing an entry — but that is rare, and the default is to write one.
 - Do not use `localStorage` for new features — use Supabase instead
 - Do not hand-write account-deletion SQL — use `admin_user_delete()` (Users tab → Delete). A one-off script misses the two tables that have no foreign key and silently orphans them
 - Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
+- Do not write a wellness score to `profiles.live_score` for a member who has not met the four-source gate, and do not compute that gate anywhere but `kwPictureSources()` — see Roles & Interfaces
+- Do not drop `kw_fn_backup` — it is the only copy of the pre-B1 function bodies
 - Do not end a session without writing a vault entry — see Vault Logging above

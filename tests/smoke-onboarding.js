@@ -60,6 +60,7 @@ function installStub(page, profile) {
       return [];
     };
     const chain = (table, op, payload) => {
+      const settle = () => Promise.resolve({ data: table === 'profiles' ? null : lists(table), error: null });
       const c = {
         eq: () => c, in: () => c, or: () => c, order: () => c, limit: () => c,
         select: () => c,
@@ -71,7 +72,13 @@ function installStub(page, profile) {
           }
           return { data: rows(table), error: null };
         },
-        then: (res) => res({ data: table === 'profiles' ? null : lists(table), error: null })
+        /* A real Supabase builder is a thenable that also has .catch, and
+           index.html chains .then(...).catch(...) in persistLiveWellness. A
+           `then` that returns the callback's value leaves .catch undefined and
+           the page dies with "Cannot read properties of undefined". */
+        then: (res, rej) => settle().then(res, rej),
+        catch: (fn) => settle().catch(fn),
+        finally: (fn) => settle().finally(fn),
       };
       if (table === 'profiles' && (op === 'upsert' || op === 'update')) {
         window.__writes.push({ op, payload });
