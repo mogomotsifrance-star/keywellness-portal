@@ -98,6 +98,15 @@ async function open(browser, file, fixture) {
 
 const valOf = (page, id) => page.evaluate(i => document.getElementById(i)?.value ?? null, id);
 
+/* dti_calculator keeps `debts` in module scope, so a fixture cannot assign it.
+   Add one the way a member does: fill the form, press Add. */
+const addDebtVia = (page, name, amount) => page.evaluate(({ name, amount }) => {
+  document.getElementById('debtName').value    = name;
+  document.getElementById('debtAmount').value  = String(amount);
+  document.getElementById('debtBalance').value = '0';
+  window.addDebt();
+}, { name, amount });
+
 (async () => {
   const browser = await chromium.launch();
 
@@ -395,6 +404,191 @@ const valOf = (page, id) => page.evaluate(i => document.getElementById(i)?.value
       /class="kw-trust">Stays in your account\. Your employer only ever sees averages across 5 or more colleagues\./.test(idx));
     check('55 and index.html defines the shared style rather than inlining it',
       /^\.kw-trust\{/m.test(idx));
+  }
+
+  /* ── 8. A1: the DTI basis ──────────────────────────────────────
+     The budget captures take-home only, so a member who arrives here from it
+     has gross = 0. This used to end in alert('Please enter your monthly
+     income.') — a demand for a figure they had already given. */
+  {
+    /* Take-home only, one debt. */
+    const { page, errors } = await open(browser, 'dti_calculator.html', {
+      profile: { id: UID, net_income: 10000, monthly_debt: 2000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      tools: { budget_planner: BUDGET },
+    });
+    const out = await page.evaluate(() => {
+      document.getElementById('grossSalary').value = '0';
+      document.getElementById('otherIncome').value = '0';
+      document.getElementById('netSalary').value   = '10000';
+      window.calculate();
+      const vis = id => { const e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; };
+      return { results: vis('resultsSection'),
+               gauge: document.getElementById('gaugePct')?.textContent || '',
+               /* strip is written synchronously; gaugePct animates */
+               ratio: (document.getElementById('summaryStrip')?.textContent.match(/(\d+\.\d)%/) || [])[1] || '',
+               desc:  document.getElementById('gaugeDesc')?.textContent || '',
+               strip: document.getElementById('summaryStrip')?.textContent || '',
+               advice: document.getElementById('adviceCard')?.textContent || '',
+               notice: vis('dti-calc-notice'),
+               snap: JSON.parse(localStorage.getItem('kw_snapshot') || '{}').dti || null };
+    });
+    check('56 a take-home-only member gets a ratio instead of an alert',
+      out.results === true && out.ratio !== '', JSON.stringify({ r: out.results, ratio: out.ratio }));
+    check('57 the result says which pay it is on',
+      /on take-home pay/.test(out.strip) || /on take-home pay/.test(out.advice),
+      out.strip.slice(0, 120) + ' | ' + out.advice.slice(0, 120));
+    check('58 and names gross as what would give the lender view',
+      /gross salary \(before PAYE\)/.test(out.advice), out.advice.slice(0, 200));
+    check('59 the gauge does not call take-home pay gross income',
+      !/gross income/i.test(out.desc), out.desc);
+    /* The seeded row takes the budget's debt_min (1800), not profiles.monthly_debt
+       (2000) — P0-5's preference, asserted by checks 39-41. 1800/10000 = 18.0%. */
+    check('60 the ratio is debt over take-home (1800/10000), on no other basis',
+      out.ratio === '18.0', out.ratio);
+    check('61 the basis is recorded in kw_snapshot for the dashboard',
+      out.snap && out.snap.basis === 'take_home', JSON.stringify(out.snap));
+    check('62 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* Neither figure: name what is missing, in the page. */
+    const { page } = await open(browser, 'dti_calculator.html', { profile: { id: UID } });
+    const out = await page.evaluate(() => {
+      let alerted = false;
+      window.alert = () => { alerted = true; };
+      ['grossSalary','otherIncome','netSalary'].forEach(i => document.getElementById(i).value = '0');
+      window.calculate();
+      const el = document.getElementById('dti-calc-notice');
+      return { alerted, shown: !!el && getComputedStyle(el).display !== 'none',
+               text: el?.textContent || '',
+               results: getComputedStyle(document.getElementById('resultsSection')).display !== 'none' };
+    });
+    check('63 with no income at all it says so in the page, not in an alert',
+      out.shown === true && out.alerted === false, JSON.stringify(out));
+    check('64 and names both figures that would unblock it',
+      /gross salary/i.test(out.text) && /take-home/i.test(out.text), out.text);
+    check('65 no results are drawn from nothing', out.results === false, String(out.results));
+    await page.close();
+  }
+  {
+    /* Gross present: the existing lender-basis path is untouched. */
+    const { page } = await open(browser, 'dti_calculator.html', { profile: { id: UID } });
+    await addDebtVia(page, 'Car', 4000);
+    const out = await page.evaluate(() => {
+      document.getElementById('grossSalary').value = '20000';
+      document.getElementById('otherIncome').value = '0';
+      document.getElementById('netSalary').value   = '15000';
+      window.calculate();
+      const _strip = document.getElementById('summaryStrip')?.textContent || '';
+      return { ratio: (_strip.match(/(\d+\.\d)%/) || [])[1] || '',
+               desc:  document.getElementById('gaugeDesc')?.textContent || '',
+               strip: _strip,
+               cap:   document.getElementById('capacityRows')?.textContent || '',
+               snap:  JSON.parse(localStorage.getItem('kw_snapshot') || '{}').dti || null };
+    });
+    check('66 with gross present the ratio is still on gross (4000/20000)',
+      out.ratio === '20.0' && /gross income/.test(out.desc), out.ratio + ' | ' + out.desc);
+    check('67 the strip still says Gross Monthly Income',
+      /Gross Monthly Income/.test(out.strip) && !/on take-home pay/.test(out.strip), out.strip.slice(0, 120));
+    check('68 the bank DSR rows are kept on the basis banks actually use',
+      /35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 160));
+    check('69 and the basis records gross', out.snap && out.snap.basis === 'gross', JSON.stringify(out.snap));
+    await page.close();
+  }
+  {
+    /* The gross-basis benchmark must not be applied to a take-home figure. */
+    const { page } = await open(browser, 'dti_calculator.html', { profile: { id: UID } });
+    await addDebtVia(page, 'Car', 4000);
+    const out = await page.evaluate(() => {
+      document.getElementById('grossSalary').value = '0';
+      document.getElementById('otherIncome').value = '0';
+      document.getElementById('netSalary').value   = '10000';
+      window.calculate();
+      return { cap: document.getElementById('capacityRows')?.textContent || '',
+               advice: document.getElementById('adviceCard')?.textContent || '',
+               rows: document.getElementById('breakdownRows')?.textContent || '' };
+    });
+    check('70 no bank DSR capacity is quoted on a take-home ratio',
+      !/35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 200));
+    check('71 the NBFIRA 30%-of-net cap, which IS a net rule, is kept',
+      /NBFIRA/.test(out.cap), out.cap.slice(0, 200));
+    check('72 the headline is not repeated as a separate "DTI on net" row',
+      !/DTI on net/.test(out.rows), out.rows.slice(0, 200));
+    check('73 and nothing promises what a lender will decide',
+      !/lenders will/i.test(out.advice) && !/qualify for most loans/i.test(out.advice), out.advice.slice(0, 200));
+    await page.close();
+  }
+
+  /* Nothing writes a DTI ratio to profiles — asserted rather than changed. */
+  {
+    const fs3 = require('fs');
+    const dti = fs3.readFileSync(path.join(REPO, 'dti_calculator.html'), 'utf8');
+    check('74 no DTI ratio is written to the shared profile on any basis',
+      !/\b(dti_pct|dti_ratio|debt_to_income)\b/.test(dti),
+      (dti.match(/\b(dti_pct|dti_ratio|debt_to_income)\b/g) || []).join(' '));
+  }
+
+  /* ── 9. A2: a source line names the source that supplied the figure ── */
+  {
+    /* The generic banner and the specific one must not stack. */
+    const { page, errors } = await open(browser, 'dti_calculator.html', {
+      profile: { id: UID, net_income: 11000, monthly_debt: 900, fin_updated_at: '2026-09-01T00:00:00Z' },
+      tools: { budget_planner: BUDGET },
+    });
+    const out = await page.evaluate(() => {
+      const gen = document.getElementById('kw-profile-notice');
+      const spec = document.getElementById('income-prefill-notice');
+      const vis = el => !!el && getComputedStyle(el).display !== 'none';
+      return { generic: vis(gen), specific: vis(spec),
+               specificText: spec?.textContent || '' };
+    });
+    check('75 the vague "from your profile" banner is gone from DTI',
+      out.generic === false, 'generic notice still shown');
+    check('76 the specific notice is the one that shows',
+      out.specific === true && /from your budget/.test(out.specificText), out.specificText);
+    check('77 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* The other three pages keep the generic banner — only DTI opts out. */
+    const { page } = await open(browser, 'retirement_calculator.html', {
+      profile: { id: UID, gross_income: 18000, fin_updated_at: '2026-09-01T00:00:00Z' },
+    });
+    const still = await page.evaluate(() => !!document.getElementById('kw-profile-notice'));
+    check('78 opting out is per-page, not a global removal', still === true, String(still));
+    await page.close();
+  }
+  {
+    /* Budget Planner's seeded-income hint named the assessment for every
+       member, whether or not they had ever done one. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID, net_income: 11000, fin_updated_at: '2026-09-01T00:00:00Z' },
+    });
+    const hint = await page.evaluate(() => document.getElementById('incomeRows')?.textContent || '');
+    check('79 the seeded-income hint no longer claims the assessment',
+      !/from your assessment/.test(hint), hint.slice(-140));
+    check('80 it names the profile, which is where net_income came from',
+      !/Prefilled/.test(hint) || /from your profile/.test(hint), hint.slice(-140));
+    await page.close();
+  }
+
+  /* Source-level sweep: the phrase must not survive anywhere in the tools. */
+  {
+    const fs4 = require('fs');
+    const TOOLS = ['budget_planner.html','dti_calculator.html','retirement_calculator.html',
+                   'investment_calculator.html','goal_planner.html','net_worth_tracker.html',
+                   'affordability_calculator.html','rent_vs_buy.html','loan_calculator.html',
+                   'expense_tracker.html','debt_management_planner.html'];
+    /* Strip HTML and JS comments first: a comment explaining why a wrong source
+       line was removed is not itself a wrong source line. */
+    const speech = f => fs4.readFileSync(path.join(REPO, f), 'utf8')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders = TOOLS.filter(f => /from your assessment/.test(speech(f)));
+    check('81 no tool page says "from your assessment"', offenders.length === 0, offenders.join(', '));
+    const bad = TOOLS.filter(f => /from your Budget Planner/.test(speech(f)));
+    check('82 nor "from your Budget Planner"', bad.length === 0, bad.join(', '));
   }
 
   await browser.close();

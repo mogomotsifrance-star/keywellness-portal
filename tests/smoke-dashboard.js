@@ -122,6 +122,7 @@ async function dash(browser, fixture) {
     const cards = [...el.querySelectorAll('.hub-card')].map(c => ({
       lbl: c.querySelector('.hub-lbl')?.textContent || '',
       val: c.querySelector('.hub-val')?.textContent || '',
+      sub: c.querySelector('.hub-sub')?.textContent || '',
       cls: c.className,
     }));
     return {
@@ -463,6 +464,110 @@ async function statRow(page) {
     const row = await statRow(page);
     check('48 a genuine zero still reads zero', row.assess === '0', JSON.stringify(row));
     check('49 and the sidebar still agrees', row.points === row.sidebar, JSON.stringify(row));
+    await page.close();
+  }
+
+  /* ── 11. A1: the dashboard reads the DTI basis ────────────────
+     The budget captures take-home only, so a member who came through it has
+     gross = 0 in the DTI tool. The dashboard used to require gross, find none,
+     and fall silently through to debt_min ÷ budget income — discarding the
+     member's own itemised debt list for a single budget line on a different
+     income, with nothing saying the number had changed meaning. */
+  {
+    const DTI_TAKEHOME = { debts: [{ id: 1, name: 'Car loan', amount: 3000, balance: 60000 }],
+                           grossSalary: '0', otherIncome: '0', netSalary: '10000', dti_basis: 'take_home' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_TAKEHOME },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('50 a take-home-only DTI still reaches the dashboard',
+      !!card && card.val === '30%', JSON.stringify(card));
+    check('51 computed from the member\'s own debts (3000/10000), not the budget line',
+      card && card.val === '30%', JSON.stringify(card));
+    check('52 and the card says which pay it is on',
+      card && /take-home/i.test(card.sub), JSON.stringify(card));
+    await page.close();
+  }
+  {
+    /* Gross present: unchanged, and never labelled take-home. */
+    const DTI_GROSS = { debts: [{ id: 1, name: 'Car loan', amount: 3000, balance: 60000 }],
+                        grossSalary: '20,000', otherIncome: '0', netSalary: '15000', dti_basis: 'gross' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_GROSS },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('53 a gross-basis DTI is unchanged (3000/20000)',
+      !!card && card.val === '15%', JSON.stringify(card));
+    check('54 and is not labelled take-home',
+      card && !/take-home/i.test(card.sub), JSON.stringify(card));
+    check('55 nor graded on the wrong band — 15% on gross is Healthy',
+      card && /Healthy/.test(card.sub), JSON.stringify(card));
+    await page.close();
+  }
+  {
+    /* 40% of take-home would be "Acceptable" on the gross bands and is not:
+       NBFIRA caps unsecured credit at 30% of net. The bands follow the basis. */
+    const DTI_HEAVY = { debts: [{ id: 1, name: 'Loans', amount: 4000, balance: 0 }],
+                        grossSalary: '0', otherIncome: '0', netSalary: '10000', dti_basis: 'take_home' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_HEAVY },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('56 40% of take-home is not graded by the gross bands',
+      card && !/Acceptable/.test(card.sub), JSON.stringify(card));
+    check('57 it is Stretched, against the cap that is a net rule',
+      card && /Stretched/.test(card.sub), JSON.stringify(card));
+    check('58 and no advice quotes the lender threshold at a take-home figure',
+      !/Lenders look for under 35%/.test(view.text), view.text.slice(0, 200));
+    await page.close();
+  }
+
+  /* ── 12. A2: the Emergency Fund view names one source, correctly ──
+     One figure — profiles.essential_expenses, written by the budget's Needs
+     total — was attributed to three different places on the same screen: the
+     card header said "from your profile", the body and both field hints said
+     "from your assessment". The assessment has collected no figures since
+     P0-3, so that one could not have been true for anybody. */
+  async function efView(browser, fixture) {
+    const { page, view } = await dash(browser, fixture);
+    const text = await page.evaluate(async () => {
+      window.location.hash = '#emergency';
+      await new Promise(r => setTimeout(r, 900));
+      return document.getElementById('page-content')?.textContent || '';
+    });
+    return { page, text, view };
+  }
+  {
+    /* fin_updated_at + a saved budget → the budget wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET },
+    });
+    check('59 the EF view no longer says "from your assessment"',
+      !/from your assessment/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('60 with a saved budget behind the figure it says so',
+      /from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('61 and says it in one voice, not three',
+      new Set(text.match(/from your (?:budget|profile|earlier assessment)/g) || []).size === 1,
+      JSON.stringify([...new Set(text.match(/from your [\w ]+/g) || [])]));
+    await page.close();
+  }
+  {
+    /* No budget saved: the two-part test fails, so it says "profile" — which
+       is true whatever wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)],
+    });
+    check('62 with no budget it does not claim the budget',
+      !/from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('63 it says profile instead', /from your profile/.test(text),
+      (text.match(/from your \w+/g) || []).join(' | '));
     await page.close();
   }
 

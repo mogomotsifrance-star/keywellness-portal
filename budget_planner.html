@@ -612,6 +612,11 @@ function profileIncomeRows(){
   const net   = pf(fig?.netSalary)   || pf(p.net_income ?? p.monthly_income ?? 0);
   const other = pf(fig?.otherIncome) || pf(p.other_income ?? 0);
   if (net <= 0) return null;
+  // A2: name the branch that actually supplied it. Since P0-3 the assessment
+  // collects no figures, so `fig` is null for anyone who assessed after it and
+  // this is the profile — which is what the hint used to claim was the
+  // assessment, for every member, whether or not they had ever done one.
+  window._incomeSeedSrc = pf(fig?.netSalary) ? 'from your earlier assessment' : 'from your profile';
   const rows = [{ id: Date.now(), label: 'Salary (take-home)', amount: Math.round(net) }];
   if (other > 0) rows.push({ id: Date.now()+1, label: 'Other Income', amount: Math.round(other) });
   return rows;
@@ -853,7 +858,7 @@ function renderIncomeRows(b){
         <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>`).join('')
-    + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Prefilled from your assessment — adjust if needed.</div>` : '');
+    + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Prefilled ${window._incomeSeedSrc || 'from your profile'} — adjust if needed.</div>` : '');
 }
 
 // ────────────────────────────────────────────

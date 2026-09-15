@@ -3035,15 +3035,30 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Debt-to-Income & Savings Rate — Supabase only: DTI Calculator → budget line items → assessment/profile ──
-  let budgetDTI = null, budgetSavRate = null;
+  let budgetDTI = null, budgetSavRate = null, budgetDTIBasis = null;
   // 1) DTI Calculator tool (most specific — sum of entered debts ÷ income)
+  //
+  // A1: the basis. The budget captures take-home only, so a member who came
+  // through it has gross = 0 here. This used to require gross, find none, and
+  // fall silently through to step 2 — discarding the member's own itemised debt
+  // list in favour of a single budget line, on a different income, with nothing
+  // on screen saying the number had changed meaning. Take-home is a real basis;
+  // it just has to travel with the figure so nothing downstream reads it as the
+  // lender's ratio.
   try {
     const _dc = _toolMap['dti_calculator'];
     if (_dc && Array.isArray(_dc.debts) && _dc.debts.length) {
       const _pf = v => parseFloat(String(v ?? '').replace(/,/g, '')) || 0;
       const _dcDebt  = _dc.debts.reduce((s, d) => s + Number(d.amount ?? d.monthly ?? 0), 0);  // calc stores monthly payment as `amount`
       const _dcGross = _pf(_dc.grossSalary) + _pf(_dc.otherIncome);
-      if (_dcGross > 0) budgetDTI = +(_dcDebt / _dcGross * 100).toFixed(1);
+      const _dcNet   = _pf(_dc.netSalary);
+      if (_dcGross > 0) {
+        budgetDTI = +(_dcDebt / _dcGross * 100).toFixed(1);
+        budgetDTIBasis = 'gross';
+      } else if (_dcNet > 0) {
+        budgetDTI = +(_dcDebt / _dcNet * 100).toFixed(1);
+        budgetDTIBasis = 'take_home';
+      }
     }
   } catch {}
   // 2) Budget line items — ONLY when explicitly entered (a blank debt/savings line must not read as 0%)
@@ -3057,7 +3072,12 @@ VIEWS['dashboard'] = async function () {
       const _savIds = ['emfund','retirement','invest','goals','debt_extra'];
       const _bSav  = _savIds.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
       if (_bInc > 0) {
-        if (budgetDTI === null && _bDebt > 0) budgetDTI = +(_bDebt / _bInc * 100).toFixed(1);
+        if (budgetDTI === null && _bDebt > 0) {
+          budgetDTI = +(_bDebt / _bInc * 100).toFixed(1);
+          // The budget's income rows are take-home (budget_planner writes
+          // net_income from the salary row, never gross_income).
+          budgetDTIBasis = 'take_home';
+        }
         if (_bSav > 0) budgetSavRate = +(_bSav / _bInc * 100).toFixed(1);
       }
     }
@@ -3065,6 +3085,8 @@ VIEWS['dashboard'] = async function () {
   // 3) Assessment / shared profile figures fill any remaining gap
   if (budgetDTI === null && _profGross && _prof.monthly_debt) {
     budgetDTI = +(_prof.monthly_debt / _profGross * 100).toFixed(1);
+    // _profGross falls back to net when gross_income is absent, so say which.
+    budgetDTIBasis = _prof.gross_income ? 'gross' : 'take_home';
   }
   if (budgetSavRate === null && _profNet && _prof.monthly_savings) {
     budgetSavRate = +(_prof.monthly_savings / _profNet * 100).toFixed(1);
@@ -3324,8 +3346,19 @@ VIEWS['dashboard'] = async function () {
 
   // DTI — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
   if (budgetDTI !== null) {
-    const dtiCls  = budgetDTI <= 35 ? 'green' : budgetDTI <= 50 ? 'gold' : budgetDTI <= 65 ? 'orange' : 'red';
-    const dtiSub  = budgetDTI <= 35 ? 'Healthy' : budgetDTI <= 50 ? 'Acceptable' : budgetDTI <= 65 ? 'High Risk' : 'Critical';
+    // 35 / 50 / 65 are GROSS bank thresholds. On a take-home ratio they grade
+    // the member harsher than any lender would, against a benchmark no lender
+    // applies to that figure — so the bands follow the basis, exactly as
+    // dtiStatus() does in the tool. On take-home the yardstick that IS a net
+    // rule is NBFIRA's 30% cap on unsecured credit.
+    const _onTH   = budgetDTIBasis === 'take_home';
+    const _good   = _onTH ? 30 : 35;
+    const _mid    = _onTH ? 45 : 50;
+    const _high   = _onTH ? 60 : 65;
+    const dtiCls  = budgetDTI <= _good ? 'green' : budgetDTI <= _mid ? 'gold' : budgetDTI <= _high ? 'orange' : 'red';
+    const dtiSub  = _onTH
+      ? (budgetDTI <= _good ? 'Comfortable · on take-home' : budgetDTI <= _mid ? 'Stretched · on take-home' : 'Heavy · on take-home')
+      : (budgetDTI <= _good ? 'Healthy' : budgetDTI <= _mid ? 'Acceptable' : budgetDTI <= _high ? 'High Risk' : 'Critical');
     hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
   } else if (hasBudget) {
     hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
@@ -3415,7 +3448,17 @@ VIEWS['dashboard'] = async function () {
   if (stressScore !== null && stressScore >= 7) actions.push({ src:'stress', color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ src:'goals', ask:true, color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (!hasNWTool) actions.push({ src:'networth', ask:true, color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
-  if (budgetDTI !== null && budgetDTI > 50) actions.push({ src:'debts', color:'var(--orange)', title:`Debt-to-income is ${budgetDTI}% — too high`, desc:'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.', click:`openTool('debt_management_planner.html')` });
+  // Same basis rule, and the copy must not quote the lender's threshold at a
+  // member whose figure is not on the lender's basis.
+  if (budgetDTI !== null && budgetDTI > (budgetDTIBasis === 'take_home' ? 45 : 50)) actions.push({
+    src:'debts', color:'var(--orange)',
+    title: budgetDTIBasis === 'take_home'
+      ? `Debt takes ${budgetDTI}% of your take-home pay`
+      : `Debt-to-income is ${budgetDTI}% — too high`,
+    desc: budgetDTIBasis === 'take_home'
+      ? 'NBFIRA caps unsecured credit at 30% of net pay. The Debt Management Planner shows what reducing it frees up.'
+      : 'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.',
+    click:`openTool('debt_management_planner.html')` });
   if (insCount !== null && insCount < 3) actions.push({ src:'insurance', color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ src:'retirement', color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ src:'budget', color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
@@ -6020,6 +6063,30 @@ VIEWS['emergency'] = async function () {
   let _asmtFig = null;
   try { _asmtFig = JSON.parse(localStorage.getItem('kw_assessment_result') || 'null')?.figures || null; } catch {}
   const _efMonthlyExp = _efNum(_asmtFig?.essentialExpenses, 'assessment essentialExpenses') || _efNum(state.user?.essential_expenses, 'profile essential_expenses') || 0;
+
+  // A2: where this figure actually came from.
+  //
+  // It is profiles.essential_expenses, which budget_planner writes from the
+  // NEEDS group total. This view named three different sources for that one
+  // number — the card header said "from your profile", the body and both hints
+  // said "from your assessment". The assessment has collected no figures since
+  // P0-3, so that third one could not have been true for anybody.
+  //
+  // Same two-part test as KWSource.label(): fin_updated_at proves something
+  // wrote the shared figures, a saved budget proves the budget existed to be
+  // that something. index.html does not load kw-profile-sync.js (only the seven
+  // tool pages do) and KWSource reads window._toolSb, which does not exist
+  // here — so the rule is computed from `state` rather than adding a script to
+  // a 500KB auth-critical page.
+  const _efSrc = (() => {
+    // The figure has two possible origins and the line must follow the one
+    // actually taken. A pre-P0-3 device can still hold real assessment figures
+    // in kw_assessment_result; post-P0-3 they are null, so this falls through.
+    if (_efNum(_asmtFig?.essentialExpenses, 'assessment essentialExpenses')) return 'from your earlier assessment';
+    const _bd = state.toolData?.budget_planner;
+    const _budgetSaved = !!(_bd?.currentKey && _bd?.budgets?.[_bd.currentKey]);
+    return (state.user?.fin_updated_at && _budgetSaved) ? 'from your budget' : 'from your profile';
+  })();
   const _ef3mo = _efMonthlyExp * 3;
   const _ef6mo = _efMonthlyExp * 6;
   const _efSetUp   = !!(saved.monthly || saved.current || saved.contribution);
@@ -6034,8 +6101,8 @@ VIEWS['emergency'] = async function () {
       <div class="kw-trust">Stays in your account. Your employer only ever sees averages across 5 or more colleagues.</div>
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
-        <div class="card-title">💡 Recommended Targets (from your profile)</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> from your assessment:</p>
+        <div class="card-title">💡 Recommended Targets (${_efSrc})</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> ${_efSrc}:</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--orange);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(3);efCalc()">
             <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px">Minimum (3 months)</div>
@@ -6061,12 +6128,12 @@ VIEWS['emergency'] = async function () {
         <div class="field">
           <label>Monthly Essential Expenses (BWP)</label>
           <input type="number" id="ef-m" value="${_efPrefill ? _efMonthlyExp : (saved.monthly||'')}" placeholder="e.g. 4500" min="0" oninput="efCalc()">
-          <div class="hint">${_efPrefill ? '💡 Pre-filled from your assessment. Adjust if needed.' : 'Rent, food, transport, utilities — basics only, no luxuries'}</div>
+          <div class="hint">${_efPrefill ? `💡 Pre-filled ${_efSrc}. Adjust if needed.` : 'Rent, food, transport, utilities — basics only, no luxuries'}</div>
         </div>
         <div class="field">
           <label>Current Emergency Savings (BWP)</label>
           <input type="number" id="ef-c" value="${saved.current || (!_efSetUp && _efSavings>0 ? _efSavings : '')}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
-          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled from your assessment — adjust if needed.</div>` : ''}
+          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled ${_efSrc} — adjust if needed.</div>` : ''}
         </div>
         <div class="field">
           <label>Monthly Contribution (BWP)</label>
