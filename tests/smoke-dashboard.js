@@ -89,9 +89,15 @@ function installStub(page, f) {
       };
       return c;
     };
+    /* Every write is recorded. B1 is about what reaches the SERVER, which no
+       amount of reading the rendered page can tell you: the defect was that a
+       score the dashboard correctly refused to show was written to
+       profiles.live_score anyway, and averaged into the employer's report. */
+    window.__kwWrites = [];
+    const rec = (t, verb) => (payload) => { window.__kwWrites.push({ table: t, verb, payload }); return chain(t); };
     const fake = {
-      from: (t) => ({ select: () => chain(t), insert: () => chain(t), update: () => chain(t),
-                      upsert: () => chain(t), delete: () => chain(t) }),
+      from: (t) => ({ select: () => chain(t), insert: rec(t, 'insert'), update: rec(t, 'update'),
+                      upsert: rec(t, 'upsert'), delete: () => chain(t) }),
       rpc: async () => ({ data: null, error: null }),
       auth: {
         getSession: async () => ({ data: { session: { user: { id: uid, email: 'm@example.com' } } } }),
@@ -148,6 +154,15 @@ async function nudgeIds(page) {
 async function actionTitles(page) {
   return page.evaluate(() =>
     [...document.querySelectorAll('.next-action .na-title')].map(n => n.textContent.trim()));
+}
+
+/* The last profiles write persistLiveWellness() made, or null if it made none. */
+async function lastScoreWrite(page) {
+  return page.evaluate(() => {
+    const w = (window.__kwWrites || []).filter(x => x.table === 'profiles'
+      && x.payload && Object.prototype.hasOwnProperty.call(x.payload, 'live_score'));
+    return w.length ? w[w.length - 1].payload : null;
+  });
 }
 
 /* The Points / Badges / Assessments / Check-ins row. */
@@ -568,6 +583,89 @@ async function statRow(page) {
       !/from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
     check('63 it says profile instead', /from your profile/.test(text),
       (text.match(/from your \w+/g) || []).join(' | '));
+    await page.close();
+  }
+
+  /* ── B1. The score gate reaches the server, not just the screen ────────────
+
+     P0-4 stopped SHOWING a score until the four sources behind it exist. It did
+     not stop WRITING one: persistLiveWellness() pushed it to profiles.live_score
+     regardless, where org_overview averaged it into the member's employer report
+     and _dept_metrics banded it in their department. A figure too provisional to
+     show its owner is not fit to be reported about them to their HR manager.
+
+     These read the recorded write rather than the page, because that is where
+     the defect lived — every one of them passes on the rendered output today. */
+  {
+    /* Habits check alone: 1 of 6, gate unmet. */
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const w = await lastScoreWrite(page);
+    check('64 a habits-only member writes no score to the server',
+      w && w.live_score === null, JSON.stringify(w));
+    check('65 and no dimension scores either',
+      w && w.live_cat_scores === null, JSON.stringify(w));
+    check('66 while the page agrees — no gauge is shown',
+      !view.gauge, 'gauge=' + view.gauge);
+    check('67 the count of sources is still recorded, so "not yet" is not "never"',
+      w && w.picture_sources === 1, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* The four gate sources: habits + budget + emergency fund + debts. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI } });
+    const w = await lastScoreWrite(page);
+    check('68 with the four sources in, a score is written',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    check('69 and the page shows one too', view.gauge, 'gauge=' + view.gauge);
+    check('70 picture_sources counts exactly what was given',
+      w && w.picture_sources === 4, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* "I have no debts" completes the debts source, so the gate is met on three
+       tools plus an answer — the same rule the checklist applies. */
+    const { page } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF, noDebts: true,
+      tools: { budget_planner: BUDGET } });
+    const w = await lastScoreWrite(page);
+    check('71 "I have no debts" satisfies the server-side gate too',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* A pre-P0-3 assessment carried its own figures. It is grandfathered on the
+       dashboard and must be grandfathered here, or the change would silently
+       delete a real score from 28 live profiles. */
+    const { page, view } = await dash(browser, { assessments: [legacyRow(400)] });
+    const w = await lastScoreWrite(page);
+    check('72 a pre-change assessment keeps its score on the server',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    check('73 as it does on the page', view.gauge, 'gauge=' + view.gauge);
+    check('74 even at 400 days — the grandfather does not expire',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* A member with nothing at all still reports their zero, so the report can
+       tell "nobody has started" apart from "we hold no row for them". */
+    const { page } = await dash(browser, { assessments: [] });
+    const w = await lastScoreWrite(page);
+    check('75 a member who has done nothing writes 0 sources and no score',
+      w && w.picture_sources === 0 && w.live_score === null, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* The checklist the member reads and the gate the server obeys are one
+       resolver. This pins them together: 6 of 6 on screen must be 6 on the wire. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI, net_worth_tracker: NW, retirement: RET } });
+    const w = await lastScoreWrite(page);
+    check('76 six sources on screen is six on the wire',
+      /6 of 6/.test(view.text) && w && w.picture_sources === 6,
+      JSON.stringify(w) + ' | ' + (view.text.match(/\d of 6/g) || []).join(','));
     await page.close();
   }
 

@@ -2300,25 +2300,106 @@ function computeLiveWellness(toolMap, ef) {
   return { score, dims, live: sources.size > 0, sources: [...sources], assessedScore: Math.round(latest.score) };
 }
 
+// ── The six sources, resolved in ONE place ───────────────────────────────────
+// The dashboard renders these as "N of 6" and gates the score on the first
+// four; persistLiveWellness() writes the same gate to the server. Computing
+// that rule twice is how the two copies drift apart, so there is one copy and
+// both callers read it.
+//
+// Every argument is an override for a caller that holds something fresher than
+// `state`: the dashboard has just re-fetched the tool rows and the emergency
+// fund, so its figures beat the login-time snapshot. Omit them and `state` is
+// used, which is what the login and save-emergency-fund paths want.
+const KW_SOURCE_IDS = ['habits', 'budget', 'emergency', 'debts', 'networth', 'retirement'];
+
+function kwPictureSources(opts) {
+  const o     = opts || {};
+  const tools = o.tools || state.toolData || {};
+  const ef    = o.ef !== undefined ? o.ef : (state.ef || state._efRow || null);
+  const _bd   = tools['budget_planner'];
+  const _nw   = tools['net_worth_tracker'];
+  const _ret  = o.retSnap !== undefined ? o.retSnap : (tools['retirement']?.snapshot ?? null);
+
+  // "I have no debts" is a real answer, not an absence of one — see the debts
+  // source on the dashboard. It lives in localStorage until P0-5 adds a column.
+  let _noDebts = false;
+  try { _noDebts = localStorage.getItem('kw_no_debts') === 'true'; } catch {}
+  const _hasDTI = !!tools['dti_calculator'];
+
+  const flags = {
+    habits:     (state.assessments || []).length > 0,
+    budget:     !!(_bd?.currentKey && _bd?.budgets?.[_bd.currentKey]),
+    // "Set up" = a saved fund with a target and any real figure — not dependent
+    // on a monthly essential-expenses figure having been entered.
+    emergency:  !!(ef && ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0)),
+    debts:      _hasDTI || _noDebts,
+    networth:   !!(_nw && ((_nw.assets || []).length || (_nw.liabilities || []).length)),
+    retirement: !!_ret,
+  };
+  flags.hasDTI  = _hasDTI;
+  flags.noDebts = _noDebts;
+  flags.count   = KW_SOURCE_IDS.filter(id => flags[id]).length;
+  return flags;
+}
+
 // Persist the live score to profiles so the employer/org aggregates
 // (org_overview / org_financial_indicators — see supabase_live_wellness.sql)
 // reflect tool updates without waiting for a reassessment. Fire-and-forget:
 // failures (e.g. the SQL migration not applied yet) only log a warning.
-function persistLiveWellness() {
-  const lw = state.liveWellness;
-  if (!lw || !currentUser || !state.user) return;
-  // Skip the write when nothing changed since the last persist (key-order-independent compare)
-  const _cmp = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
-  if (Number(state.user.live_score) === lw.score && _cmp(state.user.live_cat_scores) === _cmp(lw.dims)) return;
+//
+// B1: THE SERVER MUST NOT HOLD A SCORE THE MEMBER IS NOT BEING SHOWN. P0-4
+// gates the dashboard score on the first four sources because the dimensions
+// behind it are estimates until those figures exist. That gate stopped at the
+// screen: the score was still written to `profiles.live_score`, where it was
+// averaged into the member's employer report and banded in their department's
+// breakdown. A figure too provisional to show its owner is not fit to be
+// reported about them to their HR manager — it is the same claim, made where
+// nobody can check it. So the gate is applied here too, and a member who has
+// not met it writes NULL rather than a number.
+//
+// `picture_sources` is written on every pass, met or not. It is how the
+// reporting side can tell "we have no score for this person yet" apart from
+// "this person has never opened the portal" — the first is someone to help
+// along, the second is someone to invite.
+function persistLiveWellness(opts) {
+  if (!currentUser || !state.user) return;
+  // Nothing reaches a profile before the member has consented. The onboarding
+  // wizard owns the first write, and until it has run there is no picture to
+  // report and no employer aggregate to feed — writing picture_sources here
+  // would put a row in front of the tick that is supposed to authorise it.
+  if (!state.user.onboarded) return;
+  const lw  = state.liveWellness;
+  const src = kwPictureSources(opts);
+
+  // A pre-P0-3 assessment collected its own figures, so it satisfies the gate
+  // on its own and keeps its score — the same grandfather rule, and the same
+  // reasoning, as `grandfathered` in the dashboard view. It does not expire.
+  const _row = state.assessments?.[0] || null;
+  const _oldAssessment = !!_row && _row.answers?._habits_only !== true;
+  const scored = _oldAssessment || (src.habits && src.budget && src.emergency && src.debts);
+
+  const score = (scored && lw) ? lw.score : null;
+  const dims  = (scored && lw) ? lw.dims  : null;
+
+  // Skip the write when nothing changed since the last persist (key-order-
+  // independent compare). Null is compared as null, not coerced: Number(null)
+  // is 0, and 0 is a score a member can genuinely hold.
+  const _cmp  = o => JSON.stringify(Object.keys(o || {}).sort().map(k => [k, o[k]]));
+  const _prev = state.user.live_score == null ? null : Number(state.user.live_score);
+  if (_prev === score
+      && _cmp(state.user.live_cat_scores) === _cmp(dims)
+      && state.user.picture_sources === src.count) return;
+
   const _at = new Date().toISOString();
   sb.from('profiles')
-    .update({ live_score: lw.score, live_cat_scores: lw.dims, live_score_at: _at })
+    .update({ live_score: score, live_cat_scores: dims, live_score_at: _at, picture_sources: src.count })
     .eq('id', currentUser.id)
     .then(({ error }) => {
       if (error) { console.warn('[KW] live score persist failed (run supabase_live_wellness.sql?):', error.message); return; }
-      state.user.live_score = lw.score;
-      state.user.live_cat_scores = lw.dims;
+      state.user.live_score = score;
+      state.user.live_cat_scores = dims;
       state.user.live_score_at = _at;
+      state.user.picture_sources = src.count;
     })
     .catch(e => console.warn('[KW] live score persist failed:', e));
 }
@@ -2999,7 +3080,7 @@ VIEWS['dashboard'] = async function () {
       efCurrent = _num(ef.current_savings);
       efMonths  = _efM > 0 ? efCurrent / _efM : null;
       // "Set up" = a saved fund with a target and any real figure — not dependent on monthly being entered
-      hasEF = !!(ef.target_months && (ef.current_savings > 0 || ef.contribution > 0 || ef.monthly > 0));
+      hasEF = kwPictureSources({ tools: {}, ef }).emergency;
     }
   } catch {}
 
@@ -3011,7 +3092,6 @@ VIEWS['dashboard'] = async function () {
   try {
     const _live = computeLiveWellness(Object.keys(_toolMap).length ? _toolMap : undefined, _efRow);
     state.liveWellness = _live;
-    persistLiveWellness();
     if (_live && wellScore !== null) {
       wellIsLive = _live.live && _live.score !== Math.round(wellScore);
       wellScore  = _live.score;
@@ -3106,15 +3186,22 @@ VIEWS['dashboard'] = async function () {
   const hasAssessment = wellScore !== null || state.assessments.length > 0;
   const hasBudget     = budgetSurplus !== null;
   const hasStress     = stressScore !== null;
-  const hasDTI        = !!_toolMap['dti_calculator'];
-  // Tool-completion flags — nudges encourage using the actual tool even when the assessment estimate fills the card
-  const _bdTool       = _toolMap['budget_planner'];
-  const hasBudgetTool = !!(_bdTool?.currentKey && _bdTool?.budgets?.[_bdTool.currentKey]);
-  const _nwTool       = _toolMap['net_worth_tracker'];
-  const hasNWTool     = !!(_nwTool && ((_nwTool.assets||[]).length || (_nwTool.liabilities||[]).length));
-
-  // Hoist retSnap and insurance values here so nudges block can reference them
+  // Tool-completion flags — nudges encourage using the actual tool even when
+  // the assessment estimate fills the card. All six come from one resolver
+  // (kwPictureSources), which is also what persistLiveWellness() applies to
+  // decide whether the server may hold a score: the checklist the member reads
+  // and the gate the employer report obeys are then the same rule, not two
+  // copies of it.
   const retSnap  = _toolMap['retirement']?.snapshot ?? snap.retirement ?? null;  // Supabase source of truth, localStorage fallback
+  const _src     = kwPictureSources({ tools: _toolMap, ef: _efRow, retSnap });
+  const hasDTI        = _src.hasDTI;
+  const hasBudgetTool = _src.budget;
+  const hasNWTool     = _src.networth;
+
+  // Now that the fresher tool rows and emergency fund are in hand, tell the
+  // server what the member has — and, through the same gate, whether a score
+  // may stand against their name in their employer's report.
+  try { persistLiveWellness({ tools: _toolMap, ef: _efRow, retSnap }); } catch {}
   // Insurance — Supabase first. Newer assessments store an explicit count (_insCount, of 6 covers);
   // older ones store only the insurance dimension score (0–100). Use whichever exists.
   const _insAssess = state.assessments[0]?.cat_scores || state.user?.last_cat_scores || null;
@@ -3133,19 +3220,17 @@ VIEWS['dashboard'] = async function () {
   // "I have no debts" is a real answer, not an absence of one. The DTI tool
   // writes it to localStorage rather than a profiles column — P0-5 adds the
   // button — so the debts source can complete without a debt register existing.
-  const noDebts = (() => {
-    try { return localStorage.getItem('kw_no_debts') === 'true'; } catch { return false; }
-  })();
+  const noDebts = _src.noDebts;
 
   // The member's picture, as six things they have told us. Order matters: it is
   // the order the nudges ask for them, and the order the checklist renders.
   const SOURCES = [
-    { id:'habits',     label:'Habits check',   done: state.assessments.length > 0 },
-    { id:'budget',     label:'Budget',         done: hasBudgetTool },
-    { id:'emergency',  label:'Emergency fund', done: hasEF },
-    { id:'debts',      label:'Debts',          done: hasDTI || noDebts },
-    { id:'networth',   label:'Net worth',      done: hasNWTool },
-    { id:'retirement', label:'Retirement',     done: !!retSnap },
+    { id:'habits',     label:'Habits check',   done: _src.habits },
+    { id:'budget',     label:'Budget',         done: _src.budget },
+    { id:'emergency',  label:'Emergency fund', done: _src.emergency },
+    { id:'debts',      label:'Debts',          done: _src.debts },
+    { id:'networth',   label:'Net worth',      done: _src.networth },
+    { id:'retirement', label:'Retirement',     done: _src.retirement },
   ];
   const sourcesDone = SOURCES.filter(s => s.done).length;
 
