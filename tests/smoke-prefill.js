@@ -528,6 +528,69 @@ const addDebtVia = (page, name, amount) => page.evaluate(({ name, amount }) => {
       (dti.match(/\b(dti_pct|dti_ratio|debt_to_income)\b/g) || []).join(' '));
   }
 
+  /* ── 9. A2: a source line names the source that supplied the figure ── */
+  {
+    /* The generic banner and the specific one must not stack. */
+    const { page, errors } = await open(browser, 'dti_calculator.html', {
+      profile: { id: UID, net_income: 11000, monthly_debt: 900, fin_updated_at: '2026-09-01T00:00:00Z' },
+      tools: { budget_planner: BUDGET },
+    });
+    const out = await page.evaluate(() => {
+      const gen = document.getElementById('kw-profile-notice');
+      const spec = document.getElementById('income-prefill-notice');
+      const vis = el => !!el && getComputedStyle(el).display !== 'none';
+      return { generic: vis(gen), specific: vis(spec),
+               specificText: spec?.textContent || '' };
+    });
+    check('75 the vague "from your profile" banner is gone from DTI',
+      out.generic === false, 'generic notice still shown');
+    check('76 the specific notice is the one that shows',
+      out.specific === true && /from your budget/.test(out.specificText), out.specificText);
+    check('77 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* The other three pages keep the generic banner — only DTI opts out. */
+    const { page } = await open(browser, 'retirement_calculator.html', {
+      profile: { id: UID, gross_income: 18000, fin_updated_at: '2026-09-01T00:00:00Z' },
+    });
+    const still = await page.evaluate(() => !!document.getElementById('kw-profile-notice'));
+    check('78 opting out is per-page, not a global removal', still === true, String(still));
+    await page.close();
+  }
+  {
+    /* Budget Planner's seeded-income hint named the assessment for every
+       member, whether or not they had ever done one. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID, net_income: 11000, fin_updated_at: '2026-09-01T00:00:00Z' },
+    });
+    const hint = await page.evaluate(() => document.getElementById('incomeRows')?.textContent || '');
+    check('79 the seeded-income hint no longer claims the assessment',
+      !/from your assessment/.test(hint), hint.slice(-140));
+    check('80 it names the profile, which is where net_income came from',
+      !/Prefilled/.test(hint) || /from your profile/.test(hint), hint.slice(-140));
+    await page.close();
+  }
+
+  /* Source-level sweep: the phrase must not survive anywhere in the tools. */
+  {
+    const fs4 = require('fs');
+    const TOOLS = ['budget_planner.html','dti_calculator.html','retirement_calculator.html',
+                   'investment_calculator.html','goal_planner.html','net_worth_tracker.html',
+                   'affordability_calculator.html','rent_vs_buy.html','loan_calculator.html',
+                   'expense_tracker.html','debt_management_planner.html'];
+    /* Strip HTML and JS comments first: a comment explaining why a wrong source
+       line was removed is not itself a wrong source line. */
+    const speech = f => fs4.readFileSync(path.join(REPO, f), 'utf8')
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const offenders = TOOLS.filter(f => /from your assessment/.test(speech(f)));
+    check('81 no tool page says "from your assessment"', offenders.length === 0, offenders.join(', '));
+    const bad = TOOLS.filter(f => /from your Budget Planner/.test(speech(f)));
+    check('82 nor "from your Budget Planner"', bad.length === 0, bad.join(', '));
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

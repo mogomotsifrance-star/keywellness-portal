@@ -37,7 +37,13 @@ const KWProfile = (function () {
   }
 
   // mappings: [{inputId, col}]  — col is the profiles column name
-  function prefill(mappings, noticeParentSelector) {
+  //
+  // opts.silent suppresses the generic "Pre-filled from your profile" banner.
+  // A page that resolves the real source itself (KWSource) and writes its own
+  // notice must pass it: two notices stacked, the vaguer one on top, is how a
+  // member ends up reading "from your profile" above "from your budget" and
+  // believing neither.
+  function prefill(mappings, noticeParentSelector, opts) {
     if (!_p) return [];
     const filled = [];
 
@@ -51,7 +57,7 @@ const KWProfile = (function () {
       filled.push({ inputId, col, val });
     });
 
-    if (filled.length > 0 && !document.getElementById('kw-profile-notice')) {
+    if (filled.length > 0 && !(opts && opts.silent) && !document.getElementById('kw-profile-notice')) {
       const notice = document.createElement('div');
       notice.id = 'kw-profile-notice';
       notice.style.cssText = 'background:var(--kw-yellow-tint);border-left:4px solid var(--kw-yellow-ink);border-radius:0 8px 8px 0;padding:10px 16px;font-size:13px;color:var(--kw-ink);margin-bottom:16px';

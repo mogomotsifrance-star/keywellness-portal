@@ -525,6 +525,52 @@ async function statRow(page) {
     await page.close();
   }
 
+  /* ── 12. A2: the Emergency Fund view names one source, correctly ──
+     One figure — profiles.essential_expenses, written by the budget's Needs
+     total — was attributed to three different places on the same screen: the
+     card header said "from your profile", the body and both field hints said
+     "from your assessment". The assessment has collected no figures since
+     P0-3, so that one could not have been true for anybody. */
+  async function efView(browser, fixture) {
+    const { page, view } = await dash(browser, fixture);
+    const text = await page.evaluate(async () => {
+      window.location.hash = '#emergency';
+      await new Promise(r => setTimeout(r, 900));
+      return document.getElementById('page-content')?.textContent || '';
+    });
+    return { page, text, view };
+  }
+  {
+    /* fin_updated_at + a saved budget → the budget wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET },
+    });
+    check('59 the EF view no longer says "from your assessment"',
+      !/from your assessment/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('60 with a saved budget behind the figure it says so',
+      /from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('61 and says it in one voice, not three',
+      new Set(text.match(/from your (?:budget|profile|earlier assessment)/g) || []).size === 1,
+      JSON.stringify([...new Set(text.match(/from your [\w ]+/g) || [])]));
+    await page.close();
+  }
+  {
+    /* No budget saved: the two-part test fails, so it says "profile" — which
+       is true whatever wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)],
+    });
+    check('62 with no budget it does not claim the budget',
+      !/from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('63 it says profile instead', /from your profile/.test(text),
+      (text.match(/from your \w+/g) || []).join(' | '));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

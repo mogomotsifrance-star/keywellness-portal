@@ -6063,6 +6063,30 @@ VIEWS['emergency'] = async function () {
   let _asmtFig = null;
   try { _asmtFig = JSON.parse(localStorage.getItem('kw_assessment_result') || 'null')?.figures || null; } catch {}
   const _efMonthlyExp = _efNum(_asmtFig?.essentialExpenses, 'assessment essentialExpenses') || _efNum(state.user?.essential_expenses, 'profile essential_expenses') || 0;
+
+  // A2: where this figure actually came from.
+  //
+  // It is profiles.essential_expenses, which budget_planner writes from the
+  // NEEDS group total. This view named three different sources for that one
+  // number — the card header said "from your profile", the body and both hints
+  // said "from your assessment". The assessment has collected no figures since
+  // P0-3, so that third one could not have been true for anybody.
+  //
+  // Same two-part test as KWSource.label(): fin_updated_at proves something
+  // wrote the shared figures, a saved budget proves the budget existed to be
+  // that something. index.html does not load kw-profile-sync.js (only the seven
+  // tool pages do) and KWSource reads window._toolSb, which does not exist
+  // here — so the rule is computed from `state` rather than adding a script to
+  // a 500KB auth-critical page.
+  const _efSrc = (() => {
+    // The figure has two possible origins and the line must follow the one
+    // actually taken. A pre-P0-3 device can still hold real assessment figures
+    // in kw_assessment_result; post-P0-3 they are null, so this falls through.
+    if (_efNum(_asmtFig?.essentialExpenses, 'assessment essentialExpenses')) return 'from your earlier assessment';
+    const _bd = state.toolData?.budget_planner;
+    const _budgetSaved = !!(_bd?.currentKey && _bd?.budgets?.[_bd.currentKey]);
+    return (state.user?.fin_updated_at && _budgetSaved) ? 'from your budget' : 'from your profile';
+  })();
   const _ef3mo = _efMonthlyExp * 3;
   const _ef6mo = _efMonthlyExp * 6;
   const _efSetUp   = !!(saved.monthly || saved.current || saved.contribution);
@@ -6077,8 +6101,8 @@ VIEWS['emergency'] = async function () {
       <div class="kw-trust">Stays in your account. Your employer only ever sees averages across 5 or more colleagues.</div>
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
-        <div class="card-title">💡 Recommended Targets (from your profile)</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> from your assessment:</p>
+        <div class="card-title">💡 Recommended Targets (${_efSrc})</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> ${_efSrc}:</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--orange);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(3);efCalc()">
             <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px">Minimum (3 months)</div>
@@ -6104,12 +6128,12 @@ VIEWS['emergency'] = async function () {
         <div class="field">
           <label>Monthly Essential Expenses (BWP)</label>
           <input type="number" id="ef-m" value="${_efPrefill ? _efMonthlyExp : (saved.monthly||'')}" placeholder="e.g. 4500" min="0" oninput="efCalc()">
-          <div class="hint">${_efPrefill ? '💡 Pre-filled from your assessment. Adjust if needed.' : 'Rent, food, transport, utilities — basics only, no luxuries'}</div>
+          <div class="hint">${_efPrefill ? `💡 Pre-filled ${_efSrc}. Adjust if needed.` : 'Rent, food, transport, utilities — basics only, no luxuries'}</div>
         </div>
         <div class="field">
           <label>Current Emergency Savings (BWP)</label>
           <input type="number" id="ef-c" value="${saved.current || (!_efSetUp && _efSavings>0 ? _efSavings : '')}" placeholder="e.g. 2000" min="0" oninput="efCalc()">
-          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled from your assessment — adjust if needed.</div>` : ''}
+          ${(!_efSetUp && _efSavings>0) ? `<div class="hint">💡 Pre-filled ${_efSrc} — adjust if needed.</div>` : ''}
         </div>
         <div class="field">
           <label>Monthly Contribution (BWP)</label>
