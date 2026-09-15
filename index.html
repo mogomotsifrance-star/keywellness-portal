@@ -3115,7 +3115,7 @@ VIEWS['dashboard'] = async function () {
   }
 
   // ── Debt-to-Income & Savings Rate — Supabase only: DTI Calculator → budget line items → assessment/profile ──
-  let budgetDTI = null, budgetSavRate = null, budgetDTIBasis = null;
+  let budgetDTI = null, budgetSavRate = null, budgetDTIBasis = null, budgetDTISrc = null;
   // 1) DTI Calculator tool (most specific — sum of entered debts ÷ income)
   //
   // A1: the basis. The budget captures take-home only, so a member who came
@@ -3135,9 +3135,11 @@ VIEWS['dashboard'] = async function () {
       if (_dcGross > 0) {
         budgetDTI = +(_dcDebt / _dcGross * 100).toFixed(1);
         budgetDTIBasis = 'gross';
+        budgetDTISrc  = 'dti';
       } else if (_dcNet > 0) {
         budgetDTI = +(_dcDebt / _dcNet * 100).toFixed(1);
         budgetDTIBasis = 'take_home';
+        budgetDTISrc  = 'dti';
       }
     }
   } catch {}
@@ -3157,6 +3159,9 @@ VIEWS['dashboard'] = async function () {
           // The budget's income rows are take-home (budget_planner writes
           // net_income from the salary row, never gross_income).
           budgetDTIBasis = 'take_home';
+          // One budget line, not a debt register. The checklist below still
+          // reads "Debts — not yet" for this member, and it is right to.
+          budgetDTISrc  = 'budget';
         }
         if (_bSav > 0) budgetSavRate = +(_bSav / _bInc * 100).toFixed(1);
       }
@@ -3167,6 +3172,7 @@ VIEWS['dashboard'] = async function () {
     budgetDTI = +(_prof.monthly_debt / _profGross * 100).toFixed(1);
     // _profGross falls back to net when gross_income is absent, so say which.
     budgetDTIBasis = _prof.gross_income ? 'gross' : 'take_home';
+    budgetDTISrc  = 'profile';
   }
   if (budgetSavRate === null && _profNet && _prof.monthly_savings) {
     budgetSavRate = +(_prof.monthly_savings / _profNet * 100).toFixed(1);
@@ -3441,9 +3447,22 @@ VIEWS['dashboard'] = async function () {
     const _mid    = _onTH ? 45 : 50;
     const _high   = _onTH ? 60 : 65;
     const dtiCls  = budgetDTI <= _good ? 'green' : budgetDTI <= _mid ? 'gold' : budgetDTI <= _high ? 'orange' : 'red';
-    const dtiSub  = _onTH
-      ? (budgetDTI <= _good ? 'Comfortable · on take-home' : budgetDTI <= _mid ? 'Stretched · on take-home' : 'Heavy · on take-home')
-      : (budgetDTI <= _good ? 'Healthy' : budgetDTI <= _mid ? 'Acceptable' : budgetDTI <= _high ? 'High Risk' : 'Critical');
+    // Where the figure came from changes what the card may claim. A saved DTI
+    // run is a debt register: the member listed each obligation, so "Stretched"
+    // is a verdict about a total they gave us. The budget's `debt_min` is ONE
+    // line typed while planning a month, and the checklist below still reads
+    // "Debts — not yet" for that member — correctly, because a single line is
+    // not a debt register. Saying "Stretched · on take-home" above a row that
+    // says we have not been told is the dashboard contradicting itself, and the
+    // member cannot tell which half to believe. So the subtitle names the
+    // source and the next step instead. The band colour still reflects the
+    // ratio we do have; it is the CLAIM that had to go, not the signal.
+    const _fromBudgetLine = budgetDTISrc === 'budget';
+    const dtiSub  = _fromBudgetLine
+      ? 'from your budget — list each loan to confirm'
+      : _onTH
+        ? (budgetDTI <= _good ? 'Comfortable · on take-home' : budgetDTI <= _mid ? 'Stretched · on take-home' : 'Heavy · on take-home')
+        : (budgetDTI <= _good ? 'Healthy' : budgetDTI <= _mid ? 'Acceptable' : budgetDTI <= _high ? 'High Risk' : 'Critical');
     hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
   } else if (hasBudget) {
     hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
