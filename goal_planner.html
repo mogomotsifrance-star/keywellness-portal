@@ -289,16 +289,36 @@
         <button class="type-btn"          data-type="wedding"    onclick="selectType(this)"><span class="type-icon">💍</span> Wedding</button>
         <button class="type-btn"          data-type="business"   onclick="selectType(this)"><span class="type-icon">💼</span> Business</button>
         <button class="type-btn"          data-type="medical"    onclick="selectType(this)"><span class="type-icon">🏥</span> Medical</button>
+        <button class="type-btn"          data-type="bogadi"     onclick="selectType(this)"><span class="type-icon">💐</span> Bogadi</button>
+        <button class="type-btn"          data-type="livestock"  onclick="selectType(this)"><span class="type-icon">🐄</span> Livestock</button>
         <button class="type-btn"          data-type="custom"     onclick="selectType(this)"><span class="type-icon">🎯</span> Custom</button>
       </div>
     </div>
 
     <div class="form-grid">
+      <div id="goalTypeCopy" hidden style="grid-column: span 2;font-size:12.5px;line-height:1.65;color:var(--navy);background:var(--cream-dark);border-radius:8px;padding:11px 13px"></div>
       <div class="field" style="grid-column: span 2;">
         <label>Goal Name</label>
         <div class="input-wrap">
           <input type="text" id="goalName" class="name-field" placeholder="e.g. Buy a house in Gaborone" maxlength="60">
         </div>
+      </div>
+      <!-- Livestock computes its target from head count x today's price, so the
+           member works in the units they actually think in. Both fields empty:
+           no head count and no price are ever assumed. -->
+      <div class="field" id="livestockBlock" hidden style="grid-column: span 2;">
+        <label>How many, and what does one cost today?</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div class="input-wrap" style="flex:1;min-width:120px">
+            <input type="number" id="goalHead" placeholder="e.g. 5" min="1" step="1" oninput="syncLivestockTarget()">
+          </div>
+          <div class="input-wrap" style="flex:1;min-width:140px">
+            <span class="input-prefix">P</span>
+            <input type="text" id="goalPerHead" value="" inputmode="decimal" placeholder="0.00"
+              style="text-align:right" oninput="fmtInput(this);syncLivestockTarget()" onblur="finalizeInput(this);syncLivestockTarget()" onfocus="this.select()">
+          </div>
+        </div>
+        <div class="hint" id="livestockCalc">Head count and today\u2019s price per head \u2014 we work out the target.</div>
       </div>
       <div class="field">
         <label>Target Amount</label>
@@ -307,6 +327,7 @@
           <input type="text" id="goalTarget" value="" inputmode="decimal" autocomplete="off" placeholder="0.00"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
+        <div class="hint" id="goalTypeHint"></div>
       </div>
       <div class="field">
         <label>Current Savings Toward Goal</label>
@@ -504,6 +525,14 @@ const TYPE_META = {
   business:  { icon: '💼', label: 'Business' },
   medical:   { icon: '🏥', label: 'Medical' },
   custom:    { icon: '🎯', label: 'Custom Goal' },
+  // Phase D, approved 16 Sep 2026. Copy verbatim from
+  // docs/phase-d-category-model.md.
+  bogadi:    { icon: '💐', label: 'Bogadi',
+               hint: 'what you plan to set aside toward bride price, and by when',
+               copy: 'Bogadi is a large, known cost with a date. Treating it as a goal means the money is there when the families sit down, not borrowed the month before.' },
+  livestock: { icon: '🐄', label: 'Livestock',
+               hint: 'saving to buy cattle, goats or sheep \u2014 by head, with today\u2019s price',
+               copy: 'Saving toward livestock is saving toward an asset. Once bought, the animals move to your assets, and their upkeep moves to Farm costs.' },
 };
 
 // ──────────────────────────────────────────────
@@ -516,6 +545,36 @@ function selectType(btn) {
   // Pre-fill goal name if empty
   const nameEl = document.getElementById('goalName');
   if (!nameEl.value) nameEl.value = TYPE_META[selectedType].label;
+  applyTypeUi();
+}
+
+// The livestock inputs and the per-type copy follow the chosen type.
+function applyTypeUi(){
+  const meta = TYPE_META[selectedType] || {};
+  const blk  = document.getElementById('livestockBlock');
+  if (blk) blk.hidden = (selectedType !== 'livestock');
+  const hint = document.getElementById('goalTypeHint');
+  if (hint) hint.textContent = meta.hint || '';
+  const copy = document.getElementById('goalTypeCopy');
+  if (copy) { copy.textContent = meta.copy || ''; copy.hidden = !meta.copy; }
+  if (selectedType === 'livestock') syncLivestockTarget();
+}
+
+// Target = head x price per head. Only when BOTH are given: one without the
+// other is not a target, and a half-filled multiplication is not a figure the
+// member told us.
+function syncLivestockTarget(){
+  const head = parseInt(document.getElementById('goalHead')?.value, 10);
+  const per  = parseInput('goalPerHead');
+  const out  = document.getElementById('livestockCalc');
+  const tgt  = document.getElementById('goalTarget');
+  if (!(head > 0) || !(per > 0)) {
+    if (out) out.textContent = 'Head count and today\u2019s price per head \u2014 we work out the target.';
+    return;
+  }
+  const total = head * per;
+  if (tgt) tgt.value = total.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (out) out.textContent = `${head} \u00d7 ${fmt(per)} = ${fmt(total)} at today\u2019s price.`;
 }
 
 function selectPriority(btn) {
