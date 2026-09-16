@@ -121,7 +121,6 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
 
   <!-- Income -->
   <div class="card">
@@ -130,7 +129,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
       <div class="field">
         <label>Gross Monthly Salary (BWP)</label>
         <input type="number" id="grossSalary" placeholder="e.g. 15000" min="0">
-        <span class="field-hint">Before tax and deductions</span>
+        <span class="field-hint" id="grossSalaryHint">Before tax and deductions</span>
       </div>
       <div class="field">
         <label>Net (Take-home) Salary (BWP)</label>
@@ -471,9 +470,34 @@ function calculate() {
   document.getElementById('results').classList.add('show');
   document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'});
 
-  // Offer to write changed income/expense values back to shared profile
-  KWProfile.maybeWriteBack(_AFF_MAPPINGS);
+  // A successful Calculate IS a save.
+  //
+  // This page saves on `document.addEventListener('input', _toolSave)`, and
+  // every figure it needs can arrive prefilled — income is the only required
+  // one. So a member who opens it from their budget, agrees with what is
+  // already there and presses Calculate never fires an input event, and
+  // nothing is written: no tool_data row, no record that they used the tool.
+  // Same dead end as dti_calculator had. Accepting a figure we put in front of
+  // them is an answer.
+  _toolSave();
+
+  // Offer to write changed income/expense values back to shared profile.
+  // maybeWriteBack() already compares against dataset.kwProfileVal, so an
+  // unchanged field is not offered; _affOffered is the second half of the same
+  // guard — it stops a DECLINED offer being put again on the next Calculate.
+  const _affChanges = KWProfile.detectChanges(_AFF_MAPPINGS)
+    .filter(c => !(_affOffered[c.col] !== undefined
+                   && Math.abs(Number(_affOffered[c.col]) - Number(c.newVal)) < 0.01));
+  if (_affChanges.length) {
+    _affChanges.forEach(c => { _affOffered[c.col] = c.newVal; });
+    KWProfile.confirm(_affChanges).then(ok => { if (ok) KWProfile.writeBack(_affChanges); });
+  }
 }
+
+// What has already been put to the member, whatever they answered. Declining is
+// an answer; re-asking because they did not answer the way we hoped is worse
+// than not asking at all.
+const _affOffered = {};
 
 const _AFF_MAPPINGS = [
   { inputId: 'grossSalary', col: 'gross_income'      },
@@ -530,7 +554,11 @@ async function _toolRestore(_sb, uid){
     });
     // Prefill income + expenses from shared profile
     await KWProfile.load();
-    KWProfile.prefill(_AFF_MAPPINGS);
+    const _affFilled = KWProfile.prefill(_AFF_MAPPINGS);
+    if (_affFilled.some(f => f.inputId === 'grossSalary') && KWProfile.fromPayslip()) {
+      const _gh = document.getElementById('grossSalaryHint');
+      if (_gh) _gh.textContent = 'from your payslip — adjust if it is out of date.';
+    }
     // Cross-device: restore saved inputs (source of truth), then persist on change
     await _toolRestore(_sb, session.user.id);
     document.addEventListener('input', _toolSave);

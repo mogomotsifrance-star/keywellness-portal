@@ -610,19 +610,12 @@ document.addEventListener('DOMContentLoaded', function() {
   window._toolSb && window._toolSb.auth.getSession().then(async ({ data: { session } }) => {
     if (!session) return;
     window._toolUser = session.user;
-    // Profile income prefill (convenience for first use)
-    try {
-      const { data } = await window._toolSb.from('profiles').select('monthly_income').eq('id', session.user.id).maybeSingle();
-      if (data && data.monthly_income) {
-        const val = Number(data.monthly_income).toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
-        ['grossSalary','monthlySalary','monthlyIncome','grossIncome','income','salary','monthlyGross'].forEach(id => {
-          const el = document.getElementById(id);
-          if (el && el.tagName === 'INPUT') { el.value = val; el.dispatchEvent(new Event('input')); }
-        });
-        const notice = document.getElementById('income-prefill-notice');
-        if (notice) notice.style.display = '';
-      }
-    } catch(e){ console.warn('Income prefill failed:', e); }
+    // P0-5 (audit F7): a profile-income prefill block stood here targeting seven
+    // input ids, none of which exist on this page, and revealing an
+    // #income-prefill-notice element this page does not have either. It ran a
+    // profiles query on every load and could not do anything with the result.
+    // Deleted rather than repaired: this calculator asks for a loan amount and a
+    // rate, not the member's salary, so there is nothing here to prefill.
     // Restore saved inputs (source of truth — overrides income prefill), then persist on change
     const _apply = (_inp) => { if (!_inp) return false; Object.keys(_inp).forEach(id => { const el = document.getElementById(id); if (el && _inp[id] != null && _inp[id] !== '') el.value = _inp[id]; }); if (typeof calculate === 'function') calculate(); return true; };
     const _local = () => { try { const j = JSON.parse(localStorage.getItem('kw_tool_rent_vs_buy')||'null'); return j && j.inputs; } catch(_){ return null; } };

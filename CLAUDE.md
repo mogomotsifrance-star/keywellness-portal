@@ -394,6 +394,142 @@ floors for the HR dashboard it was written for.
 The exception is **psychosocial, which is floored for everyone, always** —
 `theme_counts()` has no internal view, decided 25 Aug. Do not add one.
 
+**A habits check is not a wellness score, and reporting knows the difference.**
+P0-3 replaced the 16-figure assessment with an 11-question habits check, and
+P0-4 stopped *showing* a score until the four sources behind it exist. That gate
+stopped at the screen: the score was still written to `profiles.live_score` and
+still read by five reporting functions, so a figure too provisional to show its
+owner was averaged into their employer's report. `supabase_habits_only_reporting.sql`
+(B1) closes it. One predicate, spelled identically in all five so it can be
+grepped:
+
+```sql
+coalesce((<answers>->>'_habits_only')::boolean, false) and <profile>.live_score is null
+```
+
+Nulling `live_score` alone is never enough — every one of those functions falls
+back to the assessment's own `score` or `cat_scores`, which on a habits-only row
+is exactly the number that must not be reported.
+
+Three things this deliberately keeps. **`goals` and `income` survive the cut** —
+they are habit questions end to end and mean the same on either kind of row.
+**Engagement still counts them**: `completed_assessment`, `assessed` and the
+activation funnel are unchanged, and the new `engaged_not_scored` is what keeps
+"has not given us enough to score" apart from "never showed up". **A pre-P0-3
+assessment keeps its score indefinitely** — those members gave their figures
+inside the assessment, and 28 live profiles depend on it.
+
+`profiles.picture_sources` (0–6) is written by `persistLiveWellness()` on every
+dashboard pass, gate met or not, and feeds `org_overview`'s `completeness` block.
+**`index.html` has exactly one definition of the six sources, `kwPictureSources()`,
+and both the dashboard checklist and the server-side gate read it.** Do not add a
+second — the checklist the member reads and the rule their employer's report
+obeys have to be the same rule.
+
+**The budget carries a payslip, and nothing in it is budgeted.** Phase C added
+an optional "From your payslip" block to `budget_planner.html`: gross pay, PAYE,
+pension, medical aid, loan repayments deducted from salary, other deductions.
+**None of it is added to `calcTotals()`** — it describes money the member never
+had the chance to allocate, so budgeting it would double-count it against the
+pay they actually received. It writes `gross_income` (its first real writer) and
+`payslip_*` via `supabase_payslip_figures.sql`.
+
+Three consumers depend on the split, and each is a claim that was wrong before:
+
+- **`monthly_debt` = budget `debt_min` + `payslip_loan_deductions`.** A loan
+  repaid off the salary used to be invisible, so a member repaying P3,000 at
+  source read as having no debt and got a clean DTI.
+- **`retirement_contribution` is the VOLUNTARY allocation, `payslip_pension` is
+  the deducted one, and Retirement adds them.** `_RET_MAPPINGS` used to map
+  `monthlyContrib` to `monthly_savings` — every savings category — so a member's
+  emergency fund and goal savings were prefilled back as their retirement
+  contribution. Keep the two apart: Phase E needs them separate.
+- **`payslip_medical` unions into the cover set; it never adds to the cover
+  COUNT blindly.** The count moves only when `answers._insCovers` says medical
+  was not already ticked. Without that set (pre-Phase-C rows) the count is left
+  alone and only the advice changes — an undercount asks a question, an
+  overcount makes a claim.
+
+**`_insCovers` goes in `answers`, never in `cat_scores`.** HR's report walks
+`cat_scores` with `jsonb_each` and casts every value to numeric to band it; an
+array there raises at query time inside `_org_report_period_data`. `answers` is
+free-form and SQL reads only `_habits_only` from it.
+
+**`debt_extra` is not savings.** It sits in the budget's Savings & Investments
+expense GROUP — a budgeting convention the 50/30/20 chart keeps, via
+`savingsGroupAmt` — but money going to a creditor is not saving. `savingsAmt`,
+`monthly_savings`, `_SAVINGS_CATS` (index.html), `KW_SAVINGS_CATS`
+(budget_planner) and `SAV_CATS` (wellness_assessment) all exclude it and all
+agree. Do not re-add it to any of them.
+
+**The net-pay row is matched by `KW_NET_ROW_RE`, which keeps the old spelling.**
+Phase C renamed the income line to "Paid into your bank account each month (net
+pay)". Every budget saved before that carries "Salary (take-home)"; matching
+only the new wording silently stops writing `net_income` for those members with
+the tool still appearing to work.
+
+**A successful Calculate is a save.** `dti_calculator` and
+`affordability_calculator` both prefill everything they need, so a member can
+complete them without typing — and both used to save only on an explicit edit,
+leaving no `tool_data` row and never flipping the dashboard source. Both now
+call their save from `calculate()`, and both carry a one-offer guard
+(`_debtOffered`, `_affOffered`) so a declined profile prompt is not put again.
+`loan_calculator` and `rent_vs_buy` cannot reach a result without an input
+event, so they are fine — **but prefill either of their required fields and the
+dead end comes back.**
+
+**Categories are placed by BUCKET, not by group** (Phase D, approved 16 Sep
+2026 — `docs/phase-d-category-model.md` is the specification, and every hint,
+first-budget prompt and advice sentence in `budget_planner.html` is verbatim
+from it). `group` decides only where a line is drawn on screen; `bucket`
+(`need` / `want` / `save` / `null`) is what `calcTotals()` and the 50/30/20 bars
+read. Before this the bars read the group, so the Other group — Giving,
+Miscellaneous and every custom line — was in the expense total and in **no bar**,
+and the three bars never added up to what the member spends.
+
+**`bucket: null` means "not told yet", and is never guessed.** An untagged line
+stays in the total and in no bar, `calcTotals()` returns it as `untaggedAmt`,
+and the page says so. Defaulting it to Wants would file a member's tithe as
+discretionary spending; defaulting to Needs would inflate a figure their
+employer's report reads.
+
+**The three-way question fires from the autosave, never mid-entry, and a
+dismissal is not a "no"** — the line stays untagged and is asked again on the
+next save. Only custom lines and `gifts` / `misc` may be tagged
+(`TAGGABLE_BUILTINS`); every other built-in is fixed, because a member
+re-tagging `housing` as a Want produces figures nothing downstream can reason
+about.
+
+**`savingsOf(b)` is the one definition of saving**, mirrored by
+`kwBudgetSavings()` in `index.html` and the `SAV_CATS` block in
+`wellness_assessment.html`. It is `emfund + retirement + invest + goals +
+motshelo`, plus any line the member has tagged `save` themselves. Never
+`moraka` (a farm's running costs), never `debt_extra` (money going to a
+creditor), never `payslip_pension` (it never reached them to be allocated).
+`motshelo` joined 16 Sep: members who save through a group were being told they
+save nothing. `savingsGroupAmt` is **retired** — the third bar is the `save`
+bucket and is labelled "Savings & extra debt repayment", so the two figures no
+longer need separating.
+
+**Advice is ranked before it is capped.** `renderAdvice()` shows ten of what it
+builds, and the Phase D sentences were being appended last — so the member with
+family support, a motshelo and a cattle post, the member the model was written
+for, never saw a single line written for them. Surplus/deficit ranks first, the
+acknowledging lines second, generic guidance last. **Mark any new line
+`kw_phase_d` if it must survive the cap.**
+
+**Advice never names a Need, Giving, family support, contributions or a custom
+line in a cut or deficit sentence.** `cuttableWants()` is the only source of a
+nameable line. The deficit sentence states the shortfall, names the single
+largest Want only when that one line could close it, and otherwise says the gap
+sits in fixed costs and offers a coach — naming nothing. There is a test per
+branch; keep it.
+
+**`kw_fn_backup` holds the pre-change bodies and is the rollback's only source.**
+Restoring `_org_report_period_data` or `_dept_metrics` from disk would undo the
+M3 split; the rollback restores from this table instead. RLS on, no policies, no
+grants beyond `postgres` / `service_role`. Do not drop it.
+
 **`_org_report_period_data` and `_dept_metrics` are NOT what their files
 say.** M3 Part 2 rewrote them in place via `pg_get_functiondef` to count
 `service_line = 'financial'` only. Re-running
@@ -571,4 +707,9 @@ inventing an entry — but that is rare, and the default is to write one.
 - Do not use `localStorage` for new features — use Supabase instead
 - Do not hand-write account-deletion SQL — use `admin_user_delete()` (Users tab → Delete). A one-off script misses the two tables that have no foreign key and silently orphans them
 - Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
+- Do not write a wellness score to `profiles.live_score` for a member who has not met the four-source gate, and do not compute that gate anywhere but `kwPictureSources()` — see Roles & Interfaces
+- Do not add anything from the payslip block to the budget's income or expense totals, and do not put `_insCovers` (or any array) in `cat_scores` — see Roles & Interfaces
+- Do not count `debt_extra` or `moraka` as savings anywhere, and do not guess a bucket for an untagged line — see Roles & Interfaces
+- Do not name a Need, Giving, family support, contributions or a custom line in any cut or deficit advice
+- Do not drop `kw_fn_backup` — it is the only copy of the pre-B1 function bodies
 - Do not end a session without writing a vault entry — see Vault Logging above

@@ -1,0 +1,834 @@
+/* Key Wellness — headless checks for the dashboard first-week state (P0-4).
+
+   What this guards:
+
+     · the score gate. A wellness score out of 100 is shown only once the four
+       sources it depends on exist — EXCEPT for a member assessed before P0-3,
+       whose figures were given inside the assessment and whose score must not
+       vanish. That exception has NO expiry: an old assessment is dated, not
+       false, and a score is not taken away from someone who went quiet. What it
+       gets instead is its date on the gauge and a live budget nudge. It must
+       still not apply to a habits-only row. Four ways to get this wrong;
+     · the two-nudge rule. The strip used to carry up to nine at once, ordered
+       by the order they happened to be written;
+     · an absent figure reads "not yet", never a dash in a warning colour. A red
+       "—" states a problem about something the member has not been asked for;
+     · "I have no debts" completes the debts source, so a debt-free member's
+       picture can reach 6 of 6 instead of being nudged forever.
+
+   Usage:  node tests/smoke-dashboard.js
+*/
+const { chromium } = require('playwright');
+const path = require('path');
+const url = require('url');
+
+let pass = 0, fail = 0;
+function check(name, ok, detail) {
+  if (ok) { pass++; console.log('PASS  ' + name); }
+  else    { fail++; console.log('FAIL  ' + name + (detail ? '  → ' + detail : '')); }
+}
+
+const INDEX = url.pathToFileURL(path.resolve(__dirname, '..', 'index.html')).href;
+const UID = 'u1';
+const daysAgo = n => new Date(Date.now() - n * 86400000).toISOString();
+const thisMonth = new Date().toISOString().slice(0, 7);
+
+/* A budget the dashboard will accept as "saved this month". */
+const BUDGET = {
+  currentKey: thisMonth,
+  budgets: { [thisMonth]: { income: [{ name: 'Salary', amount: 12000 }],
+                            expenses: { rent: 4000, food: 2000, debt_min: 1500, emfund: 500 } } },
+};
+const EF = { user_id: UID, target_months: 6, current_savings: 9000, monthly: 6000, contribution: 400 };
+const DTI = { debts: [{ id: 1, name: 'Car loan', amount: 1500, balance: 60000 }], grossSalary: '12,000', otherIncome: '0' };
+const NW = { assets: [{ name: 'Car', amt: 50000 }], liabilities: [] };
+const RET = { snapshot: { readinessPct: 55, retireAge: 60, yrsToRetire: 25, currentAge: 35 }, inputs: {} };
+
+/* A habits-only assessment row (P0-3 shape) and a pre-change one. */
+const habitsRow = (age = 1) => ({ id: 'a1', user_id: UID, score: 61,
+  cat_scores: { income: 66, savings: 33, emergency: 25, debt: 100, retirement: 0, insurance: 50, goals: 60, spending: 70, _insCount: 3 },
+  answers: { _habits_only: true, incomeStability: 2, savingsHabit: 1, debtMgmt: 3 }, created_at: daysAgo(age) });
+const legacyRow = (age = 1) => ({ id: 'a0', user_id: UID, score: 58,
+  cat_scores: { income: 60, savings: 50, emergency: 40, debt: 70, retirement: 45, insurance: 55, goals: 60, spending: 65, _insCount: 4 },
+  answers: { incomeStability: 2, savingsHabit: 2, debtMgmt: 2 }, created_at: daysAgo(age) });
+
+function installStub(page, f) {
+  return page.addInitScript(({ f, uid }) => {
+    try {
+      localStorage.setItem('kw_session_trust', JSON.stringify({ uid, ts: Date.now() }));
+      ['kw_consent_accepted','kw_welcome_seen','kw_profile','kw_snapshot',
+       'kw_assessment_result','kw_no_debts'].forEach(k => localStorage.removeItem(k));
+      localStorage.setItem('kw_welcome_seen', 'true');   // keep the welcome card out of the way
+      if (f.noDebts) localStorage.setItem('kw_no_debts', 'true');
+      if (f.startingPoint) localStorage.setItem('kw_assessment_result',
+        JSON.stringify({ score: 61, habitsOnly: true, date: new Date().toISOString(), startingPoint: f.startingPoint }));
+    } catch (_) {}
+
+    const toolRows = Object.entries(f.tools || {}).map(([tool, data]) => ({ tool, data }));
+    const lists = {
+      assessments: f.assessments || [], checkins: [], stress_logs: f.stress || [],
+      bookings: [], reward_thresholds: [], tool_data: toolRows, notifications: [],
+    };
+    const singles = {
+      profiles: f.profile, badges: { earned_badge_ids: [] },
+      my_points: { total: 0 }, emergency_fund: f.ef || null,
+    };
+    /* The real Supabase builder is a thenable that also has .catch — index.html
+       uses `.update(...).eq(...).then(...).catch(...)` in persistLiveWellness.
+       A `then` that returns a plain value leaves `.catch` undefined and the
+       dashboard dies with "Cannot read properties of undefined". */
+    const chain = (table) => {
+      const settle = () => Promise.resolve({ data: lists[table] ?? [], error: null });
+      const c = {
+        eq: () => c, in: () => c, or: () => c, order: () => c, limit: () => c, select: () => c,
+        maybeSingle: async () => ({ data: singles[table] ?? null, error: null }),
+        single: async () => ({ data: singles[table] ?? null, error: null }),
+        then: (res, rej) => settle().then(res, rej),
+        catch: (fn) => settle().catch(fn),
+        finally: (fn) => settle().finally(fn),
+      };
+      return c;
+    };
+    /* Every write is recorded. B1 is about what reaches the SERVER, which no
+       amount of reading the rendered page can tell you: the defect was that a
+       score the dashboard correctly refused to show was written to
+       profiles.live_score anyway, and averaged into the employer's report. */
+    window.__kwWrites = [];
+    const rec = (t, verb) => (payload) => { window.__kwWrites.push({ table: t, verb, payload }); return chain(t); };
+    const fake = {
+      from: (t) => ({ select: () => chain(t), insert: rec(t, 'insert'), update: rec(t, 'update'),
+                      upsert: rec(t, 'upsert'), delete: () => chain(t) }),
+      rpc: async () => ({ data: null, error: null }),
+      auth: {
+        getSession: async () => ({ data: { session: { user: { id: uid, email: 'm@example.com' } } } }),
+        getUser: async () => ({ data: { user: { id: uid, email: 'm@example.com' } }, error: null }),
+        onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+      },
+    };
+    window.supabase = { createClient: () => fake };
+  }, { f, uid: UID });
+}
+
+const CDN_NOISE = /jsdelivr|cdnjs|Chart|vimeo/i;
+
+async function dash(browser, fixture) {
+  const f = { profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true, welcome_seen: true },
+              ...fixture };
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', e => { if (!CDN_NOISE.test(String(e))) errors.push(String(e)); });
+  await page.route('**cdn.jsdelivr.net/npm/@supabase/**', r => r.abort());
+  await installStub(page, f);
+  await page.goto(INDEX);
+  await page.waitForFunction(() => !!document.getElementById('page-content')?.textContent.trim(),
+    null, { timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const view = await page.evaluate(() => {
+    const el = document.getElementById('page-content');
+    const cards = [...el.querySelectorAll('.hub-card')].map(c => ({
+      lbl: c.querySelector('.hub-lbl')?.textContent || '',
+      val: c.querySelector('.hub-val')?.textContent || '',
+      sub: c.querySelector('.hub-sub')?.textContent || '',
+      cls: c.className,
+    }));
+    return {
+      text: el.textContent,
+      html: el.innerHTML,
+      cards,
+      gauge: !!el.querySelector('svg path[d*="A 78 78"]'),
+      actions: el.querySelectorAll('.next-action').length,
+    };
+  });
+  return { page, view, errors };
+}
+
+/* index.html tags the strip #kw-nudge-strip and each row data-kw-nudge="<id>".
+   Reading those rather than inferring from div nesting keeps this suite from
+   breaking on a purely visual change to the strip. */
+async function nudgeIds(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('#kw-nudge-strip [data-kw-nudge]')].map(n => n.dataset.kwNudge));
+}
+
+/* "What To Do Next" titles, in the order they are rendered. */
+async function actionTitles(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.next-action .na-title')].map(n => n.textContent.trim()));
+}
+
+/* The last profiles write persistLiveWellness() made, or null if it made none. */
+async function lastScoreWrite(page) {
+  return page.evaluate(() => {
+    const w = (window.__kwWrites || []).filter(x => x.table === 'profiles'
+      && x.payload && Object.prototype.hasOwnProperty.call(x.payload, 'live_score'));
+    return w.length ? w[w.length - 1].payload : null;
+  });
+}
+
+/* The Points / Badges / Assessments / Check-ins row. */
+async function statRow(page) {
+  return page.evaluate(() => {
+    const v = id => document.getElementById(id)?.textContent.trim() ?? null;
+    return { points: v('stat-val-points'), badges: v('stat-val-badges'),
+             assess: v('stat-val-assess'), checkins: v('stat-val-checkins'),
+             sidebar: document.getElementById('sb-pts')?.textContent.trim() ?? null };
+  });
+}
+
+(async () => {
+  const browser = await chromium.launch();
+
+  /* ── 1. Brand-new member: nothing done ───────────────────────── */
+  {
+    const { page, view, errors } = await dash(browser, { assessments: [] });
+    check('1  the gauge is not shown before the score is earned', view.gauge === false);
+    check('2  the slot reads "Your picture — 0 of 6"', /Your picture — 0 of 6/.test(view.text), view.text.slice(0, 140));
+    check('3  all six sources are listed as a checklist',
+      ['Habits check','Budget','Emergency fund','Debts','Net worth','Retirement']
+        .every(l => view.text.includes(l)));
+    check('4  and each unmet one reads "not yet"',
+      (view.text.match(/not yet/g) || []).length >= 6, String((view.text.match(/not yet/g) || []).length));
+    check('5  no wellness score is printed anywhere', !/\d+\/100/.test(view.text),
+      (view.text.match(/\d+\/100/g) || []).join(' '));
+
+    const titles = await nudgeIds(page);
+    check('6  at most two nudges are live, and at least one', titles.length >= 1 && titles.length <= 2, JSON.stringify(titles));
+    check('7  and the first is the habits check', titles[0] === 'habits', JSON.stringify(titles));
+    check('8  the second is the budget', titles[1] === 'budget', JSON.stringify(titles));
+    check('9  the strip is headed by a next step, not "Action Required"',
+      /Your next step/.test(view.text) && !/Action Required/.test(view.text));
+    check('10 "What To Do Next" is capped at three', view.actions <= 3, String(view.actions));
+    check('11 and does not also demand the assessment nudge 1 is asking for',
+      !/Complete your wellness assessment/.test(view.text));
+    check('12 no empty hub card shows a dash', !view.cards.some(c => c.val === '—'),
+      JSON.stringify(view.cards.filter(c => c.val === '—')));
+    check('13 nor a red or orange colour for an absence',
+      !view.cards.some(c => c.val === 'not yet' && /\b(red|orange)\b/.test(c.cls)),
+      JSON.stringify(view.cards.filter(c => c.val === 'not yet' && /\b(red|orange)\b/.test(c.cls))));
+    check('14 no uncaught errors on an empty dashboard', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
+  /* ── 2. The starting point stands in for the score ───────────── */
+  {
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)],
+      startingPoint: ['From your answers, two things stand out: you save what is left rather than saving first, and a surprise bill would be hard to absorb right now.',
+                      'Moving even a small amount on payday, before anything else, is the single habit that changes this.'],
+    });
+    check('15 one source done reads "1 of 6"', /Your picture — 1 of 6/.test(view.text), view.text.slice(0, 140));
+    check('16 the habits check no longer appears as a next step',
+      !(await nudgeIds(page)).includes('habits'));
+    check('17 the written starting point fills the gauge slot',
+      /Your starting point/.test(view.text) && /save what is left rather than saving first/.test(view.text),
+      view.text.slice(0, 200));
+    check('18 still no score', view.gauge === false && !/\d+\/100/.test(view.text));
+    await page.close();
+  }
+
+  /* ── 3. The score gate opens on the fourth source ────────────── */
+  {
+    const { view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET },
+    });
+    check('19 habits + budget + EF is three of six — still no score',
+      /Your picture — 3 of 6/.test(view.text) && view.gauge === false, view.text.slice(0, 140));
+  }
+  {
+    const { view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI },
+    });
+    check('20 adding debts opens the gate and the gauge appears', view.gauge === true);
+    check('21 and a score out of 100 is now shown', /\d+\/100/.test(view.text),
+      view.text.slice(0, 160));
+  }
+
+  /* ── 4. "I have no debts" is an answer ───────────────────────── */
+  {
+    /* Gate still shut (no EF), so the checklist is on screen and the debts row
+       can be read directly. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], noDebts: true, tools: { budget_planner: BUDGET },
+    });
+    check('22 "no debts" counts the debts source as done',
+      /Your picture — 3 of 6/.test(view.text), view.text.slice(0, 160));
+    check('23 the member is no longer nudged to list debts',
+      !(await nudgeIds(page)).includes('debts'));
+    await page.close();
+  }
+  {
+    const { view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF, noDebts: true, tools: { budget_planner: BUDGET },
+    });
+    check('24 and it opens the score gate without any debt register',
+      view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
+  }
+
+  /* ── 5. The grandfather rule ──────────────────────────────────
+     It has no expiry. A score earned from figures the member typed into the old
+     assessment stays theirs; what it carries is a date, so they can judge its
+     age themselves, and a budget nudge, so refreshing it is one click. */
+  {
+    const { page, view } = await dash(browser, { assessments: [legacyRow(10)] });
+    check('25 a pre-change assessment keeps its score with no other source',
+      view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
+    check('25b and the score is shown with the date it came from',
+      /from your assessment on \d{1,2} [A-Z][a-z]+/.test(view.text),
+      view.text.slice(0, 200));
+    const titles = await nudgeIds(page);
+    check('25c with the budget nudge still live beside it',
+      titles.includes('budget'), JSON.stringify(titles));
+    await page.close();
+  }
+  {
+    /* The case the 90-day rule used to break: two years dormant. The score is
+       still the last true thing the member told us, so it stays — dated. */
+    const { page, view } = await dash(browser, { assessments: [legacyRow(730)] });
+    check('26 and it never expires, however old the assessment is',
+      view.gauge === true && /\d+\/100/.test(view.text), view.text.slice(0, 160));
+    check('26b a date from an earlier year carries its year',
+      /from your assessment on \d{1,2} [A-Z][a-z]+ \d{4}/.test(view.text),
+      view.text.slice(0, 200));
+    const titles = await nudgeIds(page);
+    check('26c the budget nudge is live here too',
+      titles.includes('budget'), JSON.stringify(titles));
+    await page.close();
+  }
+  {
+    /* Dimensions are not backfilled by the grandfather rule: a source the member
+       has never given still reads "not yet" in the hub, not a number or a dash. */
+    const { view } = await dash(browser, { assessments: [legacyRow(120)] });
+    const empties = view.cards.filter(c => c.val === 'not yet').map(c => c.lbl);
+    check('26d dimensions with no data still read "not yet"',
+      empties.length >= 3 && !view.cards.some(c => c.val === '—'),
+      JSON.stringify(view.cards.map(c => c.lbl + '=' + c.val)));
+  }
+  {
+    /* Once the four sources are in, the score stands on its own and the date
+       line would be telling the member to refresh what they just refreshed. */
+    const { view } = await dash(browser, {
+      assessments: [legacyRow(120)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI },
+    });
+    check('26e once the sources are in, the score drops the "from your assessment" line',
+      view.gauge === true && !/from your assessment on/.test(view.text),
+      view.text.slice(0, 200));
+  }
+  {
+    const { view } = await dash(browser, { assessments: [habitsRow(10)] });
+    check('27 and a habits-only row never grandfathers, however recent',
+      view.gauge === false && /Your picture — 1 of 6/.test(view.text), view.text.slice(0, 140));
+  }
+  {
+    const { view } = await dash(browser, { assessments: [habitsRow(400)] });
+    check('27b nor an old one — age was never what made a row count',
+      view.gauge === false && /Your picture/.test(view.text), view.text.slice(0, 140));
+  }
+
+  /* ── 6. A full picture ───────────────────────────────────────── */
+  {
+    const { page, view, errors } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI, net_worth_tracker: NW, retirement: RET,
+               /* stress is nudge 7, not one of the six sources — a complete
+                  picture with no log still legitimately asks for one, so the
+                  fixture supplies it to reach a genuinely empty ladder. */
+               financial_stress_tracker: { entries: [{ score: 4, date: daysAgo(2) }] } },
+    });
+    check('28 six of six shows the score', view.gauge === true);
+    const titles = await nudgeIds(page);
+    check('29 and the ladder has nothing left to ask', titles.length === 0, JSON.stringify(titles));
+    check('30 the strip still shows one "done" line for momentum',
+      /done\. That fills in the tools/.test(view.text));
+    check('31 no uncaught errors on a complete dashboard', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+
+  /* ── 7. Nudge ordering and the folded employment rule ────────── */
+  {
+    const { page } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET },
+    });
+    const titles = await nudgeIds(page);
+    check('32 with habits and budget done, the emergency fund comes next',
+      titles[0] === 'emergency', JSON.stringify(titles));
+    await page.close();
+  }
+  {
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, employment: 'Self-employed' },
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET },
+    });
+    check('33 self-employed folds a 6-month target into the EF ask, not a nudge of its own',
+      /variable income we aim for 6 months/.test(view.text), view.text.slice(0, 200));
+    const titles = await nudgeIds(page);
+    check('34 and there is still no separate employment nudge',
+      titles.length <= 2 && !/Retirement Annuity|provisional tax/.test(view.text), JSON.stringify(titles));
+    await page.close();
+  }
+
+  /* ── 8. The insurance re-take nudge is gone ──────────────────── */
+  {
+    const { page, view } = await dash(browser, {
+      assessments: [{ ...habitsRow(1), cat_scores: { ...habitsRow(1).cat_scores, _insCount: undefined } }],
+    });
+    check('35 no nudge asks the member to re-take the assessment for insurance',
+      !/Check your insurance coverage/.test(view.text) && !/Re-take the assessment/i.test(view.text));
+    const titles = await nudgeIds(page);
+    check('36 the ladder is still capped at two', titles.length <= 2, JSON.stringify(titles));
+    await page.close();
+  }
+
+  /* ── 9. "What To Do Next" follows the nudge ladder ────────────
+     The complaint: a member at 1 of 6 was led with "Calculate your net worth"
+     while the nudge directly above asked for their budget. Two panels, two
+     different next steps, three sources apart. */
+  {
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const titles = await actionTitles(page);
+    const nudges = await nudgeIds(page);
+    check('37 the list is capped at three', titles.length <= 3, JSON.stringify(titles));
+    check('38 net worth no longer leads a member at 1 of 6',
+      titles[0] !== 'Calculate your net worth', JSON.stringify(titles));
+    /* At 1 of 6 the ladder's rung is the budget. Net worth is three sources
+       further down and goals further still, so neither is something to do
+       "next" — the panel falls back to the honest line instead. */
+    check('39 nor does it ask for anything the member has not reached',
+      !titles.includes('Calculate your net worth') &&
+      !titles.includes('Set your first financial goal'), JSON.stringify(titles));
+    check('39b what is left says where they are, without inventing a task',
+      titles.includes('Keep building your picture'), JSON.stringify(titles));
+    check('40 nothing here repeats a request the nudge strip is already making',
+      !(nudges.includes('networth') && titles.includes('Calculate your net worth')),
+      JSON.stringify({ nudges, titles }));
+    await page.close();
+  }
+  {
+    /* Five of six: the net-worth nudge is live, so its request must not also
+       appear as an action. This is the case the old `!nudges.some(...)` guard
+       covered for the habits check alone. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI, retirement: RET },
+    });
+    const nudges = await nudgeIds(page);
+    const titles = await actionTitles(page);
+    check('41 with the net-worth nudge live, the action is suppressed',
+      !nudges.includes('networth') || !titles.includes('Calculate your net worth'),
+      JSON.stringify({ nudges, titles }));
+    await page.close();
+  }
+  {
+    /* An OBSERVATION about a figure the member has given is not a duplicate of
+       a request, and must survive. A budget in deficit is a red flag; losing it
+       to tidy the page would be the worse bug. */
+    const DEFICIT = { currentKey: thisMonth,
+      budgets: { [thisMonth]: { income: [{ name: 'Salary', amount: 4000 }],
+                                expenses: { housing: 6000, food: 2000 } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: DEFICIT } });
+    const titles = await actionTitles(page);
+    check('42 a deficit is still reported, request-suppression notwithstanding',
+      titles.includes('Monthly budget is in deficit'), JSON.stringify(titles));
+    await page.close();
+  }
+
+  /* ── 10. The stats row agrees with the sidebar ────────────────
+     It read 0 POINTS / 0 BADGES / 0 ASSESSMENTS straight after the habits
+     check while the sidebar showed 150. The row is painted once, inside the
+     dashboard's async render, and two things land after that: the badge/points
+     award (loadBadgeData -> syncProgressBadges is deliberately not awaited),
+     and the video path, which used to bump the sidebar chip's text directly
+     without moving state.points.
+
+     So the regression is reproduced the way it actually happens — state moves
+     after the paint, and the sidebar is rebuilt. Before the fix the row keeps
+     the old figures and the two disagree; after it, one painter serves both. */
+  {
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const before = await statRow(page);
+    check('43 the first paint shows the real figures, not the markup placeholder',
+      before.assess === '1' && before.points === before.sidebar, JSON.stringify(before));
+
+    const after = await page.evaluate(() => {
+      /* Exactly what a late award does: move state, then rebuild the chrome. */
+      state.points = { ...(state.points || {}), total: 150 };
+      state.assessments = [...state.assessments, { id: 'a9', score: 55, cat_scores: {}, answers: {}, created_at: new Date().toISOString() }];
+      state.checkins = [{ id: 'c1' }];
+      buildNav('dashboard');
+      const v = id => document.getElementById(id)?.textContent.trim() ?? null;
+      return { points: v('stat-val-points'), badges: v('stat-val-badges'),
+               assess: v('stat-val-assess'), checkins: v('stat-val-checkins'),
+               sidebar: document.getElementById('sb-pts')?.textContent.trim() ?? null };
+    });
+    check('44 a late points award reaches the row, not just the sidebar chip',
+      after.points === '150' && after.sidebar === '150', JSON.stringify(after));
+    check('45 and so does a late assessment row',
+      after.assess === '2', JSON.stringify(after));
+    check('46 and a late check-in', after.checkins === '1', JSON.stringify(after));
+    check('47 the row and the sidebar never disagree about points',
+      after.points === after.sidebar, JSON.stringify(after));
+    await page.close();
+  }
+  {
+    /* A member with nothing: 0 is the truth here, not a stale paint. */
+    const { page } = await dash(browser, { assessments: [] });
+    const row = await statRow(page);
+    check('48 a genuine zero still reads zero', row.assess === '0', JSON.stringify(row));
+    check('49 and the sidebar still agrees', row.points === row.sidebar, JSON.stringify(row));
+    await page.close();
+  }
+
+  /* ── 11. A1: the dashboard reads the DTI basis ────────────────
+     The budget captures take-home only, so a member who came through it has
+     gross = 0 in the DTI tool. The dashboard used to require gross, find none,
+     and fall silently through to debt_min ÷ budget income — discarding the
+     member's own itemised debt list for a single budget line on a different
+     income, with nothing saying the number had changed meaning. */
+  {
+    const DTI_TAKEHOME = { debts: [{ id: 1, name: 'Car loan', amount: 3000, balance: 60000 }],
+                           grossSalary: '0', otherIncome: '0', netSalary: '10000', dti_basis: 'take_home' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_TAKEHOME },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('50 a take-home-only DTI still reaches the dashboard',
+      !!card && card.val === '30%', JSON.stringify(card));
+    check('51 computed from the member\'s own debts (3000/10000), not the budget line',
+      card && card.val === '30%', JSON.stringify(card));
+    check('52 and the card says which pay it is on',
+      card && /take-home/i.test(card.sub), JSON.stringify(card));
+    await page.close();
+  }
+  {
+    /* Gross present: unchanged, and never labelled take-home. */
+    const DTI_GROSS = { debts: [{ id: 1, name: 'Car loan', amount: 3000, balance: 60000 }],
+                        grossSalary: '20,000', otherIncome: '0', netSalary: '15000', dti_basis: 'gross' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_GROSS },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('53 a gross-basis DTI is unchanged (3000/20000)',
+      !!card && card.val === '15%', JSON.stringify(card));
+    check('54 and is not labelled take-home',
+      card && !/take-home/i.test(card.sub), JSON.stringify(card));
+    check('55 nor graded on the wrong band — 15% on gross is Healthy',
+      card && /Healthy/.test(card.sub), JSON.stringify(card));
+    await page.close();
+  }
+  {
+    /* 40% of take-home would be "Acceptable" on the gross bands and is not:
+       NBFIRA caps unsecured credit at 30% of net. The bands follow the basis. */
+    const DTI_HEAVY = { debts: [{ id: 1, name: 'Loans', amount: 4000, balance: 0 }],
+                        grossSalary: '0', otherIncome: '0', netSalary: '10000', dti_basis: 'take_home' };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI_HEAVY },
+    });
+    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    check('56 40% of take-home is not graded by the gross bands',
+      card && !/Acceptable/.test(card.sub), JSON.stringify(card));
+    check('57 it is Stretched, against the cap that is a net rule',
+      card && /Stretched/.test(card.sub), JSON.stringify(card));
+    check('58 and no advice quotes the lender threshold at a take-home figure',
+      !/Lenders look for under 35%/.test(view.text), view.text.slice(0, 200));
+    await page.close();
+  }
+
+  /* ── 12. A2: the Emergency Fund view names one source, correctly ──
+     One figure — profiles.essential_expenses, written by the budget's Needs
+     total — was attributed to three different places on the same screen: the
+     card header said "from your profile", the body and both field hints said
+     "from your assessment". The assessment has collected no figures since
+     P0-3, so that one could not have been true for anybody. */
+  async function efView(browser, fixture) {
+    const { page, view } = await dash(browser, fixture);
+    const text = await page.evaluate(async () => {
+      window.location.hash = '#emergency';
+      await new Promise(r => setTimeout(r, 900));
+      return document.getElementById('page-content')?.textContent || '';
+    });
+    return { page, text, view };
+  }
+  {
+    /* fin_updated_at + a saved budget → the budget wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET },
+    });
+    check('59 the EF view no longer says "from your assessment"',
+      !/from your assessment/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('60 with a saved budget behind the figure it says so',
+      /from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('61 and says it in one voice, not three',
+      new Set(text.match(/from your (?:budget|profile|earlier assessment)/g) || []).size === 1,
+      JSON.stringify([...new Set(text.match(/from your [\w ]+/g) || [])]));
+    await page.close();
+  }
+  {
+    /* No budget saved: the two-part test fails, so it says "profile" — which
+       is true whatever wrote it. */
+    const { page, text } = await efView(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 essential_expenses: 6000, fin_updated_at: '2026-09-01T00:00:00Z' },
+      assessments: [habitsRow(1)],
+    });
+    check('62 with no budget it does not claim the budget',
+      !/from your budget/.test(text), (text.match(/from your \w+/g) || []).join(' | '));
+    check('63 it says profile instead', /from your profile/.test(text),
+      (text.match(/from your \w+/g) || []).join(' | '));
+    await page.close();
+  }
+
+  /* ── B1. The score gate reaches the server, not just the screen ────────────
+
+     P0-4 stopped SHOWING a score until the four sources behind it exist. It did
+     not stop WRITING one: persistLiveWellness() pushed it to profiles.live_score
+     regardless, where org_overview averaged it into the member's employer report
+     and _dept_metrics banded it in their department. A figure too provisional to
+     show its owner is not fit to be reported about them to their HR manager.
+
+     These read the recorded write rather than the page, because that is where
+     the defect lived — every one of them passes on the rendered output today. */
+  {
+    /* Habits check alone: 1 of 6, gate unmet. */
+    const { page, view } = await dash(browser, { assessments: [habitsRow(1)] });
+    const w = await lastScoreWrite(page);
+    check('64 a habits-only member writes no score to the server',
+      w && w.live_score === null, JSON.stringify(w));
+    check('65 and no dimension scores either',
+      w && w.live_cat_scores === null, JSON.stringify(w));
+    check('66 while the page agrees — no gauge is shown',
+      !view.gauge, 'gauge=' + view.gauge);
+    check('67 the count of sources is still recorded, so "not yet" is not "never"',
+      w && w.picture_sources === 1, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* The four gate sources: habits + budget + emergency fund + debts. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI } });
+    const w = await lastScoreWrite(page);
+    check('68 with the four sources in, a score is written',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    check('69 and the page shows one too', view.gauge, 'gauge=' + view.gauge);
+    check('70 picture_sources counts exactly what was given',
+      w && w.picture_sources === 4, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* "I have no debts" completes the debts source, so the gate is met on three
+       tools plus an answer — the same rule the checklist applies. */
+    const { page } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF, noDebts: true,
+      tools: { budget_planner: BUDGET } });
+    const w = await lastScoreWrite(page);
+    check('71 "I have no debts" satisfies the server-side gate too',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* A pre-P0-3 assessment carried its own figures. It is grandfathered on the
+       dashboard and must be grandfathered here, or the change would silently
+       delete a real score from 28 live profiles. */
+    const { page, view } = await dash(browser, { assessments: [legacyRow(400)] });
+    const w = await lastScoreWrite(page);
+    check('72 a pre-change assessment keeps its score on the server',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    check('73 as it does on the page', view.gauge, 'gauge=' + view.gauge);
+    check('74 even at 400 days — the grandfather does not expire',
+      w && typeof w.live_score === 'number', JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* A member with nothing at all still reports their zero, so the report can
+       tell "nobody has started" apart from "we hold no row for them". */
+    const { page } = await dash(browser, { assessments: [] });
+    const w = await lastScoreWrite(page);
+    check('75 a member who has done nothing writes 0 sources and no score',
+      w && w.picture_sources === 0 && w.live_score === null, JSON.stringify(w));
+    await page.close();
+  }
+  {
+    /* The checklist the member reads and the gate the server obeys are one
+       resolver. This pins them together: 6 of 6 on screen must be 6 on the wire. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], ef: EF,
+      tools: { budget_planner: BUDGET, dti_calculator: DTI, net_worth_tracker: NW, retirement: RET } });
+    const w = await lastScoreWrite(page);
+    check('76 six sources on screen is six on the wire',
+      /6 of 6/.test(view.text) && w && w.picture_sources === 6,
+      JSON.stringify(w) + ' | ' + (view.text.match(/\d of 6/g) || []).join(','));
+    await page.close();
+  }
+
+  /* ── B2. The hub tile may not contradict the checklist ────────────────────
+
+     A member with a budget and no DTI run has a Debt-to-Income tile computed
+     from the budget's single `debt_min` line — while the checklist two cards
+     down reads "Debts — not yet", because one budget line is not a debt
+     register. The tile said "Stretched · on take-home": a verdict, above a row
+     saying we have not been told. The member cannot tell which half to
+     believe. */
+  {
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET } });
+    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    check('77 a budget-derived DTI tile names its source',
+      dti && /from your budget/.test(dti.sub), JSON.stringify(dti));
+    check('78 and says what would confirm it',
+      dti && /list each loan/.test(dti.sub), JSON.stringify(dti));
+    check('79 it does not grade a single budget line as a verdict',
+      dti && !/Stretched|Comfortable|Heavy|Healthy|Acceptable|High Risk|Critical/.test(dti.sub),
+      JSON.stringify(dti));
+    check('80 while the checklist still, correctly, says the debts source is unmet',
+      /Debts/.test(view.text) && /1 of 6|2 of 6|3 of 6/.test(view.text),
+      (view.text.match(/\d of 6/g) || []).join(','));
+    await page.close();
+  }
+  {
+    /* A saved DTI run IS a debt register, so the verdict is earned and stays. */
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BUDGET, dti_calculator: DTI } });
+    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    check('81 a saved DTI run is still graded',
+      dti && /Healthy|Acceptable|High Risk|Critical|Comfortable|Stretched|Heavy/.test(dti.sub),
+      JSON.stringify(dti));
+    check('82 and does not claim to come from the budget',
+      dti && !/from your budget/.test(dti.sub), JSON.stringify(dti));
+    await page.close();
+  }
+
+  /* ── Phase C. Savings is saving, and a cover held is not a gap ────────────*/
+  {
+    /* debt_extra lives in the budget's Savings & Investments group — a
+       budgeting convention — but money going to a creditor is not savings.
+       Counting it told members a savings rate higher than the one they have. */
+    const SAV_BUDGET = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { housing: 3000, emfund: 500, retirement: 300, invest: 100,
+                  goals: 100, debt_extra: 400, debt_min: 1000 } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: SAV_BUDGET } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('83 the savings rate counts saving only',
+      sav && /^10(\.0)?%$/.test(sav.val.trim()),
+      `emfund+retirement+invest+goals = 1000 of 10000 = 10%; with debt_extra it reads 14%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+  {
+    /* A medical aid deducted from salary is a cover held. Being told to go and
+       get medical aid by a portal that is reading your medical aid deduction is
+       how a member stops trusting the rest of the page. */
+    const thin = { ...habitsRow(1) };
+    thin.cat_scores = { ...thin.cat_scores, _insCount: 1 };
+    thin.answers = { ...thin.answers, _insCovers: ['medical'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [thin] });
+    const titles = await actionTitles(page);
+    check('84 a member with medical aid is not told to get medical aid',
+      !/Medical aid and income protection/.test(view.text),
+      (view.text.match(/Medical aid[^.]*/g) || []).join(' | ') || '(none)');
+    check('85 the remaining gap is still named',
+      /Income protection is the highest priority gap/.test(view.text),
+      titles.join(' | '));
+    await page.close();
+  }
+  {
+    /* And it is not counted twice: they ticked medical AND it is on the
+       payslip, which is one cover. */
+    const both = { ...habitsRow(1) };
+    both.cat_scores = { ...both.cat_scores, _insCount: 2 };
+    both.answers = { ...both.answers, _insCovers: ['medical', 'life'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [both] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('86 one cover ticked and deducted counts once, not twice',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    await page.close();
+  }
+  {
+    /* A cover on the payslip that they did NOT tick is one they hold. */
+    const none = { ...habitsRow(1) };
+    none.cat_scores = { ...none.cat_scores, _insCount: 1 };
+    none.answers = { ...none.answers, _insCovers: ['life'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [none] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('87 a cover only the payslip knows about is counted',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    await page.close();
+  }
+  {
+    /* Pre-Phase-C assessments carry no _insCovers. We cannot tell whether
+       medical was among them, so the COUNT is left alone — an undercount asks
+       a question, an overcount makes a claim — while the advice still stops
+       naming a cover we can see on their payslip. */
+    const legacy = { ...habitsRow(1) };
+    legacy.cat_scores = { ...legacy.cat_scores, _insCount: 2 };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [legacy] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('88 without the cover set the count is not inflated',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    check('89 but the advice still does not name a cover we can see they have',
+      !/Medical aid and income protection/.test(view.text),
+      (view.text.match(/Medical aid[^.]*/g) || []).join(' | ') || '(none)');
+    await page.close();
+  }
+
+  /* ── Phase D. The savings figure the dashboard reports ────────────────────
+     A motshelo is saving and a cattle post is a farm. Members who save through
+     a group were being told they save nothing; members keeping cattle had a
+     farm's running costs counted as savings. */
+  {
+    const BW = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { housing: 3000, emfund: 400, motshelo: 600, moraka: 900,
+                  debt_extra: 500, debt_min: 1000 },
+      customCats: [], tags: {} } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BW } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('90 a money motshelo counts toward the savings rate',
+      sav && /^10(\.0)?%$/.test(sav.val.trim()),
+      `emfund 400 + motshelo 600 = 1000 of 10000 = 10%. With moraka it reads 19%, with debt_extra 15%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+  {
+    /* A custom line the member tagged `save` is saving; an untagged one is not
+       — guessing either way would move a figure their employer's report reads. */
+    const TAG = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { emfund: 400, custom_1: 300, custom_2: 200, gifts: 100 },
+      customCats: [{ id: 'custom_1', name: 'Burial society', tag: 'save' },
+                   { id: 'custom_2', name: 'Society', tag: null }],
+      tags: { gifts: 'save' } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: TAG } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('91 a tagged-save custom line counts, an untagged one does not',
+      sav && /^8(\.0)?%$/.test(sav.val.trim()),
+      `emfund 400 + custom_1 300 + gifts 100 = 800 of 10000 = 8%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+
+  await browser.close();
+  console.log(`\n  ${pass} passed, ${fail} failed.`);
+  process.exit(fail ? 1 : 0);
+})();

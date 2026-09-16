@@ -182,6 +182,8 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
   .gauge-wrap { width: 180px; height: 98px; }
   .gauge-pct-val { font-size: 1.5rem; }
 }
+/* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
+.kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
 </style>
 </head>
 <body>
@@ -213,10 +215,13 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
     <div>
       <h1>Debt-to-Income Calculator</h1>
       <p>Botswana Pula (BWP) &middot; DTI ratio &middot; Lending benchmarks &middot; Affordability analysis</p>
+      <div class="kw-trust">Only you and, if you choose, your coach. Never your employer, never a lender.</div>
     </div>
   </div>
 
-  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;">💡 Income pulled from your Budget Planner. You can adjust below.</div>
+  <!-- P0-5 (audit F7): the static text here claimed the Budget Planner as the
+       source whatever had actually written the figure. Filled by KWSource now. -->
+  <div id="income-prefill-notice" style="display:none;background:#fdf5cf;border-left:4px solid #f0c90a;border-radius:6px;padding:10px 14px;font-size:.78rem;color:#23261f;margin-bottom:14px;"></div>
 
   <!-- ── INCOME ── -->
   <div class="card">
@@ -229,7 +234,7 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
           <input type="text" id="grossSalary" value="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
-        <div class="hint">Before tax (PAYE) deductions</div>
+        <div class="hint" id="grossSalaryHint">Before tax (PAYE) deductions</div>
       </div>
       <div class="field">
         <label>Other Monthly Income</label>
@@ -305,7 +310,16 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
         Add Debt
       </button>
       <button class="btn-primary" onclick="clearDebtForm()" style="background:#f5f7fa;color:var(--slate);font-weight:600;">Clear</button>
+      <!-- P0-4/P0-5: "no debts" is an ANSWER, not an absence of one. Without a
+           way to say it, a debt-free member is nudged to list debts forever and
+           their dashboard picture can never complete. Stored in localStorage,
+           deliberately — no profiles column is added for this. -->
+      <button class="btn-primary" id="noDebtsBtn" onclick="toggleNoDebts()"
+        style="background:#f5f7fa;color:var(--slate);font-weight:600;">I have no debts</button>
       <span id="debtError" style="font-size:.78rem;color:var(--red);display:none;"></span>
+    </div>
+    <div id="noDebtsNote" style="display:none;margin-top:12px;background:#f0faf5;border:1.5px solid #a7f3d0;border-radius:8px;padding:10px 14px;font-size:.8rem;color:#065f46;line-height:1.6">
+      ✓ <strong>Noted — no debts.</strong> Your debt-to-income is 0% and your dashboard will stop asking. Add a debt above at any time and this clears itself.
     </div>
 
     <!-- Debt list -->
@@ -326,6 +340,11 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
     </svg>
     Calculate DTI Ratio
   </button>
+
+  <!-- A1: what is missing, said in the page. This replaced an alert() that named
+       income the member had already given to the budget, and vanished on OK. -->
+  <div id="dti-calc-notice" role="status"
+       style="display:none;background:var(--kw-yellow-tint,#fdf6dd);border-left:4px solid var(--kw-yellow-ink,#93790a);border-radius:0 8px 8px 0;padding:10px 14px;font-size:.82rem;color:var(--navy,#0d2545);margin:-8px 0 20px"></div>
 
   <!-- ══ RESULTS ══ -->
   <div class="results-section" id="resultsSection">
@@ -484,11 +503,16 @@ const _DTI_INCOME_MAPPINGS = [
 ];
 
 function saveData() {
+  const _sg = parseField('grossSalary'), _so = parseField('otherIncome'), _sn = parseField('netSalary');
+  const _sb2 = dtiBasis(_sg, _so, _sn);
   const data = {
     debts, nextId,
     grossSalary: document.getElementById('grossSalary').value,
     otherIncome: document.getElementById('otherIncome').value,
     netSalary:   document.getElementById('netSalary').value,
+    // Which income the ratio stands on. Consumers must not assume gross: with a
+    // budget-only member it is take-home, and the two are not interchangeable.
+    dti_basis: _sb2.basis,
   };
   localStorage.setItem(LS_DATA, JSON.stringify(data));
   (async()=>{
@@ -499,7 +523,21 @@ function saveData() {
     // Offer to write changed income fields + total debt back to shared profile
     const incomeChanges = KWProfile.detectChanges(_DTI_INCOME_MAPPINGS);
     const totalDebt = debts.reduce((s, d) => s + (d.amount || 0), 0);  // debts store the monthly payment as `amount`
-    const debtChange = (totalDebt > 0) ? [{ col: 'monthly_debt', newVal: totalDebt }] : [];
+    // Only offer it when it has actually moved. The income fields go through
+    // detectChanges() for exactly this reason; the debt total did not, and now
+    // that Calculate also saves, one edit would be put to the member twice —
+    // add a debt, then press Calculate.
+    //
+    // Two things are checked, and the second is the one that matters. The
+    // profile value catches "they already said yes". `_debtOffered` catches
+    // "they already said NO" — declining is an answer, and re-asking the same
+    // question because they did not answer it the way we hoped is worse than
+    // not asking at all.
+    const _prevDebt = (typeof KWProfile?.get === 'function') ? KWProfile.get('monthly_debt') : null;
+    const _same = v => v != null && Math.abs(Number(v) - totalDebt) < 0.01;
+    const _debtMoved = totalDebt > 0 && !_same(_prevDebt) && !_same(_debtOffered);
+    const debtChange = _debtMoved ? [{ col: 'monthly_debt', newVal: totalDebt }] : [];
+    if (_debtMoved) _debtOffered = totalDebt;
     const allChanges = [...incomeChanges, ...debtChange];
     if (allChanges.length) {
       const ok = await KWProfile.confirm(allChanges);
@@ -533,6 +571,9 @@ function showToast() {
 // ──────────────────────────────────────────────
 // State
 // ──────────────────────────────────────────────
+// The debt total last put to the member for their shared profile, whatever
+// they answered. See saveData(): it is what stops one edit asking twice.
+let _debtOffered  = null;
 let debts         = [];
 let nextId        = 1;
 let selectedDebtType = 'mortgage';
@@ -601,10 +642,43 @@ function removeDebt(id) {
   saveData();
 }
 
+// The "I have no debts" flag. The dashboard's debts source (P0-4) counts this
+// as done, so a debt-free member's picture can reach 6 of 6.
+const LS_NO_DEBTS = 'kw_no_debts';
+function noDebtsSet() { try { return localStorage.getItem(LS_NO_DEBTS) === 'true'; } catch { return false; } }
+function setNoDebts(on) {
+  try { on ? localStorage.setItem(LS_NO_DEBTS, 'true') : localStorage.removeItem(LS_NO_DEBTS); } catch (_) {}
+  renderNoDebts();
+}
+function renderNoDebts() {
+  const on = noDebtsSet();
+  const btn = document.getElementById('noDebtsBtn');
+  const note = document.getElementById('noDebtsNote');
+  if (note) note.style.display = on ? '' : 'none';
+  if (btn) {
+    btn.textContent = on ? 'I do have debts' : 'I have no debts';
+    btn.style.background = on ? 'var(--navy)' : '#f5f7fa';
+    btn.style.color = on ? '#fff' : 'var(--slate)';
+  }
+}
+function toggleNoDebts() {
+  if (!noDebtsSet() && debts.length) {
+    if (!confirm('You have ' + debts.length + ' debt' + (debts.length !== 1 ? 's' : '') +
+      ' listed. Mark yourself as having no debts and remove them?')) return;
+    debts = []; renderDebtList(); saveData();
+  }
+  setNoDebts(!noDebtsSet());
+}
+
 function renderDebtList() {
   const listEl  = document.getElementById('debtList');
   const emptyEl = document.getElementById('emptyDebts');
   const badge   = document.getElementById('debtCountBadge');
+
+  // Adding a debt is itself the answer to "do you have debts?" — the flag must
+  // not survive it and go on telling the dashboard something untrue.
+  if (debts.length && noDebtsSet()) setNoDebts(false);
+  else renderNoDebts();
 
   if (!debts.length) {
     listEl.innerHTML=''; emptyEl.style.display='block';
@@ -635,14 +709,73 @@ function renderDebtList() {
 // ──────────────────────────────────────────────
 // Calculate
 // ──────────────────────────────────────────────
+// Which income the ratio is computed on.
+//
+// The budget captures TAKE-HOME only — budget_planner writes monthly_income,
+// monthly_expenses, net_income and essential_expenses, never gross_income. So
+// every member who arrives here from the budget has gross = 0, and this page
+// used to answer that with alert('Please enter your monthly income.') and stop:
+// a demand for a figure they believe they already gave.
+//
+// A ratio on take-home is a real ratio. What it is NOT is the lender's ratio,
+// and the difference matters in both directions — take-home is smaller than
+// gross, so the same debt reads worse on it. So the basis travels with the
+// figure everywhere: the labels, the benchmark bands, the saved tool_data and
+// kw_snapshot, and the dashboard that reads them.
+function dtiBasis(gross, other, net) {
+  const grossIncome = gross + other;
+  if (grossIncome > 0) return { basis: 'gross', income: grossIncome, onTakeHome: false, label: 'gross income' };
+  if (net > 0)         return { basis: 'take_home', income: net, onTakeHome: true, label: 'take-home pay' };
+  return { basis: null, income: 0, onTakeHome: false, label: '' };
+}
+
+// Bands. The 35 / 50 / 65 thresholds are GROSS thresholds — Botswana banks
+// quote DSR on gross. Applying them to take-home would grade a member harsher
+// than any lender would, on a basis no lender uses. On take-home the honest
+// benchmark is the one that is already a net rule: NBFIRA's 30% cap on
+// unsecured credit. Messages on this basis describe the burden and never
+// assert what a lender will decide, because on this basis we cannot know.
+function dtiStatus(pct, onTakeHome) {
+  if (onTakeHome) {
+    return pct <= 30 ? {label:'Comfortable', color:'var(--green)',  cls:'green',  msg:`Under 30% of your take-home pay goes to debt. That is within the NBFIRA cap for unsecured credit and leaves room to save.`}
+         : pct <= 45 ? {label:'Stretched',   color:'#93790a',       cls:'orange', msg:`Debt takes a large share of what actually reaches your account each month. NBFIRA caps unsecured credit at 30% of net pay.`}
+         :             {label:'Heavy',       color:'var(--red)',    cls:'red',    msg:`Most of your take-home pay is committed before you spend anything. Reducing what you owe each month is the change that frees the most room.`};
+  }
+  return pct <= 35 ? {label:'Excellent',  color:'var(--green)',  cls:'green',  msg:`Your DTI is well within Botswana lending norms. You have strong borrowing capacity and are in a healthy financial position.`}
+       : pct <= 50 ? {label:'Acceptable', color:'#93790a',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
+       : pct <= 65 ? {label:'High Risk',  color:'var(--orange)', cls:'orange', msg:`Your DTI is elevated. Some lenders may decline applications. Focus on reducing existing debt before applying for new credit.`}
+       :             {label:'Critical',   color:'var(--red)',    cls:'red',    msg:`Your DTI exceeds safe lending thresholds. Most Botswana lenders will decline applications. Debt reduction should be an immediate priority.`};
+}
+
+// Inline, in the page, naming what is missing — not an alert box that names a
+// figure the member thinks they gave and disappears when dismissed.
+function dtiNotice(msg) {
+  const el = document.getElementById('dti-calc-notice');
+  if (!el) return;
+  if (!msg) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = msg;
+  el.style.display = '';
+}
+
 function calculate() {
   const gross     = parseField('grossSalary');
   const other     = parseField('otherIncome');
   const net       = parseField('netSalary');
-  const totalIncome = gross + other;
+  const _b        = dtiBasis(gross, other, net);
+  const onTakeHome  = _b.onTakeHome;
+  const basis       = _b.basis;
+  const incomeLabel = _b.label;
+  const totalIncome = _b.income;
 
-  if (!totalIncome) { alert('Please enter your monthly income.'); return; }
-  if (!debts.length) { alert('Please add at least one debt obligation.'); return; }
+  if (!totalIncome) {
+    dtiNotice('Add either your gross salary (before PAYE) or your take-home pay above — the ratio needs one of them. Your budget can fill both in, under "From your payslip".');
+    return;
+  }
+  if (!debts.length) {
+    dtiNotice('Add at least one debt obligation below, or tick "I have no debts".');
+    return;
+  }
+  dtiNotice(null);
 
   const totalDebt    = debts.reduce((s,d)=>s+d.amount, 0);
   const housingDebt  = debts.filter(d=>d.isHousing).reduce((s,d)=>s+d.amount, 0);
@@ -662,28 +795,27 @@ function calculate() {
   const deficit35    = Math.max(0, totalDebt - totalIncome * 0.35);
   const deficit40    = Math.max(0, totalDebt - totalIncome * 0.40);
 
-  // Status
-  const status = backEndDTI <= 35 ? {label:'Excellent',  color:'var(--green)',  cls:'green',  msg:`Your DTI is well within Botswana lending norms. You have strong borrowing capacity and are in a healthy financial position.`}
-               : backEndDTI <= 50 ? {label:'Acceptable', color:'#93790a',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
-               : backEndDTI <= 65 ? {label:'High Risk',  color:'var(--orange)', cls:'orange', msg:`Your DTI is elevated. Some lenders may decline applications. Focus on reducing existing debt before applying for new credit.`}
-               :                    {label:'Critical',   color:'var(--red)',    cls:'red',    msg:`Your DTI exceeds safe lending thresholds. Most Botswana lenders will decline applications. Debt reduction should be an immediate priority.`};
+  // Status — bands chosen by basis (see dtiStatus).
+  const status   = dtiStatus(backEndDTI, onTakeHome);
+  const bandGood = onTakeHome ? 30 : 35;
+  const bandMid  = onTakeHome ? 45 : 50;
 
   // ── Summary strip ──
   document.getElementById('summaryStrip').innerHTML = `
     <div class="stat-box navy">
-      <div class="stat-label">Gross Monthly Income</div>
+      <div class="stat-label">${onTakeHome ? 'Take-home Monthly Income' : 'Gross Monthly Income'}</div>
       <div class="stat-value">${fmtK(totalIncome)}</div>
-      <div class="stat-sub">Salary + other income</div>
+      <div class="stat-sub">${onTakeHome ? 'What reaches your account' : 'Salary + other income'}</div>
     </div>
     <div class="stat-box gold">
       <div class="stat-label">Total Monthly Debt</div>
       <div class="stat-value">${fmtK(totalDebt)}</div>
       <div class="stat-sub">${debts.length} obligation${debts.length!==1?'s':''}</div>
     </div>
-    <div class="stat-box ${backEndDTI<=35?'green':backEndDTI<=50?'orange':'red'}">
+    <div class="stat-box ${backEndDTI<=bandGood?'green':backEndDTI<=bandMid?'orange':'red'}">
       <div class="stat-label">Back-End DTI</div>
       <div class="stat-value">${backEndDTI.toFixed(1)}%</div>
-      <div class="stat-sub">${status.label}</div>
+      <div class="stat-sub">${status.label}${onTakeHome ? ' · on take-home pay' : ''}</div>
     </div>
     <div class="stat-box ${frontEndDTI<=28?'green':frontEndDTI<=35?'orange':'red'}">
       <div class="stat-label">Front-End DTI</div>
@@ -695,12 +827,12 @@ function calculate() {
   const clampedPct = Math.min(backEndDTI, 80);
   const angle      = -90 + (clampedPct / 80) * 180;
   document.getElementById('gaugeNeedle').setAttribute('transform', `rotate(${angle},110,110)`);
-  const gaugeColor = backEndDTI<=35?'var(--green)':backEndDTI<=50?'#93790a':backEndDTI<=65?'var(--orange)':'var(--red)';
+  const gaugeColor = backEndDTI<=bandGood?'var(--green)':backEndDTI<=bandMid?'#93790a':'var(--red)';
   KW.countUp(document.getElementById('gaugePct'), backEndDTI, { format: v => v.toFixed(1) + '%' });
   document.getElementById('gaugePct').style.color  = gaugeColor;
   document.getElementById('gaugeStatus').textContent = status.label;
   document.getElementById('gaugeStatus').style.color  = gaugeColor;
-  document.getElementById('gaugeDesc').textContent    = `${fmtK(totalDebt)}/mo of ${fmtK(totalIncome)}/mo gross income`;
+  document.getElementById('gaugeDesc').textContent    = `${fmtK(totalDebt)}/mo of ${fmtK(totalIncome)}/mo ${incomeLabel}`;
 
   // Benchmark pointer (0–80% maps to 0–100% of bar)
   setTimeout(() => {
@@ -713,13 +845,13 @@ function calculate() {
   const debtPct  = Math.min(100, (totalDebt / totalIncome) * 100);
   const freePct  = 100 - debtPct;
   document.getElementById('breakdownRows').innerHTML = `
-    <div class="data-row"><span class="data-row-label">Total gross income</span><span class="data-row-value v-navy">${fmt(totalIncome)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Total ${incomeLabel}</span><span class="data-row-value v-navy">${fmt(totalIncome)}/mo</span></div>
     <div class="data-row"><span class="data-row-label">Housing / rent payments</span><span class="data-row-value v-navy">${housingDebt>0?fmt(housingDebt)+'/mo':'—'}</span></div>
     <div class="data-row"><span class="data-row-label">Other debt payments</span><span class="data-row-value v-navy">${nonHousing>0?fmt(nonHousing)+'/mo':'—'}</span></div>
     <div class="data-row"><span class="data-row-label">Total debt obligations</span><span class="data-row-value v-gold">${fmt(totalDebt)}/mo</span></div>
     <div class="data-row"><span class="data-row-label">Free income (after debt)</span><span class="data-row-value v-green">${fmt(totalIncome-totalDebt)}/mo</span></div>
     ${totalBalance>0?`<div class="data-row"><span class="data-row-label">Total outstanding balance</span><span class="data-row-value v-muted">${fmtK(totalBalance)}</span></div>`:''}
-    ${net>0?`<div class="data-row"><span class="data-row-label">DTI on net (take-home)</span><span class="data-row-value ${netDTI>50?'v-red':netDTI>35?'v-orange':'v-green'}">${netDTI.toFixed(1)}%</span></div>`:''}`;
+    ${(net>0 && !onTakeHome)?`<div class="data-row"><span class="data-row-label">DTI on net (take-home)</span><span class="data-row-value ${netDTI>50?'v-red':netDTI>35?'v-orange':'v-green'}">${netDTI.toFixed(1)}%</span></div>`:''}`;
 
   document.getElementById('allocationViz').innerHTML = `
     <div style="display:flex;height:14px;border-radius:99px;overflow:hidden;margin-bottom:6px;">
@@ -733,21 +865,24 @@ function calculate() {
 
   // ── Capacity rows ──
   document.getElementById('capacityRows').innerHTML = `
+    ${onTakeHome ? '' : `
     <div class="section-divider">Borrowing Capacity</div>
     <div class="data-row"><span class="data-row-label">Max total debt at 35% DSR (bank)</span><span class="data-row-value v-navy">${fmt(totalIncome*0.35)}/mo</span></div>
     <div class="data-row"><span class="data-row-label">Remaining capacity (35% limit)</span><span class="data-row-value ${capacity35>0?'v-green':'v-red'}">${capacity35>0?'+'+fmt(capacity35):'-'+fmt(Math.abs(capacity35))}/mo</span></div>
-    <div class="data-row"><span class="data-row-label">Remaining capacity (40% limit)</span><span class="data-row-value ${capacity40>0?'v-green':'v-red'}">${capacity40>0?'+'+fmt(capacity40):'-'+fmt(Math.abs(capacity40))}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Remaining capacity (40% limit)</span><span class="data-row-value ${capacity40>0?'v-green':'v-red'}">${capacity40>0?'+'+fmt(capacity40):'-'+fmt(Math.abs(capacity40))}/mo</span></div>`}
     ${net>0&&netCapacity30!==null?`
     <div class="section-divider">NBFIRA Unsecured Cap (Net Salary)</div>
     <div class="data-row"><span class="data-row-label">Max unsecured debt at 30% of net</span><span class="data-row-value v-navy">${fmt(net*0.30)}/mo</span></div>
     <div class="data-row"><span class="data-row-label">Remaining NBFIRA capacity</span><span class="data-row-value ${netCapacity30>0?'v-green':'v-red'}">${netCapacity30>0?'+'+fmt(netCapacity30):'-'+fmt(Math.abs(netCapacity30))}/mo</span></div>`:''}
-    ${deficit35>0?`
+    ${(deficit35>0 && !onTakeHome)?`
     <div class="section-divider">To reach 35% threshold, reduce debt by</div>
     <div class="data-row"><span class="data-row-label">Monthly payment reduction needed</span><span class="data-row-value v-orange">${fmt(deficit35)}/mo</span></div>`:''}`;
 
   // ── Advice ──
-  let advice = `Your back-end DTI is <strong>${backEndDTI.toFixed(1)}%</strong>. ${status.msg}`;
-  if (capacity35 > 0) {
+  let advice = `Your back-end DTI is <strong>${backEndDTI.toFixed(1)}%</strong>${onTakeHome ? ' <strong>on take-home pay</strong>' : ''}. ${status.msg}`;
+  if (onTakeHome) {
+    advice += ` Lenders usually use gross. Add your gross salary (before PAYE) above for the lender's view — or enter it once in your budget, under "From your payslip", and every tool here will have it.`;
+  } else if (capacity35 > 0) {
     advice += ` You can take on up to <strong>${fmt(capacity35)}/mo</strong> in additional debt before reaching the 35% bank threshold.`;
   } else if (deficit35 > 0) {
     advice += ` To qualify for most loans, reduce monthly debt payments by <strong>${fmt(deficit35)}</strong>.`;
@@ -791,9 +926,24 @@ function calculate() {
   // ── kw_snapshot ──
   try {
     const _snap = JSON.parse(localStorage.getItem('kw_snapshot')||'{}');
-    _snap.dti = { ratio: +backEndDTI.toFixed(1), status: status.label, totalDebt, totalIncome, lastUpdated: new Date().toISOString() };
+    _snap.dti = { ratio: +backEndDTI.toFixed(1), status: status.label, totalDebt, totalIncome,
+                  basis, incomeLabel, lastUpdated: new Date().toISOString() };
     localStorage.setItem('kw_snapshot', JSON.stringify(_snap));
   } catch(e){}
+
+  // A successful Calculate IS a save.
+  //
+  // Saving used to fire only on add/remove debt, which left one path with no
+  // record at all: a member arrives from the budget with the debt row already
+  // prefilled, reads it, agrees with it, and presses Calculate. They have
+  // touched nothing, so nothing is written — no `tool_data` row, no
+  // `dti_basis`, no monthly_debt prompt. The dashboard's Debts source never
+  // flips, so their picture stays at 3 of 6 and the score gate cannot be met
+  // by that route, however many times they press the button.
+  //
+  // Accepting a figure we put in front of them is an answer. It is the answer
+  // the prefill was built to make easy, and it has to count like any other.
+  saveData();
 }
 
 // ──────────────────────────────────────────────
@@ -930,25 +1080,51 @@ KW.reveal('.card');
       localStorage.removeItem(LS_DATA);
       debts = []; nextId = 1;
       renderDebtList();
-      // Prefill income + monthly_debt from shared profile
+      // Prefill income + minimum debt payments from the shared profile.
       await KWProfile.load();
-      KWProfile.prefill(_DTI_INCOME_MAPPINGS);
-      const profDebt = KWProfile.get('monthly_debt');
-      if (profDebt > 0 && !debts.length) {
+      // silent: this page resolves the real source below and writes
+      // #income-prefill-notice itself. The generic banner would sit above it
+      // saying "from your profile" while the specific one says "from your budget".
+      const _filled = KWProfile.prefill(_DTI_INCOME_MAPPINGS, null, { silent: true });
+      // Name the payslip when that is genuinely where the figure came from.
+      if (_filled.some(f => f.inputId === 'grossSalary') && KWProfile.fromPayslip()) {
+        const _gh = document.getElementById('grossSalaryHint');
+        if (_gh) _gh.textContent = 'from your payslip — adjust if it is out of date.';
+      }
+      const _fromBudget = await KWSource.budgetSaved();
+      const _src = KWSource.label({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget);
+
+      // P0-5 (audit F7): the seeded row used to be called "Monthly Debt
+      // Obligations (from assessment)" — an anonymous lump whose stated source
+      // was, by then, usually wrong. Prefer the budget's own debt_min category,
+      // and name the row after wherever the figure really came from.
+      let _seedDebt = 0, _seedSrc = _src;
+      try {
+        const { data: _bdRow } = await _sb.from('tool_data').select('data')
+          .eq('user_id', session.user.id).eq('tool', 'budget_planner').maybeSingle();
+        const _bd = _bdRow?.data;
+        const _cur = _bd?.currentKey && _bd?.budgets?.[_bd.currentKey];
+        const _min = _cur ? Number(_cur.expenses?.debt_min || 0) : 0;
+        if (_min > 0) { _seedDebt = _min; _seedSrc = 'from your budget'; }
+      } catch (e) { console.warn('DTI: budget debt_min lookup failed:', e); }
+      if (!_seedDebt) _seedDebt = Number(KWProfile.get('monthly_debt') || 0);
+
+      if (_seedDebt > 0 && !debts.length) {
         debts.push({
           id: nextId++,
           type: 'other',
-          name: 'Monthly Debt Obligations (from assessment)',
-          amount: profDebt,
+          name: `Minimum debt payments (${_seedSrc})`,
+          amount: _seedDebt,
           balance: 0,
           isHousing: false,
         });
         renderDebtList();
-        const noticeEl = document.getElementById('income-prefill-notice');
-        if (noticeEl) {
-          noticeEl.textContent = '💡 Income and debt pre-filled from your profile. Adjust or replace with itemised debts below.';
-          noticeEl.style.display = '';
-        }
+      }
+      const noticeEl = document.getElementById('income-prefill-notice');
+      if (noticeEl && (_filled.length || _seedDebt > 0)) {
+        noticeEl.textContent = '💡 ' + KWSource.line({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget) +
+          '. Adjust it, or list each loan separately below.';
+        noticeEl.style.display = '';
       }
     }
   });
