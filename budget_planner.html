@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-categories.js"></script>
 <script src="kw-profile-sync.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -467,132 +468,19 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 // ────────────────────────────────────────────
 const LS_KEY = 'budget_planner_v2';
 
-// Phase D — the approved Botswana category model.
-// Spec: docs/phase-d-category-model.md (APPROVED 16 Sep 2026). Every hint,
-// first-budget prompt and advice sentence in this file is verbatim from it.
-//
-// `bucket` is the arithmetic; `group` is only where the line is drawn on
-// screen. The 50/30/20 bars and calcTotals() read BUCKET. They used to read
-// group, which is why the Other group — Giving, Miscellaneous and every custom
-// line — was counted in the expense total and appeared in no bar at all, so
-// the three bars never added up to what the member spends.
-//
-// `bucket: null` means the member has not told us yet (Giving, Miscellaneous,
-// an untagged custom line). Never guessed, never defaulted: an untagged line
-// stays in the total and in no bar, and is asked about again on the next save.
-//
-// EVERY ID IS UNCHANGED, so no stored budget needs migrating. `moraka` moves
-// group and bucket but keeps its id and its amount.
-const EXPENSE_GROUPS = [
-  {
-    id:'needs', name:'Needs', icon:'\ud83c\udfe0', color:'#163561',
-    cats:[
-      {id:'housing',        name:'Housing & Rent',            bucket:'need'},
-      {id:'utilities',      name:'Utilities',                 bucket:'need'},
-      {id:'food',           name:'Food & Groceries',          bucket:'need'},
-      {id:'motshelo_goods', name:'Food or goods motshelo',    bucket:'need'},
-      {id:'transport',      name:'Transport',                 bucket:'need'},
-      {id:'health',         name:'Health & Medical',          bucket:'need'},
-      {id:'childcare',      name:'Child / Education',         bucket:'need'},
-      {id:'family_support', name:'Family support',            bucket:'need'},
-      {id:'contributions',  name:'Contributions',             bucket:'need'},
-      {id:'helper',         name:'Helper',                    bucket:'need'},
-      {id:'insurance',      name:'Insurance',                 bucket:'need'},
-      // Moved out of Savings 16 Sep. A cattle post is a store of wealth; the
-      // feed, dipping and fuel that keep it are a cost, and members who told
-      // us they "save" through cattle were having a farm's running costs
-      // counted as savings.
-      {id:'moraka',         name:'Farm costs (moraka & masimo)', bucket:'need'},
-      {id:'debt_min',       name:'Minimum debt payments',     bucket:'need'},
-    ]
-  },
-  {
-    id:'wants', name:'Wants', icon:'\ud83c\udfac', color:'#D97706',
-    cats:[
-      {id:'entertain',  name:'Entertainment',       bucket:'want'},
-      {id:'dining',     name:'Dining out',          bucket:'want'},
-      {id:'shopping',   name:'Shopping & clothing', bucket:'want'},
-      {id:'personal',   name:'Personal care',       bucket:'want'},
-      {id:'subscript',  name:'Subscriptions',       bucket:'want'},
-      {id:'travel',     name:'Travel & holidays',   bucket:'want'},
-      {id:'hobbies',    name:'Hobbies & leisure',   bucket:'want'},
-    ]
-  },
-  {
-    id:'savings', name:'Savings & Investments', icon:'\ud83d\udcb0', color:'#1A8C5B',
-    cats:[
-      {id:'emfund',     name:'Emergency fund',        bucket:'save'},
-      {id:'retirement', name:'Retirement / pension',  bucket:'save'},
-      {id:'invest',     name:'Investments',           bucket:'save'},
-      {id:'goals',      name:'Goal savings',          bucket:'save'},
-      {id:'motshelo',   name:'Money motshelo',        bucket:'save'},
-      // In the third bar, never in monthly_savings — which is why that bar is
-      // labelled "Savings & extra debt repayment". Paying debt down faster is
-      // good; it is not money you still have.
-      {id:'debt_extra', name:'Extra debt repayment',  bucket:'save'},
-    ]
-  },
-  {
-    id:'other', name:'Other', icon:'\ud83d\udccb', color:'#64748B',
-    cats:[
-      // Tagged by the member on first non-zero entry (question 1, option c).
-      {id:'gifts',      name:'Giving (church, tithe, gifts)', bucket:null},
-      {id:'misc',       name:'Miscellaneous',                 bucket:null},
-    ]
-  },
-];
-
-// Hints, first-budget prompts and advice, verbatim from the approved model.
-// Keyed by category id; absent means the line carries none.
-const CAT_HINT = {
-  housing:'rent or bond, plus levies and rates',
-  utilities:'water, electricity, and the data you cannot work without',
-  food:'what you spend feeding your household in a month',
-  motshelo_goods:'your monthly contribution to a groceries or toiletries motshelo',
-  transport:'fuel, combi fares, taxis, car upkeep',
-  health:'medicines, doctor visits and anything medical aid does not cover',
-  childcare:'school fees, uniforms, cr\u00e8che, transport to school',
-  family_support:'money to parents, siblings or relatives you support. Choose "fixed" if it is the same every month, or "varies" and enter what you set aside for it.',
-  contributions:'what you set aside for funerals, weddings, baby showers and workplace collections. Most months something comes up.',
-  helper:'domestic worker, garden help \u2014 wages and their transport',
-  insurance:'funeral cover, life, car, home \u2014 not medical aid',
-  moraka:'feed, herding, vet, dipping, seed, ploughing, fuel to the farm. Not the value of the herd or the land.',
-  debt_min:'the minimum you must pay each month, across every loan',
-  dining:'restaurants, takeaways, lunch at work',
-  personal:'hair, grooming, salon',
-  subscript:'streaming, gym, apps \u2014 the ones that renew without asking',
-  emfund:'what you put aside each month for the month that goes wrong',
-  retirement:'what you choose to put away, on top of any pension off your payslip',
-  invest:'unit trusts, shares, a fixed deposit, an asset manager',
-  goals:'money set aside for something specific \u2014 see the goal types below',
-  motshelo:'your monthly contribution to the group. Enter the payout under Income when it arrives.',
-  debt_extra:'what you pay above the minimum, by choice',
-  gifts:'tithe or church giving, and gifts you give. Money to family goes under Family support.',
-  misc:'anything that fits nowhere else',
-};
-
-// Shown under the field on a member's FIRST budget only.
-const CAT_FIRST_PROMPT = {
-  housing:'Rent or bond \u2014 whatever keeps the roof over you.',
-  food:'Groceries for the household, not meals out \u2014 those have their own line.',
-  childcare:'School fees and anything that comes with them.',
-  family_support:'Many of us send money home. Put it here so your budget tells the truth about your month.',
-  contributions:'Set aside something for this month\u2019s contributions \u2014 a funeral, a wedding, the office collection \u2014 so they do not come out of the food money.',
-  moraka:'Running costs of the cattle post or the fields \u2014 not what the herd is worth.',
-  debt_min:'Only the minimums. Anything extra you choose to pay goes in Extra debt repayment.',
-  subscript:'Worth listing: subscriptions are the easiest thing to forget you are paying for.',
-  emfund:'Even P100 a month starts this. The amount matters less than it existing.',
-  motshelo:'A motshelo is saving. It counts here.',
-};
-
-const ALL_CATS = EXPENSE_GROUPS.flatMap(g=>g.cats);
-const BUCKET_OF = Object.fromEntries(ALL_CATS.map(c=>[c.id, c.bucket ?? null]));
-// The two built-ins the member tags, and the only ones that may be re-tagged.
-// Every other built-in is fixed (question 4): a member re-tagging `housing` as
-// a Want would produce figures nothing downstream could reason about.
-const TAGGABLE_BUILTINS = ['gifts','misc'];
-const CAT_MAP  = Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
-const GROUP_MAP = Object.fromEntries(EXPENSE_GROUPS.map(g=>[g.id,g]));
+// The category model lives in kw-categories.js, loaded above, so the Expense
+// Tracker reads the same list rather than carrying a second copy of it (Phase
+// D.2). These aliases keep this page's existing names working; the definitions
+// are there, and a category added here only would be the exact defect D.2
+// exists to prevent.
+const EXPENSE_GROUPS     = KW_EXPENSE_GROUPS;
+const CAT_HINT           = KW_CAT_HINT;
+const CAT_FIRST_PROMPT   = KW_CAT_FIRST_PROMPT;
+const ALL_CATS           = KW_ALL_CATS;
+const CAT_MAP            = KW_CAT_MAP;
+const GROUP_MAP          = KW_GROUP_MAP;
+const BUCKET_OF          = KW_BUCKET_OF;
+const TAGGABLE_BUILTINS  = KW_TAGGABLE_BUILTINS;
 
 // ────────────────────────────────────────────
 // STATE
