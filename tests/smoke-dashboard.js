@@ -792,6 +792,42 @@ async function statRow(page) {
     await page.close();
   }
 
+  /* ── Phase D. The savings figure the dashboard reports ────────────────────
+     A motshelo is saving and a cattle post is a farm. Members who save through
+     a group were being told they save nothing; members keeping cattle had a
+     farm's running costs counted as savings. */
+  {
+    const BW = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { housing: 3000, emfund: 400, motshelo: 600, moraka: 900,
+                  debt_extra: 500, debt_min: 1000 },
+      customCats: [], tags: {} } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: BW } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('90 a money motshelo counts toward the savings rate',
+      sav && /^10(\.0)?%$/.test(sav.val.trim()),
+      `emfund 400 + motshelo 600 = 1000 of 10000 = 10%. With moraka it reads 19%, with debt_extra 15%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+  {
+    /* A custom line the member tagged `save` is saving; an untagged one is not
+       — guessing either way would move a figure their employer's report reads. */
+    const TAG = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { emfund: 400, custom_1: 300, custom_2: 200, gifts: 100 },
+      customCats: [{ id: 'custom_1', name: 'Burial society', tag: 'save' },
+                   { id: 'custom_2', name: 'Society', tag: null }],
+      tags: { gifts: 'save' } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: TAG } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('91 a tagged-save custom line counts, an untagged one does not',
+      sav && /^8(\.0)?%$/.test(sav.val.trim()),
+      `emfund 400 + custom_1 300 + gifts 100 = 800 of 10000 = 8%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

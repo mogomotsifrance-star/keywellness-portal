@@ -1326,14 +1326,32 @@ async function loadBadgeData() {
 // going to a creditor is not savings. Counting it told members a savings rate
 // higher than the one they have, and this list is the one budget_planner's own
 // KW_SAVINGS_CATS agrees with, so the two screens no longer disagree.
-const _SAVINGS_CATS = ['emfund','retirement','invest','goals'];
+const _SAVINGS_CATS = ['emfund','retirement','invest','goals','motshelo'];
+
+// The same definition budget_planner's savingsOf() uses, applied to a budget
+// month as it comes back from Supabase. `motshelo` joined on 16 Sep — members
+// who save through a group were being told they save nothing. `moraka` is a
+// farm's running costs and `debt_extra` goes to a creditor, so neither is
+// here; nor is payslip_pension, which never reached the member to be
+// allocated (Phase C). A custom line, or Giving / Miscellaneous, counts only
+// when the member has tagged it `save` themselves.
+function kwBudgetSavings(bm) {
+  if (!bm) return 0;
+  const exp = bm.expenses || {};
+  const fixed = _SAVINGS_CATS.reduce((s, c) => s + _num(exp[c]), 0);
+  const tags = bm.tags || {};
+  let tagged = 0;
+  ['gifts', 'misc'].forEach(id => { if (tags[id] === 'save') tagged += _num(exp[id]); });
+  (bm.customCats || []).forEach(c => { if (c.tag === 'save') tagged += _num(exp[c.id]); });
+  return fixed + tagged;
+}
 function budgetMonthRates() {
   const bp = state.toolData?.budget_planner;
   const budgets = bp?.budgets || {};
   return Object.keys(budgets).sort().map(key => {
     const b = budgets[key] || {};
     const income = (b.income || []).reduce((s, r) => s + _num(r.amount), 0);
-    const savings = _SAVINGS_CATS.reduce((s, c) => s + _num((b.expenses || {})[c]), 0);
+    const savings = kwBudgetSavings(b);
     const hasData = income > 0 || Object.values(b.expenses || {}).some(v => _num(v) > 0);
     return { key, rate: income > 0 ? (savings / income) * 100 : 0, hasData };
   });
@@ -2243,7 +2261,7 @@ function computeLiveWellness(toolMap, ef) {
   if (bpB) {
     income   = (bpB.income || []).reduce((s, i) => s + _n(i.amount), 0);
     expenses = Object.values(bpB.expenses || {}).reduce((s, v) => s + _n(v), 0);
-    monthlySavings = _SAVINGS_CATS.reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
+    monthlySavings = kwBudgetSavings(bpB);
     const _bpDebt = _n((bpB.expenses || {}).debt_min) + _n((bpB.expenses || {}).debt_extra);
     if (_bpDebt > 0) debtPayments = _bpDebt;
     if (income > 0 || expenses > 0) sources.add('Budget Planner');
@@ -3157,7 +3175,7 @@ VIEWS['dashboard'] = async function () {
       const _bm = _bd.budgets[_bk];
       const _bInc  = (_bm.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
       const _bDebt = Number(_bm.expenses?.debt_min || 0);
-      const _bSav  = _SAVINGS_CATS.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
+      const _bSav  = kwBudgetSavings(_bm);
       if (_bInc > 0) {
         if (budgetDTI === null && _bDebt > 0) {
           budgetDTI = +(_bDebt / _bInc * 100).toFixed(1);

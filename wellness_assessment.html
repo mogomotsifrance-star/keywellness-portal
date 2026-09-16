@@ -1324,9 +1324,14 @@ function resolveAssessmentFigures() {
     const bpExpAll= Object.values(bpB.expenses||{}).reduce((s,v)=>s+_n(v),0);
     // debt_extra is a DEBT figure — it is counted in bpDebt below, and
     // counting it as savings too was double-counting one allocation as both.
-    // Matches _SAVINGS_CATS in index.html and KW_SAVINGS_CATS in the budget.
-    const SAV_CATS=['emfund','retirement','invest','goals'];
-    const bpSav  = SAV_CATS.reduce((s,c)=>s+_n((bpB.expenses||{})[c]),0);
+    // `moraka` is a farm's running costs, so it is not here either. `motshelo`
+    // IS saving and joined on 16 Sep. Matches _SAVINGS_CATS / kwBudgetSavings
+    // in index.html and KW_SAVINGS_CATS / savingsOf() in the budget.
+    const SAV_CATS=['emfund','retirement','invest','goals','motshelo'];
+    const _bpTags = bpB.tags || {};
+    let bpSav = SAV_CATS.reduce((s,c)=>s+_n((bpB.expenses||{})[c]),0);
+    ['gifts','misc'].forEach(id=>{ if(_bpTags[id]==='save') bpSav += _n((bpB.expenses||{})[id]); });
+    (bpB.customCats||[]).forEach(c=>{ if(c.tag==='save') bpSav += _n((bpB.expenses||{})[c.id]); });
     // Planner debt categories are debt_min (Minimum Debt Payments) + debt_extra
     // (Extra Debt Repayment) — matches computeLiveWellness() in index.html.
     const bpDebt = _n((bpB.expenses||{}).debt_min)+_n((bpB.expenses||{}).debt_extra);

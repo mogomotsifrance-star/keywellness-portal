@@ -478,6 +478,53 @@ call their save from `calculate()`, and both carry a one-offer guard
 event, so they are fine — **but prefill either of their required fields and the
 dead end comes back.**
 
+**Categories are placed by BUCKET, not by group** (Phase D, approved 16 Sep
+2026 — `docs/phase-d-category-model.md` is the specification, and every hint,
+first-budget prompt and advice sentence in `budget_planner.html` is verbatim
+from it). `group` decides only where a line is drawn on screen; `bucket`
+(`need` / `want` / `save` / `null`) is what `calcTotals()` and the 50/30/20 bars
+read. Before this the bars read the group, so the Other group — Giving,
+Miscellaneous and every custom line — was in the expense total and in **no bar**,
+and the three bars never added up to what the member spends.
+
+**`bucket: null` means "not told yet", and is never guessed.** An untagged line
+stays in the total and in no bar, `calcTotals()` returns it as `untaggedAmt`,
+and the page says so. Defaulting it to Wants would file a member's tithe as
+discretionary spending; defaulting to Needs would inflate a figure their
+employer's report reads.
+
+**The three-way question fires from the autosave, never mid-entry, and a
+dismissal is not a "no"** — the line stays untagged and is asked again on the
+next save. Only custom lines and `gifts` / `misc` may be tagged
+(`TAGGABLE_BUILTINS`); every other built-in is fixed, because a member
+re-tagging `housing` as a Want produces figures nothing downstream can reason
+about.
+
+**`savingsOf(b)` is the one definition of saving**, mirrored by
+`kwBudgetSavings()` in `index.html` and the `SAV_CATS` block in
+`wellness_assessment.html`. It is `emfund + retirement + invest + goals +
+motshelo`, plus any line the member has tagged `save` themselves. Never
+`moraka` (a farm's running costs), never `debt_extra` (money going to a
+creditor), never `payslip_pension` (it never reached them to be allocated).
+`motshelo` joined 16 Sep: members who save through a group were being told they
+save nothing. `savingsGroupAmt` is **retired** — the third bar is the `save`
+bucket and is labelled "Savings & extra debt repayment", so the two figures no
+longer need separating.
+
+**Advice is ranked before it is capped.** `renderAdvice()` shows ten of what it
+builds, and the Phase D sentences were being appended last — so the member with
+family support, a motshelo and a cattle post, the member the model was written
+for, never saw a single line written for them. Surplus/deficit ranks first, the
+acknowledging lines second, generic guidance last. **Mark any new line
+`kw_phase_d` if it must survive the cap.**
+
+**Advice never names a Need, Giving, family support, contributions or a custom
+line in a cut or deficit sentence.** `cuttableWants()` is the only source of a
+nameable line. The deficit sentence states the shortfall, names the single
+largest Want only when that one line could close it, and otherwise says the gap
+sits in fixed costs and offers a coach — naming nothing. There is a test per
+branch; keep it.
+
 **`kw_fn_backup` holds the pre-change bodies and is the rollback's only source.**
 Restoring `_org_report_period_data` or `_dept_metrics` from disk would undo the
 M3 split; the rollback restores from this table instead. RLS on, no policies, no
@@ -662,6 +709,7 @@ inventing an entry — but that is rare, and the default is to write one.
 - Do not copy `support_log()` / `support_recent()` out of `supabase_support_audit.sql` — that file is stale and still calls the deleted `is_ops_admin()`
 - Do not write a wellness score to `profiles.live_score` for a member who has not met the four-source gate, and do not compute that gate anywhere but `kwPictureSources()` — see Roles & Interfaces
 - Do not add anything from the payslip block to the budget's income or expense totals, and do not put `_insCovers` (or any array) in `cat_scores` — see Roles & Interfaces
-- Do not count `debt_extra` as savings in any of the five lists that agree on this
+- Do not count `debt_extra` or `moraka` as savings anywhere, and do not guess a bucket for an untagged line — see Roles & Interfaces
+- Do not name a Need, Giving, family support, contributions or a custom line in any cut or deficit advice
 - Do not drop `kw_fn_backup` — it is the only copy of the pre-B1 function bodies
 - Do not end a session without writing a vault entry — see Vault Logging above

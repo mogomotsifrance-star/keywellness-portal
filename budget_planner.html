@@ -353,6 +353,8 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
             <div class="card-title">Income</div>
             <div style="display:flex;gap:8px;align-items:center;">
               <span class="section-total" id="incomeTotalLabel" style="color:var(--green);"></span>
+              <button class="btn btn-ghost btn-xs" onclick="addIncomeRow('farm_income')">+ Farm income</button>
+              <button class="btn btn-ghost btn-xs" onclick="addIncomeRow('motshelo_payout')">+ Motshelo payout</button>
               <button class="btn btn-ghost btn-xs" onclick="addIncomeRow()">+ Add</button>
             </div>
           </div>
@@ -465,55 +467,130 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 // ────────────────────────────────────────────
 const LS_KEY = 'budget_planner_v2';
 
+// Phase D — the approved Botswana category model.
+// Spec: docs/phase-d-category-model.md (APPROVED 16 Sep 2026). Every hint,
+// first-budget prompt and advice sentence in this file is verbatim from it.
+//
+// `bucket` is the arithmetic; `group` is only where the line is drawn on
+// screen. The 50/30/20 bars and calcTotals() read BUCKET. They used to read
+// group, which is why the Other group — Giving, Miscellaneous and every custom
+// line — was counted in the expense total and appeared in no bar at all, so
+// the three bars never added up to what the member spends.
+//
+// `bucket: null` means the member has not told us yet (Giving, Miscellaneous,
+// an untagged custom line). Never guessed, never defaulted: an untagged line
+// stays in the total and in no bar, and is asked about again on the next save.
+//
+// EVERY ID IS UNCHANGED, so no stored budget needs migrating. `moraka` moves
+// group and bucket but keeps its id and its amount.
 const EXPENSE_GROUPS = [
   {
-    id:'needs', name:'Needs', icon:'🏠', color:'#163561',
+    id:'needs', name:'Needs', icon:'\ud83c\udfe0', color:'#163561',
     cats:[
-      {id:'housing',    name:'Housing & Rent'},
-      {id:'utilities',  name:'Utilities'},
-      {id:'food',       name:'Food & Groceries'},
-      {id:'transport',  name:'Transport'},
-      {id:'health',     name:'Health & Medical'},
-      {id:'childcare',  name:'Child / Education'},
-      {id:'helper',     name:'Helper'},
-      {id:'insurance',  name:'Insurance'},
-      {id:'debt_min',   name:'Minimum Debt Payments'},
+      {id:'housing',        name:'Housing & Rent',            bucket:'need'},
+      {id:'utilities',      name:'Utilities',                 bucket:'need'},
+      {id:'food',           name:'Food & Groceries',          bucket:'need'},
+      {id:'motshelo_goods', name:'Food or goods motshelo',    bucket:'need'},
+      {id:'transport',      name:'Transport',                 bucket:'need'},
+      {id:'health',         name:'Health & Medical',          bucket:'need'},
+      {id:'childcare',      name:'Child / Education',         bucket:'need'},
+      {id:'family_support', name:'Family support',            bucket:'need'},
+      {id:'contributions',  name:'Contributions',             bucket:'need'},
+      {id:'helper',         name:'Helper',                    bucket:'need'},
+      {id:'insurance',      name:'Insurance',                 bucket:'need'},
+      // Moved out of Savings 16 Sep. A cattle post is a store of wealth; the
+      // feed, dipping and fuel that keep it are a cost, and members who told
+      // us they "save" through cattle were having a farm's running costs
+      // counted as savings.
+      {id:'moraka',         name:'Farm costs (moraka & masimo)', bucket:'need'},
+      {id:'debt_min',       name:'Minimum debt payments',     bucket:'need'},
     ]
   },
   {
-    id:'wants', name:'Wants', icon:'🎬', color:'#D97706',
+    id:'wants', name:'Wants', icon:'\ud83c\udfac', color:'#D97706',
     cats:[
-      {id:'entertain',  name:'Entertainment'},
-      {id:'dining',     name:'Dining Out'},
-      {id:'shopping',   name:'Shopping & Clothing'},
-      {id:'personal',   name:'Personal Care'},
-      {id:'subscript',  name:'Subscriptions'},
-      {id:'travel',     name:'Travel & Holidays'},
-      {id:'hobbies',    name:'Hobbies & Leisure'},
+      {id:'entertain',  name:'Entertainment',       bucket:'want'},
+      {id:'dining',     name:'Dining out',          bucket:'want'},
+      {id:'shopping',   name:'Shopping & clothing', bucket:'want'},
+      {id:'personal',   name:'Personal care',       bucket:'want'},
+      {id:'subscript',  name:'Subscriptions',       bucket:'want'},
+      {id:'travel',     name:'Travel & holidays',   bucket:'want'},
+      {id:'hobbies',    name:'Hobbies & leisure',   bucket:'want'},
     ]
   },
   {
-    id:'savings', name:'Savings & Investments', icon:'💰', color:'#1A8C5B',
+    id:'savings', name:'Savings & Investments', icon:'\ud83d\udcb0', color:'#1A8C5B',
     cats:[
-      {id:'emfund',     name:'Emergency Fund'},
-      {id:'retirement', name:'Retirement / Pension'},
-      {id:'invest',     name:'Investments'},
-      {id:'goals',      name:'Goal Savings'},
-      {id:'moraka',     name:'Moraka'},
-      {id:'motshelo',   name:'Motshelo'},
-      {id:'debt_extra', name:'Extra Debt Repayment'},
+      {id:'emfund',     name:'Emergency fund',        bucket:'save'},
+      {id:'retirement', name:'Retirement / pension',  bucket:'save'},
+      {id:'invest',     name:'Investments',           bucket:'save'},
+      {id:'goals',      name:'Goal savings',          bucket:'save'},
+      {id:'motshelo',   name:'Money motshelo',        bucket:'save'},
+      // In the third bar, never in monthly_savings — which is why that bar is
+      // labelled "Savings & extra debt repayment". Paying debt down faster is
+      // good; it is not money you still have.
+      {id:'debt_extra', name:'Extra debt repayment',  bucket:'save'},
     ]
   },
   {
-    id:'other', name:'Other', icon:'📋', color:'#64748B',
+    id:'other', name:'Other', icon:'\ud83d\udccb', color:'#64748B',
     cats:[
-      {id:'gifts',      name:'Gifts & Donations'},
-      {id:'misc',       name:'Miscellaneous'},
+      // Tagged by the member on first non-zero entry (question 1, option c).
+      {id:'gifts',      name:'Giving (church, tithe, gifts)', bucket:null},
+      {id:'misc',       name:'Miscellaneous',                 bucket:null},
     ]
   },
 ];
 
+// Hints, first-budget prompts and advice, verbatim from the approved model.
+// Keyed by category id; absent means the line carries none.
+const CAT_HINT = {
+  housing:'rent or bond, plus levies and rates',
+  utilities:'water, electricity, and the data you cannot work without',
+  food:'what you spend feeding your household in a month',
+  motshelo_goods:'your monthly contribution to a groceries or toiletries motshelo',
+  transport:'fuel, combi fares, taxis, car upkeep',
+  health:'medicines, doctor visits and anything medical aid does not cover',
+  childcare:'school fees, uniforms, cr\u00e8che, transport to school',
+  family_support:'money to parents, siblings or relatives you support. Choose "fixed" if it is the same every month, or "varies" and enter what you set aside for it.',
+  contributions:'what you set aside for funerals, weddings, baby showers and workplace collections. Most months something comes up.',
+  helper:'domestic worker, garden help \u2014 wages and their transport',
+  insurance:'funeral cover, life, car, home \u2014 not medical aid',
+  moraka:'feed, herding, vet, dipping, seed, ploughing, fuel to the farm. Not the value of the herd or the land.',
+  debt_min:'the minimum you must pay each month, across every loan',
+  dining:'restaurants, takeaways, lunch at work',
+  personal:'hair, grooming, salon',
+  subscript:'streaming, gym, apps \u2014 the ones that renew without asking',
+  emfund:'what you put aside each month for the month that goes wrong',
+  retirement:'what you choose to put away, on top of any pension off your payslip',
+  invest:'unit trusts, shares, a fixed deposit, an asset manager',
+  goals:'money set aside for something specific \u2014 see the goal types below',
+  motshelo:'your monthly contribution to the group. Enter the payout under Income when it arrives.',
+  debt_extra:'what you pay above the minimum, by choice',
+  gifts:'tithe or church giving, and gifts you give. Money to family goes under Family support.',
+  misc:'anything that fits nowhere else',
+};
+
+// Shown under the field on a member's FIRST budget only.
+const CAT_FIRST_PROMPT = {
+  housing:'Rent or bond \u2014 whatever keeps the roof over you.',
+  food:'Groceries for the household, not meals out \u2014 those have their own line.',
+  childcare:'School fees and anything that comes with them.',
+  family_support:'Many of us send money home. Put it here so your budget tells the truth about your month.',
+  contributions:'Set aside something for this month\u2019s contributions \u2014 a funeral, a wedding, the office collection \u2014 so they do not come out of the food money.',
+  moraka:'Running costs of the cattle post or the fields \u2014 not what the herd is worth.',
+  debt_min:'Only the minimums. Anything extra you choose to pay goes in Extra debt repayment.',
+  subscript:'Worth listing: subscriptions are the easiest thing to forget you are paying for.',
+  emfund:'Even P100 a month starts this. The amount matters less than it existing.',
+  motshelo:'A motshelo is saving. It counts here.',
+};
+
 const ALL_CATS = EXPENSE_GROUPS.flatMap(g=>g.cats);
+const BUCKET_OF = Object.fromEntries(ALL_CATS.map(c=>[c.id, c.bucket ?? null]));
+// The two built-ins the member tags, and the only ones that may be re-tagged.
+// Every other built-in is fixed (question 4): a member re-tagging `housing` as
+// a Want would produce figures nothing downstream could reason about.
+const TAGGABLE_BUILTINS = ['gifts','misc'];
 const CAT_MAP  = Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
 const GROUP_MAP = Object.fromEntries(EXPENSE_GROUPS.map(g=>[g.id,g]));
 
@@ -636,7 +713,26 @@ const KW_NET_LABEL   = 'Paid into your bank account each month (net pay)';
 // lives in the Savings & Investments expense GROUP — that is a budgeting
 // convention and the 50/30/20 chart keeps it — but money going to a creditor
 // is not savings, and counting it made the rate read high.
-const KW_SAVINGS_CATS = ['emfund','retirement','invest','goals'];
+// What counts as SAVING. `moraka` is a farm's running costs and `debt_extra`
+// goes to a creditor — neither is money the member still has. `motshelo` joined
+// on 16 Sep: members who save through a group were being told they save
+// nothing. payslip_pension is never here either; it never reached them to be
+// allocated, and Retirement adds it separately (Phase C).
+const KW_SAVINGS_CATS = ['emfund','retirement','invest','goals','motshelo'];
+
+// The full savings figure for a budget: the fixed savings categories plus any
+// line the member has tagged `save` themselves. This is the ONE definition —
+// the Savings Rate stat, monthly_savings, the dashboard tile and the
+// assessment all resolve to it.
+function savingsOf(b){
+  if (!b) return 0;
+  const fixed = KW_SAVINGS_CATS.reduce((s,c)=>s+pf((b.expenses||{})[c]||0),0);
+  const tagged = allCatsOf(b)
+    .filter(c => !KW_SAVINGS_CATS.includes(c.id))
+    .filter(c => bucketOf(b, c.id) === 'save' && !BUCKET_OF[c.id])
+    .reduce((s,c)=>s+pf((b.expenses||{})[c.id]||0),0);
+  return fixed + tagged;
+}
 const KW_NET_ROW_RE  = /take-home|net pay|bank account/i;
 
 function getBudget(key){ return budgets[key] || newEmptyBudget(); }
@@ -689,6 +785,33 @@ function sortedKeys(){ return Object.keys(budgets).sort(); }
 // carries that month's user-added custom expenses (b.customCats).
 function groupCats(b,g){ return g.id==='other' ? g.cats.concat(b.customCats||[]) : g.cats; }
 
+// Every line the member has money against, built-in and custom, in one list.
+function allCatsOf(b){ return ALL_CATS.concat((b && b.customCats) || []); }
+
+// The bucket a line counts toward, or null when we have not been told.
+//
+// Order matters: a fixed built-in wins over anything stored, so a stale tag on
+// `housing` from some earlier state can never move it out of Needs. Only the
+// two taggable built-ins and custom lines read the stored tag.
+function bucketOf(b, catId){
+  const fixed = BUCKET_OF[catId];
+  if (fixed && !TAGGABLE_BUILTINS.includes(catId)) return fixed;
+  if (TAGGABLE_BUILTINS.includes(catId)) return ((b && b.tags) || {})[catId] || null;
+  const c = ((b && b.customCats) || []).find(x => x.id === catId);
+  return (c && c.tag) || null;
+}
+
+// Lines carrying money that we cannot place in a bar yet. This is what the
+// three-way question asks about, and it is recomputed on every save — a
+// question the member dismissed comes back next time rather than being
+// dropped for good, and the line simply stays untagged until they answer.
+function untaggedWithMoney(b){
+  if (!b) return [];
+  return allCatsOf(b)
+    .filter(c => pf((b.expenses || {})[c.id] || 0) > 0)
+    .filter(c => bucketOf(b, c.id) === null);
+}
+
 // Collect the shared figures a saved budget can supply, ask once, then write.
 // Returns early on anything missing rather than writing a partial patch.
 let _kwSyncPending = false;
@@ -729,7 +852,7 @@ async function kwSyncProfileFromBudget(){
   // saving, and counting it here told a member their savings rate was higher
   // than it is. Nor does it include payslip_pension, which never reached them
   // to be allocated; Retirement adds that separately.
-  const _sav = KW_SAVINGS_CATS.reduce((sum, c) => sum + pf(_exp[c] || 0), 0);
+  const _sav = savingsOf(b);
   if (_sav > 0) patch.monthly_savings = _sav;
 
   // The voluntary retirement allocation, kept apart from payslip_pension.
@@ -793,22 +916,37 @@ function calcTotals(b){
   const totalExpenses = Object.values(expByGroup).reduce((s,v)=>s+v,0);
   const totalActual   = Object.values(actByGroup).reduce((s,v)=>s+v,0);
   const surplus = totalIncome - totalExpenses;
-  // Two different questions, so two different figures.
+
+  // ── The 50/30/20 bars, by BUCKET ──────────────────────────────────────
+  // Phase C needed two savings figures because the chart followed the Savings
+  // GROUP (debt_extra included) while the rate did not. With buckets there is
+  // one figure again: debt_extra is `save`, the bar says "Savings & extra debt
+  // repayment", and savingsGroupAmt is retired.
   //
-  // savingsGroupAmt is the 50/30/20 BUDGETING view: everything filed under
-  // Savings & Investments, `debt_extra` included, because that is where a
-  // member puts it and moving it would rearrange their chart.
-  //
-  // savingsAmt is the question "how much are you actually saving", and money
-  // going to a creditor is not the answer. Paying debt down faster is good and
-  // the advice says so — it is just not saving, and counting it told members a
-  // savings rate higher than the one they have. This is the figure the rate,
-  // the profile column and the dashboard all read, so all three now agree.
-  const savingsGroupAmt = expByGroup['savings']||0;
-  const savingsAmt = KW_SAVINGS_CATS.reduce((s,c)=>s+pf(b.expenses[c]||0),0);
-  const needsAmt   = expByGroup['needs']||0;
-  const wantsAmt   = expByGroup['wants']||0;
-  return { totalIncome, totalExpenses, totalActual, surplus, savingsAmt, savingsGroupAmt, needsAmt, wantsAmt, expByGroup, actByGroup };
+  // `untaggedAmt` is money in no bar — Giving, Miscellaneous or a custom line
+  // the member has not tagged. It is reported so the page can say the bars do
+  // not cover everything, instead of quietly not adding up.
+  const byBucket = { need:0, want:0, save:0, null:0 };
+  allCatsOf(b).forEach(c => {
+    const amt = pf(b.expenses[c.id]||0);
+    if (!amt) return;
+    const bk = bucketOf(b, c.id);
+    byBucket[bk === null ? 'null' : bk] += amt;
+  });
+  const needsAmt    = byBucket.need;
+  const wantsAmt    = byBucket.want;
+  const barSaveAmt  = byBucket.save;      // the third bar, debt_extra included
+  const untaggedAmt = byBucket['null'];
+
+  // What the member is actually SAVING, which is a different question from the
+  // third bar: debt_extra goes to a creditor, and moraka is a farm's running
+  // costs. Custom lines and Giving/Miscellaneous count here only when the
+  // member has tagged them `save` themselves.
+  const savingsAmt = savingsOf(b);
+
+  return { totalIncome, totalExpenses, totalActual, surplus,
+           savingsAmt, barSaveAmt, needsAmt, wantsAmt, untaggedAmt,
+           expByGroup, actByGroup };
 }
 
 // ────────────────────────────────────────────
@@ -846,7 +984,8 @@ function confirmNewMonth(){
         income: src.income.map(r=>({...r, id:Date.now()+Math.random()})),
         expenses:{...src.expenses},
         actuals:{},   // a new month starts with zero actuals (only the plan is copied)
-        customCats:(src.customCats||[]).map(c=>({...c})),   // keep custom "Other" expenses (amounts copied above use the same ids)
+        customCats:(src.customCats||[]).map(c=>({...c})),   // keep custom "Other" expenses, and their tags, with the same ids
+        tags:{...(src.tags||{})},                            // Giving / Miscellaneous tags travel too
         notes:'',
         collapsed:{...src.collapsed},
       };
@@ -896,6 +1035,8 @@ function flushToState(){
   const b=budgets[currentKey];
   // Income
   b.income.forEach(r=>{
+    // srcId is deliberately NOT read back from the DOM: renaming the row is
+    // the member's business, but it stays the farm-income row.
     r.label = document.getElementById('inc_lbl_'+r.id)?.value||r.label;
     r.amount = pf(document.getElementById('inc_amt_'+r.id)?.value||'0');
   });
@@ -916,6 +1057,99 @@ function flushToState(){
 }
 
 // ────────────────────────────────────────────
+// THE THREE-WAY TAG (Phase D)
+// ────────────────────────────────────────────
+//
+// Giving, Miscellaneous and every custom line are money we cannot place in a
+// 50/30/20 bar, because only the member knows what the line is for. So we ask,
+// once, in their words.
+//
+// Three rules, and each is there because the alternative is worse:
+//
+//   NEVER GUESSED. An untagged line stays in the expense total and in no bar.
+//   Defaulting it to Wants would quietly file a member's tithe as discretionary
+//   spending; defaulting to Needs would inflate the figure their employer's
+//   report reads. Silence is the only honest state.
+//
+//   ASKED ON SAVE, NOT MID-ENTRY. The question fires from the autosave, once
+//   the member has stopped typing — never while they are entering the figure.
+//
+//   A DISMISSED QUESTION COMES BACK. Closing the modal leaves the line
+//   untagged and asks again on the next save. It is not a "no", and dropping
+//   it for good would leave money permanently outside the bars with nothing on
+//   screen explaining why.
+let _tagAsking = false;
+
+function askBucketTag(catId, label){
+  return new Promise(resolve => {
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const ov = document.createElement('div');
+    ov.id = 'kw-bucket-modal';
+    ov.dataset.catId = catId;
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,38,31,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:12px;padding:26px 22px;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(35,38,31,.3)">
+        <div style="font-size:17px;font-weight:700;margin-bottom:4px">Is this a need, a want, or saving?</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-bottom:18px">${esc(label)}</div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <button id="kwb-need" style="text-align:left;padding:11px 13px;border:1.5px solid var(--border);background:#fff;border-radius:9px;cursor:pointer;font-size:13px">
+            <strong>Need</strong><div style="color:var(--muted);font-size:12px;margin-top:2px">you could not stop paying it this month</div></button>
+          <button id="kwb-want" style="text-align:left;padding:11px 13px;border:1.5px solid var(--border);background:#fff;border-radius:9px;cursor:pointer;font-size:13px">
+            <strong>Want</strong><div style="color:var(--muted);font-size:12px;margin-top:2px">you choose it, and could pause it</div></button>
+          <button id="kwb-save" style="text-align:left;padding:11px 13px;border:1.5px solid var(--border);background:#fff;border-radius:9px;cursor:pointer;font-size:13px">
+            <strong>Saving</strong><div style="color:var(--muted);font-size:12px;margin-top:2px">the money is still yours afterwards</div></button>
+        </div>
+        <button id="kwb-skip" style="margin-top:14px;background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline">Not now</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const done = (val) => {
+      document.removeEventListener('keydown', onKey);
+      if (ov.parentNode) document.body.removeChild(ov);
+      resolve(val);
+    };
+    // Escape is "not now", never a silent tag.
+    const onKey = e => { if (e.key === 'Escape') done(null); };
+    document.addEventListener('keydown', onKey);
+    ov.querySelector('#kwb-need').addEventListener('click', () => done('need'));
+    ov.querySelector('#kwb-want').addEventListener('click', () => done('want'));
+    ov.querySelector('#kwb-save').addEventListener('click', () => done('save'));
+    ov.querySelector('#kwb-skip').addEventListener('click', () => done(null));
+    setTimeout(() => ov.querySelector('#kwb-need').focus(), 0);
+  });
+}
+
+function setBucketTag(b, catId, tag){
+  if (!tag) return;                                  // "not now" stores nothing
+  if (TAGGABLE_BUILTINS.includes(catId)) {
+    b.tags = b.tags || {};
+    b.tags[catId] = tag;
+  } else {
+    const c = (b.customCats || []).find(x => x.id === catId);
+    if (c) c.tag = tag;                              // survives rename: name and tag are separate fields
+  }
+}
+
+// One line per pass, asked after the member has stopped typing. Re-entered on
+// the next save while anything is still untagged.
+async function maybeAskBucketTags(){
+  if (_tagAsking || !currentKey || !budgets[currentKey]) return;
+  const b = budgets[currentKey];
+  const pending = untaggedWithMoney(b);
+  if (!pending.length) return;
+  _tagAsking = true;
+  try {
+    const c = pending[0];
+    const tag = await askBucketTag(c.id, c.name || 'This line');
+    if (tag) {
+      setBucketTag(b, c.id, tag);
+      save();
+      renderSummaryPanel();
+      renderExpenseCats(b);
+    }
+  } finally { _tagAsking = false; }
+}
+
+// ────────────────────────────────────────────
 // AUTO-SAVE  (called on every input)
 // ────────────────────────────────────────────
 let autoSaveTimer;
@@ -930,16 +1164,29 @@ function autoSave(){
     // when the payslip block itself is typed into. autoSave is the one choke
     // point every change passes through.
     if(currentKey) renderPayslipReconcile(budgets[currentKey]);
+    // Asked here, not on keystroke: the member has stopped typing and the
+    // month is saved, so an unanswered question costs them nothing.
+    maybeAskBucketTags();
   },400);
 }
 
 // ────────────────────────────────────────────
 // INCOME ROWS
 // ────────────────────────────────────────────
-function addIncomeRow(){
+// Two income rows the portal recognises by id, because advice has to treat
+// them differently: a cattle sale and a motshelo share-out are not a salary,
+// and a month containing one is not a new normal. Everything else stays free
+// text, and KW_NET_ROW_RE / net_income are untouched.
+const INCOME_SOURCES = {
+  farm_income:     { label:'Farm income',     hint:'what the moraka or masimo brought in this month \u2014 cattle or goats sold, produce sold. Not what the herd is worth.' },
+  motshelo_payout: { label:'Motshelo payout', hint:'the share-out from your money motshelo, in the month it arrives' },
+};
+
+function addIncomeRow(srcId){
   if(!currentKey) return;
   const b=budgets[currentKey];
-  b.income.push({id:Date.now(),label:'',amount:0});
+  const src = srcId && INCOME_SOURCES[srcId] ? INCOME_SOURCES[srcId] : null;
+  b.income.push({id:Date.now(),label:src?src.label:'',amount:0,...(srcId?{srcId}:{})});
   renderIncomeRows(b);
   autoSave();
 }
@@ -956,7 +1203,9 @@ function removeIncomeRow(id){
 function renderIncomeRows(b){
   document.getElementById('incomeRows').innerHTML=b.income.map(r=>`
     <div class="item-row income-row" id="incrow_${r.id}">
-      <div class="iw"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()"></div>
+      <div class="iw" style="display:block"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()">${
+        r.srcId && INCOME_SOURCES[r.srcId] ? `<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(INCOME_SOURCES[r.srcId].hint)}</div>` : ''
+      }</div>
       <div class="iw">
         <span class="iw-pre">P</span>
         <input class="mono" type="text" id="inc_amt_${r.id}" value="${r.amount>0?r.amount.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
@@ -1095,6 +1344,8 @@ function addCustomExpense(){
   flushToState();                       // keep any in-progress edits before re-rendering
   const b=budgets[currentKey];
   b.customCats=b.customCats||[];
+  // No tag. The member is asked once there is money against it — asking about
+  // an empty line they have not named yet would be asking about nothing.
   b.customCats.push({id:'custom_'+Date.now(),name:''});
   b.collapsed=b.collapsed||{};
   b.collapsed['other']=false;           // make sure the group is open so the new row is visible
@@ -1115,6 +1366,82 @@ function removeCustomExpense(id){
 // Variance = budgeted − actual. Positive (spent less than planned) reads green;
 // negative (over budget) reads red. Brand rules: green primary, red for over.
 // Shown only once an actual is entered; otherwise a muted dash.
+// A member's FIRST budget is the only one that carries the prompts — after
+// that they are clutter on a page they already know.
+function isFirstBudget(){ return Object.keys(budgets).length <= 1; }
+
+// Everything that sits under a category's name: its hint, its first-budget
+// prompt, the Fixed/Varies switch on family support, and — for a line the
+// member tagged — what they said it was.
+function catMetaHtml(b, c){
+  const bits = [];
+  const hint = CAT_HINT[c.id];
+  if (hint) bits.push(`<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(hint)}</div>`);
+
+  if (c.id === 'family_support') {
+    const mode = fsMode(b);
+    bits.push(`<div style="margin-top:5px;display:flex;gap:6px;align-items:center">
+      <button type="button" class="btn btn-ghost btn-xs" id="fs_fixed"  aria-pressed="${mode==='fixed'}"  style="${mode==='fixed' ?'background:var(--navy);color:#fff':''}" onclick="setFsMode('fixed')">Fixed</button>
+      <button type="button" class="btn btn-ghost btn-xs" id="fs_varies" aria-pressed="${mode==='varies'}" style="${mode==='varies'?'background:var(--navy);color:#fff':''}" onclick="setFsMode('varies')">Varies</button>
+      <span style="font-size:11px;color:var(--muted)">${mode==='varies'?'what you set aside \u2014 log what you sent in Actual':'the same every month'}</span>
+    </div>`);
+  }
+  if (c.id === 'contributions') {
+    bits.push(`<div style="font-size:11px;color:var(--muted);margin-top:3px">what you set aside \u2014 log what you gave in Actual</div>`);
+  }
+
+  if (isFirstBudget() && CAT_FIRST_PROMPT[c.id]) {
+    bits.push(`<div style="font-size:11px;color:var(--navy);line-height:1.5;margin-top:3px">${esc(CAT_FIRST_PROMPT[c.id])}</div>`);
+  }
+
+  // Only lines the member tags say so; a built-in's bucket is not news.
+  const taggable = String(c.id).startsWith('custom_') || TAGGABLE_BUILTINS.includes(c.id);
+  if (taggable) {
+    const t = bucketOf(b, c.id);
+    const LBL = { need:'Need', want:'Want', save:'Saving' };
+    bits.push(t
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Counted as <strong>${LBL[t]}</strong> \u00b7 <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">change</button></div>`
+      : (pf(b.expenses[c.id]||0) > 0
+          ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Not counted in any of the three bars yet \u00b7 <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">say what it is</button></div>`
+          : ''));
+  }
+  return bits.join('');
+}
+
+async function retagCat(catId){
+  if (!currentKey) return;
+  const b = budgets[currentKey];
+  const c = allCatsOf(b).find(x => x.id === catId);
+  const tag = await askBucketTag(catId, (c && c.name) || 'This line');
+  if (!tag) return;
+  setBucketTag(b, catId, tag);
+  save(); renderSummaryPanel(); renderExpenseCats(b);
+}
+
+// Family support is either the same figure every month or a provision against
+// a month that varies. Stored per budget month.
+function fsMode(b){ return (b && b.fs_mode) === 'varies' ? 'varies' : 'fixed'; }
+function setFsMode(mode){
+  if (!currentKey) return;
+  const b = budgets[currentKey];
+  b.fs_mode = (mode === 'varies') ? 'varies' : 'fixed';
+  save(); renderExpenseCats(b); renderSummaryPanel();
+}
+
+// A provision the month did not use is money still in the member's hands, and
+// saying so is the opposite of a scold: it is the one place the budget gets to
+// report good news about a line it never criticises.
+function provisionSurplus(b){
+  const rows = [];
+  ['family_support','contributions'].forEach(id => {
+    if (id === 'family_support' && fsMode(b) !== 'varies') return;
+    const prov = pf((b.expenses||{})[id]||0);
+    const act  = pf((b.actuals ||{})[id]||0);
+    if (prov > 0 && act > 0 && act < prov) rows.push({ id, left: prov - act });
+  });
+  return rows;
+}
+
 function varianceHtml(bud, act){
   if(act<=0) return '<span style="font-family:\'DM Mono\',monospace;font-size:.75rem;color:var(--muted)">—</span>';
   const diff = bud - act;
@@ -1158,8 +1485,8 @@ function renderExpenseCats(b){
           const isCustom=String(c.id).startsWith('custom_');
           return `<div class="item-row bva-row">
             ${isCustom
-              ?`<div class="iw"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"></div>`
-              :`<span style="font-size:.82rem;font-weight:500;">${c.name}</span>`}
+              ?`<div class="iw" style="display:block"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()">${catMetaHtml(b,c)}</div>`
+              :`<div style="display:block"><span style="font-size:.82rem;font-weight:500;">${c.name}</span>${catMetaHtml(b,c)}</div>`}
             <div class="iw">
               <span class="iw-pre">P</span>
               <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
@@ -1188,7 +1515,7 @@ function renderExpenseCats(b){
 function renderSummaryPanel(){
   if(!currentKey||!budgets[currentKey]) return;
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,savingsGroupAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,barSaveAmt,needsAmt,wantsAmt,untaggedAmt,expByGroup}=calcTotals(b);
 
   // Labels
   document.getElementById('incomeTotalLabel').textContent=fmtK(totalIncome);
@@ -1241,11 +1568,10 @@ function renderSummaryPanel(){
   const rules=[
     {name:'Needs (50%)',  target:50, actual:totalIncome>0?needsAmt/totalIncome*100:0,  color:'var(--navy)', amount:needsAmt},
     {name:'Wants (30%)',  target:30, actual:totalIncome>0?wantsAmt/totalIncome*100:0,  color:'var(--orange)', amount:wantsAmt},
-    // The 50/30/20 bar is the budgeting view: it follows the Savings &
-    // Investments GROUP, debt_extra included, so the chart a member already
-    // knows does not move. The Savings Rate stat above answers a different
-    // question and uses the narrower figure.
-    {name:'Savings (20%)',target:20, actual:totalIncome>0?savingsGroupAmt/totalIncome*100:0,color:'var(--green)', amount:savingsGroupAmt},
+    // Relabelled 16 Sep. The bar includes extra debt repayment and the Savings
+    // Rate stat above does not, so the label says which is which rather than
+    // leaving two numbers under one word.
+    {name:'Savings & extra debt repayment (20%)',target:20, actual:totalIncome>0?barSaveAmt/totalIncome*100:0,color:'var(--green)', amount:barSaveAmt},
   ];
   document.getElementById('ruleSection').innerHTML=rules.map(r=>{
     const over=r.actual>r.target;
@@ -1277,12 +1603,41 @@ function renderSummaryPanel(){
 // ────────────────────────────────────────────
 // SMART ADVICE ENGINE
 // ────────────────────────────────────────────
+// The only lines advice may ever suggest cutting. Needs, Giving, Family
+// support, Contributions and custom lines are NEVER named in a cut or deficit
+// sentence — a member whose gap is family support is not making a budgeting
+// error, and a custom line called "Mama" is not ours to comment on.
+function cuttableWants(b){
+  const wantIds = (EXPENSE_GROUPS.find(g=>g.id==='wants')||{cats:[]}).cats.map(c=>c.id);
+  return wantIds
+    .map(id => ({ id, name:(CAT_MAP[id]||{}).name||id, amt: pf((b.expenses||{})[id]||0) }))
+    .filter(x => x.amt > 0)
+    .sort((x,y) => y.amt - x.amt);
+}
+
 function renderAdvice(b, {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup,savRate}){
   const advice=[];
   if(totalIncome===0){ advice.push({type:'info',icon:'ℹ️',msg:'Enter your monthly income to unlock personalised advice.'}); document.getElementById('adviceList').innerHTML=advice.map(a=>`<div class="advice-card ${a.type}"><span class="advice-icon">${a.icon}</span><span>${a.msg}</span></div>`).join(''); return; }
 
   // Surplus / deficit
-  if(surplus<0) advice.push({type:'alert',icon:'🚨',msg:`You are <strong>${fmt(Math.abs(surplus))}</strong> over budget. Cut discretionary spending (Wants) or find additional income.`});
+  if(surplus<0){
+    // The old sentence said "Cut discretionary spending (Wants)" to everyone,
+    // including the member whose whole gap is family support and who may have
+    // no Wants at all. So: state the shortfall, then name ONE line only when
+    // that line could actually close it, and otherwise say plainly that the
+    // gap sits in fixed costs and offer a coach. Never name a Need, Giving,
+    // Family support, Contributions or a custom line.
+    const gap = Math.abs(surplus);
+    const wants = cuttableWants(b);
+    const biggest = wants[0] || null;
+    if (biggest && biggest.amt >= gap) {
+      advice.push({type:'alert',icon:'🚨',msg:`You are <strong>${fmt(gap)}</strong> short this month. Your largest flexible line is ${esc(biggest.name)} at <strong>${fmt(biggest.amt)}</strong> — enough to close the gap on its own, if that is the trade you want to make.`});
+    } else if (wantsAmt < gap) {
+      advice.push({type:'alert',icon:'🚨',msg:`You are <strong>${fmt(gap)}</strong> short this month, and the gap is larger than everything flexible in your budget put together. That means it sits in your fixed costs, which is not something to fix by trimming. A session with a Key Wellness coach is the right next step.`});
+    } else {
+      advice.push({type:'alert',icon:'🚨',msg:`You are <strong>${fmt(gap)}</strong> short this month. Closing it would take more than one line, so it is worth going through the month with a Key Wellness coach rather than guessing.`});
+    }
+  }
   else if(surplus===0) advice.push({type:'warn',icon:'⚠️',msg:'Your budget is exactly balanced with no buffer. Aim for a small surplus each month.'});
   else if(surplus/totalIncome>0.15) advice.push({type:'good',icon:'✅',msg:`Great surplus of <strong>${fmt(surplus)}</strong> (${(surplus/totalIncome*100).toFixed(0)}% of income). Consider moving the extra into savings or investments.`});
   else advice.push({type:'info',icon:'📊',msg:`You have a <strong>${fmt(surplus)}</strong> surplus. Allocate it intentionally — emergency fund, debt, or investments.`});
@@ -1315,11 +1670,73 @@ function renderAdvice(b, {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,
   else advice.push({type:'good',icon:'👴',msg:`Retirement contribution of <strong>${fmt(retire)}</strong> (${(retire/totalIncome*100).toFixed(0)}%) is solid. Keep it consistent!`});
 
   // Wants %
-  if(wantsAmt/totalIncome>0.40) advice.push({type:'warn',icon:'🛍️',msg:`Discretionary (Wants) spending is <strong>${(wantsAmt/totalIncome*100).toFixed(0)}%</strong> of income. Review subscriptions, dining, and entertainment.`});
+  // Replaced 16 Sep. The old line told every member to "review subscriptions,
+  // dining, and entertainment" whether or not they had any.
+  if(wantsAmt/totalIncome>0.40) advice.push({type:'info',icon:'🛍️',msg:`Wants are <strong>${(wantsAmt/totalIncome*100).toFixed(0)}%</strong> of income. There is nothing wrong with that if the rest of your month works — it is the first place to look only if you want it to be.`});
 
   // Food
   const food=pf(b.expenses['food']||0);
-  if(food/totalIncome>0.20) advice.push({type:'info',icon:'🛒',msg:`Food & groceries are <strong>${(food/totalIncome*100).toFixed(0)}%</strong> of income. Meal planning and buying in bulk can reduce this.`});
+  if(food/totalIncome>0.20) advice.push({type:'info',icon:'🛒',msg:`Food is <strong>${(food/totalIncome*100).toFixed(0)}%</strong> of income. Groceries are one of the few large lines with room to move, if you want it.`});
+
+  // Everything from here to the trend block is Phase D, and it is marked so
+  // the cap below cannot silently drop it. These lines were being appended
+  // last, after ten generic ones, so a member with family support, a
+  // motshelo and a cattle post — the member this model was written for —
+  // would never have seen a single sentence written for them.
+  const _d = advice.length;
+
+  // ── Phase D lines, verbatim from docs/phase-d-category-model.md ───────
+  // Every one of these is written to be read by the person it describes.
+  // Family support, contributions, giving and farm costs are acknowledged as
+  // obligations; none of them is ever offered as something to cut.
+  const _amt = id => pf((b.expenses||{})[id]||0);
+
+  const famSup = _amt('family_support');
+  if(famSup>0) advice.push({type:'info',icon:'👪',msg:`Family support is <strong>${fmt(famSup)}</strong> a month. It is an obligation, and it is counted as one — not as spending to cut.`});
+
+  const contrib = _amt('contributions');
+  if(contrib>0) advice.push({type:'info',icon:'🤝',msg:`You set aside <strong>${fmt(contrib)}</strong> for contributions. When a month passes without one, that amount can move to savings.`});
+
+  const giving = _amt('gifts');
+  if(giving>0) advice.push({type:'info',icon:'⛪',msg:`You give <strong>${fmt(giving)}</strong> a month. For most people this is a commitment, not a luxury, and the budget treats it that way.`});
+
+  const goodsM = _amt('motshelo_goods');
+  if(goodsM>0) advice.push({type:'info',icon:'🛒',msg:`Your goods motshelo is <strong>${fmt(goodsM)}</strong>. It is groceries paid in advance, so it counts as food, not as saving.`});
+
+  const moneyM = _amt('motshelo');
+  if(moneyM>0) advice.push({type:'good',icon:'🤲',msg:`Your motshelo is <strong>${fmt(moneyM)}</strong> a month. That is saving, and it is counted as saving.`});
+
+  const farm = _amt('moraka');
+  if(farm>0) advice.push({type:'info',icon:'🐄',msg:`Farm costs are <strong>${fmt(farm)}</strong> a month. The herd and the land may be assets; keeping them is a cost, and it is counted as one.`});
+
+  const helperPay = _amt('helper');
+  if(helperPay>0) advice.push({type:'info',icon:'🧹',msg:`Employing someone is a wage they depend on. It belongs in Needs, not Wants.`});
+
+  const school = _amt('childcare');
+  if(school/totalIncome>0.15) advice.push({type:'info',icon:'🎓',msg:`School fees are <strong>${(school/totalIncome*100).toFixed(0)}%</strong> of income. It is one of the few costs worth protecting when money is tight.`});
+
+  const subs = _amt('subscript');
+  if(subs>0) advice.push({type:'info',icon:'📺',msg:`Subscriptions add up to <strong>${fmt(subs)}</strong> a month. Worth a look at which ones you still use.`});
+
+  // Irregular income: real, and not a new normal.
+  const _inc = id => (b.income||[]).filter(r=>r.srcId===id).reduce((sum,r)=>sum+pf(r.amount),0);
+  const farmIn = _inc('farm_income');
+  if(farmIn>0) advice.push({type:'info',icon:'🌾',msg:`Farm income this month is <strong>${fmt(farmIn)}</strong>. It is real income, and because it comes and goes, the budget treats it as a bonus month rather than a salary.`});
+  const payout = _inc('motshelo_payout');
+  if(payout>0) advice.push({type:'good',icon:'🤲',msg:`A motshelo payout is money you saved coming back to you. A good month to top up the emergency fund or a goal before it becomes ordinary money.`});
+
+  // A provision the month did not use.
+  provisionSurplus(b).forEach(r => {
+    const what = r.id === 'family_support' ? 'family support' : 'contributions';
+    advice.push({type:'good',icon:'💚',msg:`You set aside more for ${what} than the month asked for — <strong>${fmt(r.left)}</strong> is still yours. Moving it to savings now is the easiest saving you will do this month.`});
+  });
+
+  // Money in no bar. Stated, never guessed at.
+  const _untagged = untaggedWithMoney(b);
+  if(_untagged.length) advice.push({type:'info',icon:'❓',msg:`${_untagged.length === 1 ? 'One line has' : _untagged.length + ' lines have'} money against ${_untagged.length === 1 ? 'it' : 'them'} but no answer to whether ${_untagged.length === 1 ? 'it is' : 'they are'} a need, a want or saving, so ${_untagged.length === 1 ? 'it is' : 'they are'} not in any of the three bars yet.`});
+
+  // Mark everything the Phase D model added, so the cap ranks it.
+  for (let i = _d; i < advice.length; i++) advice[i].kw_phase_d = true;
 
   // Multi-month trend
   const keys=sortedKeys();
@@ -1340,7 +1757,18 @@ function renderAdvice(b, {totalIncome,totalExpenses,surplus,savingsAmt,needsAmt,
 
   if(!advice.length) advice.push({type:'good',icon:'🎉',msg:'Your budget looks healthy! Keep reviewing it monthly.'});
 
-  document.getElementById('adviceList').innerHTML=advice.slice(0,8).map(a=>`<div class="advice-card ${a.type}"><span class="advice-icon">${a.icon}</span><span>${a.msg}</span></div>`).join('');
+  // The cap exists so the panel does not become a wall of text. But WHICH
+  // eight matters: the surplus or deficit first, then the lines that
+  // acknowledge what this member's money is actually doing, then the generic
+  // guidance. Ranked and stably sorted, so the cap drops the most generic
+  // advice rather than whichever happened to be pushed last.
+  const _RANK = a => a.kw_phase_d ? 1 : (a.kw_first ? 0 : 2);
+  if (advice.length) advice[0].kw_first = true;
+  const _ordered = advice
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => (_RANK(x.a) - _RANK(y.a)) || (x.i - y.i))
+    .map(x => x.a);
+  document.getElementById('adviceList').innerHTML=_ordered.slice(0,10).map(a=>`<div class="advice-card ${a.type}"><span class="advice-icon">${a.icon}</span><span>${a.msg}</span></div>`).join('');
 }
 
 // ────────────────────────────────────────────
@@ -1649,7 +2077,7 @@ function exportPDF(){
   const pageW=doc.internal.pageSize.getWidth();
   const pageH=doc.internal.pageSize.getHeight();
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,savingsGroupAmt,needsAmt,wantsAmt,expByGroup,actByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,barSaveAmt,needsAmt,wantsAmt,untaggedAmt,expByGroup,actByGroup}=calcTotals(b);
   const acts=b.actuals||{};
   const varTxt=(bud,act)=>{ if(act<=0) return '—'; const d=bud-act; return (d>0?'+':(d<0?'-':''))+fmt(Math.abs(d)); };
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
@@ -1743,7 +2171,7 @@ function exportPDF(){
 
   // 50/30/20 note
   if(y>pageH-40){doc.addPage();y=18;}
-  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'On target':'Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'On target':'Over target')],['Savings (20% target)',fmt(savingsGroupAmt),(totalIncome>0?(savingsGroupAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsGroupAmt/totalIncome>=0.2?'On target':'Below target')]];
+  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'On target':'Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'On target':'Over target')],['Savings & extra debt repayment (20% target)',fmt(barSaveAmt),(totalIncome>0?(barSaveAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&barSaveAmt/totalIncome>=0.2?'On target':'Below target')]];
   doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
   doc.text('50 / 30 / 20 RULE ANALYSIS',14,y); y+=2;
   doc.setDrawColor(...GOLD); doc.line(14,y,pageW-14,y); y+=4;

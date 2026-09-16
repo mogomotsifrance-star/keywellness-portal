@@ -729,7 +729,7 @@ const dismissProfileModal = async (page) => {
     const out = await page.evaluate((b) => {
       const t = window.calcTotals(b);
       return { income: t.totalIncome, expenses: t.totalExpenses,
-               savings: t.savingsAmt, group: t.savingsGroupAmt, needs: t.needsAmt,
+               savings: t.savingsAmt, group: t.barSaveAmt, needs: t.needsAmt,
                body: document.body.textContent };
     }, PAYSLIP_BUDGET.budgets[thisMonth]);
     check('95 the payslip block is not added to income',
@@ -739,7 +739,10 @@ const dismissProfileModal = async (page) => {
       `housing+food+transport+debt_min+emfund+retirement+invest+goals+debt_extra=10200, got ${out.expenses}`);
     check('97 monthly_savings counts saving, not extra debt repayment',
       out.savings === 1700, `emfund+retirement+invest+goals=1700, got ${out.savings}`);
-    check('98 while the 50/30/20 chart keeps the group, so no chart moves',
+    /* Phase D retired savingsGroupAmt: the third bar is now the `save` BUCKET,
+       which still carries debt_extra — and is labelled "Savings & extra debt
+       repayment" so the member can see why it differs from the Savings Rate. */
+    check('98 the third bar still carries extra debt repayment',
       out.group === 2100, `+debt_extra 400 = 2100, got ${out.group}`);
     check('99 the block explains why it is worth filling in',
       /come off before your pay reaches you/.test(out.body), '(reason line missing)');
@@ -977,6 +980,327 @@ const dismissProfileModal = async (page) => {
       n++;
       await page.close();
     }
+  }
+
+  /* ── 10. Phase D: the Botswana category model ─────────────────────────────
+
+     Spec: docs/phase-d-category-model.md (APPROVED 16 Sep 2026).
+
+     The bars used to read the GROUP, so the Other group — Giving,
+     Miscellaneous and every custom line — was in the expense total and in no
+     bar, and the three bars never added up to what the member spends. They now
+     read BUCKET, and a line we have not been told about stays visibly
+     uncounted rather than being guessed into one. */
+  const D = (over) => ({
+    currentKey: thisMonth,
+    budgets: { [thisMonth]: Object.assign({
+      income: [{ id: 1, label: 'Paid into your bank account each month (net pay)', amount: 12000 }],
+      expenses: {}, actuals: {}, customCats: [], tags: {},
+    }, over) },
+  });
+  const totalsOf = (page, bm) => page.evaluate(b => {
+    const t = window.calcTotals(b);
+    return { income:t.totalIncome, expenses:t.totalExpenses, needs:t.needsAmt,
+             wants:t.wantsAmt, bar:t.barSaveAmt, savings:t.savingsAmt,
+             untagged:t.untaggedAmt };
+  }, bm);
+
+  {
+    /* Everything tagged: the bars account for every thebe of spending. */
+    const bm = D({ expenses: { housing:4000, food:1500, dining:600, emfund:500,
+                               debt_extra:300, gifts:400, misc:200, custom_1:250 },
+                   tags: { gifts:'need', misc:'want' },
+                   customCats: [{ id:'custom_1', name:'Burial society', tag:'save' }] }).budgets[thisMonth];
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID } });
+    const t = await totalsOf(page, bm);
+    check('129 with every line tagged, the bars account for all spending',
+      t.needs + t.wants + t.bar === t.expenses,
+      `needs ${t.needs} + wants ${t.wants} + bar ${t.bar} = ${t.needs+t.wants+t.bar}, expenses ${t.expenses}`);
+    check('130 nothing is left uncounted', t.untagged === 0, String(t.untagged));
+    check('131 a line tagged Need is in the Needs bar',
+      t.needs === 5900, `housing+food+gifts(need) = 5900, got ${t.needs}`);
+    check('132 a custom line tagged Saving is saving',
+      t.savings === 750, `emfund 500 + custom 250 = 750, got ${t.savings}`);
+    await page.close();
+  }
+  {
+    /* Untagged: in the total, in no bar, and never guessed into one. */
+    const bm = D({ expenses: { housing:4000, gifts:400, custom_1:250 },
+                   customCats: [{ id:'custom_1', name:'Society', tag:null }] }).budgets[thisMonth];
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID } });
+    const t = await totalsOf(page, bm);
+    check('133 an untagged line is in the expense total',
+      t.expenses === 4650, String(t.expenses));
+    check('134 and in none of the three bars',
+      t.needs === 4000 && t.wants === 0 && t.bar === 0,
+      `needs ${t.needs} wants ${t.wants} bar ${t.bar}`);
+    check('135 the shortfall is reported rather than hidden',
+      t.untagged === 650, `gifts 400 + custom 250 = 650, got ${t.untagged}`);
+    check('136 an untagged line is never counted as saving',
+      t.savings === 0, String(t.savings));
+    await page.close();
+  }
+  {
+    /* moraka and motshelo — the two the model moved. */
+    const bm = D({ expenses: { moraka:900, motshelo:600, emfund:400, debt_extra:300 } }).budgets[thisMonth];
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID } });
+    const t = await totalsOf(page, bm);
+    check('137 farm costs are a Need, not saving',
+      t.needs === 900, `moraka in Needs, got ${t.needs}`);
+    check('138 and are absent from the savings figure',
+      t.savings === 1000, `emfund 400 + motshelo 600 = 1000, got ${t.savings}`);
+    check('139 a money motshelo IS saving',
+      t.savings === 1000 && t.bar === 1300,
+      `savings ${t.savings}, bar (incl debt_extra 300) ${t.bar}`);
+    check('140 extra debt repayment is in the bar and not in savings',
+      t.bar - t.savings === 300, `bar ${t.bar} - savings ${t.savings}`);
+    await page.close();
+  }
+  {
+    /* The page renders moraka under Needs with its amount intact — an existing
+       budget must not lose a thebe when the category changes group. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID },
+      tools: { budget_planner: D({ expenses: { moraka: 900 } }) } });
+    const view = await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('.cat-group')].map(g => ({
+        name: g.querySelector('.cat-group-name')?.textContent || '',
+        text: g.textContent,
+      }));
+      return { needs: groups.find(g => /Needs/.test(g.name))?.text || '',
+               savings: groups.find(g => /Savings/.test(g.name))?.text || '',
+               amount: document.getElementById('exp_moraka')?.value || '' };
+    });
+    check('141 farm costs render under Needs',
+      /Farm costs \(moraka & masimo\)/.test(view.needs), view.needs.slice(0, 120));
+    check('142 and no longer under Savings',
+      !/Farm costs/.test(view.savings), view.savings.slice(0, 120));
+    check('143 with the amount the member already had',
+      /900/.test(view.amount), view.amount);
+    await page.close();
+  }
+  {
+    /* The three-way question: once, on save, not mid-entry, and back again
+       after a dismissal. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID }, tools: { budget_planner: D({}) } });
+    const mid = await page.evaluate(() => {
+      const el = document.getElementById('exp_gifts');
+      el.value = '400';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return !!document.getElementById('kw-bucket-modal');
+    });
+    check('144 the question does not fire while the member is typing',
+      mid === false, 'modal opened mid-entry');
+
+    await page.waitForTimeout(900);
+    const asked = await page.evaluate(() => {
+      const m = document.getElementById('kw-bucket-modal');
+      return { open: !!m, text: m ? m.textContent.replace(/\s+/g,' ') : '' };
+    });
+    check('145 it fires once the save lands',
+      asked.open === true, 'no modal after autosave');
+    check('146 with the approved wording',
+      /Is this a need, a want, or saving\?/.test(asked.text), asked.text.slice(0, 120));
+    check('147 and the three approved descriptions',
+      /you could not stop paying it this month/.test(asked.text)
+      && /you choose it, and could pause it/.test(asked.text)
+      && /the money is still yours afterwards/.test(asked.text), asked.text.slice(0, 300));
+
+    /* Dismissed: untagged, and asked again on the next save. */
+    await page.evaluate(() => document.getElementById('kwb-skip').click());
+    await page.waitForTimeout(200);
+    const afterSkip = await page.evaluate(() => ({
+      modal: !!document.getElementById('kw-bucket-modal'),
+      tagged: !!(window.__lastSavedTags || {}).gifts,
+    }));
+    check('148 dismissing leaves the line untagged', afterSkip.tagged === false, 'a tag was stored');
+
+    const reasked = await page.evaluate(async () => {
+      const el = document.getElementById('exp_misc');
+      el.value = '100';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 900));
+      return !!document.getElementById('kw-bucket-modal');
+    });
+    check('149 and the question comes back on the next save, never dropped',
+      reasked === true, 'the question was dropped for good');
+    await page.close();
+  }
+  {
+    /* Answering it once is enough — it is not asked again for that line. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID }, tools: { budget_planner: D({}) } });
+    await page.evaluate(() => {
+      const el = document.getElementById('exp_gifts');
+      el.value = '400';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.waitForTimeout(900);
+    await page.evaluate(() => document.getElementById('kwb-need')?.click());
+    await page.waitForTimeout(500);
+    const again = await page.evaluate(async () => {
+      const el = document.getElementById('exp_gifts');
+      el.value = '450';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 900));
+      return { modal: !!document.getElementById('kw-bucket-modal'),
+               body: document.body.textContent };
+    });
+    check('150 once answered, the same line is not asked again',
+      again.modal === false, 'asked twice for one line');
+    check('151 and the page says how it is counted',
+      /Counted as Need/.test(again.body), '(no counted-as chip)');
+    await page.close();
+  }
+  {
+    /* The deficit sentence. Wants big enough to close the gap: name that one
+       line. Never a Need, Giving, family support, contributions or a custom. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID },
+      tools: { budget_planner: D({
+        income: [{ id:1, label:'Paid into your bank account each month (net pay)', amount:10000 }],
+        expenses: { housing:5000, family_support:2000, gifts:800, travel:3000, dining:400 },
+      }) } });
+    const adv = await page.evaluate(() =>
+      document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
+    check('152 the deficit states the shortfall in Pula',
+      /1,200\.00 short this month/.test(adv), adv.slice(0, 220));
+    check('153 and names the one Want line that could close it',
+      /Travel & holidays/.test(adv) && /3,000\.00/.test(adv), adv.slice(0, 260));
+    check('154 it never tells them to cut a Need, Giving or family support',
+      !/(cut|reduce|trim)[^.]{0,60}(Housing|Family support|Giving|Contributions)/i.test(adv),
+      adv.slice(0, 300));
+    check('155 the blanket "review subscriptions, dining" line is gone',
+      !/Review subscriptions, dining, and entertainment/.test(adv), '(old sentence present)');
+    await page.close();
+  }
+  {
+    /* Wants smaller than the gap: say it sits in fixed costs, name no line,
+       offer a coach. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID },
+      tools: { budget_planner: D({
+        income: [{ id:1, label:'Paid into your bank account each month (net pay)', amount:10000 }],
+        expenses: { housing:6000, family_support:3000, debt_min:2000, dining:200 },
+      }) } });
+    const adv = await page.evaluate(() =>
+      document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
+    check('156 when Wants cannot cover the gap it says so',
+      /larger than everything flexible/.test(adv), adv.slice(0, 260));
+    check('157 names no line at all',
+      !/Housing|Family support|Dining out|Minimum debt/.test(adv.split('short this month')[1]?.split('.')[0] || ''),
+      adv.slice(0, 260));
+    check('158 and offers a coach', /Key Wellness coach/.test(adv), adv.slice(0, 260));
+    await page.close();
+  }
+  {
+    /* The advice a member reads about the lines we never criticise. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID },
+      tools: { budget_planner: D({
+        expenses: { family_support:1500, contributions:400, gifts:300,
+                    motshelo:600, motshelo_goods:350, moraka:700, helper:900 },
+        tags: { gifts:'need' } }) } });
+    const adv = await page.evaluate(() =>
+      document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
+    const VERBATIM = [
+      'It is an obligation, and it is counted as one — not as spending to cut.',
+      'When a month passes without one, that amount can move to savings.',
+      'For most people this is a commitment, not a luxury, and the budget treats it that way.',
+      'That is saving, and it is counted as saving.',
+      'It is groceries paid in advance, so it counts as food, not as saving.',
+      'The herd and the land may be assets; keeping them is a cost, and it is counted as one.',
+      'Employing someone is a wage they depend on. It belongs in Needs, not Wants.',
+    ];
+    const missing = VERBATIM.filter(v => !adv.includes(v));
+    check('159 every approved advice sentence appears verbatim',
+      missing.length === 0, missing.join(' || ').slice(0, 300));
+    await page.close();
+  }
+  {
+    /* Hints, verbatim, on the page. */
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID } });
+    const body = await page.evaluate(() => document.body.textContent.replace(/\s+/g,' '));
+    const HINTS = [
+      'feed, herding, vet, dipping, seed, ploughing, fuel to the farm. Not the value of the herd or the land.',
+      'your monthly contribution to a groceries or toiletries motshelo',
+      'what you set aside for funerals, weddings, baby showers and workplace collections. Most months something comes up.',
+      'tithe or church giving, and gifts you give. Money to family goes under Family support.',
+      'your monthly contribution to the group. Enter the payout under Income when it arrives.',
+    ];
+    const missing = HINTS.filter(h => !body.includes(h));
+    check('160 every approved hint appears verbatim', missing.length === 0,
+      missing.join(' || ').slice(0, 300));
+    check('161 the third bar is relabelled',
+      /Savings & extra debt repayment/.test(body), '(bar label not found)');
+    await page.close();
+  }
+  {
+    /* Recognised income rows. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID }, tools: { budget_planner: D({}) } });
+    const out = await page.evaluate(async () => {
+      window.addIncomeRow('farm_income');
+      await new Promise(r => setTimeout(r, 200));
+      /* Scope to the income container: the payslip block reuses .income-row
+         for its grid layout, so an unscoped query picks up those too. */
+      const row = [...document.querySelectorAll('#incomeRows .income-row')].pop();
+      const inp = row.querySelector('input.mono');
+      inp.value = '4500';
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 900));
+      return { label: row.querySelector('.label-input')?.value || '',
+               hint: row.textContent,
+               adv: document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '' };
+    });
+    check('162 farm income is a named row', out.label === 'Farm income', out.label);
+    check('163 with its approved hint',
+      /Not what the herd is worth/.test(out.hint), out.hint.slice(0, 160));
+    check('164 and a month containing it is not treated as a new normal',
+      /a bonus month rather than a salary/.test(out.adv), out.adv.slice(0, 240));
+    await page.close();
+  }
+  {
+    /* Goal types. */
+    const { page } = await open(browser, 'goal_planner.html', { profile: { id: UID } });
+    const out = await page.evaluate(async () => {
+      document.querySelector('[data-type="livestock"]').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('goalHead').value = '5';
+      document.getElementById('goalHead').dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('goalPerHead').value = '6000';
+      document.getElementById('goalPerHead').dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 150));
+      return { target: document.getElementById('goalTarget').value,
+               calc: document.getElementById('livestockCalc').textContent,
+               copy: document.getElementById('goalTypeCopy').textContent,
+               body: document.body.textContent };
+    });
+    check('165 livestock computes the target from head x price',
+      /30,000/.test(out.target), out.target);
+    check('166 and shows the working', /5 × P 6,000\.00/.test(out.calc), out.calc);
+    check('167 with the approved copy',
+      out.copy.includes('Once bought, the animals move to your assets, and their upkeep moves to Farm costs.'),
+      out.copy.slice(0, 200));
+    check('168 bogadi is offered as a goal type',
+      /Bogadi/.test(out.body), '(bogadi button missing)');
+    await page.close();
+  }
+  {
+    /* A provision the month did not use is good news, never a scold. */
+    const { page } = await open(browser, 'budget_planner.html', {
+      profile: { id: UID },
+      tools: { budget_planner: D({
+        expenses: { contributions: 500, housing: 4000 },
+        actuals:  { contributions: 200 } }) } });
+    const adv = await page.evaluate(() =>
+      document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
+    check('169 an unused provision is reported as money still theirs',
+      /300\.00 is still yours/.test(adv), adv.slice(0, 260));
+    check('170 and never as overspending',
+      !/over budget|overspen/i.test(adv.split('still yours')[0] || ''), adv.slice(0, 260));
+    await page.close();
   }
 
   await browser.close();
