@@ -942,7 +942,17 @@ function calculateWellness(){
     // figures, and grandfathers the latter for 90 days (P0-4). Carried inside
     // `answers` deliberately — the INSERT shape is a contract with HR reporting
     // and must not gain a column.
-    const answersOut = { ...answers, ...(habitsOnly ? { _habits_only: true } : {}) };
+    // Phase C: WHICH covers, not just how many. The dashboard needs the set to
+    // union a medical aid deducted from salary against one ticked here —
+    // otherwise one cover counts twice, or the member is told to get medical
+    // aid they already have.
+    //
+    // It goes in `answers`, NOT in cat_scores. HR's report walks cat_scores
+    // with jsonb_each and casts every value to numeric to band it; an array
+    // there would raise at query time in _org_report_period_data. `answers` is
+    // free-form and SQL reads only `_habits_only` from it.
+    const answersOut = { ...answers, _insCovers: [...insuranceSet],
+                         ...(habitsOnly ? { _habits_only: true } : {}) };
     const { data: inserted, error: insertErr } = await _sb.from('assessments').insert({
       user_id: _user.id,
       score: totalScore,
@@ -1312,7 +1322,10 @@ function resolveAssessmentFigures() {
   if (bpB) {
     const bpInc  = (bpB.income||[]).reduce((s,i)=>s+_n(i.amount),0);
     const bpExpAll= Object.values(bpB.expenses||{}).reduce((s,v)=>s+_n(v),0);
-    const SAV_CATS=['emfund','retirement','invest','goals','debt_extra'];
+    // debt_extra is a DEBT figure — it is counted in bpDebt below, and
+    // counting it as savings too was double-counting one allocation as both.
+    // Matches _SAVINGS_CATS in index.html and KW_SAVINGS_CATS in the budget.
+    const SAV_CATS=['emfund','retirement','invest','goals'];
     const bpSav  = SAV_CATS.reduce((s,c)=>s+_n((bpB.expenses||{})[c]),0);
     // Planner debt categories are debt_min (Minimum Debt Payments) + debt_extra
     // (Extra Debt Repayment) — matches computeLiveWellness() in index.html.

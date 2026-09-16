@@ -364,6 +364,30 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
           <div id="incomeRows"></div>
         </div>
 
+        <!-- From your payslip (optional) — Phase C.
+             NOTHING in this block is added to income or expense totals. It
+             describes money the member never had the chance to allocate, so
+             budgeting it would double-count it against the pay they actually
+             received. It exists so the tools downstream stop asking. -->
+        <div class="card" id="payslipCard">
+          <div class="card-title-row">
+            <div class="card-title">From your payslip <span style="font-weight:500;color:var(--muted);font-size:.8em">(optional)</span></div>
+            <button class="btn btn-ghost btn-xs" id="payslipToggle" onclick="togglePayslip()" aria-expanded="false" aria-controls="payslipBody">Show</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:-4px">
+            Lets the portal count savings and loans that come off before your pay reaches you.
+          </div>
+          <div id="payslipBody" hidden>
+            <div class="item-row-header income-header" style="margin-top:14px">
+              <span class="col-label">From your payslip</span>
+              <span class="col-label" style="text-align:right;">Monthly Amount</span>
+              <span></span>
+            </div>
+            <div id="payslipRows"></div>
+            <div id="payslipReconcile" style="margin-top:12px"></div>
+          </div>
+        </div>
+
         <!-- Expense categories -->
         <div class="card">
           <div class="card-title-row">
@@ -602,6 +626,19 @@ function fmtInput(el){
 }
 function finalizeInput(el){const n=pf(el.value);if(!isNaN(n)&&n>0)el.value=n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});else el.value='';}
 
+// The label of the row that IS take-home pay, and the test that finds it again.
+// Phase C renamed it: "Salary (take-home)" asked for a figure members read off
+// a payslip, when the one the budget needs is the one that reaches the bank.
+// The regex keeps the old wording so budgets saved before the rename still
+// resolve — 29 live profiles carry it.
+const KW_NET_LABEL   = 'Paid into your bank account each month (net pay)';
+// What counts as SAVING for monthly_savings and the savings rate. `debt_extra`
+// lives in the Savings & Investments expense GROUP — that is a budgeting
+// convention and the 50/30/20 chart keeps it — but money going to a creditor
+// is not savings, and counting it made the rate read high.
+const KW_SAVINGS_CATS = ['emfund','retirement','invest','goals'];
+const KW_NET_ROW_RE  = /take-home|net pay|bank account/i;
+
 function getBudget(key){ return budgets[key] || newEmptyBudget(); }
 // Income rows from the assessment: local result figures (this device, exact)
 // → profile columns (cross-device, seeded when the assessment saved). null when no usable source.
@@ -617,12 +654,12 @@ function profileIncomeRows(){
   // this is the profile — which is what the hint used to claim was the
   // assessment, for every member, whether or not they had ever done one.
   window._incomeSeedSrc = pf(fig?.netSalary) ? 'from your earlier assessment' : 'from your profile';
-  const rows = [{ id: Date.now(), label: 'Salary (take-home)', amount: Math.round(net) }];
+  const rows = [{ id: Date.now(), label: KW_NET_LABEL, amount: Math.round(net) }];
   if (other > 0) rows.push({ id: Date.now()+1, label: 'Other Income', amount: Math.round(other) });
   return rows;
 }
 function newEmptyBudget(){
-  return { income:[{id:Date.now(),label:'Primary Salary',amount:0}], expenses:{}, actuals:{}, customCats:[], notes:'', collapsed:{} };
+  return { income:[{id:Date.now(),label:KW_NET_LABEL,amount:0}], expenses:{}, actuals:{}, customCats:[], notes:'', collapsed:{}, payslip:{} };
 }
 // Seed income rows from the assessment on a FIRST-EVER, untouched budget only.
 // No-op once edited, when any other month exists, or before the profile has
@@ -660,15 +697,64 @@ async function kwSyncProfileFromBudget(){
   if (_kwSyncPending) return;                // one prompt per save, not one per keystroke
   const b = budgets[currentKey];
   const _t = calcTotals(b);
-  // The take-home row by its label — the same label seedFromAssessment writes.
+  // The net-pay row by its label — the same label seedFromAssessment writes.
   // Absent (a member who renamed or removed it) simply means no net_income to
   // offer, not a guess at which row is salary.
-  const _netRow = (b.income || []).find(r => /take-home/i.test(r.label || ''));
+  //
+  // BOTH spellings are matched, and that is not tidiness. Every budget saved
+  // before Phase C carries "Salary (take-home)"; matching only the new wording
+  // would stop writing net_income for those members, silently, with the tool
+  // still appearing to work.
+  const _netRow = (b.income || []).find(r => KW_NET_ROW_RE.test(r.label || ''));
   const patch = {};
   if (_t.totalIncome   > 0) patch.monthly_income     = _t.totalIncome;
   if (_t.totalExpenses > 0) patch.monthly_expenses   = _t.totalExpenses;
   if (_netRow && pf(_netRow.amount) > 0) patch.net_income = pf(_netRow.amount);
   if (_t.needsAmt      > 0) patch.essential_expenses = _t.needsAmt;
+
+  // ── Phase C: what the budget already knows, so nothing downstream asks ──
+  const _exp = b.expenses || {};
+  const _ps  = payslipOf(b);
+  const _psHas = k => _ps[k] !== undefined && _ps[k] !== null && _ps[k] !== '';
+  const _psNum = k => _psHas(k) ? pf(_ps[k]) : null;
+
+  // Income beyond the net-pay row. Named rows the member added themselves.
+  const _otherInc = (b.income || [])
+    .filter(r => r !== _netRow)
+    .reduce((sum, r) => sum + pf(r.amount), 0);
+  if (_otherInc > 0) patch.other_income = _otherInc;
+
+  // monthly_savings is the savings the member ALLOCATES. debt_extra is money
+  // going to a creditor — paying debt down faster is good, but it is not
+  // saving, and counting it here told a member their savings rate was higher
+  // than it is. Nor does it include payslip_pension, which never reached them
+  // to be allocated; Retirement adds that separately.
+  const _sav = KW_SAVINGS_CATS.reduce((sum, c) => sum + pf(_exp[c] || 0), 0);
+  if (_sav > 0) patch.monthly_savings = _sav;
+
+  // The voluntary retirement allocation, kept apart from payslip_pension.
+  if (pf(_exp.retirement || 0) > 0) patch.retirement_contribution = pf(_exp.retirement || 0);
+
+  // monthly_debt is every obligation, including the ones taken before the
+  // member is paid. A loan deducted at source used to be invisible here, so a
+  // member repaying P3,000 off their salary read as having no debt at all and
+  // their DTI came out clean.
+  const _debtMin = pf(_exp.debt_min || 0);
+  const _psLoans = _psNum('loans');
+  if (_debtMin > 0 || (_psLoans !== null && _psLoans > 0)) {
+    patch.monthly_debt = _debtMin + (_psLoans || 0);
+  }
+
+  // The payslip figures themselves. Only what the member actually typed — an
+  // untouched field stays out of the patch entirely rather than writing 0,
+  // which would be us stating a figure we were never given.
+  PAYSLIP_FIELDS.forEach(f => {
+    if (f.id === 'loans') return;               // folded into monthly_debt above
+    const v = _psNum(f.id);
+    if (v !== null) patch[f.col] = v;
+  });
+  if (_psLoans !== null) patch.payslip_loan_deductions = _psLoans;
+
   const cols = Object.keys(patch);
   if (!cols.length) return;
 
@@ -707,10 +793,22 @@ function calcTotals(b){
   const totalExpenses = Object.values(expByGroup).reduce((s,v)=>s+v,0);
   const totalActual   = Object.values(actByGroup).reduce((s,v)=>s+v,0);
   const surplus = totalIncome - totalExpenses;
-  const savingsAmt = expByGroup['savings']||0;
+  // Two different questions, so two different figures.
+  //
+  // savingsGroupAmt is the 50/30/20 BUDGETING view: everything filed under
+  // Savings & Investments, `debt_extra` included, because that is where a
+  // member puts it and moving it would rearrange their chart.
+  //
+  // savingsAmt is the question "how much are you actually saving", and money
+  // going to a creditor is not the answer. Paying debt down faster is good and
+  // the advice says so — it is just not saving, and counting it told members a
+  // savings rate higher than the one they have. This is the figure the rate,
+  // the profile column and the dashboard all read, so all three now agree.
+  const savingsGroupAmt = expByGroup['savings']||0;
+  const savingsAmt = KW_SAVINGS_CATS.reduce((s,c)=>s+pf(b.expenses[c]||0),0);
   const needsAmt   = expByGroup['needs']||0;
   const wantsAmt   = expByGroup['wants']||0;
-  return { totalIncome, totalExpenses, totalActual, surplus, savingsAmt, needsAmt, wantsAmt, expByGroup, actByGroup };
+  return { totalIncome, totalExpenses, totalActual, surplus, savingsAmt, savingsGroupAmt, needsAmt, wantsAmt, expByGroup, actByGroup };
 }
 
 // ────────────────────────────────────────────
@@ -823,7 +921,16 @@ function flushToState(){
 let autoSaveTimer;
 function autoSave(){
   clearTimeout(autoSaveTimer);
-  autoSaveTimer=setTimeout(()=>{ flushToState(); if(currentKey) save(); renderSummaryPanel(); },400);
+  autoSaveTimer=setTimeout(()=>{
+    flushToState();
+    if(currentKey) save();
+    renderSummaryPanel();
+    // The reconciliation compares the payslip against the NET PAY ROW, so it
+    // goes stale the moment that row is edited, renamed or removed — not only
+    // when the payslip block itself is typed into. autoSave is the one choke
+    // point every change passes through.
+    if(currentKey) renderPayslipReconcile(budgets[currentKey]);
+  },400);
 }
 
 // ────────────────────────────────────────────
@@ -858,7 +965,117 @@ function renderIncomeRows(b){
         <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
     </div>`).join('')
-    + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:8px">💡 Prefilled ${window._incomeSeedSrc || 'from your profile'} — adjust if needed.</div>` : '');
+    + `<div style="font-size:11px;color:var(--muted);margin-top:8px">the amount on your bank statement, not your payslip</div>`
+    + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">💡 Prefilled ${window._incomeSeedSrc || 'from your profile'} — adjust if needed.</div>` : '');
+}
+
+// ────────────────────────────────────────────
+// FROM YOUR PAYSLIP (Phase C)
+// ────────────────────────────────────────────
+//
+// Six optional figures, none required, none defaulted, and none of them
+// touching calcTotals(). The budget's job is the money that reaches the
+// member; this block's job is to explain the gap between that and what they
+// earn, so the tools downstream stop asking for figures the member has
+// already got in front of them.
+//
+// `col` is the profiles column each one fills. `gross` is the odd one out —
+// gross_income predates Phase C and this is simply its first real writer.
+const PAYSLIP_FIELDS = [
+  { id:'gross',    col:'gross_income',            name:'Gross pay',                          hint:'before anything is taken off' },
+  { id:'paye',     col:'payslip_paye',            name:'PAYE',                               hint:'income tax' },
+  { id:'pension',  col:'payslip_pension',         name:'Pension (your contribution)',        hint:'your share, not your employer\u2019s' },
+  { id:'medical',  col:'payslip_medical',         name:'Medical aid (your share)',           hint:'' },
+  { id:'loans',    col:'payslip_loan_deductions', name:'Loan repayments deducted from salary', hint:'never reaches your account, but it is still debt' },
+  { id:'other',    col:'payslip_other',           name:'Other deductions',                   hint:'' },
+];
+
+function payslipOf(b){ return (b && b.payslip) || {}; }
+
+function togglePayslip(){
+  const body = document.getElementById('payslipBody');
+  const btn  = document.getElementById('payslipToggle');
+  if (!body || !btn) return;
+  const showing = body.hidden;
+  body.hidden = !showing;
+  btn.textContent = showing ? 'Hide' : 'Show';
+  btn.setAttribute('aria-expanded', String(showing));
+}
+
+function renderPayslipRows(b){
+  const el = document.getElementById('payslipRows');
+  if (!el) return;
+  const ps = payslipOf(b);
+  el.innerHTML = PAYSLIP_FIELDS.map(f => {
+    const v = ps[f.id];
+    // Empty, not "0.00". A placeholder is not an answer, and a zero the member
+    // did not type is a claim we were never given.
+    const shown = (v === null || v === undefined || v === '') ? ''
+      : Number(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+    return `
+    <div class="item-row income-row" id="psrow_${f.id}">
+      <div class="iw" style="display:block">
+        <div style="font-size:13px">${esc(f.name)}</div>
+        ${f.hint ? `<div style="font-size:11px;color:var(--muted)">${esc(f.hint)}</div>` : ''}
+      </div>
+      <div class="iw">
+        <span class="iw-pre">P</span>
+        <input class="mono" type="text" id="ps_${f.id}" value="${shown}" inputmode="decimal" placeholder=""
+               oninput="fmtInput(this);savePayslip();" onblur="finalizeInput(this);savePayslip();" onfocus="this.select()">
+      </div>
+      <span></span>
+    </div>`;
+  }).join('');
+}
+
+function savePayslip(){
+  if(!currentKey) return;
+  const b = budgets[currentKey];
+  b.payslip = b.payslip || {};
+  PAYSLIP_FIELDS.forEach(f => {
+    const raw = (document.getElementById('ps_'+f.id)?.value || '').trim();
+    // '' stays undefined rather than becoming 0 — see NULL IS NOT ZERO in
+    // supabase_payslip_figures.sql.
+    if (raw === '') delete b.payslip[f.id];
+    else b.payslip[f.id] = pf(raw);
+  });
+  renderPayslipReconcile(b);
+  autoSave();
+}
+
+// A quiet arithmetic observation, never an error.
+//
+// Payslips carry deductions this block does not name, employers round, and a
+// member may have typed one figure from last month. Any of those produces a
+// difference that is not a mistake. So this renders only when the member has
+// given us everything needed to do the sum, states both sides, and stops. It
+// never blocks a save, never colours red, and never tells them a figure is
+// wrong — we cannot know that, and P0's rule is not to state what we were
+// not told.
+function renderPayslipReconcile(b){
+  const el = document.getElementById('payslipReconcile');
+  if (!el) return;
+  const ps = payslipOf(b);
+  const has = k => ps[k] !== undefined && ps[k] !== null && ps[k] !== '';
+  const DEDUCTIONS = ['paye','pension','medical','loans','other'];
+  if (!has('gross') || !DEDUCTIONS.every(has)) { el.innerHTML = ''; return; }
+
+  const _netRow = (b.income || []).find(r => KW_NET_ROW_RE.test(r.label || ''));
+  const netPay  = _netRow ? pf(_netRow.amount) : 0;
+  if (!(netPay > 0)) { el.innerHTML = ''; return; }
+
+  const gross = pf(ps.gross);
+  const deds  = DEDUCTIONS.reduce((s,k) => s + pf(ps[k]), 0);
+  const left  = gross - deds;
+  const diff  = left - netPay;
+
+  el.innerHTML = `<div class="advice-card info" style="font-size:12px;line-height:1.65;display:block">
+    Gross ${fmt(gross)} less deductions ${fmt(deds)} = <strong>${fmt(left)}</strong>.
+    Your net pay line says ${fmt(netPay)}${
+      Math.abs(diff) < 1 ? ' — these agree.'
+        : `, a difference of <strong>${fmt(Math.abs(diff))}</strong>. Payslips often carry deductions not listed here, so this is worth a look rather than a correction.`
+    }
+  </div>`;
 }
 
 // ────────────────────────────────────────────
@@ -971,7 +1188,7 @@ function renderExpenseCats(b){
 function renderSummaryPanel(){
   if(!currentKey||!budgets[currentKey]) return;
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,savingsGroupAmt,needsAmt,wantsAmt,expByGroup}=calcTotals(b);
 
   // Labels
   document.getElementById('incomeTotalLabel').textContent=fmtK(totalIncome);
@@ -1024,7 +1241,11 @@ function renderSummaryPanel(){
   const rules=[
     {name:'Needs (50%)',  target:50, actual:totalIncome>0?needsAmt/totalIncome*100:0,  color:'var(--navy)', amount:needsAmt},
     {name:'Wants (30%)',  target:30, actual:totalIncome>0?wantsAmt/totalIncome*100:0,  color:'var(--orange)', amount:wantsAmt},
-    {name:'Savings (20%)',target:20, actual:totalIncome>0?savingsAmt/totalIncome*100:0,color:'var(--green)', amount:savingsAmt},
+    // The 50/30/20 bar is the budgeting view: it follows the Savings &
+    // Investments GROUP, debt_extra included, so the chart a member already
+    // knows does not move. The Savings Rate stat above answers a different
+    // question and uses the narrower figure.
+    {name:'Savings (20%)',target:20, actual:totalIncome>0?savingsGroupAmt/totalIncome*100:0,color:'var(--green)', amount:savingsGroupAmt},
   ];
   document.getElementById('ruleSection').innerHTML=rules.map(r=>{
     const over=r.actual>r.target;
@@ -1409,6 +1630,8 @@ function renderAll(){
   document.getElementById('monthLabel').textContent=mLabel(currentKey);
   renderMonthPills();
   renderIncomeRows(b);
+  renderPayslipRows(b);
+  renderPayslipReconcile(b);
   renderExpenseCats(b);
   document.getElementById('monthNotes').value=b.notes||'';
   renderSummaryPanel();
@@ -1426,7 +1649,7 @@ function exportPDF(){
   const pageW=doc.internal.pageSize.getWidth();
   const pageH=doc.internal.pageSize.getHeight();
   const b=budgets[currentKey];
-  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,needsAmt,wantsAmt,expByGroup,actByGroup}=calcTotals(b);
+  const {totalIncome,totalExpenses,totalActual,surplus,savingsAmt,savingsGroupAmt,needsAmt,wantsAmt,expByGroup,actByGroup}=calcTotals(b);
   const acts=b.actuals||{};
   const varTxt=(bud,act)=>{ if(act<=0) return '—'; const d=bud-act; return (d>0?'+':(d<0?'-':''))+fmt(Math.abs(d)); };
   const today=new Date().toLocaleDateString('en-BW',{day:'2-digit',month:'long',year:'numeric'});
@@ -1520,7 +1743,7 @@ function exportPDF(){
 
   // 50/30/20 note
   if(y>pageH-40){doc.addPage();y=18;}
-  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'On target':'Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'On target':'Over target')],['Savings (20% target)',fmt(savingsAmt),(totalIncome>0?(savingsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsAmt/totalIncome>=0.2?'On target':'Below target')]];
+  const rule503020=[['Needs (50% target)',fmt(needsAmt),(totalIncome>0?(needsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&needsAmt/totalIncome<=0.5?'On target':'Over target')],['Wants (30% target)',fmt(wantsAmt),(totalIncome>0?(wantsAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&wantsAmt/totalIncome<=0.3?'On target':'Over target')],['Savings (20% target)',fmt(savingsGroupAmt),(totalIncome>0?(savingsGroupAmt/totalIncome*100).toFixed(1):0)+'%',(totalIncome>0&&savingsGroupAmt/totalIncome>=0.2?'On target':'Below target')]];
   doc.setTextColor(...GOLD); doc.setFontSize(7); doc.setFont('helvetica','bold');
   doc.text('50 / 30 / 20 RULE ANALYSIS',14,y); y+=2;
   doc.setDrawColor(...GOLD); doc.line(14,y,pageW-14,y); y+=4;

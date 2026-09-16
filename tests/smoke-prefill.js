@@ -697,6 +697,288 @@ const dismissProfileModal = async (page) => {
     await page.close();
   }
 
+  /* ── 9. Phase C: the figures that come off pay before it arrives ──────────
+
+     The budget asked only for what lands in the member's account, so
+     everything deducted at source was invisible — most damagingly a loan
+     repaid straight off the salary, which made a member with real debt read as
+     having none and gave them a clean DTI.
+
+     The block is OPTIONAL and must stay outside every total: it describes
+     money the member never had the chance to allocate, so budgeting it would
+     double-count it against the pay they actually received. */
+  const PAYSLIP_BUDGET = {
+    currentKey: thisMonth,
+    budgets: { [thisMonth]: {
+      income: [{ id: 1, label: 'Paid into your bank account each month (net pay)', amount: 11000 }],
+      expenses: { housing: 4000, food: 1500, transport: 800, debt_min: 1800,
+                  emfund: 500, retirement: 700, invest: 300, goals: 200, debt_extra: 400 },
+      payslip: { gross: 16000, paye: 2800, pension: 900, medical: 750, loans: 3000, other: 100 },
+    } },
+  };
+  /* The same budget with the payslip block untouched. */
+  const BARE_BUDGET = JSON.parse(JSON.stringify(PAYSLIP_BUDGET));
+  delete BARE_BUDGET.budgets[thisMonth].payslip;
+
+  {
+    const { page, errors } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: PAYSLIP_BUDGET } });
+    /* budget_planner keeps `budgets` and `currentKey` in module scope (a plain
+       <script>, so `function` declarations reach window but `let`/`const` do
+       not). calcTotals IS a function declaration, so hand it the budget. */
+    const out = await page.evaluate((b) => {
+      const t = window.calcTotals(b);
+      return { income: t.totalIncome, expenses: t.totalExpenses,
+               savings: t.savingsAmt, group: t.savingsGroupAmt, needs: t.needsAmt,
+               body: document.body.textContent };
+    }, PAYSLIP_BUDGET.budgets[thisMonth]);
+    check('95 the payslip block is not added to income',
+      out.income === 11000, String(out.income));
+    check('96 nor to expenses — deducted money was never theirs to allocate',
+      out.expenses === 10200,
+      `housing+food+transport+debt_min+emfund+retirement+invest+goals+debt_extra=10200, got ${out.expenses}`);
+    check('97 monthly_savings counts saving, not extra debt repayment',
+      out.savings === 1700, `emfund+retirement+invest+goals=1700, got ${out.savings}`);
+    check('98 while the 50/30/20 chart keeps the group, so no chart moves',
+      out.group === 2100, `+debt_extra 400 = 2100, got ${out.group}`);
+    check('99 the block explains why it is worth filling in',
+      /come off before your pay reaches you/.test(out.body), '(reason line missing)');
+    check('100 and the income line asks for the bank figure, not the payslip one',
+      /bank statement, not your payslip/.test(out.body), '(hint missing)');
+    check('101 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* No numeric defaults. An untouched field is empty, and stays out of the
+       profile patch entirely rather than writing 0 — a zero the member did not
+       type is a figure we were never given. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: BARE_BUDGET } });
+    const vals = await page.evaluate(() => {
+      window.togglePayslip();
+      return ['gross','paye','pension','medical','loans','other']
+        .map(id => document.getElementById('ps_' + id)?.value ?? '(missing)');
+    });
+    check('102 every payslip field opens empty, with no placeholder figure',
+      vals.every(v => v === ''), JSON.stringify(vals));
+    await page.close();
+  }
+  {
+    /* The reconciliation is arithmetic, offered once the member has given us
+       enough to do it — and it is never an error. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: BARE_BUDGET } });
+    const bare = await page.evaluate(() =>
+      document.getElementById('payslipReconcile')?.textContent.trim() || '');
+    check('103 with nothing entered it says nothing about reconciliation',
+      bare === '', bare.slice(0, 120));
+    await page.close();
+  }
+  {
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: PAYSLIP_BUDGET } });
+    const rec = await page.evaluate(() => {
+      const el = document.getElementById('payslipReconcile');
+      return { text: el?.textContent.replace(/\s+/g, ' ').trim() || '',
+               html: el?.innerHTML || '' };
+    });
+    /* gross 16000 − (2800+900+750+3000+100 = 7550) = 8450, vs net pay 11000 */
+    check('104 with the block complete it shows the sum, both sides named',
+      /8,450/.test(rec.text) && /11,000/.test(rec.text), rec.text.slice(0, 200));
+    check('105 and states the difference without calling it a mistake',
+      /2,550/.test(rec.text) && /worth a look rather than a correction/.test(rec.text),
+      rec.text.slice(0, 260));
+    check('106 it is never styled as an error',
+      !/alert|advice-card warn|advice-card alert/.test(rec.html), rec.html.slice(0, 160));
+    await page.close();
+  }
+  {
+    /* What the budget now hands on. This is the whole point of the block. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: PAYSLIP_BUDGET } });
+    const patch = await page.evaluate(async () => {
+      window._kwProfileSnapshot = {};
+      /* Do NOT await the sync: it blocks on KWProfile.confirm(), which only
+         resolves when the modal is clicked — and the click is below. */
+      const done = window.kwSyncProfileFromBudget();
+      await new Promise(r => setTimeout(r, 300));
+      document.getElementById('kwp-yes')?.click();
+      await done;
+      await new Promise(r => setTimeout(r, 250));
+      return window.__updates[window.__updates.length - 1] || null;
+    });
+    check('107 monthly_debt counts the loan taken before the member is paid',
+      patch && Number(patch.monthly_debt) === 4800,
+      `debt_min 1800 + payslip loans 3000 = 4800, got ${patch && patch.monthly_debt}`);
+    check('108 gross_income finally has a writer that is not a calculator',
+      patch && Number(patch.gross_income) === 16000, JSON.stringify(patch?.gross_income));
+    check('109 the payslip figures are stored as their own facts',
+      patch && Number(patch.payslip_pension) === 900 && Number(patch.payslip_medical) === 750
+        && Number(patch.payslip_paye) === 2800 && Number(patch.payslip_loan_deductions) === 3000,
+      JSON.stringify(patch));
+    check('110 retirement_contribution is the voluntary allocation alone',
+      patch && Number(patch.retirement_contribution) === 700,
+      `budget retirement category 700, got ${patch && patch.retirement_contribution}`);
+    check('111 and monthly_savings excludes debt_extra',
+      patch && Number(patch.monthly_savings) === 1700, JSON.stringify(patch?.monthly_savings));
+    await page.close();
+  }
+  {
+    /* An untouched payslip block writes none of those columns — not zeros. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: BARE_BUDGET } });
+    const patch = await page.evaluate(async () => {
+      window._kwProfileSnapshot = {};
+      /* Do NOT await the sync: it blocks on KWProfile.confirm(), which only
+         resolves when the modal is clicked — and the click is below. */
+      const done = window.kwSyncProfileFromBudget();
+      await new Promise(r => setTimeout(r, 300));
+      document.getElementById('kwp-yes')?.click();
+      await done;
+      await new Promise(r => setTimeout(r, 250));
+      return window.__updates[window.__updates.length - 1] || null;
+    });
+    check('112 an untouched payslip block writes no payslip column at all',
+      patch && !('gross_income' in patch) && !('payslip_paye' in patch)
+        && !('payslip_pension' in patch) && !('payslip_loan_deductions' in patch),
+      JSON.stringify(patch));
+    check('113 monthly_debt is then the budget line alone',
+      patch && Number(patch.monthly_debt) === 1800, JSON.stringify(patch?.monthly_debt));
+    await page.close();
+  }
+  {
+    /* Budgets saved before Phase C carry the OLD income label. Matching only
+       the new wording would stop writing net_income for them, silently, with
+       the tool still appearing to work. 29 live profiles. */
+    const LEGACY = JSON.parse(JSON.stringify(BARE_BUDGET));
+    LEGACY.budgets[thisMonth].income = [
+      { id: 1, label: 'Salary (take-home)', amount: 11000 },
+      { id: 2, label: 'Side work', amount: 1400 },
+    ];
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: LEGACY } });
+    const patch = await page.evaluate(async () => {
+      window._kwProfileSnapshot = {};
+      /* Do NOT await the sync: it blocks on KWProfile.confirm(), which only
+         resolves when the modal is clicked — and the click is below. */
+      const done = window.kwSyncProfileFromBudget();
+      await new Promise(r => setTimeout(r, 300));
+      document.getElementById('kwp-yes')?.click();
+      await done;
+      await new Promise(r => setTimeout(r, 250));
+      return window.__updates[window.__updates.length - 1] || null;
+    });
+    check('114 a pre-Phase-C budget still has its net pay recognised',
+      patch && Number(patch.net_income) === 11000, JSON.stringify(patch?.net_income));
+    check('115 and income beyond that row becomes other_income',
+      patch && Number(patch.other_income) === 1400, JSON.stringify(patch?.other_income));
+    await page.close();
+  }
+  {
+    /* Retirement stops offering the member their emergency fund back as a
+       retirement contribution, and names the two real sources. */
+    const { page } = await open(browser, 'retirement_calculator.html', {
+      profile: { id: UID, retirement_contribution: 700, payslip_pension: 900,
+                 monthly_savings: 1700, gross_income: 16000, payslip_paye: 2800 } });
+    const out = await page.evaluate(() => ({
+      contrib: document.getElementById('monthlyContrib')?.value || '',
+      hint:    document.getElementById('monthlyContribHint')?.textContent || '',
+      gross:   document.getElementById('monthlySalary')?.value || '',
+    }));
+    check('116 the contribution is what goes to retirement, not all savings',
+      /1,600/.test(out.contrib), `700 + 900 = 1600, got "${out.contrib}" (monthly_savings is 1700)`);
+    check('117 and it names both places the figure came from',
+      /from your budget/.test(out.hint) && /from your payslip/.test(out.hint), out.hint);
+    check('118 gross arrives from the payslip block', /16,?000/.test(out.gross), out.gross);
+    await page.close();
+  }
+  {
+    /* Nothing is invented when we hold neither figure. */
+    const { page } = await open(browser, 'retirement_calculator.html',
+      { profile: { id: UID, monthly_savings: 1700 } });
+    const contrib = await page.evaluate(() =>
+      document.getElementById('monthlyContrib')?.value || '');
+    check('119 with no retirement figure it asks rather than guessing from savings',
+      contrib === '', `expected empty, got "${contrib}"`);
+    await page.close();
+  }
+  {
+    /* DTI and Affordability stop asking for gross, and say where it came from. */
+    for (const [file, label] of [['dti_calculator.html', '120'], ['affordability_calculator.html', '121']]) {
+      const { page } = await open(browser, file,
+        { profile: { id: UID, gross_income: 16000, payslip_paye: 2800, net_income: 11000 } });
+      const out = await page.evaluate(() => ({
+        gross: document.getElementById('grossSalary')?.value || '',
+        hint:  document.getElementById('grossSalaryHint')?.textContent || '',
+      }));
+      check(`${label} ${file.replace('_calculator.html','')} no longer has to ask for gross`,
+        /16,?000/.test(out.gross), out.gross);
+      check(`${label}b and says it came from the payslip`,
+        /from your payslip/.test(out.hint), out.hint);
+      await page.close();
+    }
+  }
+  {
+    /* The dead end, on the one tool that still had it. Affordability needs only
+       income, and income is prefilled — so a member could open it, agree, press
+       Calculate, and leave no trace. */
+    const { page, errors } = await open(browser, 'affordability_calculator.html',
+      { profile: { id: UID, gross_income: 16000, net_income: 11000, monthly_expenses: 8400 } });
+    const out = await page.evaluate(async () => {
+      window.__toolWrites = [];
+      document.getElementById('deposit').value = '50000';
+      window.calculate();
+      await new Promise(r => setTimeout(r, 900));
+      return { writes: window.__toolWrites.slice(),
+               shown: document.getElementById('results')?.classList.contains('show') || false };
+    });
+    check('122 Calculate alone writes the affordability tool record',
+      out.writes.some(w => w.tool === 'affordability'),
+      JSON.stringify(out.writes).slice(0, 200));
+    check('123 and the results still render', out.shown === true, String(out.shown));
+    check('124 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* The other three were never dead ends — they cannot reach a result
+       without an input event. These pin that, so a future prefill of loan
+       amount or home price cannot quietly recreate the defect. */
+    const cases = [
+      ['loan_calculator.html',  'loan_calc',  () => {
+        document.getElementById('loanAmount').value   = '200000';
+        document.getElementById('interestRate').value = '11';
+        document.getElementById('loanTerm').value     = '5';
+      }],
+      ['rent_vs_buy.html',      'rent_vs_buy', () => {
+        document.getElementById('homePrice').value   = '800000';
+        document.getElementById('monthlyRent').value = '6000';
+      }],
+    ];
+    let n = 125;
+    for (const [file, tool, fill] of cases) {
+      const { page } = await open(browser, file, { profile: { id: UID, monthly_income: 11000 } });
+      /* Chart.js is a blocked CDN in this harness, and these two draw one. The
+         save path is what is under test, not the chart. */
+      await page.evaluate(() => {
+        if (!window.Chart) window.Chart = function(){ return { destroy(){}, update(){}, data:{}, options:{} }; };
+      });
+      const wrote = await page.evaluate(async (fillSrc) => {
+        window.__toolWrites = [];
+        // eslint-disable-next-line no-new-func
+        new Function(fillSrc)();
+        document.querySelectorAll('input[id]').forEach(el =>
+          el.dispatchEvent(new Event('input', { bubbles: true })));
+        window.calculate();
+        await new Promise(r => setTimeout(r, 900));
+        return window.__toolWrites.slice();
+      }, '(' + fill.toString() + ')()');
+      check(`${n} ${file.replace('.html','')} records the run it was given`,
+        wrote.some(w => w.tool === tool), JSON.stringify(wrote).slice(0, 160));
+      n++;
+      await page.close();
+    }
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

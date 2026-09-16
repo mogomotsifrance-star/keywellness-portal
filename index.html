@@ -1320,7 +1320,13 @@ async function loadBadgeData() {
 }
 
 // Per-budget-month savings rate, chronological. rate = savings allocations / income.
-const _SAVINGS_CATS = ['emfund','retirement','invest','goals','debt_extra'];
+//
+// `debt_extra` is NOT here. It lives in the budget's Savings & Investments
+// expense group — a budgeting convention the 50/30/20 chart keeps — but money
+// going to a creditor is not savings. Counting it told members a savings rate
+// higher than the one they have, and this list is the one budget_planner's own
+// KW_SAVINGS_CATS agrees with, so the two screens no longer disagree.
+const _SAVINGS_CATS = ['emfund','retirement','invest','goals'];
 function budgetMonthRates() {
   const bp = state.toolData?.budget_planner;
   const budgets = bp?.budgets || {};
@@ -2237,7 +2243,7 @@ function computeLiveWellness(toolMap, ef) {
   if (bpB) {
     income   = (bpB.income || []).reduce((s, i) => s + _n(i.amount), 0);
     expenses = Object.values(bpB.expenses || {}).reduce((s, v) => s + _n(v), 0);
-    monthlySavings = ['emfund','retirement','invest','goals','debt_extra'].reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
+    monthlySavings = _SAVINGS_CATS.reduce((s, c) => s + _n((bpB.expenses || {})[c]), 0);
     const _bpDebt = _n((bpB.expenses || {}).debt_min) + _n((bpB.expenses || {}).debt_extra);
     if (_bpDebt > 0) debtPayments = _bpDebt;
     if (income > 0 || expenses > 0) sources.add('Budget Planner');
@@ -3151,8 +3157,7 @@ VIEWS['dashboard'] = async function () {
       const _bm = _bd.budgets[_bk];
       const _bInc  = (_bm.income || []).reduce((s, i) => s + Number(i.amount || 0), 0);
       const _bDebt = Number(_bm.expenses?.debt_min || 0);
-      const _savIds = ['emfund','retirement','invest','goals','debt_extra'];
-      const _bSav  = _savIds.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
+      const _bSav  = _SAVINGS_CATS.reduce((s, id) => s + Number(_bm.expenses?.[id] || 0), 0);
       if (_bInc > 0) {
         if (budgetDTI === null && _bDebt > 0) {
           budgetDTI = +(_bDebt / _bInc * 100).toFixed(1);
@@ -3211,7 +3216,26 @@ VIEWS['dashboard'] = async function () {
   // Insurance — Supabase first. Newer assessments store an explicit count (_insCount, of 6 covers);
   // older ones store only the insurance dimension score (0–100). Use whichever exists.
   const _insAssess = state.assessments[0]?.cat_scores || state.user?.last_cat_scores || null;
-  const insCount = _insAssess?._insCount ?? snap.assessment?.insCount ?? null;
+
+  // Phase C: a medical aid deducted from salary is a cover held, and the member
+  // should not be told to go and get one.
+  //
+  // Counting it is only safe when we know WHICH covers they ticked — otherwise
+  // a member who both ticked Medical Aid and has it on their payslip would be
+  // credited with two. `_insCovers` (answers, since Phase C) gives the set;
+  // for assessments taken before that it is absent, so the count is left alone
+  // and only the ADVICE changes. Saying nothing extra is the safe direction:
+  // an undercount asks a question, an overcount makes a claim.
+  const _insCovers  = Array.isArray(state.assessments[0]?.answers?._insCovers)
+    ? state.assessments[0].answers._insCovers : null;
+  const _payMedical = state.user?.payslip_medical;
+  const _medOnSlip  = _payMedical !== null && _payMedical !== undefined && Number(_payMedical) > 0;
+  const _rawInsCount = _insAssess?._insCount ?? snap.assessment?.insCount ?? null;
+  const insCount = (_insCovers && _medOnSlip && !_insCovers.includes('medical'))
+    ? _insCovers.length + 1
+    : _rawInsCount;
+  // True when we can say they hold it; null when we simply do not know.
+  const medicalHeld = _medOnSlip ? true : (_insCovers ? _insCovers.includes('medical') : null);
   const insScore = (_insAssess && typeof _insAssess.insurance === 'number') ? _insAssess.insurance : null;
 
   // ── P0-4: the six sources, the score gate, and the two-nudge rule ─────────
@@ -3563,7 +3587,10 @@ VIEWS['dashboard'] = async function () {
       ? 'NBFIRA caps unsecured credit at 30% of net pay. The Debt Management Planner shows what reducing it frees up.'
       : 'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.',
     click:`openTool('debt_management_planner.html')` });
-  if (insCount !== null && insCount < 3) actions.push({ src:'insurance', color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc:'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
+  // Never name a cover the member already holds. Being told to get medical aid
+  // by a portal that is reading your medical aid deduction is the kind of thing
+  // that makes someone stop trusting the rest of the page.
+  if (insCount !== null && insCount < 3) actions.push({ src:'insurance', color:'var(--orange)', title:`Only ${insCount} of 6 insurance covers held`, desc: medicalHeld === true ? 'Income protection is the highest priority gap.' : 'Medical aid and income protection are the highest priority gaps.', click:`go('learn')` });
   if (retSnap && retSnap.readinessPct < 50) actions.push({ src:'retirement', color:'var(--orange)', title:`Retirement readiness at ${retSnap.readinessPct}%`, desc:`${retSnap.yrsToRetire} years to retirement — increase monthly contributions now to close the gap.`, click:`openTool('retirement_calculator.html')` });
   if (budgetSavRate !== null && budgetSavRate < 10) actions.push({ src:'budget', color:'var(--gold)', title:`Savings rate is ${budgetSavRate}% — aim for 20%`, desc:'Even a 5% increase now compounds significantly over time.', click:`openTool('budget_planner.html')` });
 
