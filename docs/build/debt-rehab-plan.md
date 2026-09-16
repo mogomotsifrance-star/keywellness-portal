@@ -468,10 +468,57 @@ Tshenolo's instruction ("apply the gate fix first, then the rest"):
 view until PR #3 merges and the Cloudflare build goes green. The database and
 functions are ahead of the UI by design; nothing on the old UI calls them.
 
+### First live run — 4 Sep 2026, 10:18 UTC
+
+Tshenolo generated v1 for Olorato Maliko from the test site. Function booted in
+27–49 ms, previews and generate all returned 200, the model answered in ~20 s
+(2,228 in / 962 out tokens). Every figure matched compute: DSR 44.72% strained,
+FNB → RENEGOTIATE with the P 4,305.00 cap, both motshelo loans → CONSOLIDATE,
+shortfall P 3,550.00, all-in gap P 9,050.00, vehicle = asset sale (Empty Plot
+Kasane P 40,000.00 + AUDI A3 P 100,000.00; no Advance Recommendation on file).
+
+**One defect, fixed in this commit and redeployed as `debt-rehab-plan` v2.**
+The model returned a good narrative but merged the two motshelo loans into one
+`debt_lines` entry (2 lines for 3 liabilities), and the validator demanded an
+exact match, so the row fell back to deterministic prose
+(`narrative_source = 'fallback'`, error `missing fields`). `debt_lines` now
+accepts any non-empty list; only `phase_paragraphs` keeps an exact count.
+Regenerate creates v2 with the model's prose; v1 stays as generated.
+
+Two facts from the live record worth knowing: the motshelo rates are captured
+as bare "30" and "25", which v1/v2 parsed as annual (fixed the next day — see
+below), and FNB's balance is P 250,000.00, not the P 210,000.00 the fixture
+reconstructed from the spec's net worth.
+
+### Motshelo rates are per month — 5 Sep 2026
+
+The advisor confirmed that motshelo interest is quoted per month, so a bare
+"30" on a motshelo is 30% a month (360% p.a. equivalent), not 30% a year.
+`suggestClassification()` in `_shared/kw-finance.ts` now defaults a bare
+number to **per month when the lender matches `INFORMAL_HINTS`** (motshelo,
+mashonisa, cash loan, microlender, family) and to per year otherwise, via the
+new `ratePeriodFor()`. Text still wins in both directions: `parseRate()` now
+recognises annual wording ("p.a.", "per annum", "per year", "annual") as well
+as monthly, and an explicit period is never overridden. The Prepare screens
+are unchanged — the dropdown still lets the advisor flip either way — and a
+defaulted period says so in the suggestion reason ("rate read as per month").
+
+Because the shared module is bundled into both functions, this changes the
+Advance Recommendation as well: Tumelo's "Motshelo 30" and "Close Friends
+Microlender 25" now render as per-month rates with `has_monthly_compounding`
+on. The advance amount is unaffected (it is sized on balances), and every
+existing check in both suites still passes (22 / 32 advance, 29 / 33 rehab).
+Deployed as `debt-rehab-plan` v3 and `advance-recommendation` v4.
+
+**Olorato's v1 draft is not corrected by this.** Regenerate seeds the Prepare
+screen from the previous plan's confirmed choices, which carry `annual` for
+both motshelo rows. Either flip the two dropdowns to *per month* on Prepare,
+or discard the v1 draft and press Generate so the new defaults apply.
+
 ### Not verified from this environment
 
-The Anthropic API and the function endpoints are unreachable from the build
-sandbox, so neither function has been called end-to-end since deployment. **First live run:** sign in on the dev site as an
+Nothing outstanding. The build sandbox still cannot reach the endpoints
+itself; verification above is from the stored row and the function logs. **First live run:** sign in on the dev site as an
 advisor, open Olorato Maliko → Report → Debt Rehab Plan → Generate, then
 `select version, status, narrative_source, model, input_tokens, output_tokens from debt_rehab_plans`
 and the function logs. `narrative_source = 'fallback'` means the log line

@@ -64,6 +64,14 @@ const mc = compute(M, { term_months:24 });
 ok("parsed as monthly, 360% p.a. equivalent, rehab default on", () => { assert.equal(mc.liabilities[0].rate_period, "monthly"); assert.equal(mc.liabilities[0].rate_pa_equivalent, 360); assert.equal(mc.has_monthly_compounding, true); });
 ok("GREEN by arithmetic (P 108.33/month) with rehab still suggested", () => { assert.equal(mc.tier, "GREEN"); assert.equal(mc.conditions.find(x=>x.key==="debt_rehab").on, true); });
 
+console.log("Bare rate period follows the lender");
+const cls = (institution, interestRate, item="Other") => suggestClassification({ item, institution, loanAmount:"1000", interestRate, balance:"1000", monthlyInstalment:"0" });
+ok("motshelo '30' → monthly (defaulted, reason says so)", () => { const r = cls("Motshelo", "30"); assert.equal(r.rate_period, "monthly"); assert.match(r.reason, /read as per month/); });
+ok("'Motshelo Mother' '25' → monthly · mashonisa '2.5' → monthly", () => { assert.equal(cls("Motshelo Mother", "25").rate_period, "monthly"); assert.equal(cls("Mashonisa", "2.5").rate_period, "monthly"); });
+ok("motshelo '30% p.a.' / '30 per annum' → annual, text wins", () => { assert.equal(cls("Motshelo", "30% p.a.").rate_period, "annual"); assert.equal(cls("Motshelo", "30 per annum").rate_period, "annual"); assert.doesNotMatch(cls("Motshelo", "30% p.a.").reason, /read as per month/); });
+ok("bank '12' → annual · unknown lender '25' → annual (high-cost) · blank → null", () => { assert.equal(cls("Stanbic", "12").rate_period, "annual"); const u = cls("Express Credit", "25"); assert.equal(u.rate_period, "annual"); assert.equal(u.classification, "informal"); assert.equal(cls("Motshelo", "").rate_period, null); });
+ok("Tumelo's bare-rate motshelo and microlender now read per month", () => { assert.equal(sugg[3].rate_period, "monthly"); assert.equal(sugg[2].rate_period, "monthly"); assert.equal(sugg[1].rate_period, "annual"); });
+
 console.log("Nothing to consolidate → decline");
 const D = { ...TUMELO, liabilities:[ TUMELO.liabilities[0] ] };
 const dc = compute(D, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"}] });

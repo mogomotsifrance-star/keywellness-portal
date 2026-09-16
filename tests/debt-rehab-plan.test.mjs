@@ -41,6 +41,12 @@ ok("blank template rows dropped → 3 live", () => assert.equal(live.length, 3))
 const sugg = live.map(l => suggestAction(l.raw, 12300, 35));
 ok("suggested actions: FNB RENEGOTIATE, motshelo + mother CONSOLIDATE", () =>
   assert.deepEqual(sugg.map(s => s.action), ["RENEGOTIATE", "CONSOLIDATE", "CONSOLIDATE"]));
+ok("bare '30' / '25' on the live 'Motshelo' and 'Motshelo Mother' rows read as per month", () => {
+  const live30 = suggestAction({item:"Other", institution:"Motshelo", loanAmount:"16000", interestRate:"30", balance:"16000", monthlyInstalment:"0"}, 12300, 35);
+  const live25 = suggestAction({item:"Other", institution:"Motshelo Mother", loanAmount:"7000", interestRate:"25", balance:"7000", monthlyInstalment:"0"}, 12300, 35);
+  assert.equal(live30.rate_period, "monthly"); assert.equal(live25.rate_period, "monthly"); assert.equal(live30.action, "CONSOLIDATE");
+  assert.equal(suggestAction({item:"Personal Loan", institution:"FNB", loanAmount:"250000", interestRate:"14", balance:"250000", monthlyInstalment:"5500"}, 12300, 35).rate_period, "annual");
+});
 const c = computeRehab(OLORATO, { ...PLAN, liabilities: live.map((l,i)=>({ index:i, action:sugg[i].action, classification:sugg[i].classification, rate_period:sugg[i].rate_period })) }, { rehab_context: AR_CTX, advisor_notes: NOTES });
 ok("income P 12,300.00 · debt service P 5,500.00 · DSR 44.72% · strained", () => {
   assert.equal(c.income.total_monthly_income, 12300); assert.equal(c.debt_service, 5500); assert.equal(c.dsr, 44.72); assert.equal(c.dsr_status, "strained"); assert.equal(c.tier, "AMBER");
