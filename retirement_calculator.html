@@ -274,7 +274,7 @@
           <input type="text" id="monthlyContrib" value="" placeholder="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
-        <div class="hint">Pension deduction + personal savings per month</div>
+        <div class="hint" id="monthlyContribHint">Pension deduction + personal savings per month</div>
       </div>
       <div class="field">
         <label>Pre-Retirement Annual Return</label>
@@ -714,8 +714,29 @@ const BW_LIFE_EXPECTANCY = 75;
 const _RET_MAPPINGS = [
   { inputId: 'monthlySalary',  col: 'gross_income'    },   // retirement projections use GROSS income
   { inputId: 'currentSavings', col: 'total_savings'   },   // current savings from the assessment
-  { inputId: 'monthlyContrib', col: 'monthly_savings' },
+  // monthlyContrib is NOT here. It used to map to `monthly_savings` — every
+  // savings category the member budgets — so their emergency fund and goal
+  // savings were prefilled back to them as their retirement contribution, and
+  // the projection was built on a figure they had never claimed. Phase C fills
+  // it from the two things that ARE retirement: the voluntary allocation from
+  // the budget, and the pension deducted from their salary. See
+  // retirementContribPrefill() below.
 ];
+
+// What the member actually puts toward retirement each month: what they choose
+// to allocate, plus what is taken before they see it. Returns null when we hold
+// neither — an absent figure is not a zero contribution, it is a figure we were
+// never given, and the page must go on asking rather than project from it.
+function retirementContribPrefill() {
+  const _n = v => (v === null || v === undefined || v === '') ? null : Number(v);
+  const vol = _n(KWProfile.get('retirement_contribution'));
+  const pay = _n(KWProfile.get('payslip_pension'));
+  if (vol === null && pay === null) return null;
+  const parts = [];
+  if (vol !== null) parts.push('from your budget');
+  if (pay !== null) parts.push('from your payslip');
+  return { total: (vol || 0) + (pay || 0), sources: parts };
+}
 
 // ── Cross-device persistence helper (Supabase tool_data: 'retirement') ──
 let _retSaveTimer;
@@ -766,6 +787,21 @@ window._retSave = function(){
     });
     await KWProfile.load();
     const _filled = KWProfile.prefill(_RET_MAPPINGS);
+
+    // The contribution, from its own two sources, with the sources named. A
+    // saved tool_data value overrides this immediately below, as it does for
+    // every other field.
+    const _rc = retirementContribPrefill();
+    if (_rc) {
+      const _ci = document.getElementById('monthlyContrib');
+      if (_ci && !parseField('monthlyContrib')) {
+        _ci.value = _rc.total.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+        _ci.dataset.kwProfileCol = 'retirement_contribution';
+        _ci.dataset.kwProfileVal = String(_rc.total);
+        const _ch = document.getElementById('monthlyContribHint');
+        if (_ch) _ch.textContent = _rc.sources.join(' and ') + ' — adjust if it is out of date.';
+      }
+    }
     if (_filled.length) {
       await KWSource.apply('income-prefill-notice', KWProfile.get('fin_updated_at') ? { fin_updated_at: true } : null,
         ' — you can adjust it below.');

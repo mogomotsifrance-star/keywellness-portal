@@ -9,7 +9,7 @@ const KWProfile = (function () {
     try {
       const { data } = await window._toolSb
         .from('profiles')
-        .select('gross_income,net_income,other_income,monthly_income,monthly_expenses,total_assets,total_liabilities,monthly_debt,total_savings,monthly_savings,fin_updated_at')
+        .select('gross_income,net_income,other_income,monthly_income,monthly_expenses,total_assets,total_liabilities,monthly_debt,total_savings,monthly_savings,fin_updated_at,payslip_paye,payslip_pension,payslip_medical,payslip_loan_deductions,payslip_other,retirement_contribution')
         .eq('id', window._toolUser.id)
         .maybeSingle();
       _p = data || null;
@@ -144,7 +144,19 @@ const KWProfile = (function () {
     if (ok) await writeBack(changes);
   }
 
-  return { load, get, prefill, detectChanges, confirm, writeBack, maybeWriteBack };
+  // Phase C: the budget's payslip block is the only writer of the payslip_*
+  // columns, so any one of them being set means gross_income came from there
+  // too — as opposed to the member having typed it into a calculator. It is
+  // what lets a prefilled gross figure say "from your payslip" truthfully
+  // instead of the generic "from your profile".
+  function fromPayslip() {
+    if (!_p) return false;
+    return ['payslip_paye','payslip_pension','payslip_medical',
+            'payslip_loan_deductions','payslip_other']
+      .some(c => _p[c] !== null && _p[c] !== undefined && _p[c] !== '');
+  }
+
+  return { load, get, prefill, detectChanges, confirm, writeBack, maybeWriteBack, fromPayslip };
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────

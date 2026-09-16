@@ -706,6 +706,92 @@ async function statRow(page) {
     await page.close();
   }
 
+  /* ── Phase C. Savings is saving, and a cover held is not a gap ────────────*/
+  {
+    /* debt_extra lives in the budget's Savings & Investments group — a
+       budgeting convention — but money going to a creditor is not savings.
+       Counting it told members a savings rate higher than the one they have. */
+    const SAV_BUDGET = { currentKey: thisMonth, budgets: { [thisMonth]: {
+      income: [{ name: 'Salary', amount: 10000 }],
+      expenses: { housing: 3000, emfund: 500, retirement: 300, invest: 100,
+                  goals: 100, debt_extra: 400, debt_min: 1000 } } } };
+    const { page, view } = await dash(browser, {
+      assessments: [habitsRow(1)], tools: { budget_planner: SAV_BUDGET } });
+    const sav = view.cards.find(c => /Savings Rate/i.test(c.lbl));
+    check('83 the savings rate counts saving only',
+      sav && /^10(\.0)?%$/.test(sav.val.trim()),
+      `emfund+retirement+invest+goals = 1000 of 10000 = 10%; with debt_extra it reads 14%. Got ${sav && sav.val}`);
+    await page.close();
+  }
+  {
+    /* A medical aid deducted from salary is a cover held. Being told to go and
+       get medical aid by a portal that is reading your medical aid deduction is
+       how a member stops trusting the rest of the page. */
+    const thin = { ...habitsRow(1) };
+    thin.cat_scores = { ...thin.cat_scores, _insCount: 1 };
+    thin.answers = { ...thin.answers, _insCovers: ['medical'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [thin] });
+    const titles = await actionTitles(page);
+    check('84 a member with medical aid is not told to get medical aid',
+      !/Medical aid and income protection/.test(view.text),
+      (view.text.match(/Medical aid[^.]*/g) || []).join(' | ') || '(none)');
+    check('85 the remaining gap is still named',
+      /Income protection is the highest priority gap/.test(view.text),
+      titles.join(' | '));
+    await page.close();
+  }
+  {
+    /* And it is not counted twice: they ticked medical AND it is on the
+       payslip, which is one cover. */
+    const both = { ...habitsRow(1) };
+    both.cat_scores = { ...both.cat_scores, _insCount: 2 };
+    both.answers = { ...both.answers, _insCovers: ['medical', 'life'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [both] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('86 one cover ticked and deducted counts once, not twice',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    await page.close();
+  }
+  {
+    /* A cover on the payslip that they did NOT tick is one they hold. */
+    const none = { ...habitsRow(1) };
+    none.cat_scores = { ...none.cat_scores, _insCount: 1 };
+    none.answers = { ...none.answers, _insCovers: ['life'] };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [none] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('87 a cover only the payslip knows about is counted',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    await page.close();
+  }
+  {
+    /* Pre-Phase-C assessments carry no _insCovers. We cannot tell whether
+       medical was among them, so the COUNT is left alone — an undercount asks
+       a question, an overcount makes a claim — while the advice still stops
+       naming a cover we can see on their payslip. */
+    const legacy = { ...habitsRow(1) };
+    legacy.cat_scores = { ...legacy.cat_scores, _insCount: 2 };
+    const { page, view } = await dash(browser, {
+      profile: { id: UID, onboarded: true, first_name: 'Neo', consent_accepted: true,
+                 welcome_seen: true, payslip_medical: 750 },
+      assessments: [legacy] });
+    const ins = view.cards.find(c => /Insurance/i.test(c.lbl));
+    check('88 without the cover set the count is not inflated',
+      ins && /^2\/6$/.test(ins.val.trim()), JSON.stringify(ins));
+    check('89 but the advice still does not name a cover we can see they have',
+      !/Medical aid and income protection/.test(view.text),
+      (view.text.match(/Medical aid[^.]*/g) || []).join(' | ') || '(none)');
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

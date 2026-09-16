@@ -234,7 +234,7 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
           <input type="text" id="grossSalary" value="0.00" inputmode="decimal" autocomplete="off"
             style="text-align:right" oninput="fmtInput(this)" onblur="finalizeInput(this)" onfocus="this.select()">
         </div>
-        <div class="hint">Before tax (PAYE) deductions</div>
+        <div class="hint" id="grossSalaryHint">Before tax (PAYE) deductions</div>
       </div>
       <div class="field">
         <label>Other Monthly Income</label>
@@ -768,7 +768,7 @@ function calculate() {
   const totalIncome = _b.income;
 
   if (!totalIncome) {
-    dtiNotice('Add either your gross salary (before PAYE) or your take-home pay above — the ratio needs one of them.');
+    dtiNotice('Add either your gross salary (before PAYE) or your take-home pay above — the ratio needs one of them. Your budget can fill both in, under "From your payslip".');
     return;
   }
   if (!debts.length) {
@@ -881,7 +881,7 @@ function calculate() {
   // ── Advice ──
   let advice = `Your back-end DTI is <strong>${backEndDTI.toFixed(1)}%</strong>${onTakeHome ? ' <strong>on take-home pay</strong>' : ''}. ${status.msg}`;
   if (onTakeHome) {
-    advice += ` Lenders usually use gross. Add your gross salary (before PAYE) above for the lender's view.`;
+    advice += ` Lenders usually use gross. Add your gross salary (before PAYE) above for the lender's view — or enter it once in your budget, under "From your payslip", and every tool here will have it.`;
   } else if (capacity35 > 0) {
     advice += ` You can take on up to <strong>${fmt(capacity35)}/mo</strong> in additional debt before reaching the 35% bank threshold.`;
   } else if (deficit35 > 0) {
@@ -1086,6 +1086,11 @@ KW.reveal('.card');
       // #income-prefill-notice itself. The generic banner would sit above it
       // saying "from your profile" while the specific one says "from your budget".
       const _filled = KWProfile.prefill(_DTI_INCOME_MAPPINGS, null, { silent: true });
+      // Name the payslip when that is genuinely where the figure came from.
+      if (_filled.some(f => f.inputId === 'grossSalary') && KWProfile.fromPayslip()) {
+        const _gh = document.getElementById('grossSalaryHint');
+        if (_gh) _gh.textContent = 'from your payslip — adjust if it is out of date.';
+      }
       const _fromBudget = await KWSource.budgetSaved();
       const _src = KWSource.label({ fin_updated_at: KWProfile.get('fin_updated_at') }, _fromBudget);
 
