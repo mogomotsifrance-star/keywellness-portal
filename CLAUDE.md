@@ -463,6 +463,14 @@ carries `payslip` and `fs_mode`. Hints and first-budget prompts are guidance
 (`.kw-guide`, shown on `:focus-within`); switches, tag status and the four
 payslip double-count warnings (`KW_PAYSLIP_WARN`) are state.
 
+**The budget's phone layout (560px and under) reorders, it does not re-render.**
+Row label wrappers (`.bva-name`, `.inc-name`) become `display: contents` and
+`order` places their children; guidance and payslip warnings come LAST so that
+showing one never moves the field being typed in. Keep any new line under a
+category inside `catMeta()` with the right class (`.kw-guide` for guidance,
+anything else is state) or it lands in the wrong place on a phone. Desktop
+geometry is pinned by test 213.
+
 **`_insCovers` goes in `answers`, never in `cat_scores`.** HR's report walks
 `cat_scores` with `jsonb_each` and casts every value to numeric to band it; an
 array there raises at query time inside `_org_report_period_data`. `answers` is
