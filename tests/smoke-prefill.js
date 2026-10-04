@@ -746,8 +746,14 @@ const dismissProfileModal = async (page) => {
       out.group === 2100, `+debt_extra 400 = 2100, got ${out.group}`);
     check('99 the block explains why it is worth filling in',
       /come off before your pay reaches you/.test(out.body), '(reason line missing)');
-    check('100 and the income line asks for the bank figure, not the payslip one',
-      /bank statement, not your payslip/.test(out.body), '(hint missing)');
+    /* D.3 rewrite. Before: the page said "bank statement, not your payslip"
+       under the income list. Now: the net row's own hint says what reaches the
+       bank, and that the payslip above fills it, and sits under that row. */
+    const netHint = await page.evaluate(() =>
+      document.getElementById('incrow_1')?.textContent.replace(/\s+/g, ' ') || '');
+    check('100 and the net-pay row asks for what reaches the bank, filled from the payslip',
+      netHint.includes('what reaches your bank account each month. Filled in from your payslip above when you enter it.'),
+      netHint.slice(0, 200));
     check('101 no uncaught errors', errors.length === 0, errors.join(' | '));
     await page.close();
   }
@@ -767,32 +773,41 @@ const dismissProfileModal = async (page) => {
     await page.close();
   }
   {
-    /* The reconciliation is arithmetic, offered once the member has given us
-       enough to do it — and it is never an error. */
+    /* D.3 rewrite of 103-106. Before: a separate reconcile note under the
+       payslip block (#payslipReconcile) stated gross less deductions against
+       the net line and called the gap "worth a look rather than a correction".
+       Now: the comparison lives under the net row itself, and only for a
+       figure the member typed: "Your payslip works out to {left}. Use that
+       figure". Still arithmetic, still never an error. */
     const { page } = await open(browser, 'budget_planner.html',
       { profile: { id: UID }, tools: { budget_planner: BARE_BUDGET } });
     const bare = await page.evaluate(() =>
-      document.getElementById('payslipReconcile')?.textContent.trim() || '');
-    check('103 with nothing entered it says nothing about reconciliation',
-      bare === '', bare.slice(0, 120));
+      document.getElementById('st_inc_1')?.textContent.trim() ?? null);
+    check('103 with nothing entered the net row says nothing about the payslip',
+      bare === '', String(bare).slice(0, 120));
     await page.close();
   }
   {
     const { page } = await open(browser, 'budget_planner.html',
       { profile: { id: UID }, tools: { budget_planner: PAYSLIP_BUDGET } });
     const rec = await page.evaluate(() => {
-      const el = document.getElementById('payslipReconcile');
+      const el = document.getElementById('st_inc_1');
       return { text: el?.textContent.replace(/\s+/g, ' ').trim() || '',
-               html: el?.innerHTML || '' };
+               html: el?.innerHTML || '',
+               color: el ? getComputedStyle(el).color : '',
+               net: document.getElementById('inc_amt_1')?.value || '',
+               link: !!document.getElementById('netUsePayslip') };
     });
-    /* gross 16000 − (2800+900+750+3000+100 = 7550) = 8450, vs net pay 11000 */
-    check('104 with the block complete it shows the sum, both sides named',
-      /8,450/.test(rec.text) && /11,000/.test(rec.text), rec.text.slice(0, 200));
-    check('105 and states the difference without calling it a mistake',
-      /2,550/.test(rec.text) && /worth a look rather than a correction/.test(rec.text),
-      rec.text.slice(0, 260));
+    /* gross 16000 - (2800+900+750+3000+100 = 7550) = 8450, vs a typed 11000 */
+    check('104 with the block complete the typed net row shows what the payslip works out to',
+      /Your payslip works out to P 8,450\.00\./.test(rec.text) && /11,000/.test(rec.net),
+      `${rec.text.slice(0, 160)} | net ${rec.net}`);
+    check('105 and offers it as a choice, never calls the typed figure a mistake',
+      rec.link && /Use that figure/.test(rec.text) && !/mistake|wrong|error|incorrect/i.test(rec.text),
+      rec.text.slice(0, 200));
     check('106 it is never styled as an error',
-      !/alert|advice-card warn|advice-card alert/.test(rec.html), rec.html.slice(0, 160));
+      rec.html !== '' && !/alert|warn|var\(--red\)/.test(rec.html) && rec.color !== 'rgb(192, 57, 43)',
+      `${rec.html.slice(0, 160)} | ${rec.color}`);
     await page.close();
   }
   {
@@ -1300,6 +1315,321 @@ const dismissProfileModal = async (page) => {
       /300\.00 is still yours/.test(adv), adv.slice(0, 260));
     check('170 and never as overspending',
       !/over budget|overspen/i.test(adv.split('still yours')[0] || ''), adv.slice(0, 260));
+    await page.close();
+  }
+
+  /* ── 11. Phase D.3: payslip first, calm lines, no double counting ────────
+
+     Decided 25 Sep 2026. The payslip card comes first and what is left after
+     its deductions FILLS the net-pay row's amount, which stays the one home
+     for that figure. Hints show only while the member is in a line. Four
+     lines warn, in words only, when a payslip figure could be typed twice. */
+  const NET = 'Paid into your bank account each month (net pay)';
+  const D3 = (over) => ({
+    currentKey: thisMonth,
+    budgets: { [thisMonth]: Object.assign({
+      income: [{ id: 1, label: NET, amount: 0 }],
+      expenses: {}, actuals: {}, customCats: [], tags: {},
+    }, over) },
+  });
+  /* Type the way a member does: focus, the page's own select-on-focus, keys. */
+  const typeInto = async (page, id, text) => {
+    await page.focus('#' + id);
+    await page.evaluate(i => document.getElementById(i).select(), id);
+    await page.keyboard.type(text);
+  };
+  const netState = page => page.evaluate(() => {
+    const b = budgets[currentKey];
+    const r = b.income[0];
+    const el = document.getElementById('inc_amt_' + r.id);
+    return { amount: r.amount, src: r.src ?? null, value: el?.value ?? null,
+             readOnly: !!el?.readOnly, total: calcTotals(b).totalIncome,
+             state: document.getElementById('st_inc_' + r.id)?.textContent.replace(/\s+/g, ' ').trim() || '' };
+  });
+  const visible = (page, id) => page.evaluate(i => {
+    const el = document.getElementById(i);
+    return !!el && el.checkVisibility();
+  }, id);
+
+  {
+    const { page, errors } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: D3({}) } });
+    const order = await page.evaluate(() => {
+      const ps = document.getElementById('payslipCard'), inc = document.getElementById('incomeCard');
+      return !!(ps && inc && (ps.compareDocumentPosition(inc) & Node.DOCUMENT_POSITION_FOLLOWING));
+    });
+    check('171 the payslip card renders above the Income card', order === true, String(order));
+    check('172 on a first budget the payslip card opens by default',
+      await visible(page, 'ps_gross'), 'payslip body collapsed');
+    check('173 with the one line under its title, always visible',
+      await page.evaluate(() => document.getElementById('payslipLead')?.textContent.trim()) ===
+        'Start with your payslip. What is left after deductions becomes your income below.', '');
+
+    /* Open it regardless, so what follows tests the typing and not 172 again. */
+    await page.evaluate(() => { if (document.getElementById('payslipBody').hidden) togglePayslip(); });
+    /* Gross alone is not take-home pay, so it does not calculate. */
+    await typeInto(page, 'ps_gross', '10000');
+    await page.waitForTimeout(100);
+    let n = await netState(page);
+    const calcGross = await page.evaluate(() =>
+      typeof payslipCalc === 'function' ? payslipCalc(budgets[currentKey]) : 'no calculator');
+    check('174 gross alone does not calculate',
+      calcGross === null && n.amount === 0 && n.src !== 'payslip' && n.value === '',
+      JSON.stringify({ calcGross, n }));
+
+    /* Gross 10,000 + PAYE 1,200 + pension 500, all without leaving the card. */
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('1200');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('500');
+    await page.waitForTimeout(900);          // autosave fired at least once
+    n = await netState(page);
+    check('175 gross less PAYE and pension fills the net row with 8,300',
+      n.amount === 8300 && n.value === '8,300.00', JSON.stringify(n));
+    check('176 marked as from the payslip, and read-only', n.src === 'payslip' && n.readOnly, JSON.stringify(n));
+    check('177 totalIncome reads it, because it is the same one home', n.total === 8300, String(n.total));
+    check('178 and the net row says where it came from, with a way to adjust',
+      n.state.includes('Worked out from your payslip: P 10,000.00 less P 1,700.00 in deductions.')
+        && n.state.includes('Check it matches the net pay on your payslip. Adjust'), n.state);
+    const modalWhileTyping = await page.evaluate(() => !!document.getElementById('kw-profile-modal'));
+    check('179 typing gross then PAYE without leaving the card never opens the profile prompt',
+      modalWhileTyping === false, 'prompt opened mid-entry');
+
+    /* Leaving the card puts the question, once, with the finished figure. */
+    await page.focus('#exp_housing');
+    await page.waitForTimeout(500);
+    const asked = await page.evaluate(() => !!document.getElementById('kw-profile-modal'));
+    check('180 the prompt waits until focus leaves the card, then is offered',
+      modalWhileTyping === false && asked, `while typing ${modalWhileTyping}, after leaving ${asked}`);
+    await page.evaluate(() => document.getElementById('kwp-yes')?.click());
+    await page.waitForTimeout(300);
+    const patch = await page.evaluate(() => window.__updates[window.__updates.length - 1] || null);
+    check('181 and the synced net_income is the worked-out 8,300, with no uncaught errors',
+      patch && Number(patch.net_income) === 8300 && errors.length === 0,
+      JSON.stringify(patch && patch.net_income) + ' ' + errors.join(' | '));
+    await page.close();
+  }
+  {
+    /* Adjust, a later payslip change, then back to the payslip figure. */
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID },
+      tools: { budget_planner: D3({ payslip: { gross: 10000, paye: 1200, pension: 500 },
+        income: [{ id: 1, label: NET, amount: 8300, src: 'payslip' }] }) } });
+    await page.evaluate(() => document.getElementById('netAdjust')?.click());
+    await page.waitForTimeout(100);
+    let n = await netState(page);
+    check('183 Adjust makes the figure the member\'s own, and editable',
+      n.src === 'typed' && !n.readOnly && n.amount === 8300, JSON.stringify(n));
+    await typeInto(page, 'inc_amt_1', '8000');
+    await typeInto(page, 'ps_paye', '1300');
+    await page.waitForTimeout(700);
+    n = await netState(page);
+    check('184 a later payslip change leaves the typed figure alone',
+      n.amount === 8000 && n.src === 'typed', JSON.stringify(n));
+    check('185 and says what the payslip works out to, as a choice',
+      n.state === 'Your payslip works out to P 8,200.00. Use that figure', n.state);
+    await typeInto(page, 'ps_paye', '1200');
+    await page.waitForTimeout(700);
+    await page.evaluate(() => document.getElementById('netUsePayslip')?.click());
+    await page.waitForTimeout(100);
+    n = await netState(page);
+    check('186 "Use that figure" restores 8,300 from the payslip',
+      n.amount === 8300 && n.src === 'payslip' && n.readOnly, JSON.stringify(n));
+    /* Clearing gross keeps the last figure and hands it to the member. */
+    await typeInto(page, 'ps_gross', '');
+    await page.keyboard.press('Backspace');
+    await page.waitForTimeout(100);
+    n = await netState(page);
+    check('187 clearing gross never drops income to zero; the figure becomes typed',
+      n.amount === 8300 && n.src === 'typed' && !n.readOnly, JSON.stringify(n));
+    await page.close();
+  }
+  {
+    /* A budget saved before D.3: typed net, payslip figures that differ. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: PAYSLIP_BUDGET } });
+    let n = await netState(page);
+    check('188 an existing budget loads with its typed net untouched, offered the payslip figure, not given it',
+      n.amount === 11000 && n.value === '11,000.00' && !n.readOnly && n.src === null
+        && n.state === 'Your payslip works out to P 8,450.00. Use that figure', JSON.stringify(n));
+    await typeInto(page, 'ps_other', '150');
+    await page.waitForTimeout(100);
+    n = await netState(page);
+    /* other 100 -> 150: 16000 - 7600 = 8400 */
+    check('189 and a payslip edit still never overwrites it, only updates the offer',
+      n.amount === 11000 && n.state === 'Your payslip works out to P 8,400.00. Use that figure', JSON.stringify(n));
+    await page.close();
+  }
+  {
+    /* Payslip figures in no total and no bar, even while they fill the net row. */
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID },
+      tools: { budget_planner: D3({ expenses: { housing: 3000, dining: 400, emfund: 300 } }) } });
+    await typeInto(page, 'ps_gross', '10000');
+    await typeInto(page, 'ps_paye', '1200');
+    await typeInto(page, 'ps_pension', '500');
+    await typeInto(page, 'ps_medical', '400');
+    await typeInto(page, 'ps_loans', '900');
+    await page.waitForTimeout(100);
+    const t = await page.evaluate(() => {
+      const x = calcTotals(budgets[currentKey]);
+      return { income: x.totalIncome, expenses: x.totalExpenses, needs: x.needsAmt,
+               wants: x.wantsAmt, bar: x.barSaveAmt, savings: x.savingsAmt };
+    });
+    check('190 payslip figures appear in no total and no bar',
+      t.income === 7000 && t.expenses === 3700 && t.needs === 3000 && t.wants === 400
+        && t.bar === 300 && t.savings === 300, JSON.stringify(t));
+    await page.close();
+  }
+  {
+    /* Copy to next month. */
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID },
+      tools: { budget_planner: D3({ payslip: { gross: 10000, paye: 1200, pension: 500 }, fs_mode: 'varies',
+        income: [{ id: 1, label: NET, amount: 8300, src: 'payslip' }],
+        expenses: { family_support: 600 } }) } });
+    const next = await page.evaluate(() => {
+      const [y, m] = currentKey.split('-').map(Number);
+      const d = new Date(y, m, 1);
+      const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      const from = currentKey;
+      openNewMonthModal();
+      document.getElementById('newMonthInput').value = key;
+      document.getElementById('copyFromSel').value = from;
+      confirmNewMonth();
+      const b = budgets[key];
+      return { payslip: b.payslip, fs: b.fs_mode, src: b.income[0].src, amount: b.income[0].amount };
+    });
+    await dismissProfileModal(page);
+    check('191 copying a month carries the payslip, family support mode and the net row\'s src',
+      next.payslip && next.payslip.gross === 10000 && next.payslip.pension === 500
+        && next.fs === 'varies' && next.src === 'payslip' && next.amount === 8300, JSON.stringify(next));
+    await page.close();
+  }
+  {
+    /* Guidance shows on focus, one line at a time. */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: D3({}) } });
+    const shown = () => page.evaluate(() =>
+      [...document.querySelectorAll('.kw-guide')].filter(e => e.checkVisibility()).map(e => e.id));
+    const idle = await shown();
+    const total = await page.evaluate(() => document.querySelectorAll('.kw-guide').length);
+    check('192 with no line focused, no hint or first-budget prompt is visible',
+      idle.length === 0 && total > 20, `visible: ${idle.join(',')} of ${total}`);
+    const y0 = await page.evaluate(() => document.getElementById('exp_housing').getBoundingClientRect().top + window.scrollY);
+    await page.focus('#exp_housing');
+    const y1 = await page.evaluate(() => document.getElementById('exp_housing').getBoundingClientRect().top + window.scrollY);
+    const onFocus = await shown();
+    check('193 focusing the Housing amount shows Housing\'s hint and no other line\'s',
+      onFocus.includes('g_housing') && onFocus.every(id => /_housing$/.test(id)), onFocus.join(','));
+    check('194 on a first budget its prompt shows too, and only on focus',
+      onFocus.includes('gp_housing'), onFocus.join(','));
+    check('195 showing the hint does not move the input being typed in',
+      onFocus.includes('g_housing') && Math.abs(y1 - y0) < 0.5, `${y0} -> ${y1}, shown ${onFocus.join(',')}`);
+    const dby = await page.evaluate(() => document.getElementById('exp_housing').getAttribute('aria-describedby') || '');
+    check('196 the hidden hint stays tied to its input for screen readers',
+      dby.split(' ').includes('g_housing') && dby.split(' ').includes('gp_housing'), dby);
+    await page.focus('#ps_loans');
+    const ps = await shown();
+    check('197 payslip-row hints follow the same rule',
+      ps.length === 1 && ps[0] === 'g_ps_loans', ps.join(','));
+    await page.focus('#inc_amt_1');
+    const net = await shown();
+    check('198 the net-pay hint sits under the net row and shows on focus',
+      net.length === 1 && net[0] === 'g_inc_1'
+        && await page.evaluate(() => document.getElementById('incrow_1').contains(document.getElementById('g_inc_1'))),
+      net.join(','));
+    /* State stays visible: the Fixed/Varies switch, with nothing focused. */
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    const fsHint = await page.evaluate(() => { const e = document.getElementById('g_family_support');
+      return e ? e.checkVisibility() : 'missing'; });
+    check('199 state and controls stay visible while that line\'s guidance is hidden',
+      await visible(page, 'fs_fixed') && fsHint === false, `switch / hint: ${fsHint}`);
+    /* "No payslip?" collapses the card and goes to the net amount. */
+    await page.evaluate(() => document.getElementById('payslipSkip')?.click());
+    const skip = await page.evaluate(() => ({ hidden: document.getElementById('payslipBody')?.hidden,
+      focus: document.activeElement && document.activeElement.id }));
+    check('200 "No payslip, or not to hand?" collapses the card and focuses the net amount',
+      skip.hidden === true && skip.focus === 'inc_amt_1', JSON.stringify(skip));
+    await page.close();
+  }
+  {
+    /* A returning member who never entered a payslip figure: collapsed. */
+    const two = D3({});
+    two.budgets['2020-01'] = JSON.parse(JSON.stringify(two.budgets[thisMonth]));
+    const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID }, tools: { budget_planner: two } });
+    const st = await page.evaluate(() => ({ hidden: document.getElementById('payslipBody').hidden,
+      lead: !!document.getElementById('payslipLead')?.checkVisibility() }));
+    check('201 a returning member with no payslip figure sees it collapsed to its title and one line',
+      st.hidden === true && st.lead === true, JSON.stringify(st));
+    await page.close();
+  }
+  {
+    /* The four double-counting warnings. */
+    const WARN = {
+      debt_min:   { ps: 'loans',   amt: 'P 3,000.00', lines: [
+        'Your payslip already takes P 3,000.00 in loan repayments.',
+        'Only add loans here that you pay from your bank account.',
+        'Adding a payslip loan again would count it twice.'] },
+      retirement: { ps: 'pension', amt: 'P 900.00', lines: [
+        'P 900.00 already goes to your pension through your payslip.',
+        'Add only what you pay on top by choice, such as a retirement annuity.',
+        'Adding the payslip amount here would count it twice.'] },
+      health:     { ps: 'medical', amt: 'P 750.00', lines: [
+        'Your medical aid of P 750.00 comes off your payslip.',
+        'Add only medical costs you pay yourself, like gap payments or pharmacy.'] },
+      insurance:  { ps: 'other',   amt: '', lines: [
+        'Some cover, like funeral policies, may already come off your payslip.',
+        'Only add policies you pay from your bank account.'] },
+    };
+    const FIG = { loans: 3000, pension: 900, medical: 750, other: 100 };
+    for (const [cat, w] of Object.entries(WARN)) {
+      const { page } = await open(browser, 'budget_planner.html', { profile: { id: UID },
+        tools: { budget_planner: D3({ payslip: { gross: 16000, [w.ps]: 0 } }) } });
+      const warnText = () => page.evaluate(c => {
+        const el = document.querySelector('#psw_' + c + ' .kw-warn');
+        return { text: el ? el.innerText.split('\n').map(x => x.trim()).filter(Boolean) : null,
+                 shown: !!el && el.checkVisibility() };
+      }, cat);
+      await page.focus('#exp_' + cat);
+      const zero = await warnText();
+      await typeInto(page, 'ps_' + w.ps, String(FIG[w.ps]));
+      await page.focus('#exp_' + cat);
+      const focused = await warnText();
+      await page.evaluate(() => document.activeElement.blur());
+      const idleEmpty = await warnText();
+      await typeInto(page, 'exp_' + cat, '200');
+      await page.evaluate(() => document.activeElement.blur());
+      const idleFig = await warnText();
+      await dismissProfileModal(page);
+      check(`202 ${cat}: the warning appears only once the payslip ${w.ps} figure is above zero, verbatim`,
+        zero.text === null && focused.shown && JSON.stringify(focused.text) === JSON.stringify(w.lines),
+        JSON.stringify({ zero: zero.text, focused: focused.text }));
+      check(`203 ${cat}: hidden when out of the line and the line is empty, shown once it has a figure`,
+        !idleEmpty.shown && idleFig.shown, `${idleEmpty.shown} / ${idleFig.shown}`);
+      check(`204 ${cat}: muted, never red`,
+        await page.evaluate(c => { const el = document.querySelector('#psw_' + c + ' .kw-warn');
+          if (!el) return false;
+          const ref = document.createElement('span'); ref.style.color = 'var(--muted)'; document.body.appendChild(ref);
+          const muted = getComputedStyle(ref).color; ref.remove();
+          return getComputedStyle(el).color === muted; }, cat), '');
+      await page.close();
+    }
+  }
+  {
+    /* No new member-facing string carries an em dash, en dash or "--". */
+    const { page } = await open(browser, 'budget_planner.html',
+      { profile: { id: UID }, tools: { budget_planner: D3({}) } });
+    const strs = await page.evaluate(() => {
+      const out = [];
+      if (typeof KW_D3_COPY === 'undefined') return out;
+      Object.values(KW_D3_COPY).forEach(v => out.push(typeof v === 'function' ? v('P 1.00', 'P 2.00') : v));
+      Object.values(KW_PAYSLIP_WARN).forEach(w => out.push(...w.lines('P 1.00')));
+      if (typeof KW_D3_COPY === 'undefined') return out;
+      out.push(document.getElementById('payslipLead').textContent.trim(),
+               document.getElementById('payslipSkip').textContent.trim());
+      return out;
+    });
+    const bad = strs.filter(x => /[—–]|--/.test(x));
+    check('205 no new member-facing string contains an em dash, en dash or "--"',
+      strs.length >= 15 && bad.length === 0, bad.join(' || ') || `only ${strs.length} strings`);
     await page.close();
   }
 

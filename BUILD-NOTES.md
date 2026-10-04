@@ -1,3 +1,97 @@
+# Phase D.3: payslip first, calm lines, no double counting (2026-10-04)
+
+Branch `claude/optimistic-babbage-r9uvnf`, rebuilt from `origin/dev` at
+`4d31401`. Frontend only: `budget_planner.html`, its tests, docs. No SQL.
+
+## Restore point for the branch (recorded before it was pushed)
+
+When this session's clone was made, `claude/optimistic-babbage-r9uvnf` pointed
+at **`45a68df1d96341c552b8d992cfddd2478a0c7f36`** ("Merge dev into main: the
+two Debt Rehab fixes that were live but on no branch"). It had been cut from
+`main`, so it carried `main`-only merge commits that `dev` lacks, and was reset
+to `origin/dev` so the merge into `dev` carries only this work.
+
+By the time of the push the branch had already been deleted on GitHub
+(`git ls-remote` returned no such ref), so the push created it fresh and
+overwrote nothing. `45a68df` is still on `main`'s own history. To put the old
+tip back on this branch name anyway:
+
+```bash
+git push --force origin 45a68df1d96341c552b8d992cfddd2478a0c7f36:refs/heads/claude/optimistic-babbage-r9uvnf
+```
+
+## What changed for a member
+
+1. **Payslip first.** "From your payslip" sits above Income. It opens on a first
+   budget or wherever a payslip figure exists; otherwise it is collapsed to its
+   title and "Start with your payslip. What is left after deductions becomes
+   your income below." A link, "No payslip, or not to hand? Enter your income
+   directly below.", collapses it and focuses the net amount.
+2. **Net pay worked out from the payslip.** Gross plus at least one deduction
+   fills the net row's `amount` (gross alone does not), read-only, with "Worked
+   out from your payslip: ... Check it matches the net pay on your payslip.
+   Adjust". Adjust makes it the member's own (`src: 'typed'`); a typed figure is
+   never overwritten and gets "Your payslip works out to {left}. Use that
+   figure" when they differ by P1 or more. This replaces the Phase C reconcile
+   note. Clearing gross or every deduction keeps the last figure as typed.
+   Deductions above gross hold the last figure with a one-line note (not in the
+   prompt's spec; added so a half-retyped gross never writes a nonsense figure).
+3. **An empty net row is fillable.** The prompt said a row without `src` is
+   typed. That holds for a row with a figure. An EMPTY one (every first budget)
+   has nothing to protect, so the payslip may fill it; otherwise no first budget
+   could ever get its income from the payslip.
+4. **Hints show on focus.** Hints, first-budget prompts, the contributions line,
+   income-source hints, payslip-row hints and the net-row hint (now under the
+   net row itself) show only while the member is in that line. Switches, tag
+   status, the prefill note and the net-row lines stay visible. Rows align top,
+   so a hint opening never moves the input.
+5. **Four double-counting warnings** on Minimum debt payments, Retirement,
+   Health & Medical and Insurance, verbatim from the prompt. Words only.
+6. **The profile prompt waits** while focus is in the payslip card or on the
+   net row, and is offered once focus has left both. Totals and the saved
+   budget keep updating live.
+7. **Copy to next month** now carries `payslip` and `fs_mode`; the net row keeps
+   its `src`.
+
+No calculation, total, bar, profile column or SQL changed.
+
+## Tests (`tests/smoke-prefill.js`, 213 checks)
+
+New checks 171-205 (section 11). Each was run against `dev`'s
+`budget_planner.html` and fails there; all pass on this branch. Checks 100 and
+103-106 were rewritten in place (see the commit message for before/after).
+Every other existing check passes unchanged, and the other smoke suites
+(account, picker, routing, onboarding, habits, dashboard, notifs, ops, tracker)
+pass.
+
+## Rollback
+
+Frontend only. Revert the merge commit on `dev` (and on `main` if it reached
+production). Stored data is additive: the net row's `src` and the copied
+`payslip` / `fs_mode` are ignored by the old code, so no budget needs repairing.
+No SQL to reverse.
+
+## By hand (Tshenolo / Lone)
+
+- **Cloudflare:** the Workers Build fires on pushes to `dev` only. If
+  non-production branch builds are enabled for the Worker, this branch gets a
+  preview version; check **Workers → keywellness-portal → Deployments**. After
+  merging into `dev`, confirm the top row of **Build history** is green and that
+  its commit is the merge commit before testing.
+- **Browser verification** (a) to (f) from the D.3 prompt, on the dev site.
+- Nothing in Supabase.
+
+## Corrections to earlier notes
+
+- The "Launch Bug-Fix Batch" entry below (item 5) says budget income prefill
+  "applies only to a member's first-ever budget". Since Phase C it applies to
+  none: see the seeding note in `docs/phase-d-category-model.md`. Left off on
+  purpose in D.3; logged in the vault.
+- The `.item-row` phone layout overflows by about 90px at 390px wide (page 480px
+  in a 390px viewport). This predates D.3 (same on `dev`); logged in the vault.
+
+---
+
 # Departments in admin.html — the last leg off the SQL editor (2026-08-19)
 
 Completes the trio: organisations -> companies/sites -> **departments**. The
@@ -455,6 +549,9 @@ never persisted anywhere), not a comma-parse bug.
 5. **Behaviour change (deliberate, per launch spec)**: creating a *blank* new
    month when prior months exist no longer auto-seeds Primary Salary from the
    profile — prefill now applies only to a member's first-ever budget.
+   **(Correction, 4 Oct 2026: since Phase C, `86a57a4`, it applies to no budget
+   at all. The seeding guard still looks for "Primary Salary" and new budgets no
+   longer carry it. See the Phase D.3 entry at the top.)**
    Copy-from-month is unchanged.
 6. **Pre-existing bug spotted, not fixed (out of scope)**:
    lifestyle_inflation_calculator.html saves/restores a non-existent

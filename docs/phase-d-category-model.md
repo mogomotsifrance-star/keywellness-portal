@@ -11,12 +11,16 @@ We never scold. Family support, contributions, giving and church are obligations
 ## Income
 | id | Label | Bucket | Kind | Hint | First-budget prompt | Advice |
 |---|---|---|---|---|---|---|
-| (net row) | Paid into your bank account each month (net pay) | — | income | the amount on your bank statement, not your payslip | Start with what actually reaches your account. The payslip block below is where the rest goes. | — |
+| (net row) | Paid into your bank account each month (net pay) | — | income | what reaches your bank account each month. Filled in from your payslip above when you enter it. *(D.3, 25 Sep 2026; was "the amount on your bank statement, not your payslip")* | — *(D.3: removed. It was approved here but never reached the page; the payslip card's own line, "Start with your payslip. What is left after deductions becomes your income below.", does the job.)* | — |
 | (free rows) | member-typed | — | income | side work, rent received, a pension, anything that arrives monthly | — | — |
 | farm_income | Farm income | — | income (irregular) | what the moraka or masimo brought in this month — cattle or goats sold, produce sold. Not what the herd is worth. | — | Farm income this month is {amount}. It is real income, and because it comes and goes, the budget treats it as a bonus month rather than a salary. |
 | motshelo_payout | Motshelo payout | — | income (irregular) | the share-out from your money motshelo, in the month it arrives | — | A motshelo payout is money you saved coming back to you. A good month to top up the emergency fund or a goal before it becomes ordinary money. |
 
+**Income seeding from the profile does not run.** `maybeSeedIncomeFromAssessment()` only seeds a budget whose first row is labelled `Primary Salary`, and since Phase C (`86a57a4`) a new budget's first row carries the net-pay label instead, so a first budget is never prefilled from `profiles.net_income`. Left off deliberately in D.3 (25 Sep 2026): a seeded row would be `typed`, and the payslip could then never fill it. Logged as an open issue.
+
 ## From your payslip (reference — never in a bar, never in a total)
+
+**Phase D.3 (25 Sep 2026): the payslip comes first.** The card sits above Income, opens on a first budget or wherever a payslip figure exists, and is otherwise collapsed to its title and the line "Start with your payslip. What is left after deductions becomes your income below." What is left after the deductions entered (gross plus at least one deduction) **fills the net row's `amount`**, which stays the one home for that figure; the row records `src: 'payslip' | 'typed'`. A typed figure is never overwritten: the member sees "Your payslip works out to {left}. Use that figure" and chooses. Nothing in the block enters any total or bar, as before.
 | id | Label | Hint | Advice |
 |---|---|---|---|
 | gross | Gross pay | before anything is taken off | — |
@@ -98,3 +102,15 @@ The question, asked once (approved wording): **"Is this a need, a want, or savin
 4. Re-tagging built-ins: **no**; custom lines, Giving and Miscellaneous only.
 5. Expense Tracker adopts this list: **yes, as Phase D.2**.
 6. Three-way question wording: **approved**.
+
+## Phase D.3: double-counting warnings (approved 25 Sep 2026, verbatim)
+Words only. Shown when the payslip figure is above zero, while the member is in the line or once the line has a figure. Muted, never red, never blocking.
+
+| Budget line | Shows when | Wording |
+|---|---|---|
+| debt_min | payslip loans > 0 | Your payslip already takes {amount} in loan repayments. / Only add loans here that you pay from your bank account. / Adding a payslip loan again would count it twice. |
+| retirement | payslip pension > 0 | {amount} already goes to your pension through your payslip. / Add only what you pay on top by choice, such as a retirement annuity. / Adding the payslip amount here would count it twice. |
+| health | payslip medical > 0 | Your medical aid of {amount} comes off your payslip. / Add only medical costs you pay yourself, like gap payments or pharmacy. |
+| insurance | payslip other > 0 | Some cover, like funeral policies, may already come off your payslip. / Only add policies you pay from your bank account. |
+
+Hints and first-budget prompts in this document now show only while the member is in that line (D.3). Their wording is unchanged.

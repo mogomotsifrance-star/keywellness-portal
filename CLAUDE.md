@@ -450,6 +450,19 @@ Three consumers depend on the split, and each is a claim that was wrong before:
   alone and only the advice changes — an undercount asks a question, an
   overcount makes a claim.
 
+**Phase D.3: the payslip FILLS the net row; it never becomes a second home.**
+What is left after the payslip deductions is written into the net-pay row's
+`amount`, and the row carries `src: 'payslip' | 'typed'` (absent = a pre-D.3
+row: typed if it has a figure, fillable if empty). Everything downstream keeps
+reading that `amount` unchanged. **A typed figure is never overwritten** — the
+member is offered "Use that figure" instead — and `syncNetFromPayslip()` runs
+only on a payslip edit, never on load. The "Update your shared profile?" prompt
+is held while focus is in the payslip card or the net row (`kwSyncHeld()`), so
+a half-entered payslip is never offered as `net_income`. Copy-to-next-month
+carries `payslip` and `fs_mode`. Hints and first-budget prompts are guidance
+(`.kw-guide`, shown on `:focus-within`); switches, tag status and the four
+payslip double-count warnings (`KW_PAYSLIP_WARN`) are state.
+
 **`_insCovers` goes in `answers`, never in `cat_scores`.** HR's report walks
 `cat_scores` with `jsonb_each` and casts every value to numeric to band it; an
 array there raises at query time inside `_org_report_period_data`. `answers` is
