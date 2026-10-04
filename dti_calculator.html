@@ -11,6 +11,7 @@
 <script src="kw-badges.js"></script>
 <script src="kw-profile-sync.js"></script>
 <script src="js/kw-reveal.js"></script>
+<script src="js/dsr-bands.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -184,6 +185,11 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
 }
 /* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
 .kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
+.kw-dsr-explain{margin-top:10px;font-size:.8rem;line-height:1.55}
+.kw-dsr-explain p{margin:0 0 6px}
+.kw-dsr-basis{color:var(--muted)}
+.kw-dsr-why summary{cursor:pointer;font-weight:700;color:var(--navy)}
+.kw-dsr-why p{margin-top:6px}
 </style>
 </head>
 <body>
@@ -380,53 +386,20 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
 
       <!-- Benchmarks -->
       <div class="card">
-        <div class="card-title">Botswana Lending Benchmarks</div>
+        <div class="card-title">Debt Service Ratio Bands</div>
+        <!-- Segments, labels and rows are drawn by renderBenchmarks() from
+             js/dsr-bands.js, so this page holds no threshold of its own. -->
         <div class="benchmark-track" id="benchmarkTrack">
-          <div class="benchmark-bar">
-            <div class="bb-seg" style="width:35%;background:#397e2b;opacity:.85;"></div>
-            <div class="bb-seg" style="width:15%;background:#f0c90a;opacity:.85;"></div>
-            <div class="bb-seg" style="width:15%;background:#d97706;opacity:.85;"></div>
-            <div class="bb-seg" style="width:35%;background:#c0392b;opacity:.85;"></div>
-          </div>
+          <div class="benchmark-bar" id="benchmarkBar"></div>
           <div style="position:absolute;top:0;left:0;right:0;" id="benchmarkPointerWrap">
             <div class="benchmark-pointer" id="benchmarkPointer" style="left:0%;">
               <svg width="12" height="18" viewBox="0 0 12 18"><polygon points="6,0 12,18 0,18" fill="var(--navy)"/></svg>
             </div>
           </div>
-          <div class="benchmark-labels">
-            <span>0%</span><span>35%</span><span>50%</span><span>65%</span><span>80%+</span>
-          </div>
+          <div class="benchmark-labels" id="benchmarkLabels"></div>
         </div>
-        <div class="benchmark-rows">
-          <div class="bench-row">
-            <div class="bench-dot" style="background:#397e2b;"></div>
-            <div class="bench-range">0 – 35%</div>
-            <div class="bench-label">Excellent — most lenders approve freely</div>
-            <span class="bench-badge" style="background:#eef4ea;color:#2a5f20;">Low Risk</span>
-          </div>
-          <div class="bench-row">
-            <div class="bench-dot" style="background:#f0c90a;"></div>
-            <div class="bench-range">36 – 50%</div>
-            <div class="bench-label">Acceptable — NBFIRA DSR limit for unsecured</div>
-            <span class="bench-badge" style="background:#fdf5cf;color:#93790a;">Moderate</span>
-          </div>
-          <div class="bench-row">
-            <div class="bench-dot" style="background:#d97706;"></div>
-            <div class="bench-range">51 – 65%</div>
-            <div class="bench-label">High — some lenders decline; review advised</div>
-            <span class="bench-badge" style="background:#ffedd5;color:#d97706;">High Risk</span>
-          </div>
-          <div class="bench-row">
-            <div class="bench-dot" style="background:#c0392b;"></div>
-            <div class="bench-range">65%+</div>
-            <div class="bench-label">Very high — credit applications likely rejected</div>
-            <span class="bench-badge" style="background:#fee2e2;color:#c0392b;">Critical</span>
-          </div>
-        </div>
-        <div class="info-note" style="margin-top:14px;">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M12 16v-4M12 8h.01"/></svg>
-          <span>NBFIRA (Non-Bank Financial Institutions Regulatory Authority) caps unsecured credit at 30% of net salary. Botswana commercial banks typically use a 35–40% gross DSR for mortgage approval.</span>
-        </div>
+        <div class="benchmark-rows" id="benchmarkRows"></div>
+        <div class="info-note" style="margin-top:14px;display:block;" id="benchmarkWhy"></div>
       </div>
 
     </div>
@@ -729,23 +702,46 @@ function dtiBasis(gross, other, net) {
   return { basis: null, income: 0, onTakeHome: false, label: '' };
 }
 
-// Bands. The 35 / 50 / 65 thresholds are GROSS thresholds — Botswana banks
-// quote DSR on gross. Applying them to take-home would grade a member harsher
-// than any lender would, on a basis no lender uses. On take-home the honest
-// benchmark is the one that is already a net rule: NBFIRA's 30% cap on
-// unsecured credit. Messages on this basis describe the burden and never
-// assert what a lender will decide, because on this basis we cannot know.
-function dtiStatus(pct, onTakeHome) {
-  if (onTakeHome) {
-    return pct <= 30 ? {label:'Comfortable', color:'var(--green)',  cls:'green',  msg:`Under 30% of your take-home pay goes to debt. That is within the NBFIRA cap for unsecured credit and leaves room to save.`}
-         : pct <= 45 ? {label:'Stretched',   color:'#93790a',       cls:'orange', msg:`Debt takes a large share of what actually reaches your account each month. NBFIRA caps unsecured credit at 30% of net pay.`}
-         :             {label:'Heavy',       color:'var(--red)',    cls:'red',    msg:`Most of your take-home pay is committed before you spend anything. Reducing what you owe each month is the change that frees the most room.`};
-  }
-  return pct <= 35 ? {label:'Excellent',  color:'var(--green)',  cls:'green',  msg:`Your DTI is well within Botswana lending norms. You have strong borrowing capacity and are in a healthy financial position.`}
-       : pct <= 50 ? {label:'Acceptable', color:'#93790a',       cls:'orange', msg:`Your DTI is within the acceptable range but approaching the upper limit. Most lenders will still approve credit; aim to reduce it before taking on new debt.`}
-       : pct <= 65 ? {label:'High Risk',  color:'var(--orange)', cls:'orange', msg:`Your DTI is elevated. Some lenders may decline applications. Focus on reducing existing debt before applying for new credit.`}
-       :             {label:'Critical',   color:'var(--red)',    cls:'red',    msg:`Your DTI exceeds safe lending thresholds. Most Botswana lenders will decline applications. Debt reduction should be an immediate priority.`};
+// Bands come from js/dsr-bands.js, the same four on either basis (decided
+// 4 Oct 2026). A take-home ratio is not graded on softer bands; it is
+// labelled, because it reads higher than the member's true figure, and the
+// member is asked for their gross salary. Messages describe the burden and
+// never assert what a lender will decide.
+const DSR_CLS = { good:'green', mid:'orange', warn:'orange', bad:'red' };
+const DSR_MSG = {
+  healthy:       () => `Your repayments are below our ${KWDsr.benchmark}% wellbeing target. They leave room for your needs, your savings and the unexpected.`,
+  manageable:    () => `You are above our ${KWDsr.benchmark}% wellbeing target but well short of the ${KWDsr.line}% overindebtedness line. Every step down towards ${KWDsr.benchmark}% gives you more breathing room.`,
+  strained:      () => `Repayments take a large share of your income. You are not overindebted, but new credit will be hard to get. Reducing what you pay each month is the change that frees the most room.`,
+  over_indebted: () => `At ${KWDsr.line}% or more, repayments take so much of your income that you are considered overindebted. A plan with a Key Wellness coach is the most useful next step.`
+};
+function dtiStatus(pct) {
+  const d = KWDsr.describe(pct);
+  return { label: d.label, color: d.color, cls: DSR_CLS[d.tone] || 'orange', msg: (DSR_MSG[d.key] || (() => ''))() };
 }
+
+// The bands card, drawn once from js/dsr-bands.js. The bar runs 0 to 80%.
+const BENCH_SCALE = 80;
+function renderBenchmarks() {
+  const bands = KWDsr.bands;
+  let prev = 0;
+  document.getElementById('benchmarkBar').innerHTML = bands.map(b => {
+    const top = b.max === null ? BENCH_SCALE : b.max;
+    const w = Math.max(0, (top - prev) / BENCH_SCALE * 100); prev = top;
+    return `<div class="bb-seg" style="width:${w.toFixed(2)}%;background:${KWDsr.color(b.key)};opacity:.85;"></div>`;
+  }).join('');
+  document.getElementById('benchmarkLabels').innerHTML =
+    ['0%'].concat(bands.filter(b => b.max !== null).map(b => b.max + '%'), [BENCH_SCALE + '%+'])
+      .map(t => `<span>${t}</span>`).join('');
+  document.getElementById('benchmarkRows').innerHTML = bands.map(b => `
+    <div class="bench-row">
+      <div class="bench-dot" style="background:${KWDsr.color(b.key)};"></div>
+      <div class="bench-range">${KWDsr.rangeText(b.key)}</div>
+      <div class="bench-label">${b.label}</div>
+    </div>`).join('');
+  document.getElementById('benchmarkWhy').innerHTML =
+    `<details class="kw-dsr-why"><summary>Why two numbers?</summary><p>${KWDsr.whyTwoMember()}</p></details>`;
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderBenchmarks); else renderBenchmarks();
 
 // Inline, in the page, naming what is missing — not an alert box that names a
 // figure the member thinks they gave and disappears when dismissed.
@@ -786,19 +782,16 @@ function calculate() {
   const frontEndDTI  = housingDebt / totalIncome * 100;
   const netDTI       = net > 0 ? totalDebt / net * 100 : null;
 
-  // Capacities
-  const capacity35   = Math.max(0, totalIncome * 0.35 - totalDebt);  // max Botswana bank threshold
-  const capacity40   = Math.max(0, totalIncome * 0.40 - totalDebt);
-  const netCapacity30= net > 0 ? Math.max(0, net * 0.30 - totalDebt) : null; // NBFIRA unsecured cap
+  // Room before the wellbeing benchmark and before the overindebtedness line.
+  const benchAmt     = totalIncome * KWDsr.benchmark / 100;
+  const lineAmt      = totalIncome * KWDsr.line / 100;
+  const capacityBench= benchAmt - totalDebt;
+  const capacityLine = lineAmt - totalDebt;
+  const deficitBench = Math.max(0, totalDebt - benchAmt);
 
-  // Deficit
-  const deficit35    = Math.max(0, totalDebt - totalIncome * 0.35);
-  const deficit40    = Math.max(0, totalDebt - totalIncome * 0.40);
-
-  // Status — bands chosen by basis (see dtiStatus).
-  const status   = dtiStatus(backEndDTI, onTakeHome);
-  const bandGood = onTakeHome ? 30 : 35;
-  const bandMid  = onTakeHome ? 45 : 50;
+  // Status, from js/dsr-bands.js (see dtiStatus).
+  const status   = dtiStatus(backEndDTI);
+  const dsrCls   = status.cls;
 
   // ── Summary strip ──
   document.getElementById('summaryStrip').innerHTML = `
@@ -812,8 +805,8 @@ function calculate() {
       <div class="stat-value">${fmtK(totalDebt)}</div>
       <div class="stat-sub">${debts.length} obligation${debts.length!==1?'s':''}</div>
     </div>
-    <div class="stat-box ${backEndDTI<=bandGood?'green':backEndDTI<=bandMid?'orange':'red'}">
-      <div class="stat-label">Back-End DTI</div>
+    <div class="stat-box ${dsrCls}">
+      <div class="stat-label">Debt Service Ratio</div>
       <div class="stat-value">${backEndDTI.toFixed(1)}%</div>
       <div class="stat-sub">${status.label}${onTakeHome ? ' · on take-home pay' : ''}</div>
     </div>
@@ -827,7 +820,7 @@ function calculate() {
   const clampedPct = Math.min(backEndDTI, 80);
   const angle      = -90 + (clampedPct / 80) * 180;
   document.getElementById('gaugeNeedle').setAttribute('transform', `rotate(${angle},110,110)`);
-  const gaugeColor = backEndDTI<=bandGood?'var(--green)':backEndDTI<=bandMid?'#93790a':'var(--red)';
+  const gaugeColor = status.color;
   KW.countUp(document.getElementById('gaugePct'), backEndDTI, { format: v => v.toFixed(1) + '%' });
   document.getElementById('gaugePct').style.color  = gaugeColor;
   document.getElementById('gaugeStatus').textContent = status.label;
@@ -836,7 +829,7 @@ function calculate() {
 
   // Benchmark pointer (0–80% maps to 0–100% of bar)
   setTimeout(() => {
-    const pct = Math.min(100, (backEndDTI / 80) * 100);
+    const pct = Math.min(100, (backEndDTI / BENCH_SCALE) * 100);
     document.getElementById('benchmarkPointer').style.left = pct.toFixed(1) + '%';
   }, 100);
 
@@ -851,7 +844,7 @@ function calculate() {
     <div class="data-row"><span class="data-row-label">Total debt obligations</span><span class="data-row-value v-gold">${fmt(totalDebt)}/mo</span></div>
     <div class="data-row"><span class="data-row-label">Free income (after debt)</span><span class="data-row-value v-green">${fmt(totalIncome-totalDebt)}/mo</span></div>
     ${totalBalance>0?`<div class="data-row"><span class="data-row-label">Total outstanding balance</span><span class="data-row-value v-muted">${fmtK(totalBalance)}</span></div>`:''}
-    ${(net>0 && !onTakeHome)?`<div class="data-row"><span class="data-row-label">DTI on net (take-home)</span><span class="data-row-value ${netDTI>50?'v-red':netDTI>35?'v-orange':'v-green'}">${netDTI.toFixed(1)}%</span></div>`:''}`;
+    ${(net>0 && !onTakeHome)?`<div class="data-row"><span class="data-row-label">DTI on net (take-home)</span><span class="data-row-value v-${({good:'green',mid:'orange',warn:'orange',bad:'red'})[KWDsr.tone(KWDsr.band(netDTI))]||'muted'}">${netDTI.toFixed(1)}%</span></div>`:''}`;
 
   document.getElementById('allocationViz').innerHTML = `
     <div style="display:flex;height:14px;border-radius:99px;overflow:hidden;margin-bottom:6px;">
@@ -864,30 +857,30 @@ function calculate() {
     </div>`;
 
   // ── Capacity rows ──
-  document.getElementById('capacityRows').innerHTML = `
-    ${onTakeHome ? '' : `
-    <div class="section-divider">Borrowing Capacity</div>
-    <div class="data-row"><span class="data-row-label">Max total debt at 35% DSR (bank)</span><span class="data-row-value v-navy">${fmt(totalIncome*0.35)}/mo</span></div>
-    <div class="data-row"><span class="data-row-label">Remaining capacity (35% limit)</span><span class="data-row-value ${capacity35>0?'v-green':'v-red'}">${capacity35>0?'+'+fmt(capacity35):'-'+fmt(Math.abs(capacity35))}/mo</span></div>
-    <div class="data-row"><span class="data-row-label">Remaining capacity (40% limit)</span><span class="data-row-value ${capacity40>0?'v-green':'v-red'}">${capacity40>0?'+'+fmt(capacity40):'-'+fmt(Math.abs(capacity40))}/mo</span></div>`}
-    ${net>0&&netCapacity30!==null?`
-    <div class="section-divider">NBFIRA Unsecured Cap (Net Salary)</div>
-    <div class="data-row"><span class="data-row-label">Max unsecured debt at 30% of net</span><span class="data-row-value v-navy">${fmt(net*0.30)}/mo</span></div>
-    <div class="data-row"><span class="data-row-label">Remaining NBFIRA capacity</span><span class="data-row-value ${netCapacity30>0?'v-green':'v-red'}">${netCapacity30>0?'+'+fmt(netCapacity30):'-'+fmt(Math.abs(netCapacity30))}/mo</span></div>`:''}
-    ${(deficit35>0 && !onTakeHome)?`
-    <div class="section-divider">To reach 35% threshold, reduce debt by</div>
-    <div class="data-row"><span class="data-row-label">Monthly payment reduction needed</span><span class="data-row-value v-orange">${fmt(deficit35)}/mo</span></div>`:''}`;
+  // Hidden on take-home: room measured against a figure that reads high
+  // would understate it. The member is asked for gross instead.
+  const _room = v => `<span class="data-row-value ${v>0?'v-green':'v-red'}">${v>0?'+'+fmt(v):'-'+fmt(Math.abs(v))}/mo</span>`;
+  document.getElementById('capacityRows').innerHTML = onTakeHome ? '' : `
+    <div class="section-divider">Room in your repayments</div>
+    <div class="data-row"><span class="data-row-label">Repayments at our ${KWDsr.benchmark}% wellbeing target</span><span class="data-row-value v-navy">${fmt(benchAmt)}/mo</span></div>
+    <div class="data-row"><span class="data-row-label">Room before the ${KWDsr.benchmark}% target</span>${_room(capacityBench)}</div>
+    <div class="data-row"><span class="data-row-label">Room before the ${KWDsr.line}% overindebtedness line</span>${_room(capacityLine)}</div>
+    ${deficitBench>0?`
+    <div class="section-divider">To reach the ${KWDsr.benchmark}% target, reduce repayments by</div>
+    <div class="data-row"><span class="data-row-label">Monthly reduction needed</span><span class="data-row-value v-orange">${fmt(deficitBench)}/mo</span></div>`:''}`;
 
   // ── Advice ──
-  let advice = `Your back-end DTI is <strong>${backEndDTI.toFixed(1)}%</strong>${onTakeHome ? ' <strong>on take-home pay</strong>' : ''}. ${status.msg}`;
-  if (onTakeHome) {
-    advice += ` Lenders usually use gross. Add your gross salary (before PAYE) above for the lender's view — or enter it once in your budget, under "From your payslip", and every tool here will have it.`;
-  } else if (capacity35 > 0) {
-    advice += ` You can take on up to <strong>${fmt(capacity35)}/mo</strong> in additional debt before reaching the 35% bank threshold.`;
-  } else if (deficit35 > 0) {
-    advice += ` To qualify for most loans, reduce monthly debt payments by <strong>${fmt(deficit35)}</strong>.`;
+  let advice = `Your debt repayments take up <strong>${backEndDTI.toFixed(1)}%</strong> of your ${onTakeHome ? '<strong>take-home pay</strong>' : 'gross income'}. ${status.msg}`;
+  if (!onTakeHome && capacityBench > 0) {
+    advice += ` You have <strong>${fmt(capacityBench)}/mo</strong> of room before reaching our ${KWDsr.benchmark}% wellbeing target.`;
+  } else if (!onTakeHome && deficitBench > 0) {
+    advice += ` Reducing monthly repayments by <strong>${fmt(deficitBench)}</strong> would bring you to the ${KWDsr.benchmark}% target.`;
   }
-  document.getElementById('adviceCard').innerHTML = `<div class="advice-card ${status.cls}"><div class="advice-title">${status.label}</div><p>${advice}</p></div>`;
+  const _explain = KWDsr.memberExplainHtml(backEndDTI, {
+    basis,
+    grossPrompt: 'Add your gross salary (before PAYE) above, or once in your budget under "From your payslip", and every tool here will have it.'
+  });
+  document.getElementById('adviceCard').innerHTML = `<div class="advice-card ${status.cls}"><div class="advice-title">${status.label}</div><p>${advice}</p>${_explain}</div>`;
 
   // ── Detail table ──
   const rows = debts.map(d => {
@@ -956,7 +949,11 @@ function exportPDF() {
 
   const NAVY=[13,37,69], GOLD=[200,153,26], CREAM=[247,244,238], GREEN=[26,140,91], RED=[192,57,43], SLATE=[74,85,104];
   const gross = parseField('grossSalary'), other = parseField('otherIncome'), net = parseField('netSalary');
-  const totalIncome = gross+other;
+  // Same basis rule as calculate(). This used to divide by gross + other
+  // only, so a member on take-home got a report reading 0% on every line.
+  const _pb = dtiBasis(gross, other, net);
+  const totalIncome = _pb.income;
+  const onTakeHome  = _pb.onTakeHome;
   const totalDebt   = debts.reduce((s,d)=>s+d.amount,0);
   const backEnd     = totalIncome>0 ? totalDebt/totalIncome*100 : 0;
   const frontEnd    = totalIncome>0 ? debts.filter(d=>d.isHousing).reduce((s,d)=>s+d.amount,0)/totalIncome*100 : 0;
@@ -975,9 +972,9 @@ function exportPDF() {
 
   // Stats
   const stats = [
-    {label:'Gross Income',   value: fmt(totalIncome)+'/mo'},
+    {label: onTakeHome ? 'Take-home Income' : 'Gross Income', value: fmt(totalIncome)+'/mo'},
     {label:'Total Debt',     value: fmt(totalDebt)+'/mo'},
-    {label:'Back-End DTI',   value: backEnd.toFixed(1)+'%'},
+    {label:'Debt Service Ratio', value: backEnd.toFixed(1)+'%'},
     {label:'Front-End DTI',  value: frontEnd.toFixed(1)+'%'},
     {label:'Free Income',    value: fmt(totalIncome-totalDebt)+'/mo'},
     {label:'Obligations',    value: String(debts.length)},
@@ -1022,10 +1019,13 @@ function exportPDF() {
     doc.text('AFFORDABILITY ANALYSIS', 12, fy);
     doc.line(12,fy+1.5,pageW-12,fy+1.5);
     const rows=[
-      ['Back-End DTI',backEnd.toFixed(1)+'%'],['Front-End DTI',frontEnd.toFixed(1)+'%'],
-      ['Remaining at 35% DSR',fmt(Math.max(0,totalIncome*.35-totalDebt))+'/mo'],
-      ['Remaining at 40% DSR',fmt(Math.max(0,totalIncome*.40-totalDebt))+'/mo'],
-      ...(net>0?[['DTI on Net Salary',(totalDebt/net*100).toFixed(1)+'%'],['NBFIRA cap (30% net)',fmt(net*.30)+'/mo']]:[] ),
+      ['Debt Service Ratio', backEnd.toFixed(1)+'% ('+KWDsr.label(KWDsr.band(backEnd))+(onTakeHome?', on take-home pay':'')+')'],
+      ['Front-End DTI',frontEnd.toFixed(1)+'%'],
+      ...(onTakeHome ? [['Basis', KWDsr.TAKE_HOME_NOTE]] : [
+        ['Room before the '+KWDsr.benchmark+'% wellbeing target',fmt(Math.max(0,totalIncome*KWDsr.benchmark/100-totalDebt))+'/mo'],
+        ['Room before the '+KWDsr.line+'% overindebtedness line',fmt(Math.max(0,totalIncome*KWDsr.line/100-totalDebt))+'/mo'],
+      ]),
+      ...((net>0 && !onTakeHome)?[['DSR on take-home pay',(totalDebt/net*100).toFixed(1)+'%']]:[] ),
     ];
     rows.forEach(([l,v],i)=>{
       doc.setFontSize(7.5); doc.setFont('helvetica','normal'); doc.setTextColor(...SLATE);
@@ -1107,6 +1107,17 @@ KW.reveal('.card');
         const _min = _cur ? Number(_cur.expenses?.debt_min || 0) : 0;
         if (_min > 0) { _seedDebt = _min; _seedSrc = 'from your budget'; }
       } catch (e) { console.warn('DTI: budget debt_min lookup failed:', e); }
+      // Loans repaid straight off the salary. The budget's debt_min never
+      // holds them (they never reach the member's account), but
+      // profiles.monthly_debt does: budget_planner writes it as debt_min +
+      // payslip_loan_deductions. Seeding debt_min alone made this page's total
+      // smaller than monthly_debt, so the first Calculate offered to "update"
+      // monthly_debt down to debt_min, and a yes erased the salary-deducted
+      // loans from every report that reads it (4 Oct 2026). They are seeded
+      // as their own row instead, so the total is the same figure.
+      // monthly_debt already includes them, so that fallback adds nothing.
+      let _seedPayslip = 0;
+      if (_seedDebt > 0) _seedPayslip = Number(KWProfile.get('payslip_loan_deductions') || 0);
       if (!_seedDebt) _seedDebt = Number(KWProfile.get('monthly_debt') || 0);
 
       if (_seedDebt > 0 && !debts.length) {
@@ -1115,6 +1126,14 @@ KW.reveal('.card');
           type: 'other',
           name: `Minimum debt payments (${_seedSrc})`,
           amount: _seedDebt,
+          balance: 0,
+          isHousing: false,
+        });
+        if (_seedPayslip > 0) debts.push({
+          id: nextId++,
+          type: 'other',
+          name: 'Loan repayments deducted from your salary (from your payslip)',
+          amount: _seedPayslip,
           balance: 0,
           isHousing: false,
         });

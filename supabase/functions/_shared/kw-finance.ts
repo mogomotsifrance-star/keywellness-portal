@@ -15,21 +15,53 @@
 //   - PAYE: calcAnnualTax() / calcMonthlyPAYE() (annualised-earnings method)
 //   - Total monthly income: net salary + spouse + rentals + business + dividends
 //   - "Live" liability filter: panelReport()'s liabData test
-//   - Lending norm: kwLendingNorm(), the manageable band's ceiling
+//   - Wellbeing benchmark: kwLendingNorm() (js/dsr-bands.js benchmark)
+//   - DSR: monthly debt repayments ÷ the client's OWN gross income (gross
+//     salary + their own business, rental and dividend income; never spouse)
 // If advisor.html changes one of those, change it here in the same commit.
 // ============================================================
 
-export const DSR_GREEN_MAX = 35;          // ≤ 35% → GREEN
-export const DSR_AMBER_MAX = 45;          // ≤ 45% → AMBER, above → RED
+// DSR thresholds, decided 4 Oct 2026. They mirror threshold_config
+// 'indicator.dsr' and js/dsr-bands.js; change all three together.
+//   GREEN  below DSR_GREEN_MAX                  (below the 40% wellbeing benchmark)
+//   AMBER  DSR_GREEN_MAX up to below DSR_AMBER_MAX
+//   RED    DSR_AMBER_MAX and above              (the 60% over-indebtedness line)
+// Both bounds are EXCLUSIVE upper bounds, as in kw_dti_band(): exactly 40
+// is AMBER and exactly 60 is RED. The names are kept from the 35/45 era so
+// nothing that imports them has to change; the comparisons changed with them.
+export const DSR_BENCHMARK_PCT = 40;
+export const DSR_STRAINED_FROM_PCT = 50;
+export const DSR_OVER_INDEBTED_PCT = 60;
+export const DSR_GREEN_MAX = DSR_BENCHMARK_PCT;
+export const DSR_AMBER_MAX = DSR_OVER_INDEBTED_PCT;
 export const DISPOSABLE_FLOOR_PCT = 10;   // disposable after < 10% of income → RED
 export const HIGH_COST_RATE_PA = 20;      // ≥ 20% p.a. equivalent → high-cost
 export const DEFAULT_TERM_MONTHS = 24;
 export const REPEATED_BORROWING_COUNT = 3; // ≥ 3 informal lenders → HR-letter hold default on
-// The lending norm quoted to clients — the ceiling of the "manageable" DTI
-// band. advisor.html reads it from threshold_config (kwLendingNorm()); the
-// Edge Function does the same and passes it in, and this is the fallback
-// when the config cannot be read. Keep equal to indicator.dti.bands[manageable].max.
-export const LENDING_NORM_PCT = 35;
+// The norm advice is measured against: the Key Wellness wellbeing benchmark.
+// advisor.html reads it from threshold_config 'indicator.dsr' ->> 'benchmark'
+// (kwLendingNorm()); the Edge Function does the same and passes it in, and
+// this is the fallback when the config cannot be read. It is NOT the top of
+// the "manageable" band any more (that is 50).
+export const LENDING_NORM_PCT = DSR_BENCHMARK_PCT;
+
+// The DSR band for a percentage, same answer as kw_dti_band() in SQL.
+export type DsrBand = "healthy" | "manageable" | "strained" | "over_indebted";
+export function dsrBand(pct: number | null | undefined): DsrBand | null {
+  if (pct == null || !isFinite(Number(pct))) return null;
+  const p = Number(pct);
+  return p < DSR_BENCHMARK_PCT ? "healthy" : p < DSR_STRAINED_FROM_PCT ? "manageable" : p < DSR_OVER_INDEBTED_PCT ? "strained" : "over_indebted";
+}
+export function dsrTier(pct: number | null | undefined): Tier | null {
+  if (pct == null || !isFinite(Number(pct))) return null;
+  const p = Number(pct);
+  return p >= DSR_AMBER_MAX ? "RED" : p >= DSR_GREEN_MAX ? "AMBER" : "GREEN";
+}
+
+// Hollard advance programme (decided 4 Oct 2026): the advance is capped at
+// ADVANCE_SALARY_MULTIPLE × gross monthly salary, repaid over
+// DEFAULT_TERM_MONTHS at 0% interest.
+export const ADVANCE_SALARY_MULTIPLE = 4;
 
 // Household-name Botswana lenders. Used ONLY to pre-fill the advisor's
 // classification screen; the advisor's confirmed classification is what
@@ -179,6 +211,10 @@ export interface IncomeView {
   gross_salary: number; paye: number; other_deductions: number; net_salary: number;
   spouse_income: number; rental_income: number; business_income: number; dividends: number;
   total_monthly_income: number;
+  // The DSR denominator (decided 4 Oct 2026): the client's own gross income,
+  // gross salary + their own business, rental and dividend income. Spouse
+  // income is not theirs to repay from. Same as advisor.html calcTotals().
+  dsr_income: number;
 }
 export function totalIncome(a: Assessment): IncomeView {
   const income = a.income || {};
@@ -192,6 +228,7 @@ export function totalIncome(a: Assessment): IncomeView {
     gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net),
     spouse_income: spouse, rental_income: rentals, business_income: business, dividends,
     total_monthly_income: round2(net + spouse + rentals + business + dividends),
+    dsr_income: round2(gross + rentals + business + dividends),
   };
 }
 

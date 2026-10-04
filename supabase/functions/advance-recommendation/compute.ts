@@ -13,8 +13,26 @@
 // Mirrors advisor.html exactly where the two overlap:
 //   - PAYE: calcAnnualTax() / calcMonthlyPAYE() (annualised-earnings method)
 //   - Total monthly income: net salary + spouse + rentals + business + dividends
+//     (disposable income and the budget check use this: it is the cash)
+//   - DSR: debt repayments ÷ the client's OWN gross income (4 Oct 2026):
+//     gross salary + their own business, rental and dividend income, never spouse
 //   - "Live" liability filter: panelReport()'s liabData test
 // If advisor.html changes one of those, change it here in the same commit.
+//
+// THE ADVANCE (Hollard programme, decided 4 Oct 2026)
+//   amount      = the lower of
+//                   the debt-based amount: the captured balances of every
+//                   debt the advisor confirmed as informal / high-cost, and
+//                   the cap: ADVANCE_SALARY_MULTIPLE (4) × gross monthly salary
+//   term        = DEFAULT_TERM_MONTHS (24), fixed by the programme
+//   instalment  = amount ÷ 24, 0% interest
+//   When the cap binds, the advance settles whole debts in order of cost
+//   (highest annual-equivalent rate first, then largest balance) while they
+//   fit; whatever is left of the cap is applied towards the next debt, whose
+//   instalment is assumed UNCHANGED in the DSR after, because nobody has
+//   agreed a new one. DSR after = (repayments now − instalments of the debts
+//   fully settled + advance instalment) ÷ own gross income. The CAP stays on
+//   gross salary alone: that is the programme's rule.
 // ============================================================
 
 
@@ -22,13 +40,14 @@
 // Re-exported so tests, report.ts and index.ts keep importing from here.
 import {
   DSR_GREEN_MAX, DSR_AMBER_MAX, DISPOSABLE_FLOOR_PCT, HIGH_COST_RATE_PA,
-  DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT,
+  DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT, ADVANCE_SALARY_MULTIPLE,
   pf, isBlank, round2, fmtPct, fmtP, calcMonthlyPAYE, parseRate, liveLiabilities, suggestClassification,
 } from "../_shared/kw-finance.ts";
 import type { Assessment, Classification, RatePeriod, RawLiability, Tier } from "../_shared/kw-finance.ts";
 export {
   DSR_GREEN_MAX, DSR_AMBER_MAX, DISPOSABLE_FLOOR_PCT, HIGH_COST_RATE_PA,
-  DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT, LENDING_NORM_PCT,
+  DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT, LENDING_NORM_PCT, ADVANCE_SALARY_MULTIPLE,
+  DSR_BENCHMARK_PCT, DSR_OVER_INDEBTED_PCT, dsrBand, dsrTier,
   pf, round2, fmtP, fmtPct, calcAnnualTax, calcMonthlyPAYE, parseRate, liveLiabilities, suggestClassification,
 } from "../_shared/kw-finance.ts";
 export type { Assessment, Classification, RatePeriod, RawLiability, Tier } from "../_shared/kw-finance.ts";
@@ -67,7 +86,7 @@ export interface LiabilityView {
 export interface Computed {
   employee: { name: string; employer: string; age: string; marital_status: string; dependants: number };
   income: {
-    gross_salary: number; paye: number; other_deductions: number; net_salary: number;
+    gross_salary: number; paye: number; other_deductions: number; net_salary: number; dsr_income: number;
     spouse_income: number; rental_income: number; business_income: number; dividends: number;
     total_monthly_income: number;
   };
@@ -75,7 +94,13 @@ export interface Computed {
   term_months: number;
   before: { debt_service: number; dsr: number | null; disposable: number | null };
   after:  { debt_service: number; dsr: number | null; disposable: number | null } | null;
-  advance: { amount: number; instalment: number; instalment_pct_income: number | null; settles: number[] } | null;
+  advance: {
+    amount: number; instalment: number; instalment_pct_income: number | null; settles: number[];
+    debt_based_amount: number;       // what the confirmed informal balances add up to
+    cap: number;                     // ADVANCE_SALARY_MULTIPLE × gross monthly salary
+    capped: boolean;                 // true when the cap, not the debts, set the amount
+    partial: { index: number; applied: number } | null;  // cap remainder applied to one more debt
+  } | null;
   dsr_change: { direction: "improved" | "worsened" | "unchanged"; delta_points: number } | null;
   budget: { captured: boolean; expenses: number | null; shortfall: boolean | null };
   informal_count: number;
@@ -94,7 +119,10 @@ export interface Computed {
 export function compute(a: Assessment, prep: Prep): Computed {
   const personal = a.personal || {};
   const income = a.income || {};
-  const term = Math.max(1, Math.round(Number(prep.term_months) || DEFAULT_TERM_MONTHS));
+  // The programme fixes the term at 24 months. prep.term_months is ignored
+  // (it was advisor-editable before 4 Oct 2026); the stored input still
+  // carries whatever was sent, so an old report can be read back.
+  const term = DEFAULT_TERM_MONTHS;
 
   // Income — identical to calcTotals()
   const gross = pf(income.monthlySalary);
@@ -105,8 +133,12 @@ export function compute(a: Assessment, prep: Prep): Computed {
         business = pf(income.businessIncome), dividends = pf(income.dividends);
   const totalIncome = net + spouse + rentals + business + dividends;
 
+  // The DSR denominator: own gross income (see the header).
+  const dsrBase = gross + rentals + business + dividends;
   const gaps = new Set<string>();
-  if (gross <= 0) gaps.add("Gross salary not captured — DSR cannot be computed");
+  if (gross <= 0) gaps.add(dsrBase > 0
+    ? "Gross salary not captured — the advance cap cannot be computed"
+    : "Gross salary not captured — DSR and the advance cap cannot be computed");
 
   // Liabilities
   const live = liveLiabilities(a);
@@ -146,7 +178,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
 
   // Before
   const debtServiceBefore = round2(views.reduce((s, v) => s + v.instalment, 0));
-  const dsrBefore = totalIncome > 0 ? round2(debtServiceBefore / totalIncome * 100) : null;
+  const dsrBefore = dsrBase > 0 ? round2(debtServiceBefore / dsrBase * 100) : null;
   const dispBefore = totalIncome > 0 ? round2(totalIncome - debtServiceBefore) : null;
 
   // Budget
@@ -163,14 +195,35 @@ export function compute(a: Assessment, prep: Prep): Computed {
   const hasMonthly = informal.some((v) => v.rate_period === "monthly");
 
   let after: Computed["after"] = null, advance: Computed["advance"] = null, change: Computed["dsr_change"] = null;
-  if (informalBalance > 0 && totalIncome > 0) {
-    const instalment = round2(informalBalance / term);
-    const replaced = round2(settleable.reduce((s, v) => s + v.instalment, 0));
+  if (informalBalance > 0 && gross > 0 && totalIncome > 0) {
+    const cap = round2(gross * ADVANCE_SALARY_MULTIPLE);
+    const amount = round2(Math.min(informalBalance, cap));
+    const capped = informalBalance > cap;
+    // Which debts the advance settles in full. Uncapped: all of them. Capped:
+    // the most expensive first, while they fit.
+    let settled = settleable;
+    let partial: { index: number; applied: number } | null = null;
+    if (capped) {
+      const order = settleable.slice().sort((x, y) =>
+        ((y.rate_pa_equivalent ?? -1) - (x.rate_pa_equivalent ?? -1)) || ((y.balance as number) - (x.balance as number)));
+      settled = []; let left = amount;
+      for (const v of order) {
+        if ((v.balance as number) <= left + 0.005) { settled.push(v); left = round2(left - (v.balance as number)); }
+      }
+      if (left > 0.005) {
+        const next = order.find((v) => !settled.includes(v));
+        if (next) partial = { index: next.index, applied: round2(left) };
+      }
+    }
+    const instalment = round2(amount / term);
+    const replaced = round2(settled.reduce((s, v) => s + v.instalment, 0));
     const debtServiceAfter = round2(debtServiceBefore - replaced + instalment);
-    const dsrAfter = round2(debtServiceAfter / totalIncome * 100);
-    settleable.forEach((v) => { v.settled_by_advance = true; });
+    const dsrAfter = round2(debtServiceAfter / dsrBase * 100);
+    settled.forEach((v) => { v.settled_by_advance = true; });
+    if (capped) gaps.add(`The confirmed informal balances (${fmtP(informalBalance)}) exceed the advance cap of ${ADVANCE_SALARY_MULTIPLE} × gross salary (${fmtP(cap)}); part of the informal debt stays outstanding`);
     after = { debt_service: debtServiceAfter, dsr: dsrAfter, disposable: round2(totalIncome - debtServiceAfter) };
-    advance = { amount: informalBalance, instalment, instalment_pct_income: round2(instalment / totalIncome * 100), settles: settleable.map((v) => v.index) };
+    advance = { amount, instalment, instalment_pct_income: round2(instalment / dsrBase * 100), settles: settled.map((v) => v.index),
+                debt_based_amount: informalBalance, cap, capped, partial };
     const delta = round2(dsrAfter - (dsrBefore as number));
     change = { direction: delta > 0.05 ? "worsened" : delta < -0.05 ? "improved" : "unchanged", delta_points: delta };
   }
@@ -179,28 +232,35 @@ export function compute(a: Assessment, prep: Prep): Computed {
   let tier: Tier; let decision: string; const reasons: string[] = [];
   if (!advance || !after) {
     tier = "RED";
-    if (totalIncome <= 0) { decision = "Decline – Insufficient Data"; reasons.push("Income is not captured, so affordability cannot be assessed."); }
+    if (gross <= 0) { decision = "Decline – Insufficient Data"; reasons.push(dsrBase > 0
+      ? "Gross salary is not captured, so the advance cap (4 × gross salary) cannot be worked out."
+      : "Gross salary is not captured, so the DSR and the advance cap cannot be worked out."); }
+    else if (totalIncome <= 0) { decision = "Decline – Insufficient Data"; reasons.push("Income is not captured, so affordability cannot be assessed."); }
     else if (informal.length && settleable.length === 0) { decision = "Decline – Insufficient Data"; reasons.push("Informal debts are listed but no balances are captured, so the advance cannot be sized."); }
-    else if (dsrBefore != null && dsrBefore > DSR_AMBER_MAX) { decision = "Decline – Refer to Debt Restructuring"; reasons.push(`No informal or high-cost debt to consolidate, and the current DSR of ${fmtPct(dsrBefore)} is already above ${DSR_AMBER_MAX}%.`); }
+    else if (dsrBefore != null && dsrBefore >= DSR_AMBER_MAX) { decision = "Decline – Refer to Debt Restructuring"; reasons.push(`No informal or high-cost debt to consolidate, and the current DSR of ${fmtPct(dsrBefore)} is already at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`); }
     else { decision = "Decline – No Consolidation Opportunity"; reasons.push("No informal or high-cost debt is captured, so an advance would add a repayment without removing one."); }
   } else {
     const dsrA = after.dsr as number, dispA = after.disposable as number;
     const lowDisp = dispA < totalIncome * DISPOSABLE_FLOOR_PCT / 100;
-    if (dsrA > DSR_AMBER_MAX || lowDisp || shortfall === true) {
+    // GREEN below the benchmark, AMBER from the benchmark up to the line,
+    // RED at or past the line (exactly 40 is AMBER, exactly 60 is RED).
+    const overLine = dsrA >= DSR_AMBER_MAX;
+    if (overLine || lowDisp || shortfall === true) {
       tier = "RED";
-      if (dsrA > DSR_AMBER_MAX) reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, above the ${DSR_AMBER_MAX}% ceiling.`);
+      if (overLine) reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`);
       if (lowDisp) reasons.push(`Disposable income after the advance would be ${fmtP(dispA)}, below ${DISPOSABLE_FLOOR_PCT}% of monthly income.`);
       if (shortfall === true) reasons.push(`The captured household budget (${fmtP(expenses)}) already exceeds monthly income.`);
-      decision = (dsrA > DSR_AMBER_MAX && change && change.direction !== "improved")
+      decision = (overLine && change && change.direction !== "improved")
         ? "Decline – Refer to Debt Restructuring"
         : "Proceed Only Under Prerequisites";
-    } else if (dsrA > DSR_GREEN_MAX) {
+    } else if (dsrA >= DSR_GREEN_MAX) {
       tier = "AMBER"; decision = "Proceed with Conditional Approval";
-      reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, between ${DSR_GREEN_MAX}% and ${DSR_AMBER_MAX}%.`);
+      reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}: at or above the ${DSR_GREEN_MAX}% wellbeing benchmark, below the ${DSR_AMBER_MAX}% over-indebtedness line.`);
     } else {
       tier = "GREEN"; decision = "Proceed with Approval";
-      reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, at or below ${DSR_GREEN_MAX}%.`);
+      reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, below the ${DSR_GREEN_MAX}% wellbeing benchmark.`);
     }
+    if (advance!.capped) reasons.push(`The advance is capped at ${ADVANCE_SALARY_MULTIPLE} × gross salary (${fmtP(advance!.cap)}), below the ${fmtP(advance!.debt_based_amount)} of informal balances.`);
     if (change?.direction === "worsened") reasons.push(`DSR rises by ${change.delta_points.toFixed(2)} points because informal debts that carried no monthly instalment become a real cash obligation.`);
     if (change?.direction === "improved") reasons.push(`DSR falls by ${Math.abs(change.delta_points).toFixed(2)} points because a serviced high-cost instalment is replaced by a smaller one.`);
   }
@@ -244,7 +304,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
       marital_status: marital,
       dependants: kids,
     },
-    income: { gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net),
+    income: { gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net), dsr_income: round2(dsrBase),
               spouse_income: spouse, rental_income: rentals, business_income: business, dividends, total_monthly_income: round2(totalIncome) },
     liabilities: views,
     term_months: term,

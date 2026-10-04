@@ -117,10 +117,10 @@ function stub(page) {
           if (name !== 'debt-rehab-plan') return { data: null, error: { message: 'unknown function' } };
           if (window.__fnFail) return { data: null, error: { message: 'boom', context: { json: async () => ({ ok:false, message: 'Today\'s generation allowance for your account is used up. Try again tomorrow.' }) } } };
           const a = OLORATO.assessment;
-          const prep = { ...(body.prep || {}), plan_date: '2026-09-03', lending_norm_pct: 35 };
+          const prep = { ...(body.prep || {}), plan_date: '2026-09-03', lending_norm_pct: 40 };   // indicator.dsr benchmark (4 Oct 2026)
           const notes = [a.notes.debt, a.notes.general];
           const computed = __DRP.computeRehab(a, prep, { rehab_context: AR_CTX, advisor_notes: notes });
-          const suggestions = __DRP.liveLiabilities(a).map(({ index, raw }) => ({ index, item: raw.item, institution: raw.institution, ...__DRP.suggestAction(raw, computed.income.total_monthly_income, 35) }));
+          const suggestions = __DRP.liveLiabilities(a).map(({ index, raw }) => ({ index, item: raw.item, institution: raw.institution, ...__DRP.suggestAction(raw, computed.income.dsr_income, 40) }));
           const levers = computed.levers.assets.map(l => ({ asset_index: l.asset_index, name: l.name, value: l.value, on: l.on }));
           if (body.mode === 'preview') return { data: { ok: true, mode: 'preview', computed, suggestions, levers, consultant: 'France Mogomotsi', rehab_context: AR_CTX }, error: null };
           const narrative = __DRP.fallbackNarrative(computed);
@@ -174,12 +174,12 @@ function stub(page) {
   check('4  actions pre-filled: FNB Renegotiate, motshelo + mother Consolidate',
     await page.evaluate(() => Array.from(document.querySelectorAll('.drp-prep .ar-seg button.on')).map(b => b.className.split(' ')[0]).join(',')) === 'RENEGOTIATE,CONSOLIDATE,CONSOLIDATE');
   const live = await page.evaluate(() => document.querySelector('.ar-live').innerText);
-  check('5  live figures match the worked example: DSR 44.72%, Phase 1 44.72% – 52.51%, Phase 2 35.00% – 42.79%, shortfall headline',
-    /44\.72%/.test(live) && /44\.72% – 52\.51%/.test(live) && /35\.00% – 42\.79%/.test(live) && /shortfall P 3,550\.00/.test(live) && /9,050\.00/.test(live), live.replace(/\s+/g,' '));
+  check('5  live figures match the worked example: DSR 44.72%, Phase 1 44.72% – 52.51%, Phase 2 40.00% – 47.79%, shortfall headline',
+    /44\.72%/.test(live) && /44\.72% – 52\.51%/.test(live) && /40\.00% – 47\.79%/.test(live) && /shortfall P 3,550\.00/.test(live) && /9,050\.00/.test(live), live.replace(/\s+/g,' '));
   check('6  the AUDI is listed as an asset lever and ticked by default',
     await page.evaluate(() => { const li = document.querySelector('.drp-levers li'); return !!li && /AUDI A3/.test(li.innerText) && li.querySelector('input').checked; }));
-  check('7  FNB (rate blank) asks for a remaining term because it cannot be derived; the outcome column shows the P 4,305.00 cap',
-    await page.evaluate(() => { const tr = document.querySelector('.drp-prep tbody tr'); return /Remaining term/.test(tr.innerText) && /4,305\.00/.test(tr.innerText); }));
+  check('7  FNB (rate blank) asks for a remaining term because it cannot be derived; the outcome column shows the P 4,920.00 cap',
+    await page.evaluate(() => { const tr = document.querySelector('.drp-prep tbody tr'); return /Remaining term/.test(tr.innerText) && /4,920\.00/.test(tr.innerText); }));
   await shot(page, '1-prepare');
 
   await page.evaluate(() => drpPrepSet(1, 'action', 'RETAIN'));
@@ -219,16 +219,16 @@ function stub(page) {
       && doc.indexOf('Next Scheduled Review') < doc.indexOf('Consultant Notes'));
   check('13 enrollment: Olorato Maliko, Sedimosa, France Mogomotsi, trigger = Debt Rehab on AR v1, tier AMBER — DSR 44.72%',
     /Olorato Maliko/.test(doc) && /Sedimosa/.test(doc) && /France Mogomotsi/.test(doc) && /Advance Recommendation v1/.test(doc) && /AMBER — DSR 44\.72%/.test(doc));
-  check('14 debt table: FNB RENEGOTIATE with the P 4,305.00 cap; motshelo + mother CONSOLIDATE settled by the AR v1 advance',
+  check('14 debt table: FNB RENEGOTIATE with the P 4,920.00 cap; motshelo + mother CONSOLIDATE settled by the AR v1 advance',
     await page.evaluate(() => { const t = document.querySelectorAll('#drp-doc .ar-tbl')[0].innerText;
-      return /RENEGOTIATE/.test(t) && /Target ≤ P 4,305\.00/.test(t) && (t.match(/CONSOLIDATE/g)||[]).length === 2 && (t.match(/AR v1, 28 Aug 2026/g)||[]).length === 2; }));
+      return /RENEGOTIATE/.test(t) && /Target ≤ P 4,920\.00/.test(t) && (t.match(/CONSOLIDATE/g)||[]).length === 2 && (t.match(/AR v1, 28 Aug 2026/g)||[]).length === 2; }));
   check('15 budget: four groups, shortfall P 3,550.00 as the urgent line, all-in gap P 9,050.00, cuts 1,250 / 2,300',
     await page.evaluate(() => { const t = document.querySelectorAll('#drp-doc .ar-tbl')[1].innerText; const sec = document.querySelectorAll('#drp-doc .ar-sec')[4].innerText;
       return t.split('\n').filter(l => /^(Needs|Wants|Savings|Other)/.test(l)).length === 4 && /P 1,250\.00/.test(t) && /P 2,300\.00/.test(t)
         && /Shortfall: P 15,850\.00 budgeted against P 12,300\.00 income = P 3,550\.00 a month — the most urgent item/.test(sec) && /P 9,050\.00/.test(sec); }));
-  check('16 three phases with computed bands and a Phase 3 target of 35.00%',
+  check('16 three phases with computed bands and a Phase 3 target of 40.00%',
     await page.evaluate(() => { const ph = Array.from(document.querySelectorAll('.drp-phase .band')).map(x => x.innerText);
-      return ph.length === 3 && /44\.72% – 52\.51%/.test(ph[0]) && /35\.00% – 42\.79%/.test(ph[1]) && /Target ≤ 35\.00%/.test(ph[2]); }));
+      return ph.length === 3 && /44\.72% – 52\.51%/.test(ph[0]) && /40\.00% – 47\.79%/.test(ph[1]) && /Target ≤ 40\.00%/.test(ph[2]); }));
   check('17 checkable actions: Phase 1 lists the AUDI sale and the FNB conversation; the lever list has the AUDI; five triggers',
     await page.evaluate(() => { const p1 = document.querySelectorAll('.drp-phase')[0].innerText; const lists = document.querySelectorAll('#drp-doc .ar-cond');
       const triggers = document.querySelectorAll('#drp-doc .ar-sec')[7].querySelectorAll('.ar-cond li').length;

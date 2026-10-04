@@ -38,23 +38,27 @@ const byInst = (c, s) => c.liabilities.find(l => l.institution === s);
 console.log("Olorato (spec §7, corrected)");
 const live = liveLiabilities(OLORATO);
 ok("blank template rows dropped → 3 live", () => assert.equal(live.length, 3));
-const sugg = live.map(l => suggestAction(l.raw, 12300, 35));
+const sugg = live.map(l => suggestAction(l.raw, 12300, 40));
 ok("suggested actions: FNB RENEGOTIATE, motshelo + mother CONSOLIDATE", () =>
   assert.deepEqual(sugg.map(s => s.action), ["RENEGOTIATE", "CONSOLIDATE", "CONSOLIDATE"]));
 ok("bare '30' / '25' on the live 'Motshelo' and 'Motshelo Mother' rows read as per month", () => {
-  const live30 = suggestAction({item:"Other", institution:"Motshelo", loanAmount:"16000", interestRate:"30", balance:"16000", monthlyInstalment:"0"}, 12300, 35);
-  const live25 = suggestAction({item:"Other", institution:"Motshelo Mother", loanAmount:"7000", interestRate:"25", balance:"7000", monthlyInstalment:"0"}, 12300, 35);
+  const live30 = suggestAction({item:"Other", institution:"Motshelo", loanAmount:"16000", interestRate:"30", balance:"16000", monthlyInstalment:"0"}, 12300, 40);
+  const live25 = suggestAction({item:"Other", institution:"Motshelo Mother", loanAmount:"7000", interestRate:"25", balance:"7000", monthlyInstalment:"0"}, 12300, 40);
   assert.equal(live30.rate_period, "monthly"); assert.equal(live25.rate_period, "monthly"); assert.equal(live30.action, "CONSOLIDATE");
-  assert.equal(suggestAction({item:"Personal Loan", institution:"FNB", loanAmount:"250000", interestRate:"14", balance:"250000", monthlyInstalment:"5500"}, 12300, 35).rate_period, "annual");
+  assert.equal(suggestAction({item:"Personal Loan", institution:"FNB", loanAmount:"250000", interestRate:"14", balance:"250000", monthlyInstalment:"5500"}, 12300, 40).rate_period, "annual");
 });
 const c = computeRehab(OLORATO, { ...PLAN, liabilities: live.map((l,i)=>({ index:i, action:sugg[i].action, classification:sugg[i].classification, rate_period:sugg[i].rate_period })) }, { rehab_context: AR_CTX, advisor_notes: NOTES });
 ok("income P 12,300.00 · debt service P 5,500.00 · DSR 44.72% · strained", () => {
   assert.equal(c.income.total_monthly_income, 12300); assert.equal(c.debt_service, 5500); assert.equal(c.dsr, 44.72); assert.equal(c.dsr_status, "strained"); assert.equal(c.tier, "AMBER");
 });
-ok("FNB: RENEGOTIATE, cap P 4,305.00, rate blank → no amortised figure, rate gap", () => {
+// 4 Oct 2026: the norm is the 40% wellbeing benchmark (was 35%), on the
+// client's own gross income: P 4,000 salary + P 8,300 own business = P 12,300,
+// the same figure as before for Olorato because her salary is below the tax
+// threshold. Cap = 40% × 12,300 = P 4,920.00.
+ok("FNB: RENEGOTIATE, cap P 4,920.00, rate blank → no amortised figure, rate gap", () => {
   const f = byInst(c, "FNB"); assert.equal(f.action, "RENEGOTIATE"); assert.equal(f.instalment_pct_income, 44.72);
-  assert.equal(f.renegotiation.cap, 4305); assert.equal(f.renegotiation.amortised, null); assert.equal(f.renegotiation.band_high, 4305);
-  assert.ok(f.gaps.some(g => /Interest rate not captured/.test(g))); assert.match(f.outcome, /Target ≤ P 4,305\.00/);
+  assert.equal(f.renegotiation.cap, 4920); assert.equal(f.renegotiation.amortised, null); assert.equal(f.renegotiation.band_high, 4920);
+  assert.ok(f.gaps.some(g => /Interest rate not captured/.test(g))); assert.match(f.outcome, /Target ≤ P 4,920\.00/);
 });
 ok("motshelo + mother: CONSOLIDATE, monthly rates, P 23,000.00 settled by the AR v1 advance of 28 Aug 2026", () => {
   assert.equal(byInst(c, "Motshelo").rate_pa_equivalent, 360); assert.equal(byInst(c, "Mother").rate_period, "monthly");
@@ -75,10 +79,10 @@ ok("levers: AUDI on, covers the informal balance 4.35×; savings not captured is
   assert.equal(c.levers.income_concentration.length, 3);
 });
 ok("net worth −P 133,000.00 (assets 100,000 − liabilities 233,000, savings 0)", () => assert.equal(c.net_worth.net, -133000));
-ok("Phase 1 band 44.72% – 52.51% · Phase 2 band 35.00% – 42.79% · Phase 3 target 35%", () => {
+ok("Phase 1 band 44.72% – 52.51% · Phase 2 band 40.00% – 47.79% · Phase 3 target 40%", () => {
   assert.equal(c.phases[0].dsr_low, 44.72); assert.equal(c.phases[0].dsr_high, 52.51);
-  assert.equal(c.phases[1].dsr_low, 35); assert.equal(c.phases[1].dsr_high, 42.79); assert.equal(c.phases[1].surplus_after, 0);
-  assert.equal(c.phases[2].dsr_high, 35); assert.equal(c.exit.gap_points_from_phase2, 0);
+  assert.equal(c.phases[1].dsr_low, 40); assert.equal(c.phases[1].dsr_high, 47.79); assert.equal(c.phases[1].surplus_after, 0);
+  assert.equal(c.phases[2].dsr_high, 40); assert.equal(c.exit.gap_points_from_phase2, 0);
 });
 ok("no REFER · headline 1 renegotiate · 2 consolidate · 0 retain; shortfall P 3,550.00", () => {
   assert.equal(c.refer.on, false); assert.equal(c.headline, "1 renegotiate · 2 consolidate · 0 retain; shortfall P 3,550.00");
@@ -157,8 +161,14 @@ ok("'prime plus two' → Not captured, rate gap, action still RENEGOTIATE on the
 });
 
 console.log("Edges of the RENEGOTIATE line and the advisor's override");
-const E = { ...OLORATO, liabilities:[ { ...OLORATO.liabilities[0], monthlyInstalment:"4305" } ] };
-ok("a formal loan at exactly 35.00% of income is RETAIN (strict >)", () => assert.equal(computeRehab(E, PLAN, {}).liabilities[0].action, "RETAIN"));
+// The line is the 40% benchmark and, as in kw_dti_band(), exactly 40 is
+// ABOVE it (manageable, not healthy): 4,920 / 12,300 renegotiates, 4,919 does not.
+const E = { ...OLORATO, liabilities:[ { ...OLORATO.liabilities[0], monthlyInstalment:"4920" } ] };
+const E2 = { ...OLORATO, liabilities:[ { ...OLORATO.liabilities[0], monthlyInstalment:"4919" } ] };
+ok("a formal loan at exactly 40.00% of own gross income is RENEGOTIATE; one rand under is RETAIN", () => {
+  assert.equal(computeRehab(E, PLAN, {}).liabilities[0].action, "RENEGOTIATE");
+  assert.equal(computeRehab(E2, PLAN, {}).liabilities[0].action, "RETAIN");
+});
 const oc = computeRehab(OLORATO, { ...PLAN, liabilities:[{index:1, action:"RETAIN"}] }, { rehab_context: AR_CTX });
 ok("a CONSOLIDATE row the advisor forces to RETAIN is not sized", () => {
   assert.equal(byInst(oc, "Motshelo").action, "RETAIN"); assert.equal(oc.consolidation.balance, 7000);

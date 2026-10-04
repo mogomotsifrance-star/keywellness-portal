@@ -111,13 +111,19 @@ async function askModel(apiKey: string, c: Computed, prep: Prep): Promise<{ narr
     figures: {
       employee: { employer: c.employee.employer, age: c.employee.age, marital_status: c.employee.marital_status, dependants: c.employee.dependants },
       total_monthly_income: fmtP(c.income.total_monthly_income),
+      // The DSR is a share of THIS figure, not of total_monthly_income
+      // (decided 4 Oct 2026): gross salary + the employee's own business,
+      // rental and dividend income. The instalment share is of it too.
+      dsr_income_own_gross: fmtP(c.income.dsr_income),
+      dsr_bands: "below 40% healthy (the Key Wellness wellbeing benchmark); 40 to below 60% above the benchmark; 60% and above overindebted",
       liabilities: c.liabilities.map((l) => ({
         item: l.item, institution: l.institution, classification: l.classification, rate: l.rate_text,
         balance: fmtP(l.balance), monthly_instalment: fmtP(l.instalment), settled_by_advance: l.settled_by_advance,
       })),
       before: { debt_service: fmtP(c.before.debt_service), dsr: fmtPct(c.before.dsr), disposable: fmtP(c.before.disposable) },
       after: c.after ? { debt_service: fmtP(c.after.debt_service), dsr: fmtPct(c.after.dsr), disposable: fmtP(c.after.disposable) } : null,
-      advance: c.advance ? { amount: fmtP(c.advance.amount), term_months: c.term_months, instalment: fmtP(c.advance.instalment), instalment_pct_income: fmtPct(c.advance.instalment_pct_income) } : null,
+      advance: c.advance ? { amount: fmtP(c.advance.amount), term_months: c.term_months, instalment: fmtP(c.advance.instalment), instalment_pct_of_own_gross_income: fmtPct(c.advance.instalment_pct_income),
+        cap_4x_gross_salary: fmtP(c.advance.cap), capped_by_salary_limit: c.advance.capped, informal_balances_total: fmtP(c.advance.debt_based_amount) } : null,
       dsr_change: c.dsr_change,
       household_budget: c.budget.captured ? { expenses: fmtP(c.budget.expenses), shortfall: c.budget.shortfall } : "not captured",
       data_gaps: c.gaps,
