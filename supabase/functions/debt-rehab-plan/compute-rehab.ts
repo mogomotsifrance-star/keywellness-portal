@@ -18,7 +18,7 @@
 //   CONSOLIDATE  informal / high-cost (hint list, monthly-period rate, or
 //                ≥ HIGH_COST_RATE_PA p.a. equivalent)
 //   RENEGOTIATE  formal facility whose instalment ALONE exceeds the lending
-//                norm (the 40% wellbeing benchmark) of gross monthly salary
+//                norm (the 40% wellbeing benchmark) of own gross income
 //   RETAIN       everything else, stated explicitly
 //   REFER        plan-level: DSR with every lever applied still at or above
 //                the 60% over-indebtedness line, or
@@ -204,7 +204,7 @@ export function suggestAction(raw: RawLiability, income: number, norm: number, c
   const inst = pf(raw.monthlyInstalment);
   if (cls === "informal") return { action: "CONSOLIDATE", classification: cls, rate_period: sugg.rate_period, reason: sugg.reason };
   if (income > 0 && inst / income * 100 >= norm) {
-    return { action: "RENEGOTIATE", classification: cls, rate_period: sugg.rate_period, reason: `Instalment alone is ${fmtPct(round2(inst / income * 100))} of gross salary, at or above the ${norm}% wellbeing benchmark` };
+    return { action: "RENEGOTIATE", classification: cls, rate_period: sugg.rate_period, reason: `Instalment alone is ${fmtPct(round2(inst / income * 100))} of own gross income, at or above the ${norm}% wellbeing benchmark` };
   }
   return { action: "RETAIN", classification: cls, rate_period: sugg.rate_period, reason: sugg.reason };
 }
@@ -215,10 +215,11 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   const income = totalIncome(a);
   // inc is household take-home: what the budget, surplus and cuts are
   // measured against, because that is the cash there is. DSR is measured
-  // against the client's own GROSS salary (decided 4 Oct 2026), as every
-  // other surface now does, so every DSR figure below divides by dsrBase.
+  // against the client's own GROSS income (decided 4 Oct 2026): gross salary
+  // plus their own business, rental and dividend income, never spouse
+  // income. Every DSR figure below divides by dsrBase.
   const inc = income.total_monthly_income;
-  const dsrBase = income.gross_salary;
+  const dsrBase = income.dsr_income;
   const norm = Number(prep.lending_norm_pct) > 0 ? Number(prep.lending_norm_pct) : LENDING_NORM_PCT;
   const extension = Math.max(0, Math.round(Number(prep.extension_months) || DEFAULT_EXTENSION_MONTHS));
   const planDate = (prep.plan_date || "").slice(0, 10);
@@ -227,7 +228,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   const notesText = (inputs.advisor_notes || []).join("\n").toLowerCase();
 
   const gaps = new Set<string>();
-  if (dsrBase <= 0) gaps.add("Gross salary not captured — DSR and every band cannot be computed");
+  if (dsrBase <= 0) gaps.add("Gross income not captured — DSR and every band cannot be computed");
 
   // ── Liabilities: classification → action ─────────────────────
   const live = liveLiabilities(a);

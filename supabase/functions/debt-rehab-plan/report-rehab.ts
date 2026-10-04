@@ -44,7 +44,7 @@ export function fallbackNarrative(c: RehabComputed): RehabNarrative {
   c.levers.income_concentration.slice(0, 2).forEach((s) => root.push(s + "."));
   if (c.budget.captured && c.budget.shortfall != null && c.budget.shortfall > 0) root.push(`Monthly spending exceeds income by ${fmtP(c.budget.shortfall)} before any loan instalment is counted.`);
   const debt_lines = c.liabilities.map((l) => {
-    const head = `${l.label}: ${l.rate_text === "Not captured" ? "rate not captured" : l.rate_text}, ${l.instalment > 0 ? `instalment ${fmtP(l.instalment)} (${fmtPct(l.instalment_pct_income)} of gross salary)` : "no monthly instalment"}${l.balance == null ? ", balance not captured" : `, balance ${fmtP(l.balance)}`}.`;
+    const head = `${l.label}: ${l.rate_text === "Not captured" ? "rate not captured" : l.rate_text}, ${l.instalment > 0 ? `instalment ${fmtP(l.instalment)} (${fmtPct(l.instalment_pct_income)} of own gross income)` : "no monthly instalment"}${l.balance == null ? ", balance not captured" : `, balance ${fmtP(l.balance)}`}.`;
     return `${head} ${l.action}: ${l.outcome}.`;
   });
   const budget_paragraph = !c.budget.captured
@@ -121,7 +121,7 @@ export function buildContent(c: RehabComputed, meta: RehabMeta, n: RehabNarrativ
           { label: "Monthly debt service", value: fmtP(c.debt_service) },
           { label: "Debt Service Ratio", value: fmtPct(c.dsr) },
           { label: "Disposable after debt service", value: fmtP(c.disposable) },
-          { label: "Wellbeing benchmark", value: `${c.lending_norm_pct}% of gross salary = ${fmtP(Math.round(c.income.gross_salary * c.lending_norm_pct) / 100)}` },
+          { label: "Wellbeing benchmark", value: `${c.lending_norm_pct}% of own gross income = ${fmtP(Math.round(c.income.dsr_income * c.lending_norm_pct) / 100)}` },
         ],
         net_worth_rows: [
           { label: "Assets", value: c.net_worth.assets_captured ? fmtP(c.net_worth.assets) : "Not captured" },

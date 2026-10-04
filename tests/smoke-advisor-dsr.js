@@ -107,8 +107,17 @@ function stub(page) {
       && KWDsr.band(40) === 'manageable' && KWDsr.band(60) === 'over_indebted' && KWDsr.benchmark === 40 && KWDsr.line === 60));
   check('B2.2 advisor DSR = instalments ÷ own gross salary: 6,750 / 15,000 = 45.00%, Manageable',
     await page.evaluate((id) => { const c = clients.find(x => x.id === id); const t = calcTotals(c); return t.dti === 45 && diagDebt(t).label === 'Manageable'; }, A.id));
-  check('B2.3 business income alone gives no DSR, never a 0% that reads healthy',
-    await page.evaluate((id) => calcTotals(clients.find(x => x.id === id)).dti === null, B.id));
+  // Own gross income (decided 4 Oct 2026): the client's own business income
+  // counts; spouse income does not; no income at all gives no DSR, never 0%.
+  check('B2.3 own business income counts in the DSR; spouse income does not; no income gives no DSR',
+    await page.evaluate((id) => {
+      const c = JSON.parse(JSON.stringify(clients.find(x => x.id === id)));
+      c.liabilities[0].monthlyInstalment = 5000;                   // 5,000 / 20,000 business income
+      const own = calcTotals(c).dti;
+      c.income.businessIncome = 0; c.income.spouseIncome = 20000;  // spouse income alone
+      const spouse = calcTotals(c).dti;
+      return own === 25 && spouse === null;
+    }, B.id));
   await page.evaluate((id) => { openClient(id); switchTab('liabilities'); }, A.id);
   await page.waitForTimeout(300);
   let body = await txt();

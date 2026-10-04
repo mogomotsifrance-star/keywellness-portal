@@ -57,9 +57,9 @@ export function fallbackNarrative(c: Computed): Narrative {
         : c.dsr_change.direction === "improved"
           ? `DSR falls from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)} because a serviced high-cost instalment is replaced by a smaller advance instalment. It remains ${aft.dsr! >= DSR_BENCHMARK_PCT ? "above" : "below"} the ${DSR_BENCHMARK_PCT}% wellbeing benchmark.`
           : `DSR is effectively unchanged at ${fmtPct(aft.dsr)}.`)
-    : `Current DSR is ${fmtPct(c.before.dsr)} of gross monthly salary of ${fmtP(c.income.gross_salary)}.`;
+    : `Current DSR is ${fmtPct(c.before.dsr)} of own gross monthly income of ${fmtP(c.income.dsr_income ?? c.income.gross_salary)}.`;
   const ability_paragraph = adv && aft
-    ? `The advance instalment of ${fmtP(adv.instalment)} is ${fmtPct(adv.instalment_pct_income)} of gross salary, leaving ${fmtP(aft.disposable)} after all debt service. ${c.budget.captured ? (c.budget.shortfall ? "The captured household budget already exceeds income, which is the binding constraint." : "The captured household budget fits within that amount.") : "No household budget is on file, so living costs cannot be confirmed against that figure."}`
+    ? `The advance instalment of ${fmtP(adv.instalment)} is ${fmtPct(adv.instalment_pct_income)} of own gross income, leaving ${fmtP(aft.disposable)} after all debt service. ${c.budget.captured ? (c.budget.shortfall ? "The captured household budget already exceeds income, which is the binding constraint." : "The captured household budget fits within that amount.") : "No household budget is on file, so living costs cannot be confirmed against that figure."}`
     : `Disposable income after current debt service is ${fmtP(c.before.disposable)}. ${c.budget.captured ? "" : "No household budget is on file."}`.trim();
   return {
     reasoning_intro: adv
@@ -109,7 +109,7 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
         title: adv ? "Debt Service Ratio — Before vs After" : "Debt Service Ratio — Current Position",
         rows: [
           { label: "Monthly debt service", before: fmtP(c.before.debt_service), after: aft ? fmtP(aft.debt_service) : null },
-          { label: "Gross monthly salary", before: fmtP(c.income.gross_salary), after: aft ? fmtP(c.income.gross_salary) : null },
+          { label: "Own gross monthly income", before: fmtP(c.income.dsr_income ?? c.income.gross_salary), after: aft ? fmtP(c.income.dsr_income ?? c.income.gross_salary) : null },
           { label: "Debt Service Ratio", before: fmtPct(c.before.dsr), after: aft ? fmtPct(aft.dsr) : null },
         ],
         paragraph: n.dsr_paragraph,

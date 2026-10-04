@@ -223,8 +223,8 @@ function stub(page) {
       && doc.indexOf('Consultant Recommendation') < doc.indexOf('Employee Support Plan'));
   check('11 header table: Hollard, P 36,850.00, 24 months, Salary / Incentive Advance, France Mogomotsi',
     /Hollard/.test(doc) && /P 36,850\.00/.test(doc) && /24 months/.test(doc) && /Salary \/ Incentive Advance/.test(doc) && /France Mogomotsi/.test(doc));
-  check('12 DSR table has Before and After columns with 25.18% and 23.70%, on gross monthly salary',
-    await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[0].innerText; return /before/i.test(t) && /after advance/i.test(t) && /25\.18%/.test(t) && /23\.70%/.test(t) && /Gross monthly salary/.test(t); }));
+  check('12 DSR table has Before and After columns with 25.18% and 23.70%, on own gross monthly income',
+    await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[0].innerText; return /before/i.test(t) && /after advance/i.test(t) && /25\.18%/.test(t) && /23\.70%/.test(t) && /Own gross monthly income/.test(t); }));
   check('13 debt position: Stanbic Unchanged, five Settled by advance, a New advance line, "Not captured" for blank rates',
     await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[1].innerText;
       return (t.match(/Settled by advance/g)||[]).length === 5 && /Unchanged/.test(t) && /New advance/.test(t) && (t.match(/Not captured/g)||[]).length === 2; }));

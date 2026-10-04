@@ -129,4 +129,26 @@ ok("no gross salary → Decline – Insufficient Data, no advance", () => {
   assert.equal(z.advance, null); assert.equal(z.decision, "Decline – Insufficient Data"); assert.equal(z.before.dsr, null);
 });
 
+console.log("DSR on own gross income — salary plus the client's own business / rental / dividend income (4 Oct 2026)");
+// Olorato's shape: P 4,000 salary, P 8,300 from her own business, spouse income
+// P 5,000 that is NOT hers to repay from. FNB instalment 5,500.
+const O = { personal:{ name:"O", employer:"Hollard" }, kids:[], budget:{},
+  income:{ monthlySalary:4000, otherDeductions:0, spouseIncome:5000, rentals:0, businessIncome:8300, dividends:0 },
+  liabilities:[ {item:"Personal Loan",institution:"FNB",loanAmount:"250000",interestRate:"14",balance:"210000",monthlyInstalment:"5500"},
+                {item:"Other",institution:"Motshelo",loanAmount:"16000",interestRate:"30% monthly",balance:"16000",monthlyInstalment:"0"} ] };
+const oc = compute(O, { liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:"monthly"}] });
+ok("DSR = 5,500 / (4,000 + 8,300) = 44.72%, not 137.5% on salary alone, and spouse income stays out", () => {
+  assert.equal(oc.income.dsr_income, 12300); assert.equal(oc.before.dsr, 44.72);
+});
+ok("the cap stays on gross SALARY: 4 × 4,000 = 16,000, so the 16,000 motshelo fits exactly", () => {
+  assert.equal(oc.advance.cap, 16000); assert.equal(oc.advance.amount, 16000); assert.equal(oc.advance.capped, false);
+  assert.equal(oc.after.dsr, Math.round((5500 + 16000/24) / 12300 * 10000) / 100);
+});
+const ob = compute({ ...O, income:{ ...O.income, monthlySalary:0 } }, {});
+ok("business income but no salary: a DSR exists, the advance cannot be sized, and the reason says it is the cap", () => {
+  assert.equal(ob.before.dsr, round2pct(5500, 8300)); assert.equal(ob.advance, null); assert.equal(ob.decision, "Decline – Insufficient Data");
+  assert.ok(ob.decision_reasons.some(r => /advance cap \(4 × gross salary\)/.test(r)));
+});
+function round2pct(a, b) { return Math.round(a / b * 10000) / 100; }
+
 console.log(`\n${n} checks passed`);

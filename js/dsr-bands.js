@@ -2,9 +2,12 @@
    Key Wellness — debt service ratio (DSR) bands
    The ONE browser copy of the DSR thresholds. Decided 4 Oct 2026.
 
-   DSR = total monthly debt repayments ÷ gross monthly salary × 100.
-   Where gross salary is not recorded, take-home pay is used instead and
-   the result is labelled as such (it reads higher than the true figure).
+   DSR = total monthly debt repayments ÷ gross monthly income × 100.
+   Member side: gross salary (plus other income the member gave the DTI
+   tool); where gross is not recorded, take-home pay, labelled as such (it
+   reads higher than the true figure). Advisor side: the client's own gross
+   income, i.e. gross salary plus their own business, rental and dividend
+   income, never spouse income (decided 4 Oct 2026).
 
      healthy        below 40%
      manageable     40% up to below 50%
@@ -161,7 +164,7 @@
 
   function advisorText() {
     var parts = CFG.bands.map(function (b) { return b.label + ' ' + rangeText(b.key); });
-    return 'DSR = total monthly debt repayments ÷ gross monthly salary. Bands: ' + parts.join(' · ') + '. ' +
+    return 'DSR = total monthly debt repayments ÷ the client\'s own gross monthly income (gross salary plus their own business, rental and dividend income; spouse income is not included). Bands: ' + parts.join(' · ') + '. ' +
       CFG.line + '% is the over-indebtedness line used for risk flags. ' + CFG.benchmark +
       '% is the Key Wellness wellbeing benchmark and the target to advise towards. A member between ' +
       CFG.benchmark + '% and ' + CFG.line + '% is not overindebted but should have a plan to bring DSR below ' +

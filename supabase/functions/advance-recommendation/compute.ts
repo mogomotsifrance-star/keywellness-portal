@@ -14,7 +14,8 @@
 //   - PAYE: calcAnnualTax() / calcMonthlyPAYE() (annualised-earnings method)
 //   - Total monthly income: net salary + spouse + rentals + business + dividends
 //     (disposable income and the budget check use this: it is the cash)
-//   - DSR: debt repayments ÷ the client's OWN gross salary (4 Oct 2026)
+//   - DSR: debt repayments ÷ the client's OWN gross income (4 Oct 2026):
+//     gross salary + their own business, rental and dividend income, never spouse
 //   - "Live" liability filter: panelReport()'s liabData test
 // If advisor.html changes one of those, change it here in the same commit.
 //
@@ -30,7 +31,8 @@
 //   fit; whatever is left of the cap is applied towards the next debt, whose
 //   instalment is assumed UNCHANGED in the DSR after, because nobody has
 //   agreed a new one. DSR after = (repayments now − instalments of the debts
-//   fully settled + advance instalment) ÷ gross salary.
+//   fully settled + advance instalment) ÷ own gross income. The CAP stays on
+//   gross salary alone: that is the programme's rule.
 // ============================================================
 
 
@@ -84,7 +86,7 @@ export interface LiabilityView {
 export interface Computed {
   employee: { name: string; employer: string; age: string; marital_status: string; dependants: number };
   income: {
-    gross_salary: number; paye: number; other_deductions: number; net_salary: number;
+    gross_salary: number; paye: number; other_deductions: number; net_salary: number; dsr_income: number;
     spouse_income: number; rental_income: number; business_income: number; dividends: number;
     total_monthly_income: number;
   };
@@ -131,8 +133,12 @@ export function compute(a: Assessment, prep: Prep): Computed {
         business = pf(income.businessIncome), dividends = pf(income.dividends);
   const totalIncome = net + spouse + rentals + business + dividends;
 
+  // The DSR denominator: own gross income (see the header).
+  const dsrBase = gross + rentals + business + dividends;
   const gaps = new Set<string>();
-  if (gross <= 0) gaps.add("Gross salary not captured — DSR and the advance cap cannot be computed");
+  if (gross <= 0) gaps.add(dsrBase > 0
+    ? "Gross salary not captured — the advance cap cannot be computed"
+    : "Gross salary not captured — DSR and the advance cap cannot be computed");
 
   // Liabilities
   const live = liveLiabilities(a);
@@ -172,7 +178,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
 
   // Before
   const debtServiceBefore = round2(views.reduce((s, v) => s + v.instalment, 0));
-  const dsrBefore = gross > 0 ? round2(debtServiceBefore / gross * 100) : null;
+  const dsrBefore = dsrBase > 0 ? round2(debtServiceBefore / dsrBase * 100) : null;
   const dispBefore = totalIncome > 0 ? round2(totalIncome - debtServiceBefore) : null;
 
   // Budget
@@ -212,11 +218,11 @@ export function compute(a: Assessment, prep: Prep): Computed {
     const instalment = round2(amount / term);
     const replaced = round2(settled.reduce((s, v) => s + v.instalment, 0));
     const debtServiceAfter = round2(debtServiceBefore - replaced + instalment);
-    const dsrAfter = round2(debtServiceAfter / gross * 100);
+    const dsrAfter = round2(debtServiceAfter / dsrBase * 100);
     settled.forEach((v) => { v.settled_by_advance = true; });
     if (capped) gaps.add(`The confirmed informal balances (${fmtP(informalBalance)}) exceed the advance cap of ${ADVANCE_SALARY_MULTIPLE} × gross salary (${fmtP(cap)}); part of the informal debt stays outstanding`);
     after = { debt_service: debtServiceAfter, dsr: dsrAfter, disposable: round2(totalIncome - debtServiceAfter) };
-    advance = { amount, instalment, instalment_pct_income: round2(instalment / gross * 100), settles: settled.map((v) => v.index),
+    advance = { amount, instalment, instalment_pct_income: round2(instalment / dsrBase * 100), settles: settled.map((v) => v.index),
                 debt_based_amount: informalBalance, cap, capped, partial };
     const delta = round2(dsrAfter - (dsrBefore as number));
     change = { direction: delta > 0.05 ? "worsened" : delta < -0.05 ? "improved" : "unchanged", delta_points: delta };
@@ -226,7 +232,9 @@ export function compute(a: Assessment, prep: Prep): Computed {
   let tier: Tier; let decision: string; const reasons: string[] = [];
   if (!advance || !after) {
     tier = "RED";
-    if (gross <= 0) { decision = "Decline – Insufficient Data"; reasons.push("Gross salary is not captured, so the DSR and the advance cap cannot be worked out."); }
+    if (gross <= 0) { decision = "Decline – Insufficient Data"; reasons.push(dsrBase > 0
+      ? "Gross salary is not captured, so the advance cap (4 × gross salary) cannot be worked out."
+      : "Gross salary is not captured, so the DSR and the advance cap cannot be worked out."); }
     else if (totalIncome <= 0) { decision = "Decline – Insufficient Data"; reasons.push("Income is not captured, so affordability cannot be assessed."); }
     else if (informal.length && settleable.length === 0) { decision = "Decline – Insufficient Data"; reasons.push("Informal debts are listed but no balances are captured, so the advance cannot be sized."); }
     else if (dsrBefore != null && dsrBefore >= DSR_AMBER_MAX) { decision = "Decline – Refer to Debt Restructuring"; reasons.push(`No informal or high-cost debt to consolidate, and the current DSR of ${fmtPct(dsrBefore)} is already at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`); }
@@ -296,7 +304,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
       marital_status: marital,
       dependants: kids,
     },
-    income: { gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net),
+    income: { gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net), dsr_income: round2(dsrBase),
               spouse_income: spouse, rental_income: rentals, business_income: business, dividends, total_monthly_income: round2(totalIncome) },
     liabilities: views,
     term_months: term,

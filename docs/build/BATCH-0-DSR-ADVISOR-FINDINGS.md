@@ -21,7 +21,7 @@ GO on all three automatic conditions:
 |---|---|---|
 | No liabilities table. Advisor liabilities are a JSON array in `advisor_clients.assessment`, saved by direct UPDATE from the browser | No columns to add | New JSON key `termMonths` only |
 | `institution` already exists (67 of 131 rows filled); `balance` already exists and is what the Advance Recommendation treats as the amount owed; `loanAmount` is the principal | Two of three "new" fields exist | Relabel `balance` "Outstanding balance"; keep `loanAmount` as principal |
-| Advisor DSR = instalments ÷ household take-home (net salary + spouse + rentals + business + dividends) | LD1 changes every advisor figure | Instalments ÷ client's own gross salary only |
+| Advisor DSR = instalments ÷ household take-home (net salary + spouse + rentals + business + dividends) | LD1 changes every advisor figure | Instalments ÷ client's own gross income: gross salary + their own business, rental and dividend income; spouse income out (revised 4 Oct from "salary only", after a P 4,000-salary business owner read 137.5%) |
 | 7+ DSR implementations with different bands (20/35/45, 35/50/65, 30/45/60, 35/40, 40), inclusive and exclusive 45, and "gross" labels on take-home maths | One source needed | `threshold_config` row `indicator.dsr` + `js/dsr-bands.js` |
 | `threshold_config` `indicator.dti` already drives `kw_dti_band()`; lending norm is read from `manageable.max` | New bands would move the norm to 50 | Keep `over_indebted` key, label "Overindebted", add `benchmark: 40`, `over_indebted_line: 60` |
 | HR sees DSR bands in aggregate (`org_financial_indicators()` → employer.html Debt Health), hard-coded 20/35/45 on take-home `monthly_income` | HR follows | Gross where present, else take-home; suppression unchanged |
@@ -34,18 +34,19 @@ GO on all three automatic conditions:
 ## Band movement, old method → new method (counts only)
 
 **Advisor clients (25).** Old: instalments ÷ household take-home, bands 20/35/45.
-New: instalments ÷ own gross salary, bands 40/50/60.
+New: instalments ÷ own gross income (gross salary + own business, rental and
+dividend income), bands 40/50/60.
 
 | Band | Old (all) | Old (Hollard) | New (all) | New (Hollard) |
 |---|---|---|---|---|
-| Healthy | 8 | 4 | 17 | 9 |
+| Healthy | 8 | 4 | 18 | 9 |
 | Manageable | 2 | 2 | 0 | 0 |
-| Strained | 3 | 1 | 4 | 3 |
+| Strained | 3 | 1 | 3 | 3 |
 | Overindebted | 11 | 6 | 3 | 1 |
-| No income / no gross | 1 | 0 | 1 | 0 |
+| No income | 1 | 0 | 1 | 0 |
 
-Movements: 4 over-indebted → healthy, 4 over-indebted → strained,
-3 strained → healthy, 2 manageable → healthy; 3 stay over-indebted.
+(On gross salary alone, before the denominator was revised, it was 17 / 0 /
+4 / 3: one business owner moved from strained to healthy.)
 **Advisors should expect most flags to drop.** That is the combined effect
 of the gross denominator (larger than take-home) and the higher bands.
 

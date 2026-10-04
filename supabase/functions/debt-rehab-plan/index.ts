@@ -97,6 +97,9 @@ async function askModel(apiKey: string, c: RehabComputed, notes: string[]): Prom
     figures: {
       household: { employer: c.employee.employer, age: c.employee.age, marital_status: c.employee.marital_status, dependants: c.employee.dependants },
       total_monthly_income: fmtP(c.income.total_monthly_income),
+      // DSR and every instalment share are of this figure (4 Oct 2026): gross
+      // salary + the client's own business, rental and dividend income.
+      dsr_income_own_gross: fmtP(c.income.dsr_income),
       income_sources: { net_salary: fmtP(c.income.net_salary), spouse: fmtP(c.income.spouse_income), business: fmtP(c.income.business_income), rentals: fmtP(c.income.rental_income), dividends: fmtP(c.income.dividends) },
       debt_service: fmtP(c.debt_service), dsr: fmtPct(c.dsr), dsr_status: c.dsr_status, tier: c.tier, lending_norm: `${c.lending_norm_pct}%`,
       net_worth: { assets: fmtP(c.net_worth.assets), savings: c.net_worth.savings_captured ? fmtP(c.net_worth.savings) : "not captured", liabilities: fmtP(c.net_worth.liabilities), net: fmtP(c.net_worth.net) },
@@ -291,7 +294,7 @@ serve(async (req) => {
   // 4. Compute (deterministic)
   const computed = computeRehab(assessment, prep, { rehab_context: rehabContext, advisor_notes: noteTexts });
   const norm = computed.lending_norm_pct;
-  const suggestions = liveLiabilities(assessment).map(({ index, raw }) => ({ index, item: raw.item, institution: raw.institution, ...suggestAction(raw, computed.income.total_monthly_income, norm) }));
+  const suggestions = liveLiabilities(assessment).map(({ index, raw }) => ({ index, item: raw.item, institution: raw.institution, ...suggestAction(raw, computed.income.dsr_income, norm) }));
   const leverCandidates = computed.levers.assets.map((l) => ({ asset_index: l.asset_index, name: l.name, value: l.value, on: l.on }));
 
   if (mode === "preview") {

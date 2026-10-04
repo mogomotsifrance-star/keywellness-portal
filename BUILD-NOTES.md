@@ -10,7 +10,7 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
 | `threshold_config` row `indicator.dsr` (Batch 1) | **Applied live 4 Oct.** |
 | SQL bands + gross-else-take-home in HR/admin (Batch 2) | **Applied live 4 Oct.** HR and admin figures moved the moment it ran, on BOTH sites (one database). |
 | Frontend (Batches 2, 3, 4, 6, 6b) | On the branch. Reaches the test site only when merged to `dev`; live advisors see nothing until `main`. |
-| Edge Functions `advance-recommendation`, `debt-rehab-plan` (Batches 2 + 5) | **Code committed, NOT deployed.** Held for the business-income question below. |
+| Edge Functions `advance-recommendation`, `debt-rehab-plan` (Batches 2 + 5) | See "Edge deploy" below. |
 
 ## Things the next person must know
 
@@ -21,7 +21,8 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
 - **DSR band counts before and after 4 Oct 2026 are not comparable.** The bands
   moved (20/35/45 → 40/50/60) and, for anyone with a gross salary, so did the
   denominator. On the advisor side, over-indebted clients went from 11 of 25
-  to 3; on the member side, from 7 of 24 to 6. Full table in the findings file.
+  to 3 (healthy 8 → 18); on the member side, from 7 of 24 to 6. Full table in
+  the findings file.
   employer.html says so under Debt Health.
 - **Two config rows exist until `main` is merged.** `indicator.dti` (old) is
   still read by `advisor.html` on `main`; `indicator.dsr` is read by SQL and by
@@ -53,13 +54,17 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
   owns `profiles.monthly_debt` for anyone with rows; `dti_calculator`'s
   write-back of `monthly_debt` does not know that.
 
-## Flags for Tshenolo
+- **The advisor DSR denominator is the client's OWN gross income** (decided
+  4 Oct, revising "gross salary only"): gross salary + their own business,
+  rental and dividend income; spouse income never. Salary alone read Olorato
+  (P 4,000 salary, P 8,300 own business) at 137.5%. 5 of 25 clients have
+  business income, 4 rentals. The advance CAP stays 4 × gross salary.
+- **The Debt Rehab Plan is offered from the 40% benchmark up** (manageable,
+  strained, overindebted), not from "strained". Under the old bands strained
+  began at 35%; keeping the word would have withdrawn the plan from everyone
+  between 40% and 50%, the clients the agreed copy says need a plan.
 
-- **Business income and the DSR denominator.** "Own gross salary only" leaves
-  out a client's own business, rental and dividend income. 5 of 25 advisor
-  clients have business income and 4 have rentals. Olorato (P 4,000 salary,
-  P 8,300 own business) reads 137.5% overindebted. The Edge Functions are held
-  until this is decided.
+## Flags for Tshenolo
 - **Privacy: HR receives the full liability list without recorded consent.**
   The Advance Recommendation is written for the Hollard HR approver and lists
   every debt, lender and balance. Its own footer says "underlying financial
@@ -96,14 +101,13 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
 - `org_financial_indicators` run live as an admin on Sedimosa: new labels,
   suppression intact. Security sweep returns exactly the ten expected rows;
   ACLs on the five functions unchanged.
-- Unit: advance-recommendation 31/31 (incl. the brief's 15,000 cases: cap
+- Unit: advance-recommendation 34/34 (incl. the brief's 15,000 cases: cap
   60,000, instalment 2,500; 45% → 61.67% RED; 40,000 settled → 36.11% GREEN).
 - Browser: dashboard 99, prefill 173 (incl. 6b), account 95, picker 36,
   advance 32, advisor-dsr 30 (new), habits 56, routing 19, onboarding 53,
   notifs 21, ops 51, tracker 38, all passing.
-- **Failing, knowingly:** `tests/debt-rehab-plan.test.mjs` and
-  `tests/smoke-rehab.js` still expect the household-income basis; they are
-  rewritten once the business-income question is answered.
+- Rehab: unit 29/29, browser 33/33, on own gross income and the 40% norm
+  (Olorato's cap P 4,305 → P 4,920; Phase 2 band 40.00% – 47.79%).
 - Member copy: no em dash, en dash or double hyphen in any new member string
   (`git diff` search, and the advisor-dsr suite checks the PFA section).
 - Not done from here: the Cloudflare build history check (no dashboard

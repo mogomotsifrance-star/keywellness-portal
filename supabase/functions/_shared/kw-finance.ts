@@ -16,7 +16,8 @@
 //   - Total monthly income: net salary + spouse + rentals + business + dividends
 //   - "Live" liability filter: panelReport()'s liabData test
 //   - Wellbeing benchmark: kwLendingNorm() (js/dsr-bands.js benchmark)
-//   - DSR: monthly debt repayments ÷ the client's OWN gross salary
+//   - DSR: monthly debt repayments ÷ the client's OWN gross income (gross
+//     salary + their own business, rental and dividend income; never spouse)
 // If advisor.html changes one of those, change it here in the same commit.
 // ============================================================
 
@@ -210,6 +211,10 @@ export interface IncomeView {
   gross_salary: number; paye: number; other_deductions: number; net_salary: number;
   spouse_income: number; rental_income: number; business_income: number; dividends: number;
   total_monthly_income: number;
+  // The DSR denominator (decided 4 Oct 2026): the client's own gross income,
+  // gross salary + their own business, rental and dividend income. Spouse
+  // income is not theirs to repay from. Same as advisor.html calcTotals().
+  dsr_income: number;
 }
 export function totalIncome(a: Assessment): IncomeView {
   const income = a.income || {};
@@ -223,6 +228,7 @@ export function totalIncome(a: Assessment): IncomeView {
     gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net),
     spouse_income: spouse, rental_income: rentals, business_income: business, dividends,
     total_monthly_income: round2(net + spouse + rentals + business + dividends),
+    dsr_income: round2(gross + rentals + business + dividends),
   };
 }
 

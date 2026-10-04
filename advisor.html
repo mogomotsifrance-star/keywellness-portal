@@ -1739,7 +1739,7 @@ function kwBandLabel(key){ return KWDsr.label(key) || 'Unknown'; }
 // bands is 50, not the benchmark; it is named in the config instead.
 function kwLendingNorm(){ return KWDsr.benchmark; }
 
-// DSR as text: "45.00%", or "Not recorded" when gross salary is missing.
+// DSR as text: "45.00%", or "Not recorded" when there is no gross income.
 function dsrTxt(t, dp){
   return (t.dti === null || t.dti === undefined) ? 'Not recorded' : t.dti.toFixed(dp===undefined?2:dp)+'%';
 }
@@ -3519,10 +3519,10 @@ function panelRobo(c){
   debts.forEach(d=>{ const m=impliedMonths(d.balance,d.rate,d.minPayment); if(!isFinite(m)) anyInfeasible=true; else currentInterestEstimate += Math.max(0,d.minPayment*m-d.balance); });
   const consolidationHelps = anyInfeasible || (consNew.monthly < totalMin && consNew.interest < currentInterestEstimate);
 
-  // Restructure towards the wellbeing benchmark on gross salary, and treat
+  // Restructure towards the wellbeing benchmark on own gross income, and treat
   // it as the priority once the client is at or past the
   // over-indebtedness line, the same two numbers every surface uses.
-  const targetPayment = t.grossSalary*(kwLendingNorm()/100);
+  const targetPayment = t.dsrIncome*(kwLendingNorm()/100);
   const needsRestructuring = t.dti !== null && KWDsr.isOver(t.dti) && targetPayment>0;
   const restructMonths = needsRestructuring ? impliedMonths(totalBal, weightedRate, targetPayment) : null;
 
@@ -3606,7 +3606,7 @@ function panelRobo(c){
     <div class="card">
       <div class="card-title">Restructuring Check</div>
       <div id="robo-restruct">${needsRestructuring
-        ? `<div class="notice notice-orange" style="margin-bottom:0">DSR of ${dsrTxt(t)} is at or past the ${KWDsr.line}% over-indebtedness line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (${kwLendingNorm()}% of gross salary) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
+        ? `<div class="notice notice-orange" style="margin-bottom:0">DSR of ${dsrTxt(t)} is at or past the ${KWDsr.line}% over-indebtedness line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (${kwLendingNorm()}% of own gross income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
         : `<div class="notice notice-green" style="margin-bottom:0">DSR of ${dsrTxt(t)} is below the ${KWDsr.line}% over-indebtedness line — restructuring isn't the priority here.</div>`}</div>
     </div>
 
@@ -3693,7 +3693,7 @@ function panelReportPFA(c){
      an advisor can read out loud, auto-built from the diagnostics. ── */
   const summary = `As of ${fmtDate(new Date().toISOString())}, ${esc(fullName(c))} has a net worth of
     <strong>${fmtSigned(t.netWorth)}</strong> on total monthly household income of <strong>${fmt(t.totalIncome)}</strong>.
-    Debt service ratio sits at <strong>${dsrTxt(t)}</strong> of gross salary (${debt.label}). Income is rated
+    Debt service ratio sits at <strong>${dsrTxt(t)}</strong> of own gross income (${debt.label}). Income is rated
     <strong>${inc.label}</strong>, spending against the 50/30/20 budget is <strong>${exp.label}</strong>, and lifestyle
     affordability is <strong>${life.label}</strong>. Full detail for each area is below, with the advisor's
     recommendations at the end of this report.`;
@@ -3733,8 +3733,8 @@ function panelReportPFA(c){
   // expand. Member-facing: no em dashes, en dashes or double hyphens.
   const dsrBand = kwDtiBand(t.dti);
   const dsrHtml = t.dti === null
-    ? `<p>${NR}. Gross salary is not captured, so the debt service ratio cannot be worked out.</p>`
-    : `<p class="rp-dsr-line">Your debt repayments take up <strong>${t.dti.toFixed(1)}%</strong> of your gross salary. This is <strong>${esc(kwBandLabel(dsrBand))}</strong>.</p>
+    ? `<p>${NR}. Gross income is not captured, so the debt service ratio cannot be worked out.</p>`
+    : `<p class="rp-dsr-line">Your debt repayments take up <strong>${t.dti.toFixed(1)}%</strong> of your gross ${t.passiveIncome>0?'income':'salary'}. This is <strong>${esc(kwBandLabel(dsrBand))}</strong>.</p>
        <h4 class="rp-dsr-why">Why two numbers?</h4>
        <p class="rp-dsr-text">${esc(KWDsr.whyTwoMember())}</p>`;
 
@@ -3868,7 +3868,7 @@ function panelReport(c){
   // only decides whether the advisor is shown a door they cannot open.
   const advance = !!(c._org && c._org.id && c._org.offersAdvances);
   // The Debt Rehab Plan is internal, so it has no organisation gate: it is
-  // offered to any client whose DSR band is strained or worse, or whose
+  // offered to any client whose DSR is at or above the 40% benchmark, or whose
   // latest Advance Recommendation has Debt Rehab on (see drpOffered()).
   const rehab = drpOffered(c);
   if(!advance && !rehab) return panelReportPFA(c);
@@ -4171,7 +4171,7 @@ function arRenderPrepare(){
     </tr>`;
   }).join('');
   const live = pv ? `<div class="ar-live">
-      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div><div class="ar-note">of gross salary${pv.before.dsr==null?'':' · '+esc(kwBandLabel(kwDtiBand(pv.before.dsr)))}</div></div>
+      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div><div class="ar-note">of own gross income${pv.before.dsr==null?'':' · '+esc(kwBandLabel(kwDtiBand(pv.before.dsr)))}</div></div>
       <div><div class="l">DSR after</div><div class="v">${pv.after?pv.after.dsr.toFixed(2)+'%':'—'} ${pv.dsr_change?`<small>${pv.dsr_change.direction} ${pv.dsr_change.delta_points>0?'+':''}${pv.dsr_change.delta_points.toFixed(2)}</small>`:''}</div></div>
       <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div>${pv.advance&&pv.advance.cap!=null?`<div class="ar-note">${pv.advance.capped?`Capped at 4 × gross salary (${fmt(pv.advance.cap)}); informal balances total ${fmt(pv.advance.debt_based_amount)}`:`Cap ${fmt(pv.advance.cap)} (4 × gross salary) not reached`}</div>`:''}</div>
       <div><div class="l">Risk tier</div><div class="v ${pv.tier}">${pv.tier}</div><div class="ar-note">${esc(pv.decision)}</div></div>
@@ -4207,13 +4207,17 @@ function arRenderPrepare(){
 const DRP = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], levers:[],
               busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'', arFlag:{} };
 
-/* Offered when the client's DSR band is strained / over-indebted (the same
+/* Offered when the client's DSR is at or above the 40% benchmark (the same
    threshold_config bands the Diagnostics tab uses), or when the latest
    Advance Recommendation has the Debt Rehab entry on. No offers_advances
    gate: the document is internal and applies to any client in trouble. */
 function drpOffered(c){
+  // From the 40% wellbeing benchmark up (manageable, strained, overindebted):
+  // a client between 40% and 60% "should have a plan to bring DSR below 40%"
+  // (the agreed advisor copy, 4 Oct 2026). Under the old bands this read
+  // strained / over-indebted, which then began at 35%.
   const band = kwDtiBand(calcTotals(c).dti);
-  if(band==='strained' || band==='over_indebted') return true;
+  if(band && band!=='healthy') return true;
   if(!(c.id in DRP.arFlag)) drpFetchArFlag(c);
   return DRP.arFlag[c.id] === true;
 }
@@ -4545,12 +4549,15 @@ function calcTotals(c){
 
   const totalDebtInstalment = c.liabilities.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
   const totalLiabilityBalance = c.liabilities.reduce((s,r)=>s+pf(r.balance),0);
-  // DSR is on the client's OWN gross salary (decided 4 Oct 2026): spouse,
-  // rental, business and dividend income are left out, as a lender would.
-  // No gross salary means no DSR, never a 0% that reads as healthy. The
-  // advisor side has no take-home figure that does not come from gross, so
-  // there is no take-home fallback here.
-  const dti = grossSalary>0 ? (totalDebtInstalment/grossSalary*100) : null;
+  // DSR is on the client's OWN gross income (decided 4 Oct 2026): gross
+  // salary plus their own business, rental and dividend income. Spouse
+  // income stays out. Salary alone read a business owner on P 4,000 salary
+  // and P 8,300 of their own trading income as 137% overindebted.
+  // No income means no DSR, never a 0% that reads as healthy. The advisor
+  // side has no take-home figure that does not come from gross, so there is
+  // no take-home fallback here.
+  const dsrIncome = grossSalary + passiveIncome;
+  const dti = dsrIncome>0 ? (totalDebtInstalment/dsrIncome*100) : null;
 
   const totalAssets = c.assets.reduce((s,r)=>s+pf(r.value),0);
   const incomeGenAssets = c.assets.filter(r=>r.status==='Income-Generating').reduce((s,r)=>s+pf(r.value),0);
@@ -4589,12 +4596,12 @@ function calcTotals(c){
   const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
   const savingsPct = totalIncome>0 ? savingsAmt/totalIncome*100 : 0;
 
-  // Headroom to the wellbeing benchmark, on the same gross salary the DSR
-  // uses, so "capacity at the 40% benchmark" is worked out at 40% of the
-  // figure the DSR is a percentage of.
-  const debtCapacity = Math.max(0, grossSalary*(kwLendingNorm()/100) - totalDebtInstalment);
+  // Headroom to the wellbeing benchmark, on the same income the DSR uses,
+  // so "capacity at the 40% benchmark" is worked out at 40% of the figure
+  // the DSR is a percentage of.
+  const debtCapacity = Math.max(0, dsrIncome*(kwLendingNorm()/100) - totalDebtInstalment);
 
-  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, totalDebtInstalment, totalLiabilityBalance, dti,
+  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, dsrIncome, totalDebtInstalment, totalLiabilityBalance, dti,
     totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
     needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, debtCapacity,
     budgetDebtAmt, budgetSavingsAmt, budgetLivingAmt, budgetDebtMin };
@@ -4627,9 +4634,9 @@ function diagExpense(t){
 }
 function diagDebt(t){
   if(t.dti === null){
-    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture gross salary and liabilities to run this diagnostic.']};
+    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture gross salary (or the client\'s own business, rental or dividend income) and liabilities to run this diagnostic.']};
   }
-  const points = [`Debt service ratio (DSR) is <strong>${dsrTxt(t)}</strong> of gross monthly salary.`];
+  const points = [`Debt service ratio (DSR) is <strong>${dsrTxt(t)}</strong> of own gross monthly income.`];
 
   // Bands come from threshold_config 'indicator.dsr' via js/dsr-bands.js.
   // Only healthy is green: a client in manageable is not overindebted but
@@ -4825,7 +4832,7 @@ function analyseDebt(t, c){
 
   if(t.dti === null){
     return { key:'debt', title:'Debt', score:null, incomplete:true,
-             indicators:[], actions:[], summary:'Capture gross salary and liabilities to run this analysis.' };
+             indicators:[], actions:[], summary:'Capture gross income and liabilities to run this analysis.' };
   }
   const active = (c.liabilities || []).filter(l => pf(l.balance) > 0);
   const costly = active.filter(l => pf(String(l.interestRate || '').replace('%','')) >= 20);
