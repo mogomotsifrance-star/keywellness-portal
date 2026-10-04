@@ -1,6 +1,6 @@
 // Node 22 test for supabase/functions/advance-recommendation/compute.ts
 // Run: node tests/advance-recommendation.test.mjs
-import { compute, liveLiabilities, suggestClassification } from "../supabase/functions/advance-recommendation/compute.ts";
+import { compute, liveLiabilities, suggestClassification, dsrTier, dsrBand } from "../supabase/functions/advance-recommendation/compute.ts";
 import assert from "node:assert/strict";
 
 const TUMELO = {
@@ -34,11 +34,13 @@ ok("auto-classification: 1 formal, 5 informal", () => {
 const prep = { term_months:24, liabilities: live.map((l,i)=>({ index:i, classification:sugg[i].classification, rate_period:sugg[i].rate_period })) };
 const c = compute(TUMELO, prep);
 ok("income: PAYE 9,033.15, net 24,819.58", () => { assert.equal(c.income.paye, 9033.15); assert.equal(c.income.total_monthly_income, 24819.58); });
-ok("debt service before 11,275.98 · DSR 45.43%", () => { assert.equal(c.before.debt_service, 11275.98); assert.equal(c.before.dsr, 45.43); });
-ok("advance P 36,850.00 · instalment 1,535.42", () => { assert.equal(c.advance.amount, 36850); assert.equal(c.advance.instalment, 1535.42); });
-ok("debt service after 10,611.40 · DSR 42.75% · improved", () => { assert.equal(c.after.debt_service, 10611.40); assert.equal(c.after.dsr, 42.75); assert.equal(c.dsr_change.direction, "improved"); });
-ok("tier AMBER · Proceed with Conditional Approval", () => { assert.equal(c.tier, "AMBER"); assert.equal(c.decision, "Proceed with Conditional Approval"); });
-ok("conditions: proof on, rehab on (AMBER), HR hold on (5 informal lenders)", () => {
+// 4 Oct 2026: DSR is on the client's own GROSS salary (44,782.61), not on
+// household take-home (24,819.58). Same debts, smaller ratio.
+ok("debt service before 11,275.98 · DSR 25.18% of gross", () => { assert.equal(c.before.debt_service, 11275.98); assert.equal(c.before.dsr, 25.18); });
+ok("advance P 36,850.00 · instalment 1,535.42 · cap 179,130.44 not binding", () => { assert.equal(c.advance.amount, 36850); assert.equal(c.advance.instalment, 1535.42); assert.equal(c.advance.cap, 179130.44); assert.equal(c.advance.capped, false); });
+ok("debt service after 10,611.40 · DSR 23.70% · improved", () => { assert.equal(c.after.debt_service, 10611.40); assert.equal(c.after.dsr, 23.70); assert.equal(c.dsr_change.direction, "improved"); });
+ok("tier GREEN · Proceed with Approval (below the 40% benchmark)", () => { assert.equal(c.tier, "GREEN"); assert.equal(c.decision, "Proceed with Approval"); });
+ok("conditions: proof on, rehab on (monthly-compounding motshelo), HR hold on (5 informal lenders)", () => {
   const m = Object.fromEntries(c.conditions.map(x=>[x.key,x.on])); assert.deepEqual(m, {proof_of_payment:true, debt_rehab:true, hr_letter_hold:true});
 });
 ok("gaps: two rates not captured + budget not captured", () => {
@@ -47,16 +49,18 @@ ok("gaps: two rates not captured + budget not captured", () => {
 });
 ok("5 rows settled by advance, Stanbic unchanged", () => { assert.equal(c.advance.settles.length, 5); assert.equal(c.liabilities[0].settled_by_advance, false); });
 
-console.log("Rising DSR — unserviced motshelo only, stays AMBER (agreed rule)");
+console.log("Rising DSR — unserviced motshelo only, never RED on its own (agreed rule)");
 const R = { ...TUMELO, liabilities:[ TUMELO.liabilities[0], {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"6000",monthlyInstalment:"0"} ] };
 const rl = liveLiabilities(R);
 const rc = compute(R, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:"annual"}] });
-ok("DSR worsens 36.57 → 37.58 but tier is AMBER, not RED", () => { assert.equal(rc.dsr_change.direction, "worsened"); assert.equal(rc.tier, "AMBER"); });
+ok("DSR worsens 20.27 → 20.83 but tier is GREEN, not RED", () => { assert.equal(rc.before.dsr, 20.27); assert.equal(rc.after.dsr, 20.83); assert.equal(rc.dsr_change.direction, "worsened"); assert.equal(rc.tier, "GREEN"); });
 
-console.log("Rising DSR that crosses 45% → RED");
-const X = { ...TUMELO, income:{...TUMELO.income, monthlySalary:30000}, liabilities:[ TUMELO.liabilities[0], {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"60000",monthlyInstalment:"0"} ] };
+console.log("Rising DSR that crosses the 60% line → RED");
+// gross 20,000: before 9,075.98 = 45.38%; advance 80,000 (exactly the 4× cap,
+// so not capped) at 3,333.33 → after 12,409.31 = 62.05%.
+const X = { ...TUMELO, income:{...TUMELO.income, monthlySalary:20000}, liabilities:[ TUMELO.liabilities[0], {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"80000",monthlyInstalment:"0"} ] };
 const xc = compute(X, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:"annual"}] });
-ok("RED · Decline – Refer to Debt Restructuring", () => { assert.equal(xc.tier, "RED"); assert.equal(xc.decision, "Decline – Refer to Debt Restructuring"); });
+ok("45.38% → 62.05% · RED · Decline – Refer to Debt Restructuring", () => { assert.equal(xc.before.dsr, 45.38); assert.equal(xc.after.dsr, 62.05); assert.equal(xc.advance.capped, false); assert.equal(xc.tier, "RED"); assert.equal(xc.decision, "Decline – Refer to Debt Restructuring"); });
 
 console.log("Monthly rate text");
 const M = { ...TUMELO, liabilities:[ {item:"Other",institution:"Mashonisa",loanAmount:"2000",interestRate:"30% per month",balance:"2600",monthlyInstalment:"0"} ] };
@@ -75,7 +79,7 @@ ok("Tumelo's bare-rate motshelo and microlender now read per month", () => { ass
 console.log("Nothing to consolidate → decline");
 const D = { ...TUMELO, liabilities:[ TUMELO.liabilities[0] ] };
 const dc = compute(D, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"}] });
-ok("RED · no advance · Decline – No Consolidation Opportunity (DSR 36.57 < 45)", () => { assert.equal(dc.advance, null); assert.equal(dc.tier, "RED"); assert.equal(dc.decision, "Decline – No Consolidation Opportunity"); assert.equal(dc.conditions.length, 0); });
+ok("RED · no advance · Decline – No Consolidation Opportunity (DSR 20.27 < 60)", () => { assert.equal(dc.advance, null); assert.equal(dc.tier, "RED"); assert.equal(dc.decision, "Decline – No Consolidation Opportunity"); assert.equal(dc.conditions.length, 0); });
 
 console.log("Budget shortfall on file → RED even when DSR is fine");
 const B = { ...TUMELO, budget:{ rent:20000, food:6000 }, liabilities:[ {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"6000",monthlyInstalment:"0"} ] };
@@ -86,5 +90,43 @@ console.log("Informal debt with no balance → cannot size");
 const N = { ...TUMELO, liabilities:[ {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"0",monthlyInstalment:"0"} ] };
 const nc = compute(N, { term_months:24 });
 ok("Decline – Insufficient Data, balance gap flagged", () => { assert.equal(nc.decision, "Decline – Insufficient Data"); assert.ok(nc.gaps.some(g=>/Balance not captured/.test(g))); });
+
+console.log("DSR tiers and bands — exact boundaries (4 Oct 2026)");
+ok("tier: 39.99 GREEN · 40 AMBER · 59.99 AMBER · 60 RED · null null", () => {
+  assert.equal(dsrTier(39.99), "GREEN"); assert.equal(dsrTier(40), "AMBER"); assert.equal(dsrTier(59.99), "AMBER"); assert.equal(dsrTier(60), "RED"); assert.equal(dsrTier(null), null);
+});
+ok("band: 39.99 healthy · 40 manageable · 49.99 manageable · 50 strained · 59.99 strained · 60 over_indebted", () => {
+  assert.deepEqual([39.99,40,49.99,50,59.99,60].map(dsrBand), ["healthy","manageable","manageable","strained","strained","over_indebted"]);
+});
+
+console.log("Hollard advance cap — the brief's worked checks (gross 15,000)");
+const G = (liabs, extra={}) => ({ personal:{ name:"Test", employer:"Hollard" }, kids:[], income:{ monthlySalary:15000, otherDeductions:0 }, liabilities: liabs, budget:{}, ...extra });
+const formal3750 = {item:"Personal Loan",institution:"Stanbic",loanAmount:"100000",interestRate:"12",balance:"80000",monthlyInstalment:"3750"};
+// Nothing worth settling: one informal debt with no instalment, far above the cap.
+const g1 = compute(G([ {item:"Personal Loan",institution:"Stanbic",loanAmount:"200000",interestRate:"12",balance:"150000",monthlyInstalment:"6750"},
+                       {item:"Other",institution:"Motshelo",loanAmount:"100000",interestRate:"",balance:"100000",monthlyInstalment:"0"} ]),
+                   { liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:null}] });
+ok("cap 60,000 · instalment 2,500 at the maximum", () => { assert.equal(g1.advance.cap, 60000); assert.equal(g1.advance.amount, 60000); assert.equal(g1.advance.instalment, 2500); assert.equal(g1.advance.capped, true); });
+ok("repayments 6,750 (45%) → 9,250 (61.67%) · RED", () => { assert.equal(g1.before.dsr, 45); assert.equal(g1.after.debt_service, 9250); assert.equal(g1.after.dsr, 61.67); assert.equal(g1.tier, "RED"); });
+ok("capped: the informal debt is part-paid, not settled, and its instalment stays", () => { assert.equal(g1.advance.settles.length, 0); assert.deepEqual(g1.advance.partial, { index:1, applied:60000 }); assert.ok(g1.gaps.some(x=>/exceed the advance cap/.test(x))); });
+const g2 = compute(G([ formal3750, {item:"Other",institution:"Express Credit",loanAmount:"50000",interestRate:"25",balance:"40000",monthlyInstalment:"3000"} ]),
+                   { liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:"annual"}] });
+ok("settle a 40,000 loan repaying 3,000: instalment 1,666.67 · after 5,416.67 · DSR 36.11% · GREEN", () => {
+  assert.equal(g2.before.dsr, 45); assert.equal(g2.advance.amount, 40000); assert.equal(g2.advance.instalment, 1666.67);
+  assert.equal(g2.after.debt_service, 5416.67); assert.equal(g2.after.dsr, 36.11); assert.equal(g2.tier, "GREEN"); assert.deepEqual(g2.advance.settles, [1]);
+});
+const g3 = compute(G([ {item:"Other",institution:"Mashonisa",loanAmount:"40000",interestRate:"30% per month",balance:"50000",monthlyInstalment:"1000"},
+                       {item:"Other",institution:"Express Credit",loanAmount:"30000",interestRate:"25",balance:"30000",monthlyInstalment:"800"} ]),
+                   { liabilities:[{index:0,classification:"informal",rate_period:"monthly"},{index:1,classification:"informal",rate_period:"annual"}] });
+ok("capped at 60,000: the dearest debt (360% p.a.) is settled first, 10,000 goes towards the next", () => {
+  assert.equal(g3.advance.debt_based_amount, 80000); assert.equal(g3.advance.amount, 60000); assert.deepEqual(g3.advance.settles, [0]);
+  assert.deepEqual(g3.advance.partial, { index:1, applied:10000 });
+  assert.equal(g3.after.debt_service, 1800 - 1000 + 2500);
+});
+ok("term is fixed at 24 whatever the prep says", () => { const t = compute(G([ formal3750, {item:"Other",institution:"Motshelo",balance:"12000",monthlyInstalment:"0"} ]), { term_months:36 }); assert.equal(t.term_months, 24); assert.equal(t.advance.instalment, 500); });
+ok("no gross salary → Decline – Insufficient Data, no advance", () => {
+  const z = compute({ ...G([ {item:"Other",institution:"Motshelo",balance:"5000",monthlyInstalment:"0"} ]), income:{ monthlySalary:0, spouseIncome:20000 } }, {});
+  assert.equal(z.advance, null); assert.equal(z.decision, "Decline – Insufficient Data"); assert.equal(z.before.dsr, null);
+});
 
 console.log(`\n${n} checks passed`);

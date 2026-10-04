@@ -18,9 +18,10 @@
 //   CONSOLIDATE  informal / high-cost (hint list, monthly-period rate, or
 //                ≥ HIGH_COST_RATE_PA p.a. equivalent)
 //   RENEGOTIATE  formal facility whose instalment ALONE exceeds the lending
-//                norm (35%) of total monthly income
+//                norm (the 40% wellbeing benchmark) of gross monthly salary
 //   RETAIN       everything else, stated explicitly
-//   REFER        plan-level: DSR with every lever applied still > 45%, or
+//   REFER        plan-level: DSR with every lever applied still at or above
+//                the 60% over-indebtedness line, or
 //                ≥ 3 informal lenders with no vehicle / uncaptured balances
 // The advisor confirms every action on the Prepare screen; what is
 // confirmed is what is computed and stored.
@@ -28,7 +29,7 @@
 import {
   DSR_GREEN_MAX, DSR_AMBER_MAX, HIGH_COST_RATE_PA, REPEATED_BORROWING_COUNT, DEFAULT_TERM_MONTHS,
   LENDING_NORM_PCT, EXPENSE_GROUP_IDS,
-  pf, isBlank, round2, fmtP, fmtPct, totalIncome, parseRate, liveLiabilities, suggestClassification,
+  pf, isBlank, round2, fmtP, fmtPct, totalIncome, parseRate, liveLiabilities, suggestClassification, dsrTier,
 } from "../_shared/kw-finance.ts";
 import type { Assessment, Classification, RatePeriod, RawLiability, Tier, IncomeView } from "../_shared/kw-finance.ts";
 
@@ -202,8 +203,8 @@ export function suggestAction(raw: RawLiability, income: number, norm: number, c
   const cls = classification || sugg.classification;
   const inst = pf(raw.monthlyInstalment);
   if (cls === "informal") return { action: "CONSOLIDATE", classification: cls, rate_period: sugg.rate_period, reason: sugg.reason };
-  if (income > 0 && inst / income * 100 > norm) {
-    return { action: "RENEGOTIATE", classification: cls, rate_period: sugg.rate_period, reason: `Instalment alone is ${fmtPct(round2(inst / income * 100))} of income, above the ${norm}% lending norm` };
+  if (income > 0 && inst / income * 100 >= norm) {
+    return { action: "RENEGOTIATE", classification: cls, rate_period: sugg.rate_period, reason: `Instalment alone is ${fmtPct(round2(inst / income * 100))} of gross salary, at or above the ${norm}% wellbeing benchmark` };
   }
   return { action: "RETAIN", classification: cls, rate_period: sugg.rate_period, reason: sugg.reason };
 }
@@ -212,7 +213,12 @@ export function suggestAction(raw: RawLiability, income: number, norm: number, c
 export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs = {}): RehabComputed {
   const personal = a.personal || {};
   const income = totalIncome(a);
+  // inc is household take-home: what the budget, surplus and cuts are
+  // measured against, because that is the cash there is. DSR is measured
+  // against the client's own GROSS salary (decided 4 Oct 2026), as every
+  // other surface now does, so every DSR figure below divides by dsrBase.
   const inc = income.total_monthly_income;
+  const dsrBase = income.gross_salary;
   const norm = Number(prep.lending_norm_pct) > 0 ? Number(prep.lending_norm_pct) : LENDING_NORM_PCT;
   const extension = Math.max(0, Math.round(Number(prep.extension_months) || DEFAULT_EXTENSION_MONTHS));
   const planDate = (prep.plan_date || "").slice(0, 10);
@@ -221,18 +227,18 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   const notesText = (inputs.advisor_notes || []).join("\n").toLowerCase();
 
   const gaps = new Set<string>();
-  if (income.gross_salary <= 0 && inc <= 0) gaps.add("Income not captured — DSR and every band cannot be computed");
+  if (dsrBase <= 0) gaps.add("Gross salary not captured — DSR and every band cannot be computed");
 
   // ── Liabilities: classification → action ─────────────────────
   const live = liveLiabilities(a);
   const prepMap = new Map<number, RehabPrepLiability>();
   (prep.liabilities || []).forEach((p) => prepMap.set(Number(p.index), p));
-  const cap = round2(inc * norm / 100);
+  const cap = round2(dsrBase * norm / 100);
 
   const views: RehabLiabilityView[] = live.map(({ index, raw }) => {
     const p = prepMap.get(index);
     const confirmedCls: Classification | undefined = p?.classification === "informal" || p?.classification === "formal" ? p.classification : undefined;
-    const sugg = suggestAction(raw, inc, norm, confirmedCls);
+    const sugg = suggestAction(raw, dsrBase, norm, confirmedCls);
     const classification = confirmedCls || sugg.classification;
     const action: Action = p?.action === "RETAIN" || p?.action === "CONSOLIDATE" || p?.action === "RENEGOTIATE" ? p.action : sugg.action;
     const rate = parseRate(raw.interestRate);
@@ -284,17 +290,20 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
       index, item: String(raw.item || "Other"), institution: String(raw.institution || ""), label, classification,
       rate_value: rate.value, rate_period, rate_pa_equivalent: rate_pa,
       rate_text: rate.value == null ? "Not captured" : `${rate.value}% ${rate_period === "monthly" ? "per month" : "p.a."}`,
-      balance, instalment, instalment_pct_income: inc > 0 ? round2(instalment / inc * 100) : null,
+      balance, instalment, instalment_pct_income: dsrBase > 0 ? round2(instalment / dsrBase * 100) : null,
       action, suggested_action: sugg.action, suggested_reason: sugg.reason,
       settled_by: null, settled_with: null, outcome: "", renegotiation, gaps: rowGaps,
     };
   });
 
   const debtService = round2(views.reduce((s, v) => s + v.instalment, 0));
-  const dsr = inc > 0 ? round2(debtService / inc * 100) : null;
+  const dsr = dsrBase > 0 ? round2(debtService / dsrBase * 100) : null;
   const disposable = inc > 0 ? round2(inc - debtService) : null;
-  const dsr_status: DsrStatus | null = dsr == null ? null : dsr > DSR_AMBER_MAX ? "over_indebted" : dsr > norm ? "strained" : "within_norm";
-  const tier: Tier = dsr == null ? "RED" : dsr > DSR_AMBER_MAX ? "RED" : dsr > DSR_GREEN_MAX ? "AMBER" : "GREEN";
+  // At or past the line is over-indebted; at or above the benchmark is
+  // strained (above the norm, not in crisis). Exactly 40 / 60 fall upward,
+  // as in kw_dti_band().
+  const dsr_status: DsrStatus | null = dsr == null ? null : dsr >= DSR_AMBER_MAX ? "over_indebted" : dsr >= norm ? "strained" : "within_norm";
+  const tier: Tier = dsr == null ? "RED" : (dsrTier(dsr) as Tier);
 
   // ── Net worth (internal view includes savings) ───────────────
   const assets = Array.isArray(a.assets) ? a.assets : [];
@@ -438,7 +447,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   const renegCurrent = round2(renegRows.reduce((s, v) => s + v.instalment, 0));
   const renegLow = round2(renegRows.reduce((s, v) => s + (v.renegotiation!.band_low ?? v.renegotiation!.cap), 0));
   const renegCap = round2(renegRows.reduce((s, v) => s + v.renegotiation!.cap, 0));
-  const pct = (ds: number) => inc > 0 ? round2(Math.max(0, ds) / inc * 100) : null;
+  const pct = (ds: number) => dsrBase > 0 ? round2(Math.max(0, ds) / dsrBase * 100) : null;
   const p1low = pct(debtService - consInst);
   const p1high = pct(debtService - consInst + advInst);
   const p2low = pct(debtService - consInst - renegCurrent + renegLow);
@@ -448,7 +457,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
 
   // ── REFER ───────────────────────────────────────────────────
   const referReasons: string[] = [];
-  if (p2low != null && p2low > DSR_AMBER_MAX) referReasons.push(`DSR with every lever applied would still be ${fmtPct(p2low)}, above ${DSR_AMBER_MAX}%.`);
+  if (p2low != null && p2low >= DSR_AMBER_MAX) referReasons.push(`DSR with every lever applied would still be ${fmtPct(p2low)}, at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`);
   if (informalCount >= REPEATED_BORROWING_COUNT && (vehicle === "none" || consUncaptured.length > 0)) {
     referReasons.push(`${informalCount} informal lenders and ${consUncaptured.length > 0 ? "balances that are not captured" : "no vehicle to consolidate them with"}.`);
   }

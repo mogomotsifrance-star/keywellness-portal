@@ -6,7 +6,7 @@
 // Edge Function and tests/smoke-advance.js so the browser test renders
 // exactly what production would.
 // ============================================================
-import { fmtP, fmtPct } from "./compute.ts";
+import { fmtP, fmtPct, DSR_BENCHMARK_PCT } from "./compute.ts";
 import type { Computed } from "./compute.ts";
 
 export const MAX_BULLETS = 6;
@@ -55,11 +55,11 @@ export function fallbackNarrative(c: Computed): Narrative {
     ? (c.dsr_change.direction === "worsened"
         ? `DSR rises from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)}. This is a deterioration: the informal debts being settled carried no monthly instalment, so the advance instalment is a new cash obligation rather than a replacement.`
         : c.dsr_change.direction === "improved"
-          ? `DSR falls from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)} because a serviced high-cost instalment is replaced by a smaller advance instalment. It remains ${aft.dsr! > 35 ? "above" : "within"} the 35% comfort level.`
+          ? `DSR falls from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)} because a serviced high-cost instalment is replaced by a smaller advance instalment. It remains ${aft.dsr! >= DSR_BENCHMARK_PCT ? "above" : "below"} the ${DSR_BENCHMARK_PCT}% wellbeing benchmark.`
           : `DSR is effectively unchanged at ${fmtPct(aft.dsr)}.`)
-    : `Current DSR is ${fmtPct(c.before.dsr)} on total monthly income of ${fmtP(c.income.total_monthly_income)}.`;
+    : `Current DSR is ${fmtPct(c.before.dsr)} of gross monthly salary of ${fmtP(c.income.gross_salary)}.`;
   const ability_paragraph = adv && aft
-    ? `The advance instalment of ${fmtP(adv.instalment)} is ${fmtPct(adv.instalment_pct_income)} of monthly income, leaving ${fmtP(aft.disposable)} after all debt service. ${c.budget.captured ? (c.budget.shortfall ? "The captured household budget already exceeds income, which is the binding constraint." : "The captured household budget fits within that amount.") : "No household budget is on file, so living costs cannot be confirmed against that figure."}`
+    ? `The advance instalment of ${fmtP(adv.instalment)} is ${fmtPct(adv.instalment_pct_income)} of gross salary, leaving ${fmtP(aft.disposable)} after all debt service. ${c.budget.captured ? (c.budget.shortfall ? "The captured household budget already exceeds income, which is the binding constraint." : "The captured household budget fits within that amount.") : "No household budget is on file, so living costs cannot be confirmed against that figure."}`
     : `Disposable income after current debt service is ${fmtP(c.before.disposable)}. ${c.budget.captured ? "" : "No household budget is on file."}`.trim();
   return {
     reasoning_intro: adv
@@ -84,7 +84,10 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
   const debtRows = c.liabilities.map((l) => ({
     debt: l.item, institution: l.institution || "—", interest: l.rate_text,
     balance: fmtP(l.balance), instalment: fmtP(l.instalment),
-    status: settled.has(l.index) ? "Settled by advance" : l.classification === "informal" ? "Informal – balance not captured" : "Unchanged",
+    status: settled.has(l.index) ? "Settled by advance"
+      : (adv && adv.partial && adv.partial.index === l.index) ? `Part-paid by advance (${fmtP(adv.partial.applied)}); instalment unchanged`
+      : l.classification === "informal" ? (l.balance == null ? "Informal – balance not captured" : "Informal – beyond the advance cap")
+      : "Unchanged",
   }));
   if (adv) debtRows.push({
     debt: "New advance", institution: payrollLineFor(employerName), interest: "0%", balance: fmtP(adv.amount),
@@ -106,7 +109,7 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
         title: adv ? "Debt Service Ratio — Before vs After" : "Debt Service Ratio — Current Position",
         rows: [
           { label: "Monthly debt service", before: fmtP(c.before.debt_service), after: aft ? fmtP(aft.debt_service) : null },
-          { label: "Total monthly income", before: fmtP(c.income.total_monthly_income), after: aft ? fmtP(c.income.total_monthly_income) : null },
+          { label: "Gross monthly salary", before: fmtP(c.income.gross_salary), after: aft ? fmtP(c.income.gross_salary) : null },
           { label: "Debt Service Ratio", before: fmtPct(c.before.dsr), after: aft ? fmtPct(aft.dsr) : null },
         ],
         paragraph: n.dsr_paragraph,

@@ -232,12 +232,14 @@ serve(async (req) => {
   if (!client) return json(req, { ok: false, message: "Client not found or not in your caseload." }, 403);
   const assessment = (client.assessment || {}) as Assessment;
 
-  // 3a. The lending norm, from the same config the portal reads. Fallback to the constant.
+  // 3a. The norm: the wellbeing benchmark, from the same config row the
+  //     portal reads (indicator.dsr ->> benchmark). It used to be read from the
+  //     top of the "manageable" band, which under the 4 Oct 2026 bands is 50,
+  //     not the benchmark. Fallback to the constant.
   try {
-    const { data: cfg } = await me.from("threshold_config").select("value").eq("key", "indicator.dti").maybeSingle();
-    const bands = (cfg?.value as { bands?: { key: string; max: number | null }[] } | null)?.bands || [];
-    const m = bands.find((b) => b.key === "manageable");
-    prep.lending_norm_pct = m && m.max != null && Number(m.max) > 0 ? Number(m.max) : LENDING_NORM_PCT;
+    const { data: cfg } = await me.from("threshold_config").select("value").eq("key", "indicator.dsr").maybeSingle();
+    const b = Number((cfg?.value as { benchmark?: number } | null)?.benchmark);
+    prep.lending_norm_pct = isFinite(b) && b > 0 ? b : LENDING_NORM_PCT;
   } catch { prep.lending_norm_pct = LENDING_NORM_PCT; }
 
   // 3b. Rehab context: the client's latest Advance Recommendation, as the caller.

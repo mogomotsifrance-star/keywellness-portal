@@ -182,8 +182,9 @@ function stub(page) {
   check('4  auto-classification: Stanbic formal, the other five informal',
     await page.evaluate(() => Array.from(document.querySelectorAll('.ar-prep .ar-seg button.on')).map(b => b.className.includes('informal') ? 'I' : 'F').join('')) === 'FIIIII');
   const live = await page.evaluate(() => document.querySelector('.ar-live').innerText);
-  check('5  live figures match the worked example: 45.43% → 42.75%, P 36,850.00, AMBER',
-    /45\.43%/.test(live) && /42\.75%/.test(live) && /36,850\.00/.test(live) && /AMBER/.test(live), live.replace(/\s+/g,' '));
+  // 4 Oct 2026: DSR on the client's own gross salary, tiers 40 / 60, advance capped at 4 × gross.
+  check('5  live figures for the worked example on gross: 25.18% → 23.70%, P 36,850.00, cap not reached, GREEN',
+    /25\.18%/.test(live) && /23\.70%/.test(live) && /36,850\.00/.test(live) && /GREEN/.test(live) && /not reached/.test(live), live.replace(/\s+/g,' '));
   check('6  rates that were not captured say so, not 0%',
     await page.evaluate(() => Array.from(document.querySelectorAll('.ar-prep tbody tr')).filter(tr => /Not captured/.test(tr.innerText)).length === 2));
 
@@ -192,8 +193,8 @@ function stub(page) {
   await page.evaluate(() => arPrepSet(1, 'classification', 'formal'));
   await page.waitForTimeout(600);
   const live2 = await page.evaluate(() => document.querySelector('.ar-live').innerText);
-  check('7  changing a classification re-computes live (advance drops to P 11,850.00, DSR after rises to 47.42%)',
-    /11,850\.00/.test(live2) && /47\.42%/.test(live2) && /RED/.test(live2), live2.replace(/\s+/g,' '));
+  check('7  changing a classification re-computes live (advance drops to P 11,850.00, DSR after rises to 26.28%)',
+    /11,850\.00/.test(live2) && /26\.28%/.test(live2) && /worsened/.test(live2), live2.replace(/\s+/g,' '));
   await page.evaluate(() => arPrepSet(1, 'classification', 'informal'));
   await page.waitForTimeout(600);
 
@@ -201,8 +202,8 @@ function stub(page) {
   await page.evaluate(() => arPrepField('term_months', '12'));
   await page.waitForTimeout(600);
   const live3 = await page.evaluate(() => document.querySelector('.ar-live').innerText);
-  check('8  a 12-month term halves the horizon: instalment P 3,070.83, DSR after 48.94% → RED',
-    /3,070\.83/.test(live3) && /48\.94%/.test(live3) && /RED/.test(live3), live3.replace(/\s+/g,' '));
+  check('8  the term is fixed at 24 by the programme: a 12 sent from the page changes nothing (instalment P 1,535.42)',
+    /1,535\.42/.test(live3) && /23\.70%/.test(live3), live3.replace(/\s+/g,' '));
   await page.evaluate(() => arPrepField('term_months', '24'));
   await page.waitForTimeout(600);
 
@@ -222,13 +223,13 @@ function stub(page) {
       && doc.indexOf('Consultant Recommendation') < doc.indexOf('Employee Support Plan'));
   check('11 header table: Hollard, P 36,850.00, 24 months, Salary / Incentive Advance, France Mogomotsi',
     /Hollard/.test(doc) && /P 36,850\.00/.test(doc) && /24 months/.test(doc) && /Salary \/ Incentive Advance/.test(doc) && /France Mogomotsi/.test(doc));
-  check('12 DSR table has Before and After columns with 45.43% and 42.75%',
-    await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[0].innerText; return /before/i.test(t) && /after advance/i.test(t) && /45\.43%/.test(t) && /42\.75%/.test(t); }));
+  check('12 DSR table has Before and After columns with 25.18% and 23.70%, on gross monthly salary',
+    await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[0].innerText; return /before/i.test(t) && /after advance/i.test(t) && /25\.18%/.test(t) && /23\.70%/.test(t) && /Gross monthly salary/.test(t); }));
   check('13 debt position: Stanbic Unchanged, five Settled by advance, a New advance line, "Not captured" for blank rates',
     await page.evaluate(() => { const t = document.querySelectorAll('#ar-doc .ar-tbl')[1].innerText;
       return (t.match(/Settled by advance/g)||[]).length === 5 && /Unchanged/.test(t) && /New advance/.test(t) && (t.match(/Not captured/g)||[]).length === 2; }));
-  check('14 risk block is AMBER and the decision line is Proceed with Conditional Approval',
-    await page.evaluate(() => document.querySelector('.ar-risk').classList.contains('AMBER') && /Proceed with Conditional Approval/.test(document.querySelector('.ar-dec').textContent)));
+  check('14 risk block is GREEN and the decision line is Proceed with Approval',
+    await page.evaluate(() => document.querySelector('.ar-risk').classList.contains('GREEN') && /Proceed with Approval/.test(document.querySelector('.ar-dec').textContent)));
   check('15 the three operating conditions are checkboxes, all on by default for this case',
     await page.evaluate(() => { const li = document.querySelectorAll('.ar-sec .ar-cond')[0].querySelectorAll('li'); return li.length === 3 && Array.from(li).every(l => l.querySelector('input').checked); }));
   check('16 data gaps are printed, not hidden: two rates and the missing budget',
@@ -288,7 +289,7 @@ function stub(page) {
   await page.waitForTimeout(800);
   check('25 Regenerate reopens Prepare seeded from v1 (24 months, five informal)',
     await page.evaluate(() => document.querySelectorAll('.ar-prep').length === 1
-      && document.querySelector('.ar-prep input[type=number]').value === '24'
+      && /24 months/.test(document.querySelector('.ar-prep input[disabled]').value)
       && document.querySelectorAll('.ar-prep .ar-seg button.on.informal').length === 5));
   await page.click('button:has-text("Generate Advance Recommendation")');
   await page.waitForTimeout(700);
