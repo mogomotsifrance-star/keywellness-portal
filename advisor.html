@@ -3734,9 +3734,9 @@ function panelReportPFA(c){
   const dsrBand = kwDtiBand(t.dti);
   const dsrHtml = t.dti === null
     ? `<p>${NR}. Gross income is not captured, so the debt service ratio cannot be worked out.</p>`
-    : `<p class="rp-dsr-line">Your debt repayments take up <strong>${t.dti.toFixed(1)}%</strong> of your gross ${t.passiveIncome>0?'income':'salary'}. This is <strong>${esc(kwBandLabel(dsrBand))}</strong>.</p>
+    : `<p class="rp-dsr-line">Your debt repayments take up <strong>${t.dti.toFixed(1)}%</strong> of your own gross income. This is <strong>${esc(kwBandLabel(dsrBand))}</strong>.</p>
        <h4 class="rp-dsr-why">Why two numbers?</h4>
-       <p class="rp-dsr-text">${esc(KWDsr.whyTwoMember())}</p>`;
+       <p class="rp-dsr-text">${esc(KWDsr.whyTwoMember('your own gross income'))}</p>`;
 
   const assetData = c.assets.filter(r=>r.name||pf(r.value));
   const assetRows = assetData.map(r=>[esc(r.name)||'—', r.status, fmt(pf(r.value)), fmt(pf(r.monthlyIncome)), fmt(pf(r.potentialIncome))]);

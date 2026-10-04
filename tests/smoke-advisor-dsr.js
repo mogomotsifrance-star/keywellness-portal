@@ -125,7 +125,9 @@ function stub(page) {
     /45\.00%/.test(body) && /Debt service ratio \(DSR\) · Manageable/i.test(body) && /Why two numbers\?/.test(body), body.slice(0, 200));
   check('B2.5 the advisor explanation carries the agreed wording',
     await page.evaluate(() => /Healthy below 40% · Manageable 40 to 49\.99% · Strained 50 to 59\.99% · Overindebted 60% and above/.test(KWDsr.advisorText())
-      && /60% is the over-indebtedness line used for risk flags\. 40% is the Key Wellness wellbeing benchmark/.test(KWDsr.advisorText())));
+      && /60% is the over-indebtedness line used for risk flags\. 40% is the Key Wellness wellbeing benchmark/.test(KWDsr.advisorText())
+      && /own gross monthly income/.test(KWDsr.advisorText()) && /spouse income is not included/.test(KWDsr.advisorText())
+      && /your salary/.test(KWDsr.whyTwoMember()) && /your own gross income/.test(KWDsr.whyTwoMember('your own gross income'))));
 
   /* ── Batch 3: Liabilities page ─────────────────────────────── */
   const heads = await page.evaluate(() => Array.from(document.querySelectorAll('.rt-liab thead th')).map(th => th.textContent.trim()));
@@ -211,10 +213,10 @@ function stub(page) {
   check('B6.3 a missing figure prints "Not recorded", never P 0.00 (Stanbic has no term)',
     /Not recorded/.test(doc.slice(doc.indexOf('Liabilities'), doc.indexOf('Debt Service Ratio'))));
   const dsrSec = doc.slice(doc.indexOf('Debt Service Ratio'), doc.indexOf('Assets'));
-  check('B6.4 DSR section: "Your debt repayments take up 45.0% of your gross salary. This is Manageable."',
-    /Your debt repayments take up 45\.0% of your gross salary\. This is Manageable\./.test(dsrSec), dsrSec.slice(0, 200));
+  check('B6.4 DSR section: "Your debt repayments take up 45.0% of your own gross income. This is Manageable."',
+    /Your debt repayments take up 45\.0% of your own gross income\. This is Manageable\./.test(dsrSec), dsrSec.slice(0, 200));
   check('B6.5 the explanation is printed in full (paper cannot expand a toggle)',
-    /Why two numbers\?/.test(dsrSec) && /At 60% or more, debt repayments take so much of your salary/.test(dsrSec) && /below 40%/.test(dsrSec));
+    /Why two numbers\?/.test(dsrSec) && /At 60% or more, debt repayments take so much of your own gross income/.test(dsrSec) && !/your salary/.test(dsrSec) && /below 40%/.test(dsrSec));
   check('B6.6 member copy passes the dash check: no em dash, en dash or double hyphen in the DSR section',
     !/[—–]|--/.test(dsrSec), dsrSec);
   const budSec = doc.slice(doc.indexOf('Personal Budget'), doc.indexOf('Advisory Diagnostic'));

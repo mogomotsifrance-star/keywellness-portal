@@ -77,12 +77,12 @@ the new fields are additions.
   owns `profiles.monthly_debt` for anyone with rows; `dti_calculator`'s
   write-back of `monthly_debt` does not know that.
 
-- **The advisor DSR denominator is the client's OWN gross income** (decided
+- **The advisor DSR basis is own gross income, spouse excluded** (ACCEPTED
   4 Oct, revising "gross salary only"): gross salary + their own business,
   rental and dividend income; spouse income never. Salary alone read Olorato
   (P 4,000 salary, P 8,300 own business) at 137.5%. 5 of 25 clients have
   business income, 4 rentals. The advance CAP stays 4 × gross salary.
-- **The Debt Rehab Plan is offered from the 40% benchmark up** (manageable,
+- **The Debt Rehab Plan starts at 40%** (ACCEPTED 4 Oct): offered from the benchmark up (manageable,
   strained, overindebted), not from "strained". Under the old bands strained
   began at 35%; keeping the word would have withdrawn the plan from everyone
   between 40% and 50%, the clients the agreed copy says need a plan.

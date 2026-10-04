@@ -136,8 +136,11 @@
 
   var TAKE_HOME_NOTE = 'Based on take-home pay, so likely higher than your true figure.';
 
-  function whyTwoMember() {
-    return 'At ' + CFG.line + '% or more, debt repayments take so much of your salary that you are ' +
+  // income: the words for the basis. Member pages are on gross salary, so the
+  // default is "your salary". The advisor's client report (PFA) is on the
+  // client's own gross income and passes "your own gross income".
+  function whyTwoMember(income) {
+    return 'At ' + CFG.line + '% or more, debt repayments take so much of ' + (income || 'your salary') + ' that you are ' +
       'considered overindebted. That is the line we use to flag serious risk. Our wellbeing target is ' +
       'lower, below ' + CFG.benchmark + '%. At that level your repayments still leave enough room for ' +
       'your needs, your savings and the unexpected. Between the two you are not in crisis, but every ' +
@@ -168,7 +171,7 @@
       CFG.line + '% is the over-indebtedness line used for risk flags. ' + CFG.benchmark +
       '% is the Key Wellness wellbeing benchmark and the target to advise towards. A member between ' +
       CFG.benchmark + '% and ' + CFG.line + '% is not overindebted but should have a plan to bring DSR below ' +
-      CFG.benchmark + '%. Where gross salary is missing, DSR is calculated on take-home pay and is marked as such.';
+      CFG.benchmark + '%. On the member side, where gross salary is missing, DSR is calculated on take-home pay and is marked as such.';
   }
 
   function advisorExplainHtml() {
