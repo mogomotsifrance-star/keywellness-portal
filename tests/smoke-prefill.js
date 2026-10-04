@@ -698,6 +698,32 @@ const dismissProfileModal = async (page) => {
       out.writes >= 2, String(out.writes));
     await page.close();
   }
+  {
+    /* Batch 6b (4 Oct 2026). A member who repays a loan straight off the
+       salary: budget debt_min 1,800, payslip loans 3,000, and the budget
+       wrote monthly_debt = 4,800. Seeding debt_min alone made this page's
+       total 1,800, so Calculate offered to "update" monthly_debt DOWN to
+       1,800, and a yes erased the salary-deducted loan from every report. */
+    const { page, errors } = await open(browser, 'dti_calculator.html', {
+      profile: { id: UID, net_income: 11000, monthly_debt: 4800, payslip_loan_deductions: 3000 },
+      tools: { budget_planner: BUDGET },
+    });
+    const list = await page.evaluate(() => document.getElementById('debtList')?.textContent || '');
+    check('6b.1 the salary-deducted loan is seeded as its own row beside the budget line',
+      /1,800/.test(list) && /3,000/.test(list) && /deducted from your salary/.test(list), list.slice(0, 200));
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    const out = await page.evaluate(() => ({
+      modal: !!document.getElementById('kw-profile-modal'),
+      modalText: document.getElementById('kw-profile-modal')?.textContent || '',
+      debts: (window.__toolWrites.find(w => w.tool === 'dti_calculator')?.data?.debts || []).map(d => Number(d.amount)),
+    }));
+    check('6b.2 the total matches monthly_debt (4,800), so no one is offered a lower figure',
+      out.debts.reduce((a, b) => a + b, 0) === 4800 && !/monthly debt|4,800|1,800/i.test(out.modalText),
+      JSON.stringify(out));
+    check('6b.3 no uncaught errors', errors.length === 0, errors.join(' | '));
+    await page.close();
+  }
 
   /* ── 9. Phase C: the figures that come off pay before it arrives ──────────
 

@@ -1107,6 +1107,17 @@ KW.reveal('.card');
         const _min = _cur ? Number(_cur.expenses?.debt_min || 0) : 0;
         if (_min > 0) { _seedDebt = _min; _seedSrc = 'from your budget'; }
       } catch (e) { console.warn('DTI: budget debt_min lookup failed:', e); }
+      // Loans repaid straight off the salary. The budget's debt_min never
+      // holds them (they never reach the member's account), but
+      // profiles.monthly_debt does: budget_planner writes it as debt_min +
+      // payslip_loan_deductions. Seeding debt_min alone made this page's total
+      // smaller than monthly_debt, so the first Calculate offered to "update"
+      // monthly_debt down to debt_min, and a yes erased the salary-deducted
+      // loans from every report that reads it (4 Oct 2026). They are seeded
+      // as their own row instead, so the total is the same figure.
+      // monthly_debt already includes them, so that fallback adds nothing.
+      let _seedPayslip = 0;
+      if (_seedDebt > 0) _seedPayslip = Number(KWProfile.get('payslip_loan_deductions') || 0);
       if (!_seedDebt) _seedDebt = Number(KWProfile.get('monthly_debt') || 0);
 
       if (_seedDebt > 0 && !debts.length) {
@@ -1115,6 +1126,14 @@ KW.reveal('.card');
           type: 'other',
           name: `Minimum debt payments (${_seedSrc})`,
           amount: _seedDebt,
+          balance: 0,
+          isHousing: false,
+        });
+        if (_seedPayslip > 0) debts.push({
+          id: nextId++,
+          type: 'other',
+          name: 'Loan repayments deducted from your salary (from your payslip)',
+          amount: _seedPayslip,
           balance: 0,
           isHousing: false,
         });
