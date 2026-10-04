@@ -495,7 +495,7 @@ async function statRow(page) {
       assessments: [habitsRow(1)], ef: EF,
       tools: { budget_planner: BUDGET, dti_calculator: DTI_TAKEHOME },
     });
-    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    const card = view.cards.find(c => c.lbl === 'Debt Service Ratio');
     check('50 a take-home-only DTI still reaches the dashboard',
       !!card && card.val === '30%', JSON.stringify(card));
     check('51 computed from the member\'s own debts (3000/10000), not the budget line',
@@ -512,7 +512,7 @@ async function statRow(page) {
       assessments: [habitsRow(1)], ef: EF,
       tools: { budget_planner: BUDGET, dti_calculator: DTI_GROSS },
     });
-    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
+    const card = view.cards.find(c => c.lbl === 'Debt Service Ratio');
     check('53 a gross-basis DTI is unchanged (3000/20000)',
       !!card && card.val === '15%', JSON.stringify(card));
     check('54 and is not labelled take-home',
@@ -522,19 +522,22 @@ async function statRow(page) {
     await page.close();
   }
   {
-    /* 40% of take-home would be "Acceptable" on the gross bands and is not:
-       NBFIRA caps unsecured credit at 30% of net. The bands follow the basis. */
+    /* 4 Oct 2026: the SAME bands on either basis (js/dsr-bands.js). 40% of
+       take-home is Manageable, and the card says it is on take-home, which
+       reads higher than the member's true figure. The old softer take-home
+       bands ("Stretched", NBFIRA 30%) are gone. */
     const DTI_HEAVY = { debts: [{ id: 1, name: 'Loans', amount: 4000, balance: 0 }],
                         grossSalary: '0', otherIncome: '0', netSalary: '10000', dti_basis: 'take_home' };
     const { page, view } = await dash(browser, {
       assessments: [habitsRow(1)], ef: EF,
       tools: { budget_planner: BUDGET, dti_calculator: DTI_HEAVY },
     });
-    const card = view.cards.find(c => c.lbl === 'Debt-to-Income');
-    check('56 40% of take-home is not graded by the gross bands',
-      card && !/Acceptable/.test(card.sub), JSON.stringify(card));
-    check('57 it is Stretched, against the cap that is a net rule',
-      card && /Stretched/.test(card.sub), JSON.stringify(card));
+    const card = view.cards.find(c => c.lbl === 'Debt Service Ratio');
+    check('56 40% of take-home is graded on the one band set: exactly 40 is Manageable',
+      card && /Manageable/.test(card.sub), JSON.stringify(card));
+    check('57 and is labelled as on take-home, with the explanation and a gross prompt',
+      card && /on take-home/.test(card.sub) && /likely higher than your true figure/.test(view.text)
+        && /Add your gross salary/.test(view.text) && /Why two numbers\?/.test(view.text), JSON.stringify(card));
     check('58 and no advice quotes the lender threshold at a take-home figure',
       !/Lenders look for under 35%/.test(view.text), view.text.slice(0, 200));
     await page.close();
@@ -680,13 +683,13 @@ async function statRow(page) {
   {
     const { page, view } = await dash(browser, {
       assessments: [habitsRow(1)], tools: { budget_planner: BUDGET } });
-    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    const dti = view.cards.find(c => /Debt Service Ratio/.test(c.lbl));
     check('77 a budget-derived DTI tile names its source',
       dti && /from your budget/.test(dti.sub), JSON.stringify(dti));
     check('78 and says what would confirm it',
       dti && /list each loan/.test(dti.sub), JSON.stringify(dti));
     check('79 it does not grade a single budget line as a verdict',
-      dti && !/Stretched|Comfortable|Heavy|Healthy|Acceptable|High Risk|Critical/.test(dti.sub),
+      dti && !/Stretched|Comfortable|Heavy|Healthy|Acceptable|High Risk|Critical|Manageable|Strained|Overindebted/.test(dti.sub),
       JSON.stringify(dti));
     check('80 while the checklist still, correctly, says the debts source is unmet',
       /Debts/.test(view.text) && /1 of 6|2 of 6|3 of 6/.test(view.text),
@@ -697,9 +700,9 @@ async function statRow(page) {
     /* A saved DTI run IS a debt register, so the verdict is earned and stays. */
     const { page, view } = await dash(browser, {
       assessments: [habitsRow(1)], tools: { budget_planner: BUDGET, dti_calculator: DTI } });
-    const dti = view.cards.find(c => /Debt-to-Income/.test(c.lbl));
+    const dti = view.cards.find(c => /Debt Service Ratio/.test(c.lbl));
     check('81 a saved DTI run is still graded',
-      dti && /Healthy|Acceptable|High Risk|Critical|Comfortable|Stretched|Heavy/.test(dti.sub),
+      dti && /Healthy|Manageable|Strained|Overindebted/.test(dti.sub),
       JSON.stringify(dti));
     check('82 and does not claim to come from the budget',
       dti && !/from your budget/.test(dti.sub), JSON.stringify(dti));

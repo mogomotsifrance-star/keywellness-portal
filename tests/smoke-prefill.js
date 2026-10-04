@@ -500,8 +500,10 @@ const dismissProfileModal = async (page) => {
       out.ratio === '20.0' && /gross income/.test(out.desc), out.ratio + ' | ' + out.desc);
     check('67 the strip still says Gross Monthly Income',
       /Gross Monthly Income/.test(out.strip) && !/on take-home pay/.test(out.strip), out.strip.slice(0, 120));
-    check('68 the bank DSR rows are kept on the basis banks actually use',
-      /35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 160));
+    // 4 Oct 2026: room is measured against the wellbeing benchmark and the
+    // over-indebtedness line from js/dsr-bands.js, not bank thresholds.
+    check('68 on gross, the room rows measure against the 40% target and the 60% line',
+      /40% wellbeing target/.test(out.cap) && /60% overindebtedness line/.test(out.cap), out.cap.slice(0, 160));
     check('69 and the basis records gross', out.snap && out.snap.basis === 'gross', JSON.stringify(out.snap));
     await page.close();
   }
@@ -518,10 +520,10 @@ const dismissProfileModal = async (page) => {
                advice: document.getElementById('adviceCard')?.textContent || '',
                rows: document.getElementById('breakdownRows')?.textContent || '' };
     });
-    check('70 no bank DSR capacity is quoted on a take-home ratio',
-      !/35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 200));
-    check('71 the NBFIRA 30%-of-net cap, which IS a net rule, is kept',
-      /NBFIRA/.test(out.cap), out.cap.slice(0, 200));
+    check('70 no room is quoted on a take-home ratio (it would understate it)',
+      !/wellbeing target/.test(out.cap), out.cap.slice(0, 200));
+    check('71 and the unverified NBFIRA claim is gone (removed 4 Oct 2026)',
+      !/NBFIRA/.test(out.cap), out.cap.slice(0, 200));
     check('72 the headline is not repeated as a separate "DTI on net" row',
       !/DTI on net/.test(out.rows), out.rows.slice(0, 200));
     check('73 and nothing promises what a lender will decide',

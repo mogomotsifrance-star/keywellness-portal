@@ -10,6 +10,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
+<script src="js/dsr-bands.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script><style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
@@ -1069,7 +1070,7 @@ function calculateWellness(){
     document.getElementById('summaryStrip').innerHTML=`
       <div class="stat-box navy"><div class="stat-label">Wellness Score</div><div class="stat-value" style="color:${ringColor}">${totalScore}/100</div><div class="stat-sub">${grade.label}</div></div>
       <div class="stat-box gold"><div class="stat-label">Savings Rate</div><div class="stat-value">${savRate.toFixed(1)}%</div><div class="stat-sub">Ideal ≥ 20% of gross</div></div>
-      <div class="stat-box ${dti_pct<=35?'green':dti_pct<=50?'orange':'red'}"><div class="stat-label">Debt-to-Income</div><div class="stat-value">${dti_pct.toFixed(1)}%</div><div class="stat-sub">Botswana norm ≤ 35%</div></div>
+      <div class="stat-box ${({good:'green',mid:'orange',warn:'orange',bad:'red'})[KWDsr.tone(KWDsr.band(dti_pct))]||'orange'}"><div class="stat-label">Debt Service Ratio</div><div class="stat-value">${dti_pct.toFixed(1)}%</div><div class="stat-sub">${KWDsr.label(KWDsr.band(dti_pct))} · our target below ${KWDsr.benchmark}%</div></div>
       <div class="stat-box ${netWorth>=0?'green':'red'}"><div class="stat-label">Net Worth</div><div class="stat-value">${fmtK(Math.abs(netWorth))}</div><div class="stat-sub">${netWorth>=0?'Positive':'Negative'}</div></div>
       <div class="stat-box ${emMonths>=6?'green':emMonths>=3?'orange':'red'}"><div class="stat-label">Emergency Cover</div><div class="stat-value">${emMonths.toFixed(1)} mo</div><div class="stat-sub">Target: 6 months</div></div>
       <div class="stat-box navy"><div class="stat-label">Insurance Items</div><div class="stat-value">${insCount} / 6</div><div class="stat-sub">Covers held</div></div>`;
@@ -1173,7 +1174,12 @@ function buildInsights(dims,d){
   else if(d.savRate>=20)ins.push({icon:'🌟',cls:'green',title:'Excellent Savings Rate',text:`Saving <strong>${d.savRate.toFixed(1)}%</strong> of income puts you ahead of most. Ensure savings are in growth-oriented instruments.`});
   if(d.emMonths<3)ins.push({icon:'🚨',cls:'red',title:'Emergency Fund Gap',text:`With only <strong>${d.emMonths.toFixed(1)} months</strong> of cover, a job loss or medical emergency could force you into debt. Build to 6 months of essential expenses.`});
   else if(d.emMonths>=6)ins.push({icon:'🛡️',cls:'green',title:'Strong Emergency Fund',text:`Your emergency fund covers <strong>${d.emMonths.toFixed(1)} months</strong> — well above the 6-month target. You are resilient to short-term shocks.`});
-  if(d.dti_pct>50)ins.push({icon:'🔴',cls:'red',title:'High Debt Burden',text:`Your DTI of <strong>${d.dti_pct.toFixed(1)}%</strong> exceeds NBFIRA and bank benchmarks. New credit applications are likely to be declined.`});
+  // Bands from js/dsr-bands.js. Strained and overindebted are the two
+  // that warrant a red insight; the old 50% line and its NBFIRA claim are gone.
+  const _dsrKey = KWDsr.band(d.dti_pct);
+  if(_dsrKey==='strained'||_dsrKey==='over_indebted')ins.push({icon:'🔴',cls:'red',title:'High Debt Burden',text: _dsrKey==='over_indebted'
+    ? `Your debt repayments take <strong>${d.dti_pct.toFixed(1)}%</strong> of your income. At ${KWDsr.line}% or more you are considered overindebted. A plan with a coach is the most useful next step.`
+    : `Your debt repayments take <strong>${d.dti_pct.toFixed(1)}%</strong> of your income. You are not overindebted, but new credit will be hard to get, and our wellbeing target is below ${KWDsr.benchmark}%.`});
   else if(d.dti_pct<=20&&d.totalDebtBalance===0)ins.push({icon:'🎉',cls:'green',title:'Low or No Consumer Debt',text:`Your debt load is minimal. This frees capital for investing and building wealth.`});
   if(d.netWorth<0)ins.push({icon:'📉',cls:'orange',title:'Negative Net Worth',text:`You currently owe more than you own. Focus on growing assets and reducing liabilities to turn this positive.`});
   else ins.push({icon:'📈',cls:'blue',title:`Net Worth: ${fmtK(d.netWorth)}`,text:`Your net worth is positive. Track this number quarterly — a growing net worth is the ultimate measure of financial progress.`});
@@ -1182,6 +1188,7 @@ function buildInsights(dims,d){
 }
 
 function buildActions(dims,d){
+  const _dsrKey = KWDsr.band(d.dti_pct);
   const actions=[],dimMap=Object.fromEntries(dims.map(x=>[x.id,x.score]));
   // Same guard as buildInsights: the figure-driven actions below quote amounts
   // (`fmt(d.essentialExp*6)`), which in habits mode would render as "P 0.00".
@@ -1211,14 +1218,14 @@ function buildActions(dims,d){
     return actions.slice(0,8);
   }
   if(d.emMonths<3)actions.push({priority:'High',title:'Build your emergency fund first',desc:`Target: ${fmt(d.essentialExp*6)}. Open a separate notice account and auto-debit even P200/month. This is your financial safety net.`});
-  if(d.dti_pct>50)actions.push({priority:'High',title:'Reduce debt-to-income ratio below 35%',desc:`You need to free ${fmt(d.totalIncome*(d.dti_pct/100-0.35))}/mo. Contact lenders for consolidation options or accelerate repayments on the highest-interest accounts first.`});
+  if(_dsrKey==='strained'||_dsrKey==='over_indebted')actions.push({priority:'High',title:`Bring your debt repayments below ${KWDsr.benchmark}% of your income`,desc:`You need to free ${fmt(d.totalIncome*(d.dti_pct-KWDsr.benchmark)/100)}/mo. Contact lenders for consolidation options or accelerate repayments on the highest-interest accounts first.`});
   if(d.savRate<10)actions.push({priority:'High',title:'Increase savings rate to at least 10%',desc:`That's ${fmt(d.gross*0.10)}/mo. Set up an automatic debit on payday. Even P500 more per month compounds significantly over 10 years.`});
   if(d.insCount<2)actions.push({priority:'High',title:'Secure medical aid and income protection',desc:'These two covers protect against the most financially devastating risks: illness and loss of income. Get quotes this month.'});
   if(d.emMonths>=3&&d.emMonths<6)actions.push({priority:'Medium',title:'Top up emergency fund to 6 months',desc:`You need ${fmt((6-d.emMonths)*d.essentialExp)} more. Keep it in an accessible savings account separate from daily spending.`});
   if(d.savRate>=10&&d.savRate<20)actions.push({priority:'Medium',title:'Grow savings rate toward 20%',desc:'Consider unit trusts, Stanbic savings bonds, or a TFSA-equivalent for tax-efficient compounding.'});
   if(dimMap.retirement<50)actions.push({priority:'Medium',title:'Increase pension/retirement contributions',desc:'Voluntary additional contributions (VACs) to your employer fund or a private retirement annuity are the most tax-efficient way to save.'});
   if(dimMap.goals<50)actions.push({priority:'Medium',title:'Set and document 3 specific financial goals',desc:'Write down each goal with a target amount, timeline, and monthly savings needed. Use the Goal Planner tool to track them.'});
-  if(d.dti_pct>20&&d.dti_pct<=50)actions.push({priority:'Medium',title:'Accelerate debt repayment',desc:'Apply the avalanche method: pay minimums on all debts, then direct extra cash to the highest-interest balance first.'});
+  if(d.dti_pct>20&&(_dsrKey==='healthy'||_dsrKey==='manageable'))actions.push({priority:'Medium',title:'Accelerate debt repayment',desc:'Apply the avalanche method: pay minimums on all debts, then direct extra cash to the highest-interest balance first.'});
   if(d.netWorth<0)actions.push({priority:'Medium',title:'Focus on growing assets',desc:'Consider low-cost investments: BSE-listed unit trusts, stokvels, or a small rental income property if you can afford the deposit.'});
   if(dimMap.spending<60)actions.push({priority:'Low',title:'Implement a monthly spending review',desc:'Spend 20 minutes on the last day of each month reviewing bank statements. Categorise spending and identify areas to reduce.'});
   if(d.insCount>=2&&d.insCount<5)actions.push({priority:'Low',title:'Review and fill remaining insurance gaps',desc:`You have ${d.insCount} of 6 recommended covers. Next priority: life insurance or income protection.`});

@@ -444,8 +444,8 @@ function indicators(opts) {
   check('a withheld learning figure is a dash',
     /Watched a video:\s*—/.test(txt), (txt.match(/Watched a video:[^\n]*/) || [''])[0]);
 
-  check('the financial position shows DTI, retirement and stress',
-    /Debt-to-income/i.test(txt) && /Retirement readiness/i.test(txt) && /Financial stress/i.test(txt));
+  check('the financial position shows DSR, retirement and stress',
+    /Debt service ratio/i.test(txt) && /Retirement readiness/i.test(txt) && /Financial stress/i.test(txt));
   check('with the medians', /22\.4/.test(txt) && /48/.test(txt) && /out of 10/.test(txt));
   check('a suppressed DTI band shows a dash rather than a count',
     /Over-indebted \(>45%\)[\s\S]{0,12}—/.test(txt),
@@ -513,7 +513,7 @@ function indicators(opts) {
   check('an organisation under the floor says its detail is withheld',
     /withheld/i.test(txt) && /five-member floor/i.test(txt));
   check('but the whole-organisation financial position still renders',
-    /Debt-to-income/i.test(txt), txt.slice(0, 300));
+    /Debt service ratio/i.test(txt), txt.slice(0, 300));
 
   await page.evaluate(() => { acctPanel = 'delivery'; return window.renderOrgAccount(); });
   await page.waitForTimeout(400);
@@ -545,7 +545,7 @@ function indicators(opts) {
   await page.waitForTimeout(400);
   txt = await body();
   check('wellbeing keeps the financial position when only the report fails',
-    /Debt-to-income/.test(txt) && /unavailable/i.test(txt));
+    /Debt service ratio/.test(txt) && /unavailable/i.test(txt));
 
   await page.evaluate(() => {
     window.__repFail = false; window.__finFail = true;

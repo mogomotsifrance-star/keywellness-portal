@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/dsr-bands.js"></script>
 <style>
 /* ============================================================
    kw-theme.css — inlined so this file renders correctly no matter
@@ -532,6 +533,10 @@ tbody td{padding:10px 12px;vertical-align:middle}
   #sidebar{display:none}
   #main{margin-left:0}
 }
+/* ── DSR explanation ("Why two numbers?") — js/dsr-bands.js ── */
+.kw-dsr-why{margin-top:12px;font-size:12px;line-height:1.6;color:var(--muted)}
+.kw-dsr-why summary{cursor:pointer;font-weight:700;color:var(--navy)}
+.kw-dsr-why p{margin-top:6px}
 </style>
 </head>
 <body>
@@ -919,7 +924,7 @@ async function bootAdvisor(){
   ADVISOR = me;
 
   // Indicator thresholds, so the DTI banding on this screen matches the
-  // organisation figures. Failure is non-fatal — kwDtiCfg() falls back to
+  // organisation figures. Failure is non-fatal — js/dsr-bands.js already holds
   // the same numbers.
   await loadThresholds();
 
@@ -1672,78 +1677,47 @@ function fmtDate(iso){
 let ORG_OPTIONS = null;          // last fetch, read by ncOrgChanged()
 let pendingImport = null;        // an imported file waiting for an organisation
 
-/* ── DTI banding ──────────────────────────────────────────────
-   One definition of "over-indebted", held in threshold_config and read
-   by every surface: this portal, the organisation RPCs, and HR's
-   figures. Hard-coding it here again is what let the advisor screen and
-   the HR dashboard disagree about the same client.
+/* ── DSR banding ──────────────────────────────────────────────
+   One definition of the debt service ratio bands, held in
+   threshold_config 'indicator.dsr' (SQL: kw_dti_band()) and mirrored for
+   the browser in js/dsr-bands.js. This page holds no threshold of its own:
+   hard-coding one here again is what let the advisor screen and the HR
+   dashboard disagree about the same client.
 
-   `max` is an EXCLUSIVE upper bound — a band matches when dti < max — so
-   exactly 45.0 is over-indebted. That matches kw_dti_band() in SQL and
-   org_financial_indicators(), and therefore every figure already
-   published. Do not "fix" it to <=.
+   `max` is an EXCLUSIVE upper bound, so exactly 40 is manageable, 50 is
+   strained and 60 is overindebted. Do not "fix" it to <=.
 
-   The fallback is the same set, so a failed fetch degrades to correct
-   numbers rather than to a blank diagnostic. ── */
-let KW_DTI = null;
-const KW_DTI_FALLBACK = {
-  flag_band: 'over_indebted',
-  bands: [
-    { key:'healthy',       max:20,   label:'Healthy (under 20%)'   },
-    { key:'manageable',    max:35,   label:'Manageable (20–34.9%)' },
-    { key:'strained',      max:45,   label:'Strained (35–44.9%)'   },
-    { key:'over_indebted', max:null, label:'Over-indebted (45%+)'  }
-  ]
-};
-
+   The live row is fetched so a config change reaches the advisor without a
+   deploy; if the fetch fails, js/dsr-bands.js already holds the same
+   numbers, so the page degrades to correct figures, not a blank. ── */
 async function loadThresholds(){
   const { data, error } = await sb.from('threshold_config')
-    .select('value').eq('key','indicator.dti').maybeSingle();
+    .select('value').eq('key','indicator.dsr').maybeSingle();
   if(error || !data || !data.value){
-    console.warn('DTI thresholds unavailable, using built-in defaults',
+    console.warn('DSR thresholds unavailable, using js/dsr-bands.js defaults',
                  error ? error.message : '');
-    KW_DTI = KW_DTI_FALLBACK;
     return;
   }
-  KW_DTI = data.value;
+  KWDsr.applyConfig(data.value);
 }
 
-function kwDtiCfg(){ return KW_DTI || KW_DTI_FALLBACK; }
-
-function kwDtiBand(dti){
-  if(dti === null || dti === undefined || isNaN(dti)) return null;
-  const bands = kwDtiCfg().bands || [];
-  for(let i = 0; i < bands.length; i++){
-    const max = bands[i].max;
-    if(max === null || max === undefined || Number(dti) < Number(max)) return bands[i].key;
-  }
-  return null;
-}
+function kwDtiBand(dti){ return KWDsr.band(dti); }
 
 // The canonical "flagged for debt" test. Same answer as
 // kw_is_over_indebted() in SQL.
-function kwIsOverIndebted(dti){
-  return kwDtiBand(dti) === (kwDtiCfg().flag_band || 'over_indebted');
-}
+function kwIsOverIndebted(dti){ return KWDsr.isOver(dti); }
 
-function kwBandDef(key){
-  const bands = kwDtiCfg().bands || [];
-  for(let i = 0; i < bands.length; i++){ if(bands[i].key === key) return bands[i]; }
-  return {};
-}
+function kwBandLabel(key){ return KWDsr.label(key) || 'Unknown'; }
 
-// Config labels carry their range for HR-facing output ("Strained
-// (35–44.9%)"); the pill wants just the word.
-function kwBandLabel(key){
-  const raw = kwBandDef(key).label || key || '';
-  return String(raw).replace(/\s*\(.*\)\s*$/, '') || 'Unknown';
-}
+// The Key Wellness wellbeing benchmark: the figure advisors advise
+// towards, and the line borrowing capacity is measured against. It used to
+// be read from the top of the "manageable" band, which under the current
+// bands is 50, not the benchmark; it is named in the config instead.
+function kwLendingNorm(){ return KWDsr.benchmark; }
 
-// The ceiling of the "manageable" band is the lending norm quoted to
-// clients, so it follows the config rather than being written twice.
-function kwLendingNorm(){
-  const m = kwBandDef('manageable').max;
-  return (m === null || m === undefined) ? 35 : Number(m);
+// DSR as text: "45.00%", or "Not recorded" when gross salary is missing.
+function dsrTxt(t, dp){
+  return (t.dti === null || t.dti === undefined) ? 'Not recorded' : t.dti.toFixed(dp===undefined?2:dp)+'%';
 }
 
 // Fetched every time the form opens, deliberately NOT cached. An advisor
@@ -2624,8 +2598,9 @@ function debtStatHtml(c){
     <div class="card-title">At a glance</div>
     <div class="stat-grid" style="margin-bottom:0">
       <div class="stat-box"><div class="stat-val">${fmt(t.totalDebtInstalment)}</div><div class="stat-lbl">Total Monthly Debt</div></div>
-      <div class="stat-box ${d.color}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income (DTI)</div></div>
-    </div>`;
+      <div class="stat-box ${d.color}"><div class="stat-val">${dsrTxt(t)}</div><div class="stat-lbl">Debt service ratio (DSR) · ${esc(d.label)}</div></div>
+    </div>
+    ${KWDsr.advisorExplainHtml()}`;
 }
 function refreshDebtStat(){ const el=document.getElementById('debtStat'); if(el) el.innerHTML = debtStatHtml(getClient()); }
 
@@ -3408,8 +3383,11 @@ function panelRobo(c){
   debts.forEach(d=>{ const m=impliedMonths(d.balance,d.rate,d.minPayment); if(!isFinite(m)) anyInfeasible=true; else currentInterestEstimate += Math.max(0,d.minPayment*m-d.balance); });
   const consolidationHelps = anyInfeasible || (consNew.monthly < totalMin && consNew.interest < currentInterestEstimate);
 
-  const targetPayment = t.totalIncome*0.35;
-  const needsRestructuring = t.dti > 45 && targetPayment>0;
+  // Restructure towards the wellbeing benchmark on gross salary, and treat
+  // it as the priority once the client is at or past the
+  // over-indebtedness line, the same two numbers every surface uses.
+  const targetPayment = t.grossSalary*(kwLendingNorm()/100);
+  const needsRestructuring = t.dti !== null && KWDsr.isOver(t.dti) && targetPayment>0;
   const restructMonths = needsRestructuring ? impliedMonths(totalBal, weightedRate, targetPayment) : null;
 
   const wantsOverBudget = Math.max(0, t.wantsAmt - t.totalIncome*0.3);
@@ -3430,12 +3408,12 @@ function panelRobo(c){
   }
 
   let overallPath;
-  if(needsRestructuring && (!isFinite(restructMonths) || t.dti>65)){
-    overallPath = `Debt-to-income is ${t.dti.toFixed(2)}% — restructuring or consolidation should come first, to bring the monthly obligation down to an affordable level before a ${stratPick.split(' ')[0].toLowerCase()} payoff plan is realistic.`;
+  if(needsRestructuring && !isFinite(restructMonths)){
+    overallPath = `DSR is ${dsrTxt(t)} — restructuring or consolidation should come first, to bring the monthly obligation down to an affordable level before a ${stratPick.split(' ')[0].toLowerCase()} payoff plan is realistic.`;
   } else if(consolidationHelps){
     overallPath = `Consolidation looks favourable at an estimated ${rs.consRate}% over ${rs.consTerm} months — pair it with the ${stratPick.split(' ')[0]} method on whatever stays outside the consolidation.`;
   } else if(needsRestructuring){
-    overallPath = `Consider restructuring to ease monthly pressure (DTI ${t.dti.toFixed(2)}%), then follow the ${stratPick.split(' ')[0]} method.`;
+    overallPath = `Consider restructuring to ease monthly pressure (DSR ${dsrTxt(t)}), then follow the ${stratPick.split(' ')[0]} method.`;
   } else {
     overallPath = `Current debt load is manageable at this income — proceed directly with the ${stratPick.split(' ')[0]} method.`;
   }
@@ -3456,7 +3434,7 @@ function panelRobo(c){
       <div class="stat-box red"><div class="stat-val">${fmt(totalBal)}</div><div class="stat-lbl">Total Debt Balance</div></div>
       <div class="stat-box"><div class="stat-val">${weightedRate.toFixed(2)}%</div><div class="stat-lbl">Weighted Avg. Rate</div></div>
       <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Min. Payments</div></div>
-      <div class="stat-box ${t.dti<=35?'green':t.dti<=50?'gold':'red'}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income</div></div>
+      <div class="stat-box ${diagDebt(t).color}"><div class="stat-val">${dsrTxt(t)}</div><div class="stat-lbl">Debt service ratio</div></div>
     </div>
     <div id="robo-stats"></div>
 
@@ -3492,8 +3470,8 @@ function panelRobo(c){
     <div class="card">
       <div class="card-title">Restructuring Check</div>
       <div id="robo-restruct">${needsRestructuring
-        ? `<div class="notice notice-orange" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is above the 45% affordability line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (35% of income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
-        : `<div class="notice notice-green" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is within an affordable range — restructuring isn't the priority here.</div>`}</div>
+        ? `<div class="notice notice-orange" style="margin-bottom:0">DSR of ${dsrTxt(t)} is at or past the ${KWDsr.line}% over-indebtedness line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (${kwLendingNorm()}% of gross salary) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
+        : `<div class="notice notice-green" style="margin-bottom:0">DSR of ${dsrTxt(t)} is below the ${KWDsr.line}% over-indebtedness line — restructuring isn't the priority here.</div>`}</div>
     </div>
 
     <div class="card">
@@ -3579,7 +3557,7 @@ function panelReportPFA(c){
      an advisor can read out loud, auto-built from the diagnostics. ── */
   const summary = `As of ${fmtDate(new Date().toISOString())}, ${esc(fullName(c))} has a net worth of
     <strong>${fmtSigned(t.netWorth)}</strong> on total monthly household income of <strong>${fmt(t.totalIncome)}</strong>.
-    Debt-to-income sits at <strong>${t.dti.toFixed(2)}%</strong> (${debt.label}). Income is rated
+    Debt service ratio sits at <strong>${dsrTxt(t)}</strong> of gross salary (${debt.label}). Income is rated
     <strong>${inc.label}</strong>, spending against the 50/30/20 budget is <strong>${exp.label}</strong>, and lifestyle
     affordability is <strong>${life.label}</strong>. Full detail for each area is below, with the advisor's
     recommendations at the end of this report.`;
@@ -4030,9 +4008,9 @@ function arRenderPrepare(){
     </tr>`;
   }).join('');
   const live = pv ? `<div class="ar-live">
-      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div></div>
+      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div><div class="ar-note">of gross salary${pv.before.dsr==null?'':' · '+esc(kwBandLabel(kwDtiBand(pv.before.dsr)))}</div></div>
       <div><div class="l">DSR after</div><div class="v">${pv.after?pv.after.dsr.toFixed(2)+'%':'—'} ${pv.dsr_change?`<small>${pv.dsr_change.direction} ${pv.dsr_change.delta_points>0?'+':''}${pv.dsr_change.delta_points.toFixed(2)}</small>`:''}</div></div>
-      <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div></div>
+      <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div>${pv.advance&&pv.advance.cap!=null?`<div class="ar-note">${pv.advance.capped?`Capped at 4 × gross salary (${fmt(pv.advance.cap)}); informal balances total ${fmt(pv.advance.debt_based_amount)}`:`Cap ${fmt(pv.advance.cap)} (4 × gross salary) not reached`}</div>`:''}</div>
       <div><div class="l">Risk tier</div><div class="v ${pv.tier}">${pv.tier}</div><div class="ar-note">${esc(pv.decision)}</div></div>
     </div>` : '';
   return `${arErr()}
@@ -4042,7 +4020,7 @@ function arRenderPrepare(){
     ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Treatment</th><th class="num">Balance</th><th class="num">Instalment</th></tr></thead><tbody>${rows}</tbody></table></div>`
                    : `<div class="ar-note">No liabilities captured for this client. Add them on the Liabilities tab first.</div>`}
     <div class="ar-fields">
-      <div><label>Repayment term (months)</label><input type="number" min="1" max="60" value="${p.term_months}" onchange="arPrepField('term_months', this.value)"></div>
+      <div><label>Repayment term</label><input type="text" value="24 months, 0% interest" disabled title="Fixed by the advance programme (4 Oct 2026)"><div class="ar-note">Fixed by the programme. The advance is the lower of the informal balances and 4 × gross salary.</div></div>
       <div><label>Consultation date</label><input type="date" value="${esc(p.consultation_date)}" onchange="arPrepField('consultation_date', this.value)"></div>
       <div><label>Context for the narrative (optional, not printed)</label><textarea placeholder="e.g. forex loss on a side business; second motshelo taken in July" oninput="arPrepField('advisor_context', this.value)">${esc(p.advisor_context)}</textarea></div>
     </div>
@@ -4404,7 +4382,12 @@ function calcTotals(c){
 
   const totalDebtInstalment = c.liabilities.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
   const totalLiabilityBalance = c.liabilities.reduce((s,r)=>s+pf(r.balance),0);
-  const dti = totalIncome>0 ? (totalDebtInstalment/totalIncome*100) : 0;
+  // DSR is on the client's OWN gross salary (decided 4 Oct 2026): spouse,
+  // rental, business and dividend income are left out, as a lender would.
+  // No gross salary means no DSR, never a 0% that reads as healthy. The
+  // advisor side has no take-home figure that does not come from gross, so
+  // there is no take-home fallback here.
+  const dti = grossSalary>0 ? (totalDebtInstalment/grossSalary*100) : null;
 
   const totalAssets = c.assets.reduce((s,r)=>s+pf(r.value),0);
   const incomeGenAssets = c.assets.filter(r=>r.status==='Income-Generating').reduce((s,r)=>s+pf(r.value),0);
@@ -4428,11 +4411,10 @@ function calcTotals(c){
   const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
   const savingsPct = totalIncome>0 ? savingsAmt/totalIncome*100 : 0;
 
-  // Headroom to the lending norm. Fixed at 35% before, while the wording
-  // around it quotes kwLendingNorm() from threshold_config -- so a change to
-  // the config produced "capacity at the 40% threshold" over a figure still
-  // worked out at 35%.
-  const debtCapacity = Math.max(0, totalIncome*(kwLendingNorm()/100) - totalDebtInstalment);
+  // Headroom to the wellbeing benchmark, on the same gross salary the DSR
+  // uses, so "capacity at the 40% benchmark" is worked out at 40% of the
+  // figure the DSR is a percentage of.
+  const debtCapacity = Math.max(0, grossSalary*(kwLendingNorm()/100) - totalDebtInstalment);
 
   return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, totalDebtInstalment, totalLiabilityBalance, dti,
     totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
@@ -4465,34 +4447,36 @@ function diagExpense(t){
   return {title:'Expense Problem', color, label, points};
 }
 function diagDebt(t){
-  if(t.totalIncome<=0){
-    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture income and liabilities to run this diagnostic.']};
+  if(t.dti === null){
+    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture gross salary and liabilities to run this diagnostic.']};
   }
-  const points = [`Debt-to-income (DTI) is <strong>${t.dti.toFixed(2)}%</strong> of gross monthly income.`];
+  const points = [`Debt service ratio (DSR) is <strong>${dsrTxt(t)}</strong> of gross monthly salary.`];
 
-  // Bands come from threshold_config (see kwDtiBand). Colour is the
-  // portal's own reading of them: healthy and manageable are both within
-  // the lending norm, so both stay green — which keeps the activity
-  // report's "not green" flag on the same 35% line it has always used.
+  // Bands come from threshold_config 'indicator.dsr' via js/dsr-bands.js.
+  // Only healthy is green: a client in manageable is not overindebted but
+  // is above the wellbeing benchmark and should have a plan, so it shows
+  // gold rather than passing as fine.
   const band  = kwDtiBand(t.dti);
   const label = kwBandLabel(band);
   const norm  = kwLendingNorm();
+  const line  = KWDsr.line;
   let color;
   switch(band){
-    case 'healthy':
-    case 'manageable':    color = 'green';  break;
+    case 'healthy':       color = 'green';  break;
+    case 'manageable':    color = 'gold';   break;
     case 'strained':      color = 'orange'; break;
     case 'over_indebted': color = 'red';    break;
     default:              color = 'grey';
   }
 
-  if(band === 'healthy' || band === 'manageable'){
-    points.push(`Within Botswana lending norms (≤${norm}%) — borrowing capacity intact.`);
-    points.push(`Remaining capacity at the ${norm}% threshold: ${fmt(t.debtCapacity)}/mo.`);
-  } else if(band === 'strained'){
-    points.push(`Above the ${norm}% lending norm — new credit will be difficult. Reduce before applying.`);
+  if(band === 'healthy'){
+    points.push(`Below the ${norm}% wellbeing benchmark: repayments leave room for needs, savings and the unexpected.`);
+    points.push(`Remaining capacity at the ${norm}% benchmark: ${fmt(t.debtCapacity)}/mo.`);
+  } else if(band === 'manageable' || band === 'strained'){
+    points.push(`Above the ${norm}% wellbeing benchmark but below the ${line}% over-indebtedness line. Not overindebted; agree a plan to bring DSR below ${norm}%.`);
+    if(band === 'strained') points.push('New credit will be difficult at this level. Reduce before applying.');
   } else if(band === 'over_indebted'){
-    points.push('Past the 45% affordability line — most lenders would decline, and restructuring is the realistic route.');
+    points.push(`At or past the ${line}% over-indebtedness line. Most lenders would decline, and restructuring is the realistic route.`);
   }
   return {title:'Debt Problem', color, label, points};
 }
@@ -4505,7 +4489,7 @@ function diagLifestyle(t){
   if(t.wantsPct>30 && t.savingsPct<20){ color='red'; label='At Risk'; points.push(`Wants spending (${t.wantsPct.toFixed(2)}%) is outpacing savings (${t.savingsPct.toFixed(2)}%) — classic lifestyle-inflation pattern.`); }
   else if(t.wantsPct>30 || t.savingsPct<20){ color='orange'; label='Caution'; points.push('Discretionary spending or savings rate is drifting away from a sustainable balance.'); }
   else { points.push('Discretionary spending and savings rate are in a healthy balance.'); }
-  points.push(`Can comfortably afford up to ${fmt(t.debtCapacity)}/mo of new debt before hitting the ${kwLendingNorm()}% DTI threshold.`);
+  points.push(`Can comfortably afford up to ${fmt(t.debtCapacity)}/mo of new debt before reaching the ${kwLendingNorm()}% DSR benchmark.`);
   if(t.totalAssets>0 && t.assetIncomePct<70){ if(color==='green') color='gold'; points.push(`Only ${t.assetIncomePct.toFixed(2)}% of assets are income-generating — target is 70%.`); }
   return {title:'Lifestyle Inflation & Affordability', color, label, points};
 }
@@ -4521,8 +4505,8 @@ function diagLifestyle(t){
 
    For each of the three areas it produces:
      • a severity score 0–100, from the same thresholds the Advisory
-       Framework already uses (50/30/20, DTI ≤35%, 30% passive income,
-       70% income-generating assets, the 45% restructuring line)
+       Framework already uses (50/30/20, the DSR bands in js/dsr-bands.js,
+       30% passive income, 70% income-generating assets)
      • named INDICATORS — the specific observable signs that fired, e.g.
        an expense problem shows "Budget deficit"
      • a PLAN OF ACTION, ordered, with the biggest lever first
@@ -4660,9 +4644,9 @@ function analyseDebt(t, c){
   const ind = [], act = [];
   let score = 0;
 
-  if(t.totalIncome <= 0){
+  if(t.dti === null){
     return { key:'debt', title:'Debt', score:null, incomplete:true,
-             indicators:[], actions:[], summary:'Capture income and liabilities to run this analysis.' };
+             indicators:[], actions:[], summary:'Capture gross salary and liabilities to run this analysis.' };
   }
   const active = (c.liabilities || []).filter(l => pf(l.balance) > 0);
   const costly = active.filter(l => pf(String(l.interestRate || '').replace('%','')) >= 20);
@@ -4673,19 +4657,22 @@ function analyseDebt(t, c){
              summary:'No outstanding debt recorded' };
   }
 
-  if(t.dti > 65){
+  // One indicator per band, from js/dsr-bands.js. The old 65% "critical"
+  // tier is retired: the bands stop at the over-indebtedness line.
+  const dsrBand = kwDtiBand(t.dti);
+  if(dsrBand === 'over_indebted'){
     score += 55;
-    ind.push({ label:'Debt servicing unaffordable', detail:`DTI is ${t.dti.toFixed(1)}%. Most lenders would decline, and the client is likely rotating credit to meet instalments.` });
-  } else if(t.dti > 45){
+    ind.push({ label:'Overindebted', detail:`DSR is ${dsrTxt(t,1)}, at or past the ${KWDsr.line}% over-indebtedness line. Most lenders would decline, and restructuring is the realistic route.` });
+  } else if(dsrBand === 'strained'){
     score += 38;
-    ind.push({ label:'Past the restructuring line', detail:`DTI is ${t.dti.toFixed(1)}%, above the 45% affordability line where restructuring becomes the realistic route.` });
-  } else if(t.dti > 35){
+    ind.push({ label:'DSR strained', detail:`DSR is ${dsrTxt(t,1)}. Not overindebted, but well above the ${kwLendingNorm()}% wellbeing benchmark. New credit will be difficult.` });
+  } else if(dsrBand === 'manageable'){
     score += 22;
-    ind.push({ label:'DTI above lending threshold', detail:`DTI is ${t.dti.toFixed(1)}%, above the 35% Botswana lending norm. New credit will be difficult.` });
+    ind.push({ label:'DSR above the wellbeing benchmark', detail:`DSR is ${dsrTxt(t,1)}, above the ${kwLendingNorm()}% benchmark. Agree a plan to bring it below ${kwLendingNorm()}%.` });
   }
   if(t.debtCapacity <= 0 && t.dti > kwLendingNorm()){
     score += 8;
-    ind.push({ label:'No borrowing headroom', detail:`There is no room for further credit at the ${kwLendingNorm()}% threshold — any new obligation worsens the position.` });
+    ind.push({ label:'No borrowing headroom', detail:`There is no room for further credit at the ${kwLendingNorm()}% benchmark — any new obligation worsens the position.` });
   }
   if(t.netWorth < 0){
     score += 18;
@@ -4713,17 +4700,17 @@ function analyseDebt(t, c){
   } else {
     act.push('There is no surplus to accelerate with. Fix the budget deficit first — a payoff strategy on a deficit is theoretical.');
   }
-  if(active.length >= 3 || t.dti > 45){
+  if(active.length >= 3 || KWDsr.isOver(t.dti)){
     act.push('Run the Consolidation Check with a realistic rate and term. If it does not clearly reduce the monthly payment, do not recommend it.');
   }
-  if(t.dti > 45){
+  if(KWDsr.isOver(t.dti)){
     act.push('Begin restructuring conversations with creditors now rather than after a missed payment — terms are far better before default.');
   }
-  act.push('Agree a credit freeze until DTI is back under 35%, and record the target date.');
+  act.push(`Agree a credit freeze until DSR is back under the ${kwLendingNorm()}% benchmark, and record the target date.`);
 
   return { key:'debt', title:'Debt', score:Math.min(100, score), incomplete:false,
            indicators:ind, actions:act,
-           summary:`DTI ${t.dti.toFixed(1)}% · ${fmt(t.totalLiabilityBalance)} outstanding across ${active.length} facilit${active.length===1?'y':'ies'}` };
+           summary:`DSR ${dsrTxt(t,1)} · ${fmt(t.totalLiabilityBalance)} outstanding across ${active.length} facilit${active.length===1?'y':'ies'}` };
 }
 
 /* Ranks the three areas and names the primary problem.
@@ -4784,15 +4771,14 @@ function renderFrameworkView(){
       <div class="diag-card st-orange">
         <div class="diag-head"><h4>Debt Problem</h4></div>
         <ul class="diag-list">
-          <li>Debt-to-income ratio: total monthly instalments ÷ gross monthly income.</li>
-          <li>Healthy ≤35% · Acceptable ≤50% · High Risk ≤65% · Critical &gt;65% — matching the DTI Calculator thresholds used elsewhere on the portal.</li>
+          <li>${esc(KWDsr.advisorText())}</li>
         </ul>
       </div>
       <div class="diag-card st-red">
         <div class="diag-head"><h4>Lifestyle Inflation & Affordability</h4></div>
         <ul class="diag-list">
           <li>Compares Wants spending against the Savings rate to spot lifestyle creep.</li>
-          <li>Reports remaining borrowing capacity at the 35% DTI threshold.</li>
+          <li>Reports remaining borrowing capacity at the DSR wellbeing benchmark.</li>
           <li>Checks that ≥70% of assets are income-generating, per the Key Wealth assessment guideline.</li>
         </ul>
       </div>
