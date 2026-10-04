@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="kw-badges.js"></script>
+<script src="kw-categories.js"></script>
 <script src="kw-profile-sync.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -87,6 +88,25 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .item-row.bva-row{grid-template-columns:1fr 108px 108px 96px 32px;}
 .item-row-header.bva-header{grid-template-columns:1fr 108px 108px 96px 32px;}
 .bva-var{display:flex;align-items:center;justify-content:flex-end;padding-right:2px;}
+/* Phase D.3: guidance shows only while the member is in that line.
+   Rows align to the TOP so a hint opening under the label grows the row
+   downwards and never moves the input being typed in. The label column gets
+   a little top padding so its text still sits level with the input. */
+.item-row.bva-row,.item-row.income-row{align-items:start;}
+.item-row.bva-row > .bva-var{min-height:36px;}
+.item-row.bva-row > .del-btn,.item-row.income-row > .del-btn{margin-top:4px;}
+.row-lbl{padding-top:8px;}
+.kw-guide{display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px;}
+.kw-guide.kw-prompt{color:var(--navy);margin-top:3px;}
+.item-row:focus-within .kw-guide{display:block;}
+/* Payslip double-count warnings: shown while in the line, or once the line
+   already carries a figure. Muted, never red, never blocking. */
+.kw-warn{display:none;font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px;padding-left:8px;border-left:2px solid var(--border);}
+.item-row:focus-within .kw-warn,.item-row.has-fig .kw-warn{display:block;}
+.kw-state{font-size:11px;color:var(--muted);line-height:1.5;margin-top:3px;}
+.kw-linkbtn{background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit;}
+#payslipSkip.kw-linkbtn{font-size:12px;}
+.iw input[readonly]{color:var(--navy);background:var(--kw-surface,#f7f5f0);cursor:default;}
 .col-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
 .del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
 .del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
@@ -347,6 +367,35 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
       <!-- ── LEFT: Budget entry ── -->
       <div id="budgetLeft">
 
+        <!-- From your payslip (optional): Phase C, moved first by Phase D.3.
+             NOTHING in this block is added to income or expense totals. It
+             describes money the member never had the chance to allocate, so
+             budgeting it would double-count it against the pay they actually
+             received. D.3 uses it for one thing more: what is left after the
+             deductions FILLS the net-pay row's amount (see syncNetFromPayslip),
+             which stays the one home for that figure. -->
+        <div class="card" id="payslipCard">
+          <div class="card-title-row">
+            <div class="card-title">From your payslip <span style="font-weight:500;color:var(--muted);font-size:.8em">(optional)</span></div>
+            <button class="btn btn-ghost btn-xs" id="payslipToggle" onclick="togglePayslip()" aria-expanded="false" aria-controls="payslipBody">Show</button>
+          </div>
+          <div id="payslipLead" style="font-size:12px;color:var(--navy);line-height:1.6;margin-top:-4px">
+            Start with your payslip. What is left after deductions becomes your income below.
+          </div>
+          <div id="payslipBody" hidden>
+            <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:4px">
+              Lets the portal count savings and loans that come off before your pay reaches you.
+            </div>
+            <div class="item-row-header income-header" style="margin-top:14px">
+              <span class="col-label">From your payslip</span>
+              <span class="col-label" style="text-align:right;">Monthly Amount</span>
+              <span></span>
+            </div>
+            <div id="payslipRows"></div>
+            <button type="button" id="payslipSkip" class="kw-linkbtn" style="margin-top:8px" onclick="skipPayslip()">No payslip, or not to hand? Enter your income directly below.</button>
+          </div>
+        </div>
+
         <!-- Income -->
         <div class="card" id="incomeCard">
           <div class="card-title-row">
@@ -364,30 +413,6 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
             <span></span>
           </div>
           <div id="incomeRows"></div>
-        </div>
-
-        <!-- From your payslip (optional) — Phase C.
-             NOTHING in this block is added to income or expense totals. It
-             describes money the member never had the chance to allocate, so
-             budgeting it would double-count it against the pay they actually
-             received. It exists so the tools downstream stop asking. -->
-        <div class="card" id="payslipCard">
-          <div class="card-title-row">
-            <div class="card-title">From your payslip <span style="font-weight:500;color:var(--muted);font-size:.8em">(optional)</span></div>
-            <button class="btn btn-ghost btn-xs" id="payslipToggle" onclick="togglePayslip()" aria-expanded="false" aria-controls="payslipBody">Show</button>
-          </div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:-4px">
-            Lets the portal count savings and loans that come off before your pay reaches you.
-          </div>
-          <div id="payslipBody" hidden>
-            <div class="item-row-header income-header" style="margin-top:14px">
-              <span class="col-label">From your payslip</span>
-              <span class="col-label" style="text-align:right;">Monthly Amount</span>
-              <span></span>
-            </div>
-            <div id="payslipRows"></div>
-            <div id="payslipReconcile" style="margin-top:12px"></div>
-          </div>
         </div>
 
         <!-- Expense categories -->
@@ -467,132 +492,19 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 // ────────────────────────────────────────────
 const LS_KEY = 'budget_planner_v2';
 
-// Phase D — the approved Botswana category model.
-// Spec: docs/phase-d-category-model.md (APPROVED 16 Sep 2026). Every hint,
-// first-budget prompt and advice sentence in this file is verbatim from it.
-//
-// `bucket` is the arithmetic; `group` is only where the line is drawn on
-// screen. The 50/30/20 bars and calcTotals() read BUCKET. They used to read
-// group, which is why the Other group — Giving, Miscellaneous and every custom
-// line — was counted in the expense total and appeared in no bar at all, so
-// the three bars never added up to what the member spends.
-//
-// `bucket: null` means the member has not told us yet (Giving, Miscellaneous,
-// an untagged custom line). Never guessed, never defaulted: an untagged line
-// stays in the total and in no bar, and is asked about again on the next save.
-//
-// EVERY ID IS UNCHANGED, so no stored budget needs migrating. `moraka` moves
-// group and bucket but keeps its id and its amount.
-const EXPENSE_GROUPS = [
-  {
-    id:'needs', name:'Needs', icon:'\ud83c\udfe0', color:'#163561',
-    cats:[
-      {id:'housing',        name:'Housing & Rent',            bucket:'need'},
-      {id:'utilities',      name:'Utilities',                 bucket:'need'},
-      {id:'food',           name:'Food & Groceries',          bucket:'need'},
-      {id:'motshelo_goods', name:'Food or goods motshelo',    bucket:'need'},
-      {id:'transport',      name:'Transport',                 bucket:'need'},
-      {id:'health',         name:'Health & Medical',          bucket:'need'},
-      {id:'childcare',      name:'Child / Education',         bucket:'need'},
-      {id:'family_support', name:'Family support',            bucket:'need'},
-      {id:'contributions',  name:'Contributions',             bucket:'need'},
-      {id:'helper',         name:'Helper',                    bucket:'need'},
-      {id:'insurance',      name:'Insurance',                 bucket:'need'},
-      // Moved out of Savings 16 Sep. A cattle post is a store of wealth; the
-      // feed, dipping and fuel that keep it are a cost, and members who told
-      // us they "save" through cattle were having a farm's running costs
-      // counted as savings.
-      {id:'moraka',         name:'Farm costs (moraka & masimo)', bucket:'need'},
-      {id:'debt_min',       name:'Minimum debt payments',     bucket:'need'},
-    ]
-  },
-  {
-    id:'wants', name:'Wants', icon:'\ud83c\udfac', color:'#D97706',
-    cats:[
-      {id:'entertain',  name:'Entertainment',       bucket:'want'},
-      {id:'dining',     name:'Dining out',          bucket:'want'},
-      {id:'shopping',   name:'Shopping & clothing', bucket:'want'},
-      {id:'personal',   name:'Personal care',       bucket:'want'},
-      {id:'subscript',  name:'Subscriptions',       bucket:'want'},
-      {id:'travel',     name:'Travel & holidays',   bucket:'want'},
-      {id:'hobbies',    name:'Hobbies & leisure',   bucket:'want'},
-    ]
-  },
-  {
-    id:'savings', name:'Savings & Investments', icon:'\ud83d\udcb0', color:'#1A8C5B',
-    cats:[
-      {id:'emfund',     name:'Emergency fund',        bucket:'save'},
-      {id:'retirement', name:'Retirement / pension',  bucket:'save'},
-      {id:'invest',     name:'Investments',           bucket:'save'},
-      {id:'goals',      name:'Goal savings',          bucket:'save'},
-      {id:'motshelo',   name:'Money motshelo',        bucket:'save'},
-      // In the third bar, never in monthly_savings — which is why that bar is
-      // labelled "Savings & extra debt repayment". Paying debt down faster is
-      // good; it is not money you still have.
-      {id:'debt_extra', name:'Extra debt repayment',  bucket:'save'},
-    ]
-  },
-  {
-    id:'other', name:'Other', icon:'\ud83d\udccb', color:'#64748B',
-    cats:[
-      // Tagged by the member on first non-zero entry (question 1, option c).
-      {id:'gifts',      name:'Giving (church, tithe, gifts)', bucket:null},
-      {id:'misc',       name:'Miscellaneous',                 bucket:null},
-    ]
-  },
-];
-
-// Hints, first-budget prompts and advice, verbatim from the approved model.
-// Keyed by category id; absent means the line carries none.
-const CAT_HINT = {
-  housing:'rent or bond, plus levies and rates',
-  utilities:'water, electricity, and the data you cannot work without',
-  food:'what you spend feeding your household in a month',
-  motshelo_goods:'your monthly contribution to a groceries or toiletries motshelo',
-  transport:'fuel, combi fares, taxis, car upkeep',
-  health:'medicines, doctor visits and anything medical aid does not cover',
-  childcare:'school fees, uniforms, cr\u00e8che, transport to school',
-  family_support:'money to parents, siblings or relatives you support. Choose "fixed" if it is the same every month, or "varies" and enter what you set aside for it.',
-  contributions:'what you set aside for funerals, weddings, baby showers and workplace collections. Most months something comes up.',
-  helper:'domestic worker, garden help \u2014 wages and their transport',
-  insurance:'funeral cover, life, car, home \u2014 not medical aid',
-  moraka:'feed, herding, vet, dipping, seed, ploughing, fuel to the farm. Not the value of the herd or the land.',
-  debt_min:'the minimum you must pay each month, across every loan',
-  dining:'restaurants, takeaways, lunch at work',
-  personal:'hair, grooming, salon',
-  subscript:'streaming, gym, apps \u2014 the ones that renew without asking',
-  emfund:'what you put aside each month for the month that goes wrong',
-  retirement:'what you choose to put away, on top of any pension off your payslip',
-  invest:'unit trusts, shares, a fixed deposit, an asset manager',
-  goals:'money set aside for something specific \u2014 see the goal types below',
-  motshelo:'your monthly contribution to the group. Enter the payout under Income when it arrives.',
-  debt_extra:'what you pay above the minimum, by choice',
-  gifts:'tithe or church giving, and gifts you give. Money to family goes under Family support.',
-  misc:'anything that fits nowhere else',
-};
-
-// Shown under the field on a member's FIRST budget only.
-const CAT_FIRST_PROMPT = {
-  housing:'Rent or bond \u2014 whatever keeps the roof over you.',
-  food:'Groceries for the household, not meals out \u2014 those have their own line.',
-  childcare:'School fees and anything that comes with them.',
-  family_support:'Many of us send money home. Put it here so your budget tells the truth about your month.',
-  contributions:'Set aside something for this month\u2019s contributions \u2014 a funeral, a wedding, the office collection \u2014 so they do not come out of the food money.',
-  moraka:'Running costs of the cattle post or the fields \u2014 not what the herd is worth.',
-  debt_min:'Only the minimums. Anything extra you choose to pay goes in Extra debt repayment.',
-  subscript:'Worth listing: subscriptions are the easiest thing to forget you are paying for.',
-  emfund:'Even P100 a month starts this. The amount matters less than it existing.',
-  motshelo:'A motshelo is saving. It counts here.',
-};
-
-const ALL_CATS = EXPENSE_GROUPS.flatMap(g=>g.cats);
-const BUCKET_OF = Object.fromEntries(ALL_CATS.map(c=>[c.id, c.bucket ?? null]));
-// The two built-ins the member tags, and the only ones that may be re-tagged.
-// Every other built-in is fixed (question 4): a member re-tagging `housing` as
-// a Want would produce figures nothing downstream could reason about.
-const TAGGABLE_BUILTINS = ['gifts','misc'];
-const CAT_MAP  = Object.fromEntries(ALL_CATS.map(c=>[c.id,c]));
-const GROUP_MAP = Object.fromEntries(EXPENSE_GROUPS.map(g=>[g.id,g]));
+// The category model lives in kw-categories.js, loaded above, so the Expense
+// Tracker reads the same list rather than carrying a second copy of it (Phase
+// D.2). These aliases keep this page's existing names working; the definitions
+// are there, and a category added here only would be the exact defect D.2
+// exists to prevent.
+const EXPENSE_GROUPS     = KW_EXPENSE_GROUPS;
+const CAT_HINT           = KW_CAT_HINT;
+const CAT_FIRST_PROMPT   = KW_CAT_FIRST_PROMPT;
+const ALL_CATS           = KW_ALL_CATS;
+const CAT_MAP            = KW_CAT_MAP;
+const GROUP_MAP          = KW_GROUP_MAP;
+const BUCKET_OF          = KW_BUCKET_OF;
+const TAGGABLE_BUILTINS  = KW_TAGGABLE_BUILTINS;
 
 // ────────────────────────────────────────────
 // STATE
@@ -815,9 +727,28 @@ function untaggedWithMoney(b){
 // Collect the shared figures a saved budget can supply, ask once, then write.
 // Returns early on anything missing rather than writing a partial patch.
 let _kwSyncPending = false;
+let _kwSyncDeferred = false;
+function kwSyncHeld(){
+  const a = document.activeElement;
+  if (!a || a === document.body) return false;
+  const card = document.getElementById('payslipCard');
+  if (card && card.contains(a)) return true;
+  const r = currentKey && netRowOf(budgets[currentKey]);
+  const row = r && document.getElementById('incrow_' + r.id);
+  return !!(row && row.contains(a));
+}
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (_kwSyncDeferred && !kwSyncHeld()) { _kwSyncDeferred = false; kwSyncProfileFromBudget(); }
+}, 0));
 async function kwSyncProfileFromBudget(){
   if (!window._toolUser || !window._toolSb || !currentKey || !budgets[currentKey]) return;
   if (_kwSyncPending) return;                // one prompt per save, not one per keystroke
+  // D.3: not while the member is still in the payslip card or the net row.
+  // Mid-entry, the net figure is gross less only the deductions typed so far,
+  // and offering THAT as their net_income would be asking them to confirm a
+  // figure they have not finished giving us. Totals and the saved budget keep
+  // updating; only the question waits, and is put once focus leaves both.
+  if (kwSyncHeld()) { _kwSyncDeferred = true; return; }
   const b = budgets[currentKey];
   const _t = calcTotals(b);
   // The net-pay row by its label — the same label seedFromAssessment writes.
@@ -986,6 +917,11 @@ function confirmNewMonth(){
         actuals:{},   // a new month starts with zero actuals (only the plan is copied)
         customCats:(src.customCats||[]).map(c=>({...c})),   // keep custom "Other" expenses, and their tags, with the same ids
         tags:{...(src.tags||{})},                            // Giving / Miscellaneous tags travel too
+        // D.3: payslips rarely change month to month, and the net row keeps its
+        // `src` through the spread above, so a copied month never carries a
+        // figure "worked out from your payslip" with no payslip behind it.
+        payslip:{...(src.payslip||{})},
+        ...(src.fs_mode ? { fs_mode: src.fs_mode } : {}),
         notes:'',
         collapsed:{...src.collapsed},
       };
@@ -1034,11 +970,17 @@ function flushToState(){
   if(!currentKey||!budgets[currentKey]) return;
   const b=budgets[currentKey];
   // Income
+  const _net = netRowOf(b);
   b.income.forEach(r=>{
     // srcId is deliberately NOT read back from the DOM: renaming the row is
     // the member's business, but it stays the farm-income row.
     r.label = document.getElementById('inc_lbl_'+r.id)?.value||r.label;
+    // A net row filled from the payslip is read-only; its figure lives in
+    // state, not in the input, so it is never read back.
+    if (r === _net && r.src === 'payslip') return;
     r.amount = pf(document.getElementById('inc_amt_'+r.id)?.value||'0');
+    // A figure the member typed into the net row is theirs from now on.
+    if (r === _net && r.amount > 0) r.src = 'typed';
   });
   // Expenses (incl. this month's custom "Other" categories) + actuals
   b.actuals = b.actuals || {};
@@ -1159,11 +1101,11 @@ function autoSave(){
     flushToState();
     if(currentKey) save();
     renderSummaryPanel();
-    // The reconciliation compares the payslip against the NET PAY ROW, so it
-    // goes stale the moment that row is edited, renamed or removed — not only
-    // when the payslip block itself is typed into. autoSave is the one choke
+    // The net row's state lines compare the payslip with the NET PAY ROW, so
+    // they go stale the moment that row is edited, renamed or removed, not
+    // only when the payslip block is typed into. autoSave is the one choke
     // point every change passes through.
-    if(currentKey) renderPayslipReconcile(budgets[currentKey]);
+    if(currentKey) refreshNetState(budgets[currentKey]);
     // Asked here, not on keystroke: the member has stopped typing and the
     // month is saved, so an unanswered question costs them nothing.
     maybeAskBucketTags();
@@ -1200,22 +1142,135 @@ function removeIncomeRow(id){
   renderIncomeRows(b); autoSave();
 }
 
+// ── Phase D.3: the net-pay row is filled from the payslip ────────────────
+//
+// The row keeps its label, its place and its stored `amount`, and everything
+// downstream (net_income, totalIncome, the dashboard, the snapshot) goes on
+// reading that amount. The payslip FILLS the one home for the figure; it never
+// becomes a second one. `src` records who filled it:
+//
+//   'payslip'  worked out from the payslip block, read-only, follows it
+//   'typed'    the member's own figure, never overwritten by us
+//   (absent)   a budget saved before D.3. With an amount it is typed; an EMPTY
+//              row has no figure to protect, so it is the one row the payslip
+//              may fill without asking. That is how a first budget gets its
+//              income from the payslip at all.
+//
+// Every new member-facing string is here, so the no-dashes check reads one place.
+const KW_D3_COPY = {
+  netHint:   'what reaches your bank account each month. Filled in from your payslip above when you enter it.',
+  worked:    (g, d) => `Worked out from your payslip: ${g} less ${d} in deductions.`,
+  check:     'Check it matches the net pay on your payslip.',
+  adjust:    'Adjust',
+  worksOut:  l => `Your payslip works out to ${l}.`,
+  useIt:     'Use that figure',
+  overGross: 'Your deductions add up to more than your gross pay, so this keeps its last figure. Check the payslip figures above.',
+};
+
+function netRowOf(b){ return ((b && b.income) || []).find(r => KW_NET_ROW_RE.test(r.label || '')) || null; }
+function netSrc(r){
+  if (!r) return null;
+  if (r.src === 'payslip' || r.src === 'typed') return r.src;
+  return pf(r.amount) > 0 ? 'typed' : 'empty';
+}
+
 function renderIncomeRows(b){
-  document.getElementById('incomeRows').innerHTML=b.income.map(r=>`
+  const net = netRowOf(b);
+  const many = b.income.length > 1;
+  document.getElementById('incomeRows').innerHTML=b.income.map(r=>{
+    const isNet = r === net;
+    const fromPs = isNet && netSrc(r) === 'payslip';
+    const hint = isNet ? KW_D3_COPY.netHint
+      : (r.srcId && INCOME_SOURCES[r.srcId] ? INCOME_SOURCES[r.srcId].hint : '');
+    const desc = [hint ? 'g_inc_'+r.id : '', isNet ? 'st_inc_'+r.id : ''].filter(Boolean).join(' ');
+    const canDel = many && !fromPs;
+    return `
     <div class="item-row income-row" id="incrow_${r.id}">
-      <div class="iw" style="display:block"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()">${
-        r.srcId && INCOME_SOURCES[r.srcId] ? `<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(INCOME_SOURCES[r.srcId].hint)}</div>` : ''
+      <div class="iw" style="display:block"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()"${desc?` aria-describedby="${desc}"`:''}>${
+        hint ? `<div class="kw-guide" id="g_inc_${r.id}">${esc(hint)}</div>` : ''
       }</div>
       <div class="iw">
         <span class="iw-pre">P</span>
-        <input class="mono" type="text" id="inc_amt_${r.id}" value="${r.amount>0?r.amount.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00" oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
+        <input class="mono" type="text" id="inc_amt_${r.id}" value="${r.amount>0?r.amount.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${desc?` aria-describedby="${desc}"`:''}${
+          fromPs ? ' readonly aria-readonly="true"' : ` oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();"`} onfocus="this.select()">
       </div>
-      <button class="del-btn" onclick="removeIncomeRow(${r.id})" ${b.income.length<=1?'disabled style="opacity:.3;cursor:not-allowed;"':''}>
+      <button class="del-btn" onclick="removeIncomeRow(${r.id})" ${canDel?'':'disabled style="opacity:.3;cursor:not-allowed;"'}>
         <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
-    </div>`).join('')
-    + `<div style="font-size:11px;color:var(--muted);margin-top:8px">the amount on your bank statement, not your payslip</div>`
+      ${isNet ? `<div class="kw-state" id="st_inc_${r.id}" style="grid-column:1/-1;margin-top:0">${netStateHtml(b, r)}</div>` : ''}
+    </div>`;
+  }).join('')
     + (window._incomeSeeded ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">💡 Prefilled ${window._incomeSeedSrc || 'from your profile'} — adjust if needed.</div>` : '');
+}
+
+// Re-render the income rows without losing the member's place in them.
+function renderIncomeRowsKeepFocus(b){
+  const a = document.activeElement;
+  const id = a && a.id && document.getElementById('incomeRows')?.contains(a) ? a.id : null;
+  renderIncomeRows(b);
+  if (id) document.getElementById(id)?.focus();
+}
+
+// The lines under the net row. State, not guidance: always visible.
+function netStateHtml(b, r){
+  const c = payslipCalc(b);
+  const src = netSrc(r);
+  if (src === 'payslip') {
+    if (c && c.left > 0) return `<div>${esc(KW_D3_COPY.worked(fmt(c.gross), fmt(c.deds)))}</div>`
+      + `<div>${esc(KW_D3_COPY.check)} <button type="button" class="kw-linkbtn" id="netAdjust" onclick="adjustNet()">${KW_D3_COPY.adjust}</button></div>`;
+    return `<div>${esc(KW_D3_COPY.overGross)}</div>`;
+  }
+  // An observation, never an error: payslips carry deductions this block does
+  // not name, employers round, and a figure can be last month's. P1 or more.
+  if (c && c.left > 0 && Math.abs(c.left - pf(r.amount)) >= 1)
+    return `<div id="netUseLine">${esc(KW_D3_COPY.worksOut(fmt(c.left)))} <button type="button" class="kw-linkbtn" id="netUsePayslip" onclick="useNetFromPayslip()">${KW_D3_COPY.useIt}</button></div>`;
+  return '';
+}
+// Refresh only the state lines, so a member typing in the net amount keeps focus.
+function refreshNetState(b){
+  const r = netRowOf(b);
+  const el = r && document.getElementById('st_inc_' + r.id);
+  if (el) el.innerHTML = netStateHtml(b, r);
+}
+
+// Fill the net row from the payslip, under the rules above. Called only when
+// the payslip changes or the member asks for it, never on load: opening an
+// old budget must not move a figure the member did not touch.
+function syncNetFromPayslip(b){
+  const r = netRowOf(b);
+  if (!r) return;
+  const src = netSrc(r);
+  if (src === 'typed') return;
+  const c = payslipCalc(b);
+  // Gross or every deduction cleared: keep the last figure, and it becomes
+  // the member's, so income never silently drops to zero.
+  if (!c) { if (src === 'payslip') r.src = 'typed'; return; }
+  // Deductions above gross (usually a gross pay half retyped): hold the last
+  // figure rather than write a nonsense one.
+  if (!(c.left > 0)) return;
+  r.amount = c.left;
+  r.src = 'payslip';
+}
+
+function adjustNet(){
+  if(!currentKey) return;
+  flushToState();
+  const b = budgets[currentKey], r = netRowOf(b);
+  if (!r) return;
+  r.src = 'typed';
+  renderIncomeRows(b);
+  document.getElementById('inc_amt_' + r.id)?.focus();
+  autoSave();
+}
+function useNetFromPayslip(){
+  if(!currentKey) return;
+  flushToState();
+  const b = budgets[currentKey], r = netRowOf(b);
+  if (!r) return;
+  r.src = 'payslip';
+  syncNetFromPayslip(b);
+  renderIncomeRows(b);
+  autoSave();
 }
 
 // ────────────────────────────────────────────
@@ -1241,14 +1296,43 @@ const PAYSLIP_FIELDS = [
 
 function payslipOf(b){ return (b && b.payslip) || {}; }
 
-function togglePayslip(){
+const PS_DEDUCTIONS = ['paye','pension','medical','loans','other'];
+
+// Gross less whatever deductions were entered. A blank deduction means "not on
+// this payslip". Gross on its own is not take-home, so it does not calculate.
+function payslipCalc(b){
+  const ps = payslipOf(b);
+  const has = k => ps[k] !== undefined && ps[k] !== null && ps[k] !== '';
+  if (!has('gross')) return null;
+  const entered = PS_DEDUCTIONS.filter(has);
+  if (!entered.length) return null;
+  const gross = pf(ps.gross);
+  const deds  = +entered.reduce((s,k) => s + pf(ps[k]), 0).toFixed(2);
+  return { gross, deds, left: +(gross - deds).toFixed(2) };
+}
+function payslipHasAny(b){
+  const ps = payslipOf(b);
+  return PAYSLIP_FIELDS.some(f => ps[f.id] !== undefined && ps[f.id] !== null && ps[f.id] !== '');
+}
+
+function setPayslipOpen(open){
   const body = document.getElementById('payslipBody');
   const btn  = document.getElementById('payslipToggle');
   if (!body || !btn) return;
-  const showing = body.hidden;
-  body.hidden = !showing;
-  btn.textContent = showing ? 'Hide' : 'Show';
-  btn.setAttribute('aria-expanded', String(showing));
+  body.hidden = !open;
+  btn.textContent = open ? 'Hide' : 'Show';
+  btn.setAttribute('aria-expanded', String(open));
+}
+function togglePayslip(){
+  const body = document.getElementById('payslipBody');
+  if (body) setPayslipOpen(body.hidden);
+}
+// "No payslip, or not to hand?" Collapse the card and go to the net amount.
+function skipPayslip(){
+  setPayslipOpen(false);
+  const b = currentKey && budgets[currentKey];
+  const r = netRowOf(b) || (b && b.income[0]);
+  if (r) document.getElementById('inc_amt_' + r.id)?.focus();
 }
 
 function renderPayslipRows(b){
@@ -1263,13 +1347,13 @@ function renderPayslipRows(b){
       : Number(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
     return `
     <div class="item-row income-row" id="psrow_${f.id}">
-      <div class="iw" style="display:block">
+      <div class="row-lbl">
         <div style="font-size:13px">${esc(f.name)}</div>
-        ${f.hint ? `<div style="font-size:11px;color:var(--muted)">${esc(f.hint)}</div>` : ''}
+        ${f.hint ? `<div class="kw-guide" id="g_ps_${f.id}">${esc(f.hint)}</div>` : ''}
       </div>
       <div class="iw">
         <span class="iw-pre">P</span>
-        <input class="mono" type="text" id="ps_${f.id}" value="${shown}" inputmode="decimal" placeholder=""
+        <input class="mono" type="text" id="ps_${f.id}" value="${shown}" inputmode="decimal" placeholder=""${f.hint ? ` aria-describedby="g_ps_${f.id}"` : ''}
                oninput="fmtInput(this);savePayslip();" onblur="finalizeInput(this);savePayslip();" onfocus="this.select()">
       </div>
       <span></span>
@@ -1279,6 +1363,7 @@ function renderPayslipRows(b){
 
 function savePayslip(){
   if(!currentKey) return;
+  flushToState();            // keep any unflushed income/expense edits before re-rendering
   const b = budgets[currentKey];
   b.payslip = b.payslip || {};
   PAYSLIP_FIELDS.forEach(f => {
@@ -1288,44 +1373,21 @@ function savePayslip(){
     if (raw === '') delete b.payslip[f.id];
     else b.payslip[f.id] = pf(raw);
   });
-  renderPayslipReconcile(b);
+  const r = netRowOf(b);
+  const before = r ? r.src + '|' + r.amount : '';
+  syncNetFromPayslip(b);
+  // Re-render the income rows only when the net figure itself moved. savePayslip
+  // also runs on BLUR, and a member tabbing from the payslip into the net amount
+  // would otherwise have the input they just focused replaced under them.
+  if (r && before !== r.src + '|' + r.amount) renderIncomeRowsKeepFocus(b);
+  else refreshNetState(b);
+  refreshPayslipWarnings(b);
   autoSave();
 }
 
-// A quiet arithmetic observation, never an error.
-//
-// Payslips carry deductions this block does not name, employers round, and a
-// member may have typed one figure from last month. Any of those produces a
-// difference that is not a mistake. So this renders only when the member has
-// given us everything needed to do the sum, states both sides, and stops. It
-// never blocks a save, never colours red, and never tells them a figure is
-// wrong — we cannot know that, and P0's rule is not to state what we were
-// not told.
-function renderPayslipReconcile(b){
-  const el = document.getElementById('payslipReconcile');
-  if (!el) return;
-  const ps = payslipOf(b);
-  const has = k => ps[k] !== undefined && ps[k] !== null && ps[k] !== '';
-  const DEDUCTIONS = ['paye','pension','medical','loans','other'];
-  if (!has('gross') || !DEDUCTIONS.every(has)) { el.innerHTML = ''; return; }
-
-  const _netRow = (b.income || []).find(r => KW_NET_ROW_RE.test(r.label || ''));
-  const netPay  = _netRow ? pf(_netRow.amount) : 0;
-  if (!(netPay > 0)) { el.innerHTML = ''; return; }
-
-  const gross = pf(ps.gross);
-  const deds  = DEDUCTIONS.reduce((s,k) => s + pf(ps[k]), 0);
-  const left  = gross - deds;
-  const diff  = left - netPay;
-
-  el.innerHTML = `<div class="advice-card info" style="font-size:12px;line-height:1.65;display:block">
-    Gross ${fmt(gross)} less deductions ${fmt(deds)} = <strong>${fmt(left)}</strong>.
-    Your net pay line says ${fmt(netPay)}${
-      Math.abs(diff) < 1 ? ' — these agree.'
-        : `, a difference of <strong>${fmt(Math.abs(diff))}</strong>. Payslips often carry deductions not listed here, so this is worth a look rather than a correction.`
-    }
-  </div>`;
-}
+// Phase D.3 retired the Phase C reconcile note (renderPayslipReconcile): the
+// comparison now lives under the net row itself, as the "Your payslip works
+// out to" line, and only for a figure the member typed.
 
 // ────────────────────────────────────────────
 // EXPENSE CATEGORIES
@@ -1370,29 +1432,35 @@ function removeCustomExpense(id){
 // that they are clutter on a page they already know.
 function isFirstBudget(){ return Object.keys(budgets).length <= 1; }
 
-// Everything that sits under a category's name: its hint, its first-budget
-// prompt, the Fixed/Varies switch on family support, and — for a line the
-// member tagged — what they said it was.
-function catMetaHtml(b, c){
-  const bits = [];
+// Everything that sits under a category's name, in two kinds (Phase D.3):
+//
+//   GUIDANCE  the hint, the first-budget prompt, the contributions line. Shown
+//             only while the member is in that row (.kw-guide, :focus-within),
+//             one line's at a time, and tied to the row's inputs with
+//             aria-describedby so a screen reader still reads it. Wording is
+//             verbatim from the Phase D model and unchanged.
+//   STATE     the Fixed/Varies switch, what a tagged line is counted as, the
+//             payslip double-count warning. Always shown (the warning once the
+//             line has a figure; see .kw-warn).
+//
+// Returns { html, ids } so the caller can describe its inputs by these ids.
+function catMeta(b, c){
+  const bits = [], ids = [];
+  const guide = (id, text, cls) => { ids.push(id); bits.push(`<div class="kw-guide${cls?' '+cls:''}" id="${id}">${esc(text)}</div>`); };
   const hint = CAT_HINT[c.id];
-  if (hint) bits.push(`<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:2px">${esc(hint)}</div>`);
+  if (hint) guide('g_'+c.id, hint);
 
   if (c.id === 'family_support') {
     const mode = fsMode(b);
     bits.push(`<div style="margin-top:5px;display:flex;gap:6px;align-items:center">
       <button type="button" class="btn btn-ghost btn-xs" id="fs_fixed"  aria-pressed="${mode==='fixed'}"  style="${mode==='fixed' ?'background:var(--navy);color:#fff':''}" onclick="setFsMode('fixed')">Fixed</button>
       <button type="button" class="btn btn-ghost btn-xs" id="fs_varies" aria-pressed="${mode==='varies'}" style="${mode==='varies'?'background:var(--navy);color:#fff':''}" onclick="setFsMode('varies')">Varies</button>
-      <span style="font-size:11px;color:var(--muted)">${mode==='varies'?'what you set aside \u2014 log what you sent in Actual':'the same every month'}</span>
+      <span style="font-size:11px;color:var(--muted)">${mode==='varies'?'what you set aside — log what you sent in Actual':'the same every month'}</span>
     </div>`);
   }
-  if (c.id === 'contributions') {
-    bits.push(`<div style="font-size:11px;color:var(--muted);margin-top:3px">what you set aside \u2014 log what you gave in Actual</div>`);
-  }
+  if (c.id === 'contributions') guide('gc_'+c.id, 'what you set aside — log what you gave in Actual');
 
-  if (isFirstBudget() && CAT_FIRST_PROMPT[c.id]) {
-    bits.push(`<div style="font-size:11px;color:var(--navy);line-height:1.5;margin-top:3px">${esc(CAT_FIRST_PROMPT[c.id])}</div>`);
-  }
+  if (isFirstBudget() && CAT_FIRST_PROMPT[c.id]) guide('gp_'+c.id, CAT_FIRST_PROMPT[c.id], 'kw-prompt');
 
   // Only lines the member tags say so; a built-in's bucket is not news.
   const taggable = String(c.id).startsWith('custom_') || TAGGABLE_BUILTINS.includes(c.id);
@@ -1400,12 +1468,49 @@ function catMetaHtml(b, c){
     const t = bucketOf(b, c.id);
     const LBL = { need:'Need', want:'Want', save:'Saving' };
     bits.push(t
-      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Counted as <strong>${LBL[t]}</strong> \u00b7 <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">change</button></div>`
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Counted as <strong>${LBL[t]}</strong> · <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">change</button></div>`
       : (pf(b.expenses[c.id]||0) > 0
-          ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Not counted in any of the three bars yet \u00b7 <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">say what it is</button></div>`
+          ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Not counted in any of the three bars yet · <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">say what it is</button></div>`
           : ''));
   }
-  return bits.join('');
+
+  if (KW_PAYSLIP_WARN[c.id]) {
+    ids.push('psw_'+c.id);
+    bits.push(`<div id="psw_${c.id}">${payslipWarnHtml(b, c.id)}</div>`);
+  }
+  return { html: bits.join(''), ids };
+}
+
+// ── Phase D.3: the double-counting warnings ────────────────────────────────
+// A loan or pension already taken off the payslip, typed again here, comes
+// out of money that never reached the account. Words only: no figure changes,
+// nothing blocks a save. The retirement line must never suggest the member's
+// own figure is wrong; a voluntary annuity on top of the payslip pension is
+// exactly what that line is for, and retirement_contribution keeps recording
+// it apart from payslip_pension (Phase C).
+const KW_PAYSLIP_WARN = {
+  debt_min:   { ps:'loans',   lines: a => [`Your payslip already takes ${a} in loan repayments.`,
+                                           'Only add loans here that you pay from your bank account.',
+                                           'Adding a payslip loan again would count it twice.'] },
+  retirement: { ps:'pension', lines: a => [`${a} already goes to your pension through your payslip.`,
+                                           'Add only what you pay on top by choice, such as a retirement annuity.',
+                                           'Adding the payslip amount here would count it twice.'] },
+  health:     { ps:'medical', lines: a => [`Your medical aid of ${a} comes off your payslip.`,
+                                           'Add only medical costs you pay yourself, like gap payments or pharmacy.'] },
+  insurance:  { ps:'other',   lines: () => ['Some cover, like funeral policies, may already come off your payslip.',
+                                            'Only add policies you pay from your bank account.'] },
+};
+function payslipWarnHtml(b, catId){
+  const w = KW_PAYSLIP_WARN[catId];
+  const v = pf(payslipOf(b)[w.ps] ?? 0);
+  if (!(v > 0)) return '';
+  return `<div class="kw-warn">${w.lines(fmt(v)).map(esc).join('<br>')}</div>`;
+}
+function refreshPayslipWarnings(b){
+  Object.keys(KW_PAYSLIP_WARN).forEach(id => {
+    const el = document.getElementById('psw_'+id);
+    if (el) el.innerHTML = payslipWarnHtml(b, id);
+  });
 }
 
 async function retagCat(catId){
@@ -1458,6 +1563,8 @@ function updateRowVariance(catId){
   const bud=pf(document.getElementById('exp_'+catId)?.value||'0');
   const act=pf(document.getElementById('act_'+catId)?.value||'0');
   cell.innerHTML=varianceHtml(bud,act);
+  // D.3: a line with a figure keeps its payslip warning visible after blur.
+  document.getElementById('exprow_'+catId)?.classList.toggle('has-fig', bud>0);
 }
 
 function renderExpenseCats(b){
@@ -1483,18 +1590,20 @@ function renderExpenseCats(b){
           const val=pf(b.expenses[c.id]||0);
           const act=pf((b.actuals||{})[c.id]||0);
           const isCustom=String(c.id).startsWith('custom_');
-          return `<div class="item-row bva-row">
+          const meta=catMeta(b,c);
+          const dby=meta.ids.length?` aria-describedby="${meta.ids.join(' ')}"`:'';
+          return `<div class="item-row bva-row${val>0?' has-fig':''}" id="exprow_${c.id}">
             ${isCustom
-              ?`<div class="iw" style="display:block"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()">${catMetaHtml(b,c)}</div>`
-              :`<div style="display:block"><span style="font-size:.82rem;font-weight:500;">${c.name}</span>${catMetaHtml(b,c)}</div>`}
+              ?`<div class="iw" style="display:block"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"${dby}>${meta.html}</div>`
+              :`<div style="display:block" class="row-lbl"><span style="font-size:.82rem;font-weight:500;">${c.name}</span>${meta.html}</div>`}
             <div class="iw">
               <span class="iw-pre">P</span>
-              <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
+              <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${dby}
                 oninput="fmtInput(this);updateRowVariance('${c.id}');autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
             </div>
             <div class="iw">
               <span class="iw-pre">P</span>
-              <input class="mono" type="text" id="act_${c.id}" value="${act>0?act.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"
+              <input class="mono" type="text" id="act_${c.id}" value="${act>0?act.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${dby}
                 oninput="fmtInput(this);updateRowVariance('${c.id}');autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
             </div>
             <div class="bva-var" id="var_${c.id}">${varianceHtml(val,act)}</div>
@@ -2057,9 +2166,11 @@ function renderAll(){
 
   document.getElementById('monthLabel').textContent=mLabel(currentKey);
   renderMonthPills();
+  // Open for a first budget or wherever a payslip figure exists; otherwise
+  // collapsed to its title and the one line under it.
+  setPayslipOpen(isFirstBudget() || payslipHasAny(b));
   renderIncomeRows(b);
   renderPayslipRows(b);
-  renderPayslipReconcile(b);
   renderExpenseCats(b);
   document.getElementById('monthNotes').value=b.notes||'';
   renderSummaryPanel();

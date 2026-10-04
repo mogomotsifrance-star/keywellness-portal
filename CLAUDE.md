@@ -450,6 +450,19 @@ Three consumers depend on the split, and each is a claim that was wrong before:
   alone and only the advice changes — an undercount asks a question, an
   overcount makes a claim.
 
+**Phase D.3: the payslip FILLS the net row; it never becomes a second home.**
+What is left after the payslip deductions is written into the net-pay row's
+`amount`, and the row carries `src: 'payslip' | 'typed'` (absent = a pre-D.3
+row: typed if it has a figure, fillable if empty). Everything downstream keeps
+reading that `amount` unchanged. **A typed figure is never overwritten** — the
+member is offered "Use that figure" instead — and `syncNetFromPayslip()` runs
+only on a payslip edit, never on load. The "Update your shared profile?" prompt
+is held while focus is in the payslip card or the net row (`kwSyncHeld()`), so
+a half-entered payslip is never offered as `net_income`. Copy-to-next-month
+carries `payslip` and `fs_mode`. Hints and first-budget prompts are guidance
+(`.kw-guide`, shown on `:focus-within`); switches, tag status and the four
+payslip double-count warnings (`KW_PAYSLIP_WARN`) are state.
+
 **`_insCovers` goes in `answers`, never in `cat_scores`.** HR's report walks
 `cat_scores` with `jsonb_each` and casts every value to numeric to band it; an
 array there raises at query time inside `_org_report_period_data`. `answers` is
@@ -486,6 +499,35 @@ from it). `group` decides only where a line is drawn on screen; `bucket`
 read. Before this the bars read the group, so the Other group — Giving,
 Miscellaneous and every custom line — was in the expense total and in **no bar**,
 and the three bars never added up to what the member spends.
+
+**The category model lives in `kw-categories.js`, and both pages load it.**
+`budget_planner.html` and `expense_tracker.html` are standalone pages, so the
+only way to have one list rather than two copies of one list is a shared
+script. Before Phase D.2 the tracker carried its own 13 expense and 5 income
+categories which did not match the budget's — "Education" here was "Child /
+Education" there, one "Savings" bucket was six lines, "Family & Gifts" was two
+— so a member who logged daily spending and kept a budget had two category
+models and no way to compare them. **Add a category there, not in either page.**
+The budget keeps thin aliases (`EXPENSE_GROUPS = KW_EXPENSE_GROUPS` and so on)
+so its existing names still work.
+
+**The tracker colours by GROUP, not by category** (`catColor()` / `catIcon()`
+over `KW_GROUP_OF`). Budget categories carry no icon or colour, and inventing
+28 of each would be 28 more things to keep in step; a donut showing Needs /
+Wants / Savings proportions is also the more useful chart.
+
+**Its dropdown floats the member's six most-used to the top**, with the rest in
+the budget's own groups. The tracker is the one tool used daily, on a phone,
+and the shared list has 28 expense categories where it used to have 13.
+
+**The D.2 migration is stamped on the PAYLOAD, not the device**
+(`catModel: 'phase-d'`), and runs inside `load()`. The Supabase restore
+overwrites localStorage wholesale, so a row saved before D.2 can land on a
+device that has already migrated; stamping the payload means it is migrated
+when it arrives. **It never deletes a transaction** — an id the map does not
+know keeps its id and renders as "Uncategorised (was: …)". Losing a member's
+logged spending to a category rename is not an acceptable failure, and filing
+it under Other would be inventing a fact about their money.
 
 **`bucket: null` means "not told yet", and is never guessed.** An untagged line
 stays in the total and in no bar, `calcTotals()` returns it as `untaggedAmt`,
@@ -711,5 +753,6 @@ inventing an entry — but that is rare, and the default is to write one.
 - Do not add anything from the payslip block to the budget's income or expense totals, and do not put `_insCovers` (or any array) in `cat_scores` — see Roles & Interfaces
 - Do not count `debt_extra` or `moraka` as savings anywhere, and do not guess a bucket for an untagged line — see Roles & Interfaces
 - Do not name a Need, Giving, family support, contributions or a custom line in any cut or deficit advice
+- Do not add a category to `budget_planner.html` or `expense_tracker.html` — the list is `kw-categories.js`, and a category in one page only is the defect Phase D.2 removed
 - Do not drop `kw_fn_backup` — it is the only copy of the pre-B1 function bodies
 - Do not end a session without writing a vault entry — see Vault Logging above

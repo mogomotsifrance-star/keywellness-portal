@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="kw-categories.js"></script>
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -363,29 +364,29 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 // ─────────────────────────────────────
 // Config & constants
 // ─────────────────────────────────────
-const CATEGORIES = [
-  {id:'food',       name:'Food & Groceries',   icon:'🛒', color:'#0D2545'},
-  {id:'transport',  name:'Transport',           icon:'🚗', color:'#C8991A'},
-  {id:'housing',    name:'Housing & Rent',      icon:'🏠', color:'#1A8C5B'},
-  {id:'utilities',  name:'Utilities',           icon:'💡', color:'#2563EB'},
-  {id:'health',     name:'Health & Medical',    icon:'🏥', color:'#C0392B'},
-  {id:'education',  name:'Education',           icon:'🎓', color:'#7C3AED'},
-  {id:'entertain',  name:'Entertainment',       icon:'🎬', color:'#D97706'},
-  {id:'shopping',   name:'Shopping & Clothing', icon:'🛍️', color:'#0891B2'},
-  {id:'personal',   name:'Personal Care',       icon:'💆', color:'#BE185D'},
-  {id:'savings',    name:'Savings & Invest.',   icon:'🏦', color:'#059669'},
-  {id:'debt',       name:'Debt Payments',       icon:'💳', color:'#B45309'},
-  {id:'family',     name:'Family & Gifts',      icon:'👨‍👩‍👧', color:'#9333EA'},
-  {id:'other',      name:'Other',               icon:'📋', color:'#64748B'},
-];
-const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
-const INCOME_CATS = [
-  {id:'salary',    name:'Salary',      icon:'💼'},
-  {id:'business',  name:'Business',    icon:'🏢'},
-  {id:'rental',    name:'Rental',      icon:'🏘️'},
-  {id:'freelance', name:'Freelance',   icon:'💻'},
-  {id:'other_in',  name:'Other',       icon:'➕'},
-];
+// Phase D.2 — the tracker reads the shared model (kw-categories.js) instead of
+// its own 13 expense and 5 income categories. Before this a member who logged
+// daily spending and kept a budget had two category models and no way to
+// compare them: "Education" here was "Child / Education" there, one "Savings"
+// bucket here was six lines there, and "Family & Gifts" was two.
+const CATEGORIES  = KW_ALL_CATS;
+const CAT_MAP     = KW_CAT_MAP;
+const INCOME_CATS = KW_INCOME_CATS;
+
+// Colour and icon come from the GROUP, not the category — see kw-categories.js.
+// A donut showing Needs / Wants / Savings proportions says something; 28
+// arbitrary colours would not, and would be 28 more things to keep in step.
+const GROUP_ICON = { needs:'\ud83c\udfe0', wants:'\ud83c\udfac', savings:'\ud83d\udcb0', other:'\ud83d\udccb' };
+function catColor(catId){ return kwGroupMeta(KW_GROUP_OF[catId]).color; }
+function catIcon(catId){  return GROUP_ICON[KW_GROUP_OF[catId]] || GROUP_ICON.other; }
+function catName(catId){
+  const c = CAT_MAP[catId] || INCOME_CATS.find(x=>x.id===catId);
+  // An id the migration did not recognise is shown as what it is. It is never
+  // dropped and never quietly filed under Other — a member's logged spending
+  // is not ours to delete because a category was renamed.
+  return c ? c.name : `Uncategorised (was: ${catId})`;
+}
+function isUnknownCat(catId){ return !CAT_MAP[catId] && !INCOME_CATS.some(x=>x.id===catId); }
 
 const LS_KEY = 'expense_tracker_v2';
 const fmt  = v => 'P ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -423,7 +424,7 @@ let viewMonth = now.getMonth();
 let toastTimer;
 function showToast(){ const t=document.getElementById('saveToast'); t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),1600); }
 function save(){
-  const _d={transactions,budgets,nextId};
+  const _d={transactions,budgets,nextId,catModel,familyTo};
   localStorage.setItem(LS_KEY,JSON.stringify(_d));
   (async()=>{
     if(!window._toolSb||!window._toolUser){ showToast(); return; }
@@ -440,7 +441,109 @@ function load(){
     transactions=d.transactions||{};
     budgets=d.budgets||{};
     nextId=d.nextId||1;
+    catModel=d.catModel||null;
+    familyTo=d.familyTo||null;
+    migrateCategories();
   } catch{}
+}
+
+// ── Phase D.2: the one-time category migration ─────────────────────────
+//
+// It runs HERE, inside load(), because load() is on both paths: the local
+// read at startup, and the Supabase restore, which overwrites localStorage
+// wholesale and then calls load() again. A row saved before D.2 can therefore
+// land on a device that has already migrated — so the stamp lives on the
+// PAYLOAD, not on the device, and an unstamped payload is migrated whenever
+// it arrives.
+//
+// It never deletes a transaction. An id the map does not know keeps its id and
+// renders as "Uncategorised (was: …)" with a one-click fix; losing a member's
+// logged spending to a category rename is not an acceptable failure.
+let catModel = null;
+let familyTo = null;     // 'family_support' | 'gifts', once the member answers
+
+function migrateCategories(){
+  if (catModel === KW_CAT_MODEL_STAMP) return;
+  let touched = false;
+
+  Object.keys(transactions).forEach(key => {
+    (transactions[key]||[]).forEach(t => {
+      const was = t.category;
+      const r = kwMigrateCategory(t.category, { familyTo });
+      if (r.id !== t.category) { t.category = r.id; touched = true; }
+      // Remember what it used to be, in two cases.
+      //
+      // An UNKNOWN id, so "Uncategorised (was: …)" can say so on a later pass.
+      // And `family`, because the migration has already moved it to the
+      // approved default and the question below still has to find those rows
+      // to offer Giving instead — without this the question can never fire,
+      // which is exactly the bug the tests caught.
+      if (!t.catWas && (r.wasUnknown || was === 'family')) { t.catWas = was; touched = true; }
+    });
+  });
+
+  // The per-category budget map is keyed by the same ids. Remapping the
+  // transactions and leaving this behind would strand a member's limits.
+  const nextBudgets = {};
+  Object.keys(budgets||{}).forEach(oldId => {
+    const r = kwMigrateCategory(oldId, { familyTo });
+    // Two old ids can land on one new one; add rather than overwrite.
+    nextBudgets[r.id] = (nextBudgets[r.id]||0) + Number(budgets[oldId]||0);
+    if (r.id !== oldId) touched = true;
+  });
+  budgets = nextBudgets;
+
+  catModel = KW_CAT_MODEL_STAMP;
+  if (touched) save();
+}
+
+// Does this member have anything that was logged as "Family & Gifts"? The
+// question is only worth asking of someone who does.
+function hasFamilyData(){
+  if (familyTo) return false;                       // already answered
+  const inTx = Object.keys(transactions).some(k =>
+    (transactions[k]||[]).some(t => t.catWas === 'family' || t.category === 'family'));
+  return inTx;
+}
+
+// Asked once. Money to relatives is Family support, which is the approved
+// default and what an unanswered question leaves in place — unlike the
+// budget's three-way tag, this one HAS a settled answer, so the question
+// offers the alternative rather than withholding a decision.
+function askFamilyDestination(){
+  if (!hasFamilyData()) return;
+  const ov = document.createElement('div');
+  ov.id = 'kw-family-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(35,38,31,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:12px;padding:26px 22px;max-width:440px;width:100%;box-shadow:0 8px 40px rgba(35,38,31,.3)">
+      <div style="font-size:17px;font-weight:700;margin-bottom:6px">Your "Family &amp; Gifts" entries</div>
+      <p style="font-size:13px;line-height:1.65;color:var(--muted);margin-bottom:18px">
+        The budget keeps these apart now. Money you send to parents, siblings or
+        relatives is <strong>Family support</strong>. Tithe, church and gifts are
+        <strong>Giving</strong>. Which were yours mostly for?
+      </p>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button id="kwf-support" style="text-align:left;padding:11px 13px;border:1.5px solid var(--border);background:#fff;border-radius:9px;cursor:pointer;font-size:13px"><strong>Family support</strong></button>
+        <button id="kwf-giving"  style="text-align:left;padding:11px 13px;border:1.5px solid var(--border);background:#fff;border-radius:9px;cursor:pointer;font-size:13px"><strong>Giving (church, tithe, gifts)</strong></button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:12px">You can change any entry afterwards.</div>
+    </div>`;
+  document.body.appendChild(ov);
+  const answer = (dest) => {
+    familyTo = dest;
+    Object.keys(transactions).forEach(k => (transactions[k]||[]).forEach(t => {
+      if (t.catWas === 'family' || t.category === 'family') { t.category = dest; delete t.catWas; }
+    }));
+    if (budgets.family_support && dest === 'gifts') {
+      budgets.gifts = (budgets.gifts||0) + budgets.family_support;
+      delete budgets.family_support;
+    }
+    if (ov.parentNode) document.body.removeChild(ov);
+    save(); renderAll();
+  };
+  ov.querySelector('#kwf-support').addEventListener('click', () => answer('family_support'));
+  ov.querySelector('#kwf-giving').addEventListener('click',  () => answer('gifts'));
 }
 
 // ─────────────────────────────────────
@@ -459,14 +562,54 @@ function setType(t){
   populateCategorySelect();
 }
 
+// The tracker is the one tool used daily, on a phone, at speed — and the
+// shared model has 28 expense categories where this page used to have 13. So
+// the member's six most-used float to the top, and the rest follow grouped as
+// they are in the budget. Adopting the list in full without making the daily
+// action slower.
+function topSixCategoryIds(){
+  const counts = {};
+  Object.keys(transactions).forEach(k =>
+    (transactions[k]||[]).forEach(t => {
+      if (t.type === 'income') return;
+      counts[t.category] = (counts[t.category]||0) + 1;
+    }));
+  return Object.keys(counts)
+    .filter(id => CAT_MAP[id])          // an unknown id is not offered as a choice
+    .sort((a,b) => counts[b]-counts[a])
+    .slice(0,6);
+}
+
 function populateCategorySelect(){
   const sel=document.getElementById('txCategory');
   sel.innerHTML='';
-  const cats = txType==='income' ? INCOME_CATS : CATEGORIES;
-  cats.forEach(c=>{
+  const opt = (c) => {
     const o=document.createElement('option');
-    o.value=c.id; o.textContent=c.icon+' '+c.name;
-    sel.appendChild(o);
+    o.value=c.id; o.textContent=(c.icon||catIcon(c.id))+' '+c.name;
+    return o;
+  };
+
+  if (txType==='income') {
+    INCOME_CATS.forEach(c=>sel.appendChild(opt(c)));
+    return;
+  }
+
+  const top = topSixCategoryIds();
+  if (top.length) {
+    const g=document.createElement('optgroup');
+    g.label='Most used';
+    top.forEach(id=>g.appendChild(opt(CAT_MAP[id])));
+    sel.appendChild(g);
+  }
+  // Everything else, in the budget's own groups and order, so the two pages
+  // read the same way.
+  KW_EXPENSE_GROUPS.forEach(grp=>{
+    const rest = grp.cats.filter(c=>!top.includes(c.id));
+    if (!rest.length) return;
+    const g=document.createElement('optgroup');
+    g.label=grp.name;
+    rest.forEach(c=>g.appendChild(opt(c)));
+    sel.appendChild(g);
   });
 }
 
@@ -518,7 +661,7 @@ function openBudgetModal(){
   grid.innerHTML=CATEGORIES.map(c=>`
     <div class="budget-row">
       <div class="budget-row-cat">
-        <span style="font-size:1rem;">${c.icon}</span>
+        <span style="font-size:1rem;">${catIcon(c.id)}</span>
         <span class="budget-row-name">${c.name}</span>
       </div>
       <div class="budget-row-input">
@@ -601,14 +744,14 @@ function renderDonut(txArr){
   sorted.forEach(c=>{
     const pct=totals[c.id]/total;
     const dash=pct*circ;
-    paths+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${c.color}" stroke-width="${strokeW}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset+circ*0.25}" stroke-linecap="butt" style="transition:stroke-dasharray .8s"/>`;
+    paths+=`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${catColor(c.id)}" stroke-width="${strokeW}" stroke-dasharray="${dash} ${circ-dash}" stroke-dashoffset="${-offset+circ*0.25}" stroke-linecap="butt" style="transition:stroke-dasharray .8s"/>`;
     offset+=dash;
   });
   svg.innerHTML=paths;
 
   document.getElementById('donutLegend').innerHTML=sorted.slice(0,6).map(c=>`
     <div style="display:flex;align-items:center;gap:8px;padding:5px 0;">
-      <span style="width:10px;height:10px;border-radius:2px;background:${c.color};flex-shrink:0;"></span>
+      <span style="width:10px;height:10px;border-radius:2px;background:${catColor(c.id)};flex-shrink:0;"></span>
       <span style="font-size:.76rem;flex:1;color:var(--slate);">${c.name}</span>
       <span style="font-size:.76rem;font-family:'DM Mono',monospace;font-weight:700;color:var(--navy);">${fmt(totals[c.id])}</span>
       <span style="font-size:.68rem;color:var(--muted);min-width:32px;text-align:right;">${(totals[c.id]/total*100).toFixed(0)}%</span>
@@ -631,10 +774,10 @@ function renderCatBreakdown(txArr){
     const pct=budget>0?Math.min(spent/budget*100,100):Math.min(spent/maxAmt*100,100);
     const over=budget>0&&spent>budget;
     if(over) overCount++;
-    const barColor=over?'var(--red)':budget>0&&spent/budget>0.8?'var(--orange)':c.color;
+    const barColor=over?'var(--red)':budget>0&&spent/budget>0.8?'var(--orange)':catColor(c.id);
     return `<div class="cat-bar-row" onclick="filterByCat('${c.id}')">
       <div class="cat-bar-header">
-        <div class="cat-bar-name"><span>${c.icon}</span>${c.name}</div>
+        <div class="cat-bar-name"><span>${catIcon(c.id)}</span>${c.name}</div>
         <div class="cat-bar-amounts">${fmt(spent)}${budget>0?` / ${fmt(budget)}`:''}</div>
         <div class="cat-bar-pct ${over?'over-budget':''}">${budget>0?(spent/budget*100).toFixed(0)+'%':''}</div>
       </div>
@@ -656,7 +799,7 @@ function renderCatFilterPills(txArr){
   document.getElementById('catFilter').innerHTML=`
     <span class="cat-pill ${!activeCatFilter?'active':''}" onclick="filterByCat(null)">All</span>
     ${allCats.map(c=>`<span class="cat-pill ${activeCatFilter===c.id?'active':''}" onclick="filterByCat('${c.id}')">
-      <span>${c.icon}</span>${c.name}
+      <span>${c.icon||catIcon(c.id)}</span>${c.name}
     </span>`).join('')}`;
 }
 
@@ -690,10 +833,10 @@ function renderTxList(){
 
   const allCats=[...CATEGORIES,...INCOME_CATS];
   list.innerHTML=txArr.map(t=>{
-    const cat=allCats.find(c=>c.id===t.category)||{icon:'📋',name:'Other',color:'#64748B'};
+    const cat=allCats.find(c=>c.id===t.category)||{name:catName(t.category)};
     const dateStr=new Date(t.date).toLocaleDateString('en-BW',{day:'2-digit',month:'short'});
     return `<div class="tx-item">
-      <div class="tx-icon" style="background:${(CAT_MAP[t.category]||{color:'#e2e8f0'}).color}22;">${cat.icon}</div>
+      <div class="tx-icon" style="background:${isUnknownCat(t.category)?'#e2e8f0':catColor(t.category)}22;">${cat.icon||catIcon(t.category)}</div>
       <div class="tx-body">
         <div class="tx-name">${esc(t.desc)}</div>
         <div class="tx-meta">
@@ -792,7 +935,7 @@ function exportPDF(){
       head:[['Category','Spent','Budget','% of Budget','% of Total']],
       body:usedCats.sort((a,b)=>(totals[b.id]||0)-(totals[a.id]||0)).map(c=>{
         const s=totals[c.id]||0, b=budgets[c.id]||0;
-        return [pdfSafe(c.icon+' '+c.name), fmt(s), b>0?fmt(b):'—', b>0?(s/b*100).toFixed(1)+'%':'—', (s/totalExp*100).toFixed(1)+'%'];
+        return [pdfSafe((c.icon||catIcon(c.id))+' '+c.name), fmt(s), b>0?fmt(b):'—', b>0?(s/b*100).toFixed(1)+'%':'—', (s/totalExp*100).toFixed(1)+'%'];
       }),
       styles:{fontSize:8,cellPadding:3,textColor:NAVY,lineColor:[214,221,232],lineWidth:.2},
       headStyles:{fillColor:NAVY,textColor:GOLD,fontStyle:'bold',fontSize:7},
@@ -870,6 +1013,9 @@ KW.reveal('.card');
     });
     const { data: toolRow } = await _sb.from('tool_data').select('data').eq('user_id', session.user.id).eq('tool', 'expense_tracker').maybeSingle();
     if (toolRow?.data) { localStorage.setItem(LS_KEY, JSON.stringify(toolRow.data)); load(); renderAll(); KW.reveal('.card'); }
+    // After the restore, so the question is asked about everything the member
+    // has, not just what this device happened to hold.
+    askFamilyDestination();
   });
 })();
 </script>
