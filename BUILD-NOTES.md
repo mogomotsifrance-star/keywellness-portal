@@ -1,3 +1,27 @@
+# Phase D.3: payslip first, calm lines, no double counting (2026-10-04)
+
+Branch `claude/optimistic-babbage-r9uvnf`, rebuilt from `origin/dev` at
+`4d31401`. Frontend only: `budget_planner.html`, its tests, docs. No SQL.
+
+## Restore point for the branch (recorded before it was pushed)
+
+When this session's clone was made, `claude/optimistic-babbage-r9uvnf` pointed
+at **`45a68df1d96341c552b8d992cfddd2478a0c7f36`** ("Merge dev into main: the
+two Debt Rehab fixes that were live but on no branch"). It had been cut from
+`main`, so it carried `main`-only merge commits that `dev` lacks, and was reset
+to `origin/dev` so the merge into `dev` carries only this work.
+
+By the time of the push the branch had already been deleted on GitHub
+(`git ls-remote` returned no such ref), so the push created it fresh and
+overwrote nothing. `45a68df` is still on `main`'s own history. To put the old
+tip back on this branch name anyway:
+
+```bash
+git push --force origin 45a68df1d96341c552b8d992cfddd2478a0c7f36:refs/heads/claude/optimistic-babbage-r9uvnf
+```
+
+---
+
 # Departments in admin.html — the last leg off the SQL editor (2026-08-19)
 
 Completes the trio: organisations -> companies/sites -> **departments**. The
