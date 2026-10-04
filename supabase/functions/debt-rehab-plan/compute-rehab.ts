@@ -477,7 +477,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   }
   consUncaptured.forEach((v) => p1.push({ key: "balance_" + v.index, label: `Capture the balance owed to ${v.label} — it cannot be consolidated until it is known` }));
   leverAssets.filter((l) => l.on).forEach((l) => p1.push({ key: "lever_" + l.asset_index, label: `Initiate the sale of ${l.name} (${fmtP(l.value)}); target completion within ${ASSET_SALE_DEADLINE_DAYS} days` }));
-  renegRows.forEach((v) => p1.push({ key: "reneg_open_" + v.index, label: `Open the term-extension conversation with ${v.institution || v.label}: instalment ${fmtP(v.instalment)} is ${fmtPct(v.instalment_pct_income)} of income` }));
+  renegRows.forEach((v) => p1.push({ key: "reneg_open_" + v.index, label: `Open the term-extension conversation with ${v.institution || v.label}: instalment ${fmtP(v.instalment)} is ${fmtPct(v.instalment_pct_income)} of own gross income` }));
   if (!savingsCaptured) p1.push({ key: "savings_capture", label: "Capture savings and investment balances" });
   views.filter((v) => v.rate_value == null && v.action !== "RETAIN").forEach((v) => p1.push({ key: "rate_" + v.index, label: `Capture the interest rate on ${v.label}` }));
 
