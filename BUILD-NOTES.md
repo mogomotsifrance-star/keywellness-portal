@@ -12,6 +12,29 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
 | Frontend (Batches 2, 3, 4, 6, 6b) | On the branch. Reaches the test site only when merged to `dev`; live advisors see nothing until `main`. |
 | Edge Functions `advance-recommendation`, `debt-rehab-plan` (Batches 2 + 5) | See "Edge deploy" below. |
 
+## Edge deploy (4 Oct 2026)
+
+| Function | Before (rollback target) | After |
+|---|---|---|
+| `advance-recommendation` | v4, ezbr `054fc4d0f523fcf3e85b6cf6e654a7b492e4380a86e3d2ccac29d68dfaf3dc8a` | **v5**, ezbr `24d26f2de5d5e8ac4841887fbba03333e5d2e033155823ce2b7ce05306fe6faf` |
+| `debt-rehab-plan` | v3, ezbr `2456ef70be1ba058c809d1d4ff8e13cf06c1e45a8412569b07abdd08988c804a` | **v4**, ezbr `d01d06cce3259546cd2c774560c38ae95e4425441ce6be4b29853c07f35cdfff` |
+
+Both were read back after deploying and every file is byte-identical to
+commit `9673280`. The local modules type-check under Deno; the entrypoints'
+remote imports (deno.land std, esm.sh supabase-js) are unchanged from the
+versions that were running. **Not verified from here:** a live invocation
+(the sandbox cannot reach supabase.co and the project has no pg_net). First
+live check: an advisor opens a Hollard client → Report → Advance
+Recommendation; the Prepare screen should show "Cap P … (4 × gross salary)"
+under Advance. Then any client at or above 40% → Debt Rehab Plan → Prepare.
+If either errors, check the function logs, and roll back by redeploying the
+previous code (commit `c6dd74f` holds it).
+
+These deploys reached the LIVE site's advisors at once (Edge Functions are
+not branched), while `advisor.html` on `main` still shows the old bands
+around them until the merge. Both report formats are backward compatible:
+the new fields are additions.
+
 ## Things the next person must know
 
 - **Existing liabilities lack only Loan term.** Institution is already on 67 of
@@ -90,7 +113,7 @@ merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
 | 1 | `migrations/rollback-dsr-bands-batch1.sql` (only after Batch 2 is rolled back) |
 | 2 SQL | `migrations/rollback-dsr-bands-batch2.sql` restores five bodies from `kw_fn_backup` tag `dsr-bands-batch2`; readable copy in `migrations/backup-dsr-bands-batch2-pre.sql` (MD5-checked against the live bodies) |
 | 2 frontend | revert commit `c6dd74f` |
-| 2 + 5 Edge | not deployed. If deployed later: redeploy `advance-recommendation` v4 (ezbr `054fc4d0…dc8a`) and `debt-rehab-plan` v3 (ezbr `2456ef70…804a`) by deploying `supabase/functions/` as it stands at commit `c6dd74f` (the Edge code before `24365bd`) |
+| 2 + 5 Edge | redeploy `supabase/functions/advance-recommendation` and `debt-rehab-plan` as they stand at commit `c6dd74f` (the Edge code before `24365bd`), restoring the v4 / v3 behaviour recorded above |
 | 3, 4, 6 | revert commit `a89e2a2` (one commit; the three share advisor.html). `termMonths` values stay in the JSON, harmlessly |
 | 6b | revert commit `f6dc2d6` |
 
