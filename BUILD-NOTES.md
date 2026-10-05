@@ -1,3 +1,69 @@
+# HR suppression leak (P0): stop-gap LIVE (2026-10-05)
+
+Findings: `docs/build/BATCH-0-P0-HR-SUPPRESSION-FINDINGS.md`.
+
+## FLAG: no client HR user is to be onboarded until Batch 1 is live
+
+Confirmed with Tshenolo on **5 Oct 2026**: every HR login today is an internal
+or test account, so no client has seen the leak. Granting HR access to a client
+(Roles & Access → HR) before Batch 1 is live hands them the dashboard the
+stop-gap only partly closes. The stop-gap is insurance, not the fix.
+
+Also until Batch 1: **publish no org report.** `_org_report_period_data` still
+returns `total_reach` / `total_attended` beside a suppressed `attended_session`,
+and a published snapshot is frozen.
+
+## What the stop-gap does (applied 5 Oct 2026)
+
+`migrations/stopgap-p0-hr-suppression.sql`, applied byte for byte from commit
+`e478d8c` after a self-rolling-back trial. Six functions patched in place; the
+pre-change bodies are in `kw_fn_backup` tag `p0-hr-suppression-stopgap`
+(ids 22–27), each confirmed md5-identical to the live body before the patch ran.
+
+| Function | Employer now gets |
+|---|---|
+| `org_financial_indicators` | `eligible:false, withheld:'small_cells'` when any band is 1–2 or any block is 1–4 people |
+| `org_overview` | distribution / completeness withheld on a cell of 1–2; emergency-fund % nulled when its count or complement is 1–2 |
+| `org_stress_summary` | window fixed at 90 days; `insufficient_cohort` on any band of 1–2 |
+| `org_report_data` (5-arg), `org_report_company_breakdown` (4-arg), `org_report_department_breakdown` (5-arg) | admin only. employer.html never calls them |
+
+Admin output is byte-identical to before (md5 checked in the trial). Psychosocial
+untouched.
+
+**Known wording, to fix in Batch 1:** the withheld cards reuse texts written for
+a different reason. Debt Health and Retirement say "Data appears once 5+
+employees have completed assessments (14 of 5)", and Workforce Distribution says
+"Appears once at least 3 employees have completed the assessment (14 so far)".
+Neither makes a claim about anyone's money.
+
+**Rollback:** `migrations/rollback-stopgap-p0-hr-suppression.sql` (restores the
+six bodies from `kw_fn_backup`; expect 0 rows from its verify query).
+
+**Tests:** `tests/smoke-employer-hr.js` feeds the stop-gap payloads to
+employer.html. It passes 22/22 against `dev` and against `main` (the live site),
+including a control case proving the checks see the leaked figures.
+
+## Accepted risk: watching the dashboard change over time
+
+Even after Batch 1, an HR user who reads the live dashboard every day can see a
+cell move by one when one person joins, assesses or logs stress, and may know
+who that was. Only rounding or noise closes this, and both cost every figure its
+accuracy. **Accepted by Tshenolo on 5 Oct 2026.** Batch 1 reduces it: HR
+receives published reports (one scope, one period, issued by us) rather than a
+live query they can repeat, and the live cards keep the merge and base-floor
+rules.
+
+## Test organisations
+
+`organizations.is_test = true` marks Test Co (confirmed a test organisation on
+5 Oct 2026). Every HR and report function filters to a single org, so a test
+org's members never enter another organisation's figures. The cross-organisation
+aggregates (`admin_orgs_overview`, `tuesday_review_pack`, `ops_timeline`) are
+staff-only, and the last two already skip `is_test`. Nothing member-facing
+compares across organisations.
+
+---
+
 # Budget page fits a phone (2026-10-04)
 
 Branch `claude/optimistic-babbage-r9uvnf`, cut from `origin/dev` at `6a947f6`
