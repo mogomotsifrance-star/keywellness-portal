@@ -1,9 +1,12 @@
 # Batch 0 findings: HR suppression leak (P0), 5 Oct 2026
 
-Read-only discovery. **Nothing was changed on the database.** The stop-gap is written but
-**not applied**: `migrations/stopgap-p0-hr-suppression.sql`, with its rollback in
-`migrations/rollback-stopgap-p0-hr-suppression.sql`.
-**Status: waiting at the GO/NO-GO gate.**
+Read-only discovery. **Update 5 Oct 2026: GO given.** The stop-gap
+(`migrations/stopgap-p0-hr-suppression.sql`) was trialled in a rolled-back
+transaction, then **applied**. Rollback: `migrations/rollback-stopgap-p0-hr-suppression.sql`.
+Batch 1 (merge small bands + the three rules) has a GO. See BUILD-NOTES for the
+flag: no client HR user before Batch 1 is live. Every HR login today is internal
+or test, so no client saw the leak. Test Co is a test organisation (`is_test`);
+its published report needs no re-issue.
 
 Method: read every live function body (`pg_proc.prosrc`). Called the HR functions as
 the Test Co HR login, which is a plain employer, and as the Sedimosa HR login, which is
