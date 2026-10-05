@@ -73,10 +73,12 @@ function stub(page) {
     (0, eval)(AR_BUNDLE);
     window.__rpc = [];
     window.__reports = [];          // what advance_recommendations holds
+    window.__consents = [];         // what advance_consents holds
     window.__invocations = [];
 
     const chainFor = (t) => {
-      const rows = t === 'advance_recommendations' ? window.__reports.slice().sort((a,b)=>b.version-a.version) : [];
+      const rows = t === 'advance_recommendations' ? window.__reports.slice().sort((a,b)=>b.version-a.version)
+                 : t === 'advance_consents' ? window.__consents.slice().reverse() : [];
       const chain = {
         eq: () => chain, is: () => chain, in: () => chain, or: () => chain, order: () => chain, limit: () => chain,
         maybeSingle: async () => ({ data: t === 'profiles' ? { id: ME } : null, error: null }),
@@ -100,9 +102,19 @@ function stub(page) {
           if (r) { r.content = args.p_content; r.conditions = args.p_conditions; }
           return { data: null, error: null };
         }
+        if (fn === 'advance_consent_record') {
+          const k = { id: 'k' + (window.__consents.length + 1), form_signed_on: args.p_form_signed_on,
+                      recorded_by_name: 'France Mogomotsi', recorded_at: '2026-08-31T09:00:00Z', withdrawn_at: null };
+          window.__consents.push(k);
+          return { data: k.id, error: null };
+        }
         if (fn === 'advance_recommendation_finalise') {
+          // Mirrors supabase_advance_consent.sql: an unused, unwithdrawn form or no finalise.
+          const used = new Set(window.__reports.filter(x => x.status === 'final').map(x => x.consent_id));
+          const k = window.__consents.slice().reverse().find(c => !c.withdrawn_at && !used.has(c.id));
+          if (!k) return { data: null, error: { message: "The employee's signed consent form must be recorded before this report can be finalised." } };
           const r = window.__reports.find(x => x.id === args.p_id);
-          if (r) { r.status = 'final'; r.finalised_at = '2026-08-31T10:00:00Z'; }
+          if (r) { r.status = 'final'; r.finalised_at = '2026-08-31T10:00:00Z'; r.consent_id = k.id; }
           return { data: null, error: null };
         }
         if (fn === 'advance_recommendation_discard') {
@@ -266,16 +278,50 @@ function stub(page) {
       return getComputedStyle(off).display === 'none' && getComputedStyle(document.querySelector('.ar-bar')).display === 'none'
         && getComputedStyle(document.querySelector('.ar-switch')).display === 'none';
     }));
+  check('33 in print, a draft carries "Draft, not for sharing with the employer"; the consent panel is hidden',
+    await page.evaluate(() => {
+      const d = document.querySelector('.ar-draft-print');
+      return !!d && getComputedStyle(d).display !== 'none' && d.textContent.trim() === 'Draft, not for sharing with the employer'
+        && getComputedStyle(document.querySelector('.ar-consent')).display === 'none';
+    }));
   await page.emulateMedia({ media: 'screen' });
+  check('34 on screen the draft line is not shown (it is print-only)',
+    await page.evaluate(() => getComputedStyle(document.querySelector('.ar-draft-print')).display === 'none'));
 
-  /* ── 6. Finalise ──────────────────────────────────────── */
+  /* ── 6. Consent form, then finalise ──────────────────── */
+  check('35 with no consent form recorded, Mark final is disabled and one sentence says why',
+    await page.evaluate(() => document.querySelector('.ar-bar button[disabled]')?.textContent.trim() === 'Mark final'
+      && /Finalise is unavailable until the employee's signed consent form is recorded, because a final report goes to their employer's HR\./.test(document.querySelector('.ar-consent').innerText)));
+  await page.fill('#ar-consent-date', '2026-08-20');
+  await page.click('button:has-text("Record consent form")');
+  await page.waitForTimeout(300);
+  check('36 recording without ticking "Signed consent form on file" is refused on the page, nothing sent',
+    await page.evaluate(() => /Tick "Signed consent form on file"/.test(document.getElementById('ar-root').innerText)
+      && !window.__rpc.some(r => r.fn === 'advance_consent_record')));
+  await page.check('#ar-consent-onfile');
+  await page.fill('#ar-consent-date', '2026-08-20');
+  await page.click('button:has-text("Record consent form")');
+  await page.waitForTimeout(500);
+  check('37 recording sends the client and the signing date, then shows who recorded it and Mark final is enabled',
+    await page.evaluate(() => {
+      const c = window.__rpc.find(r => r.fn === 'advance_consent_record');
+      return c && c.args.p_form_signed_on === '2026-08-20' && !!c.args.p_client_id
+        && /Signed consent form on file · signed 20 Aug 2026 · recorded by France Mogomotsi/.test(document.querySelector('.ar-consent').innerText)
+        && !document.querySelector('.ar-bar button[disabled]');
+    }));
   await page.click('button:has-text("Mark final")');
   await page.waitForTimeout(200);
   check('22 Mark final asks for confirmation before locking',
     await page.evaluate(() => !!document.querySelector('button') && /Confirm — mark final/.test(document.querySelector('.ar-bar').innerText)) &&
     await page.evaluate(() => window.__rpc.filter(r => r.fn === 'advance_recommendation_finalise').length === 0));
+  check('38 the confirm step reminds: give the employee the same copy that goes to HR',
+    await page.evaluate(() => /Give the employee the same copy that goes to HR\./.test(document.querySelector('.ar-bar').innerText)));
   await page.click('button:has-text("Confirm — mark final")');
   await page.waitForTimeout(600);
+  check('39 after finalising, the reminder stays on screen and the final report names the form it relied on',
+    await page.evaluate(() => /Marked final\. Give the employee the same copy that goes to HR\./.test(document.getElementById('ar-root').innerText)
+      && /Signed consent form on file · signed 20 Aug 2026/.test(document.querySelector('.ar-consent.ok').innerText)
+      && !document.querySelector('.ar-draft-print')));
   check('23 after confirming, the row is final, the badge says Final, and nothing is editable',
     await page.evaluate(() => window.__rpc.some(r => r.fn === 'advance_recommendation_finalise')
       && /Final/.test(document.querySelector('.ar-status').textContent)
@@ -295,6 +341,8 @@ function stub(page) {
   await page.waitForTimeout(700);
   check('26 v2 is a fresh draft; the picker lists v2 and v1 (final)',
     await page.evaluate(() => { const o = Array.from(document.querySelectorAll('.ar-select option')).map(x => x.textContent); return o.length === 2 && /v2 · Draft/.test(o[0]) && /v1 · Final/.test(o[1]); }));
+  check('40 a new application (v2) asks for a new consent form: the v1 form is used',
+    await page.evaluate(() => !!document.getElementById('ar-consent-onfile') && !!document.querySelector('.ar-bar button[disabled]')));
 
   /* ── 8. Error path ────────────────────────────────────── */
   await page.evaluate(() => { window.__fnFail = true; arRegenerate(); });
