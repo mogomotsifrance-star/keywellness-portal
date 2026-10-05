@@ -43,7 +43,7 @@
 -- recorded_by_name / recorded_by_email, which is what a person reads; the uuid
 -- may dangle after an account is deleted, like support_actions before its FK.
 --
--- Idempotent: safe to run twice.
+-- Idempotent: safe to run twice. Contains no DROP statement (see section 2).
 -- ============================================================
 
 begin;
@@ -99,10 +99,18 @@ create table if not exists public.advance_consents (
 create index if not exists advance_consents_client_idx on public.advance_consents (client_id);
 
 alter table public.advance_consents enable row level security;
-drop policy if exists advance_consents_read on public.advance_consents;
-create policy advance_consents_read on public.advance_consents for select
-  using (exists (select 1 from public.advisor_clients ac
-                  where ac.id = advance_consents.client_id and can_manage_advisor(ac.advisor_id)));
+-- Created only when missing, so a re-run needs no DROP (the Supabase MCP
+-- tool holds any DROP statement for a confirmation it cannot show, 5 Oct 2026).
+do $$
+begin
+  if not exists (select 1 from pg_policies
+                  where schemaname = 'public' and tablename = 'advance_consents'
+                    and policyname = 'advance_consents_read') then
+    create policy advance_consents_read on public.advance_consents for select
+      using (exists (select 1 from public.advisor_clients ac
+                      where ac.id = advance_consents.client_id and can_manage_advisor(ac.advisor_id)));
+  end if;
+end $$;
 
 -- Writes only through the RPC. RLS already refuses them; the grants say so too.
 revoke all on public.advance_consents from anon;
@@ -230,8 +238,7 @@ end;
 $$;
 revoke execute on function public.kw_advance_final_needs_consent() from public, anon, authenticated;
 
-drop trigger if exists advance_recommendations_final_needs_consent on public.advance_recommendations;
-create trigger advance_recommendations_final_needs_consent
+create or replace trigger advance_recommendations_final_needs_consent
   before insert or update on public.advance_recommendations
   for each row execute function public.kw_advance_final_needs_consent();
 

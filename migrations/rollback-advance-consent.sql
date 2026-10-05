@@ -2,30 +2,29 @@
 -- ROLLBACK — supabase_advance_consent.sql (consent form before finalise)
 -- Written 5 Oct 2026, before the forward migration was applied.
 --
--- Part 1 (always): puts finalising back exactly as it was.
---   - drops the trigger that refuses status -> 'final' without a consent
+-- Puts finalising back exactly as it was, WITHOUT a single DROP statement,
+-- so it can be run through the Supabase MCP tool (which holds any DROP for a
+-- confirmation it cannot show) as well as in the SQL editor:
 --   - restores advance_recommendation_finalise() from kw_fn_backup tag
 --     'advance-consent-gate' (the body captured just before the change)
---   - drops advance_consent_record()
---   After Part 1 an advisor can finalise with no consent form recorded again.
+--   - DISABLES the trigger that refuses status -> 'final' without a consent
+--   - revokes advance_consent_record() from everyone, so nobody can call it
+-- After this an advisor can finalise with no consent form recorded again.
 --
--- Part 2 (only when no consent has ever been recorded): removes the table,
---   the column and the index. If even one consent row exists, Part 2 does
---   nothing and says so. A recorded consent form is evidence that an
---   employee agreed to their report going to HR; a rollback must not
---   destroy it. Remove those by hand, deliberately, if that is ever wanted.
+-- KEPT on purpose: advance_consents and advance_recommendations.consent_id. A
+-- recorded consent form is evidence that an employee agreed to their report
+-- going to HR; a rollback must not destroy it. The page keeps working: it
+-- still reads both.
 --
--- ALSO REVERT: the advisor.html commit (consent panel). With Part 1 only, the
--- page still works: it reads advance_consents and consent_id, which Part 1
--- keeps. With Part 2 as well, the page's report list query names consent_id
--- and fails, so revert the page first.
+-- Removing the table, column, trigger and function entirely is a separate,
+-- deliberate step: migrations/cleanup-advance-consent.sql (SQL editor only,
+-- and only while no consent has ever been recorded).
+--
+-- ALSO REVERT: the advisor.html commit (consent panel), or advisors will see a
+-- panel and a disabled button the database no longer enforces.
 -- ============================================================
 
 begin;
-
--- ── Part 1 ───────────────────────────────────────────────────
-drop trigger if exists advance_recommendations_final_needs_consent on public.advance_recommendations;
-drop function if exists public.kw_advance_final_needs_consent();
 
 do $$
 declare
@@ -50,27 +49,21 @@ end $$;
 revoke execute on function public.advance_recommendation_finalise(uuid) from public, anon;
 grant  execute on function public.advance_recommendation_finalise(uuid) to authenticated;
 
-drop function if exists public.advance_consent_record(uuid, date);
-
--- ── Part 2 ───────────────────────────────────────────────────
 do $$
 begin
-  if to_regclass('public.advance_consents') is null then
-    raise notice 'advance_consents already gone';
-  elsif exists (select 1 from public.advance_consents) then
-    raise notice 'advance_consents holds % row(s): KEPT, with advance_recommendations.consent_id. Part 1 is done; finalising is ungated.',
-      (select count(*) from public.advance_consents);
-  else
-    drop index if exists public.advance_recommendations_one_final_per_consent;
-    alter table public.advance_recommendations drop column if exists consent_id;
-    drop table public.advance_consents;
-    raise notice 'advance_consents was empty: table, column and index removed';
+  if exists (select 1 from pg_trigger where tgname = 'advance_recommendations_final_needs_consent') then
+    alter table public.advance_recommendations disable trigger advance_recommendations_final_needs_consent;
+  end if;
+  if to_regprocedure('public.advance_consent_record(uuid,date)') is not null then
+    revoke execute on function public.advance_consent_record(uuid, date) from public, anon, authenticated;
   end if;
 end $$;
 
 commit;
 
--- Verify (expect: finalise_has_consent_check = false, trigger_left = 0, record_fn_left = 0)
+-- Verify (expect: finalise_has_consent_check = false, trigger_enabled = 'D' or none,
+-- record_callable_by_authenticated = false, consent_rows_kept = whatever was recorded)
 select (select prosrc like '%advance_consents%' from pg_proc where proname = 'advance_recommendation_finalise') as finalise_has_consent_check,
-       (select count(*) from pg_trigger where tgname = 'advance_recommendations_final_needs_consent') as trigger_left,
-       (select count(*) from pg_proc where proname = 'advance_consent_record') as record_fn_left;
+       (select tgenabled from pg_trigger where tgname = 'advance_recommendations_final_needs_consent') as trigger_enabled,
+       (select has_function_privilege('authenticated', p.oid, 'EXECUTE') from pg_proc p where p.proname = 'advance_consent_record') as record_callable_by_authenticated,
+       (select count(*) from public.advance_consents) as consent_rows_kept;

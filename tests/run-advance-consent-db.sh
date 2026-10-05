@@ -21,15 +21,23 @@ BK=$($PSQL -d $DB -tA -c "select count(*) from kw_fn_backup where tag='advance-c
 echo "backups after two runs: $BK (expect 1)"; [ "$BK" = "1" ]
 OUT=$($PSQL -d $DB -f "$HERE/advance-consent-db-tests.sql" 2>&1) || { echo "$OUT" | grep -E "PASS|FAIL|ERROR"; echo "TESTS FAILED"; exit 1; }
 echo "$OUT" | grep -E "PASS|FAIL|ERROR"
-$PSQL -d $DB -f "$ROOT/migrations/rollback-advance-consent.sql" 2>&1 | grep -E "NOTICE|ERROR" || true
-$PSQL -d $DB -f "$ROOT/migrations/rollback-advance-consent.sql" >/dev/null 2>&1   # idempotent
+$PSQL -d $DB -f "$ROOT/migrations/rollback-advance-consent.sql" >/dev/null
+$PSQL -d $DB -f "$ROOT/migrations/rollback-advance-consent.sql" >/dev/null   # idempotent
 GATED=$($PSQL -d $DB -tA -c "select prosrc like '%advance_consents%' from pg_proc where proname='advance_recommendation_finalise'")
-TRG=$($PSQL -d $DB -tA -c "select count(*) from pg_trigger where tgname='advance_recommendations_final_needs_consent'")
-RPC=$($PSQL -d $DB -tA -c "select count(*) from pg_proc where proname='advance_consent_record'")
+TRG=$($PSQL -d $DB -tA -c "select tgenabled from pg_trigger where tgname='advance_recommendations_final_needs_consent'")
+RPC=$($PSQL -d $DB -tA -c "select has_function_privilege('authenticated', 'public.advance_consent_record(uuid,date)', 'EXECUTE')")
 KEPT=$($PSQL -d $DB -tA -c "select count(*) from advance_consents")
-echo "after rollback: finalise_gated=$GATED trigger=$TRG record_rpc=$RPC consent_rows_kept=$KEPT"
-[ "$GATED" = "f" ] && [ "$TRG" = "0" ] && [ "$RPC" = "0" ] && [ "$KEPT" -gt 0 ] && echo "ROLLBACK CLEAN (evidence kept)" || { echo "ROLLBACK WRONG"; exit 1; }
-# Rolled back, a draft finalises again with no form: proves Part 1 really ungated it.
+echo "after rollback: finalise_gated=$GATED trigger_enabled=$TRG record_callable=$RPC consent_rows_kept=$KEPT"
+[ "$GATED" = "f" ] && [ "$TRG" = "D" ] && [ "$RPC" = "f" ] && [ "$KEPT" -gt 0 ] && echo "ROLLBACK CLEAN (evidence kept, no DROP used)" || { echo "ROLLBACK WRONG"; exit 1; }
+# Rolled back, a draft finalises again with no form: proves the rollback really ungated it.
 $PSQL -d $DB -c "insert into advance_recommendations (client_id, version, status, input, computed, content) values ('c0000000-0000-4000-8000-000000000003', 1, 'draft', '{}', '{}', '{}')"
 $PSQL -d $DB -c "update advance_recommendations set status='final' where client_id='c0000000-0000-4000-8000-000000000003'"
 echo "after rollback: a draft finalises with no form again: OK"
+# Cleanup refuses while evidence exists
+if $PSQL -d $DB -f "$ROOT/migrations/cleanup-advance-consent.sql" >/dev/null 2>&1; then echo "CLEANUP REMOVED EVIDENCE"; exit 1; else echo "cleanup refused while consent rows exist: OK"; fi
+# and removes everything once the table is empty
+$PSQL -d $DB -c "update advance_recommendations set consent_id = null" -c "alter table advance_recommendations disable trigger all" >/dev/null 2>&1 || true
+$PSQL -d $DB -c "delete from advance_consents" >/dev/null
+$PSQL -d $DB -f "$ROOT/migrations/cleanup-advance-consent.sql" >/dev/null
+GONE=$($PSQL -d $DB -tA -c "select to_regclass('public.advance_consents') is null and to_regprocedure('public.advance_consent_record(uuid,date)') is null")
+echo "cleanup on an empty table removes everything: $GONE"; [ "$GONE" = "t" ]
