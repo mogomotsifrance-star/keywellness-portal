@@ -1,3 +1,43 @@
+# Phone-check follow-ups: surname, gross-only line, profile prompt once per visit (2026-10-05)
+
+From Tshenolo's phone check of the budget phone fix on 5 Oct. Branch
+`claude/optimistic-babbage-r9uvnf`, cut from `origin/dev` at `3274a30`.
+Frontend only; no SQL.
+
+1. **Onboarding: Surname straight after First name, and required**
+   (`index.html`, "About you"). Was "Last name (optional)" near the bottom of
+   the step. Same red message pattern as first name: "Surname is required."
+   Onboarding only, by decision: existing members without a surname are not
+   interrupted, and the name pop-up and My Profile keep it optional.
+2. **Budget: gross alone now says what to do.** The D.3 rule stands (gross is
+   not take-home, so gross alone does not fill the net row), but the member saw
+   nothing happen. An EMPTY net row now shows "Add your deductions above, such
+   as PAYE, and your take-home pay fills in here." until the first deduction
+   fills it. A typed net row is never filled, so it never gets this line; it
+   gets "Use that figure" once a deduction arrives, as before.
+3. **"Update your shared profile?" is asked once per visit.** It used to come
+   back after every pause in typing (every autosave where a shared figure
+   changed), and "Just this budget" was not remembered. Now the first answer
+   holds until the page is next opened: Yes keeps the profile in step with
+   later saves without asking again; "Just this budget" (or Escape) means no
+   more asking this visit. The prompt says so: "Say yes once and they stay in
+   step while you edit, without asking again." The D.3 hold (not while in the
+   payslip card or the net row) still applies to the first ask.
+
+## Tests
+
+- `tests/smoke-onboarding.js`: new checks 52-54. The two flows that finish the
+  wizard (main flow and 37b) now type a surname, since finishing without one is
+  blocked; no assertion changed.
+- `tests/smoke-prefill.js` section 13: checks 214-218.
+- Each new check fails against `dev` (3274a30) and passes here.
+
+## Rollback
+
+Revert the merge commit. No stored data changes shape.
+
+---
+
 # Budget page fits a phone (2026-10-04)
 
 Branch `claude/optimistic-babbage-r9uvnf`, cut from `origin/dev` at `6a947f6`

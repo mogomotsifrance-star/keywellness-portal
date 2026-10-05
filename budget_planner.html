@@ -784,6 +784,13 @@ function untaggedWithMoney(b){
 // Returns early on anything missing rather than writing a partial patch.
 let _kwSyncPending = false;
 let _kwSyncDeferred = false;
+// Asked once per visit (5 Oct 2026). The member's answer holds until the page
+// is next opened: 'yes' keeps the profile in step with every later save of this
+// visit without asking again (they agreed, and the prompt says so); 'no' ("Just
+// this budget", or Escape) means no more asking this visit. Before this the
+// prompt came back after every pause in typing, on every line.
+let _kwSyncAnswer = null;   // null | 'yes' | 'no'
+const KW_SYNC_ONCE_LINE = 'Say yes once and they stay in step while you edit, without asking again.';
 function kwSyncHeld(){
   const a = document.activeElement;
   if (!a || a === document.body) return false;
@@ -799,6 +806,7 @@ document.addEventListener('focusout', () => setTimeout(() => {
 async function kwSyncProfileFromBudget(){
   if (!window._toolUser || !window._toolSb || !currentKey || !budgets[currentKey]) return;
   if (_kwSyncPending) return;                // one prompt per save, not one per keystroke
+  if (_kwSyncAnswer === 'no') return;        // "Just this budget" holds for the visit
   // D.3: not while the member is still in the payslip card or the net row.
   // Mid-entry, the net figure is gross less only the deductions typed so far,
   // and offering THAT as their net_income would be asking them to confirm a
@@ -877,14 +885,17 @@ async function kwSyncProfileFromBudget(){
 
   _kwSyncPending = true;
   try {
-    const ok = await KWProfile.confirm(changed.map(c => ({ col: c, newVal: patch[c] })), {
-      title: 'Update your shared profile?',
-      body: 'Your budget is where these figures live. Saving them here fills in your debt-to-income, affordability and emergency fund so none of them has to ask you again.',
-      yesLabel: 'Yes, update',
-      noLabel: 'Just this budget',
-      defaultYes: true,
-    });
-    if (!ok) return;
+    if (_kwSyncAnswer !== 'yes') {
+      const ok = await KWProfile.confirm(changed.map(c => ({ col: c, newVal: patch[c] })), {
+        title: 'Update your shared profile?',
+        body: 'Your budget is where these figures live. Saving them here fills in your debt-to-income, affordability and emergency fund so none of them has to ask you again. ' + KW_SYNC_ONCE_LINE,
+        yesLabel: 'Yes, update',
+        noLabel: 'Just this budget',
+        defaultYes: true,
+      });
+      _kwSyncAnswer = ok ? 'yes' : 'no';
+      if (!ok) return;
+    }
     patch.fin_updated_at = new Date().toISOString();
     const { error } = await window._toolSb.from('profiles').update(patch).eq('id', window._toolUser.id);
     if (error) { console.warn('Budget profile sync failed:', error); return; }
@@ -1219,6 +1230,9 @@ const KW_D3_COPY = {
   check:     'Check it matches the net pay on your payslip.',
   adjust:    'Adjust',
   worksOut:  l => `Your payslip works out to ${l}.`,
+  // 5 Oct 2026: gross alone does not fill the net row (gross is not take-home),
+  // and without a word the member saw nothing happen at all.
+  grossOnly: 'Add your deductions above, such as PAYE, and your take-home pay fills in here.',
   useIt:     'Use that figure',
   overGross: 'Your deductions add up to more than your gross pay, so this keeps its last figure. Check the payslip figures above.',
 };
@@ -1276,6 +1290,11 @@ function netStateHtml(b, r){
       + `<div>${esc(KW_D3_COPY.check)} <button type="button" class="kw-linkbtn" id="netAdjust" onclick="adjustNet()">${KW_D3_COPY.adjust}</button></div>`;
     return `<div>${esc(KW_D3_COPY.overGross)}</div>`;
   }
+  // Gross entered, no deduction yet, and a row the payslip may fill: say what
+  // fills it. Not for a typed row; that one is never filled, and is offered
+  // "Use that figure" once a deduction arrives.
+  if (src === 'empty' && !c && payslipHasGross(b))
+    return `<div id="netGrossOnly">${esc(KW_D3_COPY.grossOnly)}</div>`;
   // An observation, never an error: payslips carry deductions this block does
   // not name, employers round, and a figure can be last month's. P1 or more.
   if (c && c.left > 0 && Math.abs(c.left - pf(r.amount)) >= 1)
@@ -1365,6 +1384,10 @@ function payslipCalc(b){
   const gross = pf(ps.gross);
   const deds  = +entered.reduce((s,k) => s + pf(ps[k]), 0).toFixed(2);
   return { gross, deds, left: +(gross - deds).toFixed(2) };
+}
+function payslipHasGross(b){
+  const g = payslipOf(b).gross;
+  return g !== undefined && g !== null && g !== '' && pf(g) > 0;
 }
 function payslipHasAny(b){
   const ps = payslipOf(b);

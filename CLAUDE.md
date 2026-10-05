@@ -458,7 +458,10 @@ reading that `amount` unchanged. **A typed figure is never overwritten** — the
 member is offered "Use that figure" instead — and `syncNetFromPayslip()` runs
 only on a payslip edit, never on load. The "Update your shared profile?" prompt
 is held while focus is in the payslip card or the net row (`kwSyncHeld()`), so
-a half-entered payslip is never offered as `net_income`. Copy-to-next-month
+a half-entered payslip is never offered as `net_income`, and it is **asked once
+per visit** (`_kwSyncAnswer`, 5 Oct 2026): Yes keeps the profile in step for the
+rest of the visit, "Just this budget" stops the asking. Do not make it ask per
+save again; members found it unusable. Copy-to-next-month
 carries `payslip` and `fs_mode`. Hints and first-budget prompts are guidance
 (`.kw-guide`, shown on `:focus-within`); switches, tag status and the four
 payslip double-count warnings (`KW_PAYSLIP_WARN`) are state.

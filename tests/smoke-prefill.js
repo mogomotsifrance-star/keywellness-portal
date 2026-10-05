@@ -1812,6 +1812,72 @@ const dismissProfileModal = async (page) => {
     await page.close();
   }
 
+  /* ── 13. Phone-check follow-ups (5 Oct 2026) ─────────────────────────────
+     Gross alone filled nothing and said nothing; and the profile prompt came
+     back after every pause in typing. */
+  {
+    const GROSS_ONLY = 'Add your deductions above, such as PAYE, and your take-home pay fills in here.';
+    const page = await openVW(390, D3({}));
+    await typeInto(page, 'ps_gross', '16000');
+    await page.waitForTimeout(100);
+    const g1 = await page.evaluate(() => document.getElementById('st_inc_1')?.textContent.replace(/\s+/g, ' ').trim() || '');
+    await typeInto(page, 'ps_paye', '2800');
+    await page.waitForTimeout(100);
+    const g2 = await page.evaluate(() => ({ st: document.getElementById('st_inc_1')?.textContent || '',
+      net: document.getElementById('inc_amt_1')?.value }));
+    check('214 gross alone says how the net line fills; the first deduction fills it and the line goes',
+      g1 === GROSS_ONLY && !g2.st.includes('Add your deductions') && g2.net === '13,200.00',
+      JSON.stringify({ g1, g2 }));
+    await dismissProfileModal(page);
+    await page.close();
+  }
+  {
+    /* A figure the member typed is never filled, so it is not told it will be. */
+    const page = await openVW(390, D3({ income: [{ id: 1, label: NET, amount: 9000, src: 'typed' }] }));
+    await typeInto(page, 'ps_gross', '16000');
+    await page.waitForTimeout(100);
+    const st = await page.evaluate(() => document.getElementById('st_inc_1')?.textContent.trim() ?? null);
+    check('215 a typed net row does not get the "fills in here" line',
+      st === '' && await page.evaluate(() => typeof payslipHasGross === 'function'), String(st));
+    await page.close();
+  }
+  /* Type into a budget line and let the 400ms autosave fire. */
+  const editLine = async (page, id, v) => {
+    await typeInto(page, id, v);
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.waitForTimeout(800);
+    return page.evaluate(() => !!document.getElementById('kw-profile-modal'));
+  };
+  {
+    const page = await openVW(1280, D3({ income: [{ id: 1, label: NET, amount: 12000, src: 'typed' }] }));
+    const first = await editLine(page, 'exp_housing', '4000');
+    const body = await page.evaluate(() => document.getElementById('kw-profile-modal')?.textContent.replace(/\s+/g, ' ') || '');
+    await page.evaluate(() => document.getElementById('kwp-no')?.click());
+    await page.waitForTimeout(150);
+    const again = [await editLine(page, 'exp_food', '1500'), await editLine(page, 'exp_transport', '800'),
+                   await editLine(page, 'exp_housing', '4100')];
+    check('216 the profile prompt is asked once per visit; "Just this budget" holds for the rest of it',
+      first && again.every(m => m === false), JSON.stringify({ first, again }));
+    check('217 and it says so: one yes keeps the profile in step without asking again',
+      body.includes('Say yes once and they stay in step while you edit, without asking again.'), body.slice(0, 260));
+    await page.close();
+  }
+  {
+    const page = await openVW(1280, D3({ income: [{ id: 1, label: NET, amount: 12000, src: 'typed' }] }));
+    await editLine(page, 'exp_housing', '4000');
+    await page.evaluate(() => document.getElementById('kwp-yes')?.click());
+    await page.waitForTimeout(300);
+    const n0 = await page.evaluate(() => window.__updates.length);
+    const asked = [await editLine(page, 'exp_food', '1500'), await editLine(page, 'exp_transport', '800')];
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => ({ n: window.__updates.length,
+      last: window.__updates[window.__updates.length - 1] || null }));
+    check('218 after "Yes", later edits update the profile without asking again',
+      asked.every(m => m === false) && after.n > n0 && after.last && Number(after.last.monthly_expenses) === 6300,
+      JSON.stringify({ asked, n0, n: after.n, exp: after.last && after.last.monthly_expenses }));
+    await page.close();
+  }
+
   await browser.close();
   console.log(`\n  ${pass} passed, ${fail} failed.`);
   process.exit(fail ? 1 : 0);

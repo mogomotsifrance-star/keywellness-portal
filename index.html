@@ -2587,6 +2587,14 @@ VIEWS['onboarding'] = function () {
           </div>
 
           <div style="margin-bottom:18px">
+            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Surname <span style="color:var(--gold)">*</span></label>
+            <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
+              autocomplete="family-name" style="${inputCss};max-width:280px"
+              oninput="document.getElementById('onb-last-err').style.display='none'">
+            <p id="onb-last-err" style="color:var(--red);font-size:12px;margin-top:6px;display:none">⚠ Surname is required.</p>
+          </div>
+
+          <div style="margin-bottom:18px">
             <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Your age <span style="color:var(--gold)">*</span></label>
             <input type="number" id="onb-age" value="${profile.age||''}" placeholder="e.g. 28" min="18" max="80"
               style="${inputCss};max-width:140px;font-family:'DM Mono',monospace;font-weight:700"
@@ -2613,12 +2621,6 @@ VIEWS['onboarding'] = function () {
           </div>
 
           <hr style="border:0;border-top:1px solid var(--border);margin:24px 0 18px">
-
-          <div style="margin-bottom:18px">
-            <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px">Last name <span style="color:var(--muted);font-weight:500">(optional)</span></label>
-            <input type="text" id="onb-last" value="${escHtml(profile.last_name||'')}" placeholder="e.g. Sithole" maxlength="60"
-              autocomplete="family-name" style="${inputCss};max-width:280px">
-          </div>
 
           <div>
             <label style="display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:6px">Gender <span style="color:var(--muted);font-weight:500">(optional)</span></label>
@@ -2685,6 +2687,7 @@ VIEWS['onboarding'] = function () {
     const ageVal = parseInt(document.getElementById('onb-age')?.value || '', 10);
     let ok = true;
     if (!first) { document.getElementById('onb-name-err').style.display=''; ok = false; }
+    if (!last)  { document.getElementById('onb-last-err').style.display=''; ok = false; }
     if (!ageVal || ageVal < 18 || ageVal > 80) { document.getElementById('onb-age-err').style.display=''; ok = false; }
     if (!profile.employment) { document.getElementById('onb-emp-err').style.display=''; ok = false; }
     if (!profile.goals || !profile.goals.length) { document.getElementById('onb-goals-err').style.display=''; ok = false; }

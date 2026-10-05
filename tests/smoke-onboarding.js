@@ -246,8 +246,22 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
       blocked.errs.every(Boolean), JSON.stringify(blocked.errs));
     check('29 and does not open the assessment', blocked.navs === 0);
 
+    /* Surname: decided 5 Oct 2026. It comes straight after First name and is
+       required, like first name, with its own message. */
+    const sn = await page.evaluate(() => {
+      const inputs = [...document.querySelectorAll('#page-content input')].map(i => i.id);
+      const lbl = document.getElementById('onb-last')?.closest('div')?.querySelector('label')?.textContent || '';
+      return { next: inputs[inputs.indexOf('onb-first') + 1], lbl: lbl.replace(/\s+/g, ' ').trim(),
+               err: getComputedStyle(document.getElementById('onb-last-err') || document.body).display !== 'none'
+                    && !!document.getElementById('onb-last-err') };
+    });
+    check('52 Surname comes straight after First name, marked required, not optional',
+      sn.next === 'onb-last' && /^Surname\s*\*$/.test(sn.lbl), JSON.stringify(sn));
+    check('53 Finish without a surname is blocked with its own message', sn.err && blocked.writes === writesBefore, JSON.stringify(sn));
+
     /* Age outside 18–80 is rejected. */
     await page.fill('#onb-first', 'Kagiso');
+    await page.fill('#onb-last', 'Sithole');
     await page.fill('#onb-age', '12');
     await page.click('.choice-btn:has-text("Self-employed")');
     await page.click('.choice-btn:has-text("Build savings")');
@@ -278,6 +292,7 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
       Array.isArray(last.payload.goals) && last.payload.goals.includes('Build savings'),
       JSON.stringify(last && last.payload));
     /* The regression this file exists for. */
+    check('54 and saves the surname it now requires', last && last.payload.last_name === 'Sithole' && sn.next === 'onb-last' && sn.err, JSON.stringify(last && last.payload.last_name));
     check('33 and does NOT un-record the consent taken on screen 1',
       last && last.payload.consent_accepted === true,
       'consent_accepted=' + JSON.stringify(last && last.payload.consent_accepted));
@@ -307,6 +322,7 @@ const NEW_MEMBER = { id: UID, onboarded: false, first_name: null, consent_accept
     await page.click('#w-next');
     await page.waitForTimeout(400);
     await page.fill('#onb-first', 'Neo');
+    await page.fill('#onb-last', 'Molefe');
     await page.fill('#onb-age', '29');
     await page.click('.choice-btn:has-text("Student")');
     await page.click('.choice-btn:has-text("Pay off debt")');
