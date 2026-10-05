@@ -1,3 +1,268 @@
+# HR suppression leak (P0): stop-gap LIVE (2026-10-05)
+
+Findings: `docs/build/BATCH-0-P0-HR-SUPPRESSION-FINDINGS.md`.
+
+## FLAG: no client HR user is to be onboarded until Batch 1 is live
+
+Confirmed with Tshenolo on **5 Oct 2026**: every HR login today is an internal
+or test account, so no client has seen the leak. Granting HR access to a client
+(Roles & Access → HR) before Batch 1 is live hands them the dashboard the
+stop-gap only partly closes. The stop-gap is insurance, not the fix.
+
+Also until Batch 1: **publish no org report.** `_org_report_period_data` still
+returns `total_reach` / `total_attended` beside a suppressed `attended_session`,
+and a published snapshot is frozen.
+
+## What the stop-gap does (applied 5 Oct 2026)
+
+`migrations/stopgap-p0-hr-suppression.sql`, applied byte for byte from commit
+`e478d8c` after a self-rolling-back trial. Six functions patched in place; the
+pre-change bodies are in `kw_fn_backup` tag `p0-hr-suppression-stopgap`
+(ids 22–27), each confirmed md5-identical to the live body before the patch ran.
+
+| Function | Employer now gets |
+|---|---|
+| `org_financial_indicators` | `eligible:false, withheld:'small_cells'` when any band is 1–2 or any block is 1–4 people |
+| `org_overview` | distribution / completeness withheld on a cell of 1–2; emergency-fund % nulled when its count or complement is 1–2 |
+| `org_stress_summary` | window fixed at 90 days; `insufficient_cohort` on any band of 1–2 |
+| `org_report_data` (5-arg), `org_report_company_breakdown` (4-arg), `org_report_department_breakdown` (5-arg) | admin only. employer.html never calls them |
+
+Admin output is byte-identical to before (md5 checked in the trial). Psychosocial
+untouched.
+
+**Known wording, to fix in Batch 1:** the withheld cards reuse texts written for
+a different reason. Debt Health and Retirement say "Data appears once 5+
+employees have completed assessments (14 of 5)", and Workforce Distribution says
+"Appears once at least 3 employees have completed the assessment (14 so far)".
+Neither makes a claim about anyone's money.
+
+**Rollback:** `migrations/rollback-stopgap-p0-hr-suppression.sql` (restores the
+six bodies from `kw_fn_backup`; expect 0 rows from its verify query).
+
+**Tests:** `tests/smoke-employer-hr.js` feeds the stop-gap payloads to
+employer.html. It passes 22/22 against `dev` and against `main` (the live site),
+including a control case proving the checks see the leaked figures.
+
+## Accepted risk: watching the dashboard change over time
+
+Even after Batch 1, an HR user who reads the live dashboard every day can see a
+cell move by one when one person joins, assesses or logs stress, and may know
+who that was. Only rounding or noise closes this, and both cost every figure its
+accuracy. **Accepted by Tshenolo on 5 Oct 2026.** Batch 1 reduces it: HR
+receives published reports (one scope, one period, issued by us) rather than a
+live query they can repeat, and the live cards keep the merge and base-floor
+rules.
+
+## Test organisations
+
+`organizations.is_test = true` marks Test Co (confirmed a test organisation on
+5 Oct 2026). Every HR and report function filters to a single org, so a test
+org's members never enter another organisation's figures. The cross-organisation
+aggregates (`admin_orgs_overview`, `tuesday_review_pack`, `ops_timeline`) are
+staff-only, and the last two already skip `is_test`. Nothing member-facing
+compares across organisations.
+
+---
+
+# Budget page fits a phone (2026-10-04)
+
+Branch `claude/optimistic-babbage-r9uvnf`, cut from `origin/dev` at `6a947f6`
+(the branch carried nothing `dev` lacked, so no restore point was needed).
+`budget_planner.html` layout only: CSS and row markup hooks. No figure,
+calculation, stored field or wording changed; no other page; no SQL.
+
+## The cause
+
+At 390px and 360px the page was 480px wide. The phone grid for an expense row
+was `1fr 70px 70px 60px 24px`: 248px of fixed columns before the name, and the
+family support row's Fixed/Varies switch did not wrap (408px minimum). The page
+column cannot shrink below its widest child, so every card grew to 462px.
+Budgeted / Actual were 42px wide, showing about three characters. Month pills
+and the year grid scroll inside their own strips and were never the problem.
+
+## What a member sees on a phone (560px and under)
+
+- **Expense row:** name full width (Delete at its right for a custom line), the
+  always-visible state under it (Fixed/Varies, "Counted as"), then Budgeted and
+  Actual side by side, each labelled, with Variance labelled under Actual. The
+  column header row is hidden; its words label the fields instead.
+- **Income and payslip rows:** label on one line, amount full width below.
+- **Hints, first-budget prompts and payslip warnings open under the amounts**,
+  so showing one never moves the field being typed in (D.3's rule). On desktop
+  they still open under the name.
+- **Inputs:** at least 44px tall, 16px text (iPhones no longer zoom). At 360px
+  Budgeted and Actual show "P 12,500.00" in full.
+- **44px tap targets** for Fixed/Varies, Adjust, "Use that figure", the tag
+  links, Delete, payslip Show/Hide and "No payslip?". The visible shape keeps
+  its size: Delete draws its tile inside a transparent 44px box, the pills use
+  a transparent border, links grow only their line. No two tap boxes overlap.
+
+Desktop (above 560px) is pixel-identical to `dev`: test 213 pins the 1280px
+row geometry captured from `dev`.
+
+How it works: under 560px the row's label wrapper is `display: contents`, so
+its children join the row grid, and `order` places them (name 0, state 1,
+labels 2, fields 3, Variance 4, guidance and warnings 6). The `.bva-lbl`
+labels are `display: none` above 560px.
+
+## Tests
+
+`tests/smoke-prefill.js` section 12, checks 206-213 (206 runs at 390 and 360).
+Each was run against `dev`'s `budget_planner.html` and fails there; all pass
+here (222 passed). The geometry half of 213 passes on `dev` by construction,
+since it IS `dev`'s geometry; the check as a whole fails there because the
+phone labels it also requires do not exist. All other suites pass.
+
+## Rollback
+
+Revert the merge commit. CSS and markup only; no stored data touched.
+
+## By hand
+
+- Tshenolo: on a phone, open the budget, fill a payslip, open every group,
+  confirm nothing scrolls sideways.
+- Cloudflare: builds fire on `dev` only, so there is no preview for this
+  branch unless non-production branch builds are enabled on the Worker.
+
+---
+# Advisor debt, budget, DSR and the Hollard advance cap (2026-10-04)
+
+Branch `claude/advisor-portal-debt-budget-dsr-gs324o`, cut from `dev`. Not
+merged. Findings: `docs/build/BATCH-0-DSR-ADVISOR-FINDINGS.md`.
+
+## What is live now, and what is not
+
+| Part | State |
+|---|---|
+| `threshold_config` row `indicator.dsr` (Batch 1) | **Applied live 4 Oct.** |
+| SQL bands + gross-else-take-home in HR/admin (Batch 2) | **Applied live 4 Oct.** HR and admin figures moved the moment it ran, on BOTH sites (one database). |
+| Frontend (Batches 2, 3, 4, 6, 6b) | On the branch. Reaches the test site only when merged to `dev`; live advisors see nothing until `main`. |
+| Edge Functions `advance-recommendation`, `debt-rehab-plan` (Batches 2 + 5) | See "Edge deploy" below. |
+
+## Edge deploy (4 Oct 2026)
+
+| Function | Before (rollback target) | After |
+|---|---|---|
+| `advance-recommendation` | v4, ezbr `054fc4d0f523fcf3e85b6cf6e654a7b492e4380a86e3d2ccac29d68dfaf3dc8a` | **v5**, ezbr `24d26f2de5d5e8ac4841887fbba03333e5d2e033155823ce2b7ce05306fe6faf` |
+| `debt-rehab-plan` | v3, ezbr `2456ef70be1ba058c809d1d4ff8e13cf06c1e45a8412569b07abdd08988c804a` | **v4**, ezbr `d01d06cce3259546cd2c774560c38ae95e4425441ce6be4b29853c07f35cdfff` |
+
+Both were read back after deploying and every file is byte-identical to
+commit `9673280`. The local modules type-check under Deno; the entrypoints'
+remote imports (deno.land std, esm.sh supabase-js) are unchanged from the
+versions that were running. **Not verified from here:** a live invocation
+(the sandbox cannot reach supabase.co and the project has no pg_net). First
+live check: an advisor opens a Hollard client → Report → Advance
+Recommendation; the Prepare screen should show "Cap P … (4 × gross salary)"
+under Advance. Then any client at or above 40% → Debt Rehab Plan → Prepare.
+If either errors, check the function logs, and roll back by redeploying the
+previous code (commit `c6dd74f` holds it).
+
+These deploys reached the LIVE site's advisors at once (Edge Functions are
+not branched), while `advisor.html` on `main` still shows the old bands
+around them until the merge. Both report formats are backward compatible:
+the new fields are additions.
+
+## Things the next person must know
+
+- **Existing liabilities lack only Loan term.** Institution is already on 67 of
+  131 rows; Outstanding balance is the existing `balance` key, relabelled.
+  Advisors should capture the loan term (and any missing institution or
+  balance) at the next session. Lone to communicate.
+- **DSR band counts before and after 4 Oct 2026 are not comparable.** The bands
+  moved (20/35/45 → 40/50/60) and, for anyone with a gross salary, so did the
+  denominator. On the advisor side, over-indebted clients went from 11 of 25
+  to 3 (healthy 8 → 18); on the member side, from 7 of 24 to 6. Full table in
+  the findings file.
+  employer.html says so under Debt Health.
+- **Two config rows exist until `main` is merged.** `indicator.dti` (old) is
+  still read by `advisor.html` on `main`; `indicator.dsr` is read by SQL and by
+  every page on this branch. Retire `indicator.dti` after the merge. Until then
+  a live advisor's old-band reading and the admin's new-band figure can
+  disagree for the same client.
+- **Hollard eligibility** is `organizations.offers_advances = true` on the
+  client's organisation (`advisor_clients.org_id`). Only Hollard has it. It is
+  enforced inside `advance_recommendation_create()`. The 13 Hollard clients are
+  advisor-side records with no portal account.
+- **The advance** (Batch 5, in code): the lower of the confirmed informal
+  balances and 4 × gross monthly salary, 24 months fixed, 0%. When the cap
+  binds, the dearest debts are settled first and the remainder part-pays the
+  next, whose instalment is assumed unchanged.
+- **The budget planner's 40% "dangerously high" advice was left alone.** It is
+  budget `debt_min` ÷ the budget's take-home income, without salary-deducted
+  loans, so it is not DSR. Separately, it does not match the approved Phase D
+  copy (25%, non-scolding, `docs/phase-d-category-model.md:44`).
+- **Budget totals are computed in the browser, in `calcTotals()`**, not in an
+  RPC as the brief asked. The budget is JSON saved by the browser, there is no
+  budget RPC, and Total income depends on the BURS PAYE table, which exists in
+  JS and TS only. The Budget tab and the PFA both read `calcTotals()`, so they
+  cannot disagree. A SQL copy would be a third PAYE implementation.
+- **"Motshelo / Moraka" is one budget line** in the advisor portal and counts
+  as a savings contribution. The member side says moraka is never saving.
+  Splitting the line is a separate change.
+- **`member_debts`** exists live (25 rows) with no migration on any branch.
+  Recorded in `supabase_member_debts_doc.sql` (documentation only). Its rollup
+  owns `profiles.monthly_debt` for anyone with rows; `dti_calculator`'s
+  write-back of `monthly_debt` does not know that.
+
+- **The advisor DSR basis is own gross income, spouse excluded** (ACCEPTED
+  4 Oct, revising "gross salary only"): gross salary + their own business,
+  rental and dividend income; spouse income never. Salary alone read Olorato
+  (P 4,000 salary, P 8,300 own business) at 137.5%. 5 of 25 clients have
+  business income, 4 rentals. The advance CAP stays 4 × gross salary.
+- **The Debt Rehab Plan starts at 40%** (ACCEPTED 4 Oct): offered from the benchmark up (manageable,
+  strained, overindebted), not from "strained". Under the old bands strained
+  began at 35%; keeping the word would have withdrawn the plan from everyone
+  between 40% and 50%, the clients the agreed copy says need a plan.
+
+## Flags for Tshenolo
+- **Privacy: HR receives the full liability list without recorded consent.**
+  The Advance Recommendation is written for the Hollard HR approver and lists
+  every debt, lender and balance. Its own footer says "underlying financial
+  details remain confidential". A future prompt will add recorded member
+  consent and limit HR to the advance terms plus the debts being settled.
+  Nothing was added to it in this build.
+- **Privacy notice and lender names.** The member consent statement covers
+  "personal and financial data" for coaching and is plausibly enough for a
+  lender name, but (1) the 13 Hollard clients have no portal account and never
+  saw it, and (2) "used exclusively for financial wellness coaching" does not
+  describe the advance report going to HR. Not resolved here.
+- **HR suppression can be undone by subtraction.** `org_financial_indicators`
+  returns `reported_count` beside the bands, so a suppressed band of 1 or 2 is
+  total minus the others (seen live on Sedimosa: 10 − 6 − 0 − 3 = 1).
+  Pre-existing, unchanged by this build.
+- **Ask Key counts `debt_extra` as savings** (`ask-claude/index.ts:164`),
+  against the rule in CLAUDE.md. Not fixed (Ask Key left alone by decision).
+
+## Rollback, per batch
+
+| Batch | How |
+|---|---|
+| 1 | `migrations/rollback-dsr-bands-batch1.sql` (only after Batch 2 is rolled back) |
+| 2 SQL | `migrations/rollback-dsr-bands-batch2.sql` restores five bodies from `kw_fn_backup` tag `dsr-bands-batch2`; readable copy in `migrations/backup-dsr-bands-batch2-pre.sql` (MD5-checked against the live bodies) |
+| 2 frontend | revert commit `c6dd74f` |
+| 2 + 5 Edge | redeploy `supabase/functions/advance-recommendation` and `debt-rehab-plan` as they stand at commit `c6dd74f` (the Edge code before `24365bd`), restoring the v4 / v3 behaviour recorded above |
+| 3, 4, 6 | revert commit `a89e2a2` (one commit; the three share advisor.html). `termMonths` values stay in the JSON, harmlessly |
+| 6b | revert commit `f6dc2d6` |
+
+## Verification
+
+- `kw_dti_band`: 39.99 healthy, 40 / 45 / 49.99 manageable, 50 / 55 / 59.99
+  strained, 60 / 62 over_indebted, null null (live, by `select`).
+- `org_financial_indicators` run live as an admin on Sedimosa: new labels,
+  suppression intact. Security sweep returns exactly the ten expected rows;
+  ACLs on the five functions unchanged.
+- Unit: advance-recommendation 34/34 (incl. the brief's 15,000 cases: cap
+  60,000, instalment 2,500; 45% → 61.67% RED; 40,000 settled → 36.11% GREEN).
+- Browser: dashboard 99, prefill 173 (incl. 6b), account 95, picker 36,
+  advance 32, advisor-dsr 30 (new), habits 56, routing 19, onboarding 53,
+  notifs 21, ops 51, tracker 38, all passing.
+- Rehab: unit 29/29, browser 33/33, on own gross income and the 40% norm
+  (Olorato's cap P 4,305 → P 4,920; Phase 2 band 40.00% – 47.79%).
+- Member copy: no em dash, en dash or double hyphen in any new member string
+  (`git diff` search, and the advisor-dsr suite checks the PFA section).
+- Not done from here: the Cloudflare build history check (no dashboard
+  access); confirm the top row is green after the merge to `dev`.
+
 # Phase D.3: payslip first, calm lines, no double counting (2026-10-04)
 
 Branch `claude/optimistic-babbage-r9uvnf`, rebuilt from `origin/dev` at

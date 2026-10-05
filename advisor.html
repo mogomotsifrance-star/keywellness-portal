@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="js/dsr-bands.js"></script>
 <style>
 /* ============================================================
    kw-theme.css — inlined so this file renders correctly no matter
@@ -532,6 +533,32 @@ tbody td{padding:10px 12px;vertical-align:middle}
   #sidebar{display:none}
   #main{margin-left:0}
 }
+/* ── DSR explanation ("Why two numbers?") — js/dsr-bands.js ── */
+.kw-dsr-why{margin-top:12px;font-size:12px;line-height:1.6;color:var(--muted)}
+.kw-dsr-why summary{cursor:pointer;font-weight:700;color:var(--navy)}
+.kw-dsr-why p{margin-top:6px}
+/* Liabilities table (4 Oct 2026): numbers right-aligned in tabular figures */
+.rt-num, .rt-num input{text-align:right;font-variant-numeric:tabular-nums}
+.rt-liab{min-width:860px}
+.rt-muted{font-size:10.5px;color:var(--muted);margin-top:2px}
+.rt-warn{font-size:10.5px;color:var(--orange);margin-top:2px;text-align:left;line-height:1.35}
+.rt-total td{font-weight:700;border-top:2px solid var(--border);background:var(--kw-surface);font-variant-numeric:tabular-nums;font-size:12.5px}
+.rt-wrap input::placeholder{color:var(--muted)}
+/* Budget totals (4 Oct 2026) */
+.bud-sum{width:100%;border-collapse:collapse;margin:4px 0 16px;font-size:13px}
+.bud-sum th{text-align:left;font-weight:600;color:var(--text);padding:7px 0;border-bottom:1px solid var(--border)}
+.bud-sum td{padding:7px 0;border-bottom:1px solid var(--border);font-weight:700;white-space:nowrap;vertical-align:top}
+.bud-sum-sub{font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}
+.bud-sum-net th,.bud-sum-net td{border-bottom:none;font-weight:800;color:var(--green)}
+.bud-sum-net.short th,.bud-sum-net.short td{color:var(--red)}
+.bud-sum-word{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+.bud-sum-note{font-size:11.5px;color:var(--orange);margin:-8px 0 14px;line-height:1.5}
+/* PFA additions (4 Oct 2026) */
+.rp-nr{color:var(--muted);font-style:italic;font-weight:400;font-size:11px}
+.rp-dsr{font-size:13px;line-height:1.65;color:var(--text)}
+.rp-dsr p{margin:0 0 8px}
+.rp-dsr-why{font-size:12.5px;font-weight:800;color:var(--navy);margin:10px 0 4px}
+.rp-dsr-text{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -919,7 +946,7 @@ async function bootAdvisor(){
   ADVISOR = me;
 
   // Indicator thresholds, so the DTI banding on this screen matches the
-  // organisation figures. Failure is non-fatal — kwDtiCfg() falls back to
+  // organisation figures. Failure is non-fatal — js/dsr-bands.js already holds
   // the same numbers.
   await loadThresholds();
 
@@ -1135,6 +1162,8 @@ function assessmentPayload(c){
   delete out.id; delete out._link; delete out._memberUserId;
   delete out.appointments;          // bookings are the source of truth
   delete out.createdAt; delete out.updatedAt;
+  // A rejected loan-term entry is a message on screen, never data.
+  (out.liabilities||[]).forEach(function(r){ delete r._termError; });
   return out;
 }
 
@@ -1672,78 +1701,47 @@ function fmtDate(iso){
 let ORG_OPTIONS = null;          // last fetch, read by ncOrgChanged()
 let pendingImport = null;        // an imported file waiting for an organisation
 
-/* ── DTI banding ──────────────────────────────────────────────
-   One definition of "over-indebted", held in threshold_config and read
-   by every surface: this portal, the organisation RPCs, and HR's
-   figures. Hard-coding it here again is what let the advisor screen and
-   the HR dashboard disagree about the same client.
+/* ── DSR banding ──────────────────────────────────────────────
+   One definition of the debt service ratio bands, held in
+   threshold_config 'indicator.dsr' (SQL: kw_dti_band()) and mirrored for
+   the browser in js/dsr-bands.js. This page holds no threshold of its own:
+   hard-coding one here again is what let the advisor screen and the HR
+   dashboard disagree about the same client.
 
-   `max` is an EXCLUSIVE upper bound — a band matches when dti < max — so
-   exactly 45.0 is over-indebted. That matches kw_dti_band() in SQL and
-   org_financial_indicators(), and therefore every figure already
-   published. Do not "fix" it to <=.
+   `max` is an EXCLUSIVE upper bound, so exactly 40 is manageable, 50 is
+   strained and 60 is overindebted. Do not "fix" it to <=.
 
-   The fallback is the same set, so a failed fetch degrades to correct
-   numbers rather than to a blank diagnostic. ── */
-let KW_DTI = null;
-const KW_DTI_FALLBACK = {
-  flag_band: 'over_indebted',
-  bands: [
-    { key:'healthy',       max:20,   label:'Healthy (under 20%)'   },
-    { key:'manageable',    max:35,   label:'Manageable (20–34.9%)' },
-    { key:'strained',      max:45,   label:'Strained (35–44.9%)'   },
-    { key:'over_indebted', max:null, label:'Over-indebted (45%+)'  }
-  ]
-};
-
+   The live row is fetched so a config change reaches the advisor without a
+   deploy; if the fetch fails, js/dsr-bands.js already holds the same
+   numbers, so the page degrades to correct figures, not a blank. ── */
 async function loadThresholds(){
   const { data, error } = await sb.from('threshold_config')
-    .select('value').eq('key','indicator.dti').maybeSingle();
+    .select('value').eq('key','indicator.dsr').maybeSingle();
   if(error || !data || !data.value){
-    console.warn('DTI thresholds unavailable, using built-in defaults',
+    console.warn('DSR thresholds unavailable, using js/dsr-bands.js defaults',
                  error ? error.message : '');
-    KW_DTI = KW_DTI_FALLBACK;
     return;
   }
-  KW_DTI = data.value;
+  KWDsr.applyConfig(data.value);
 }
 
-function kwDtiCfg(){ return KW_DTI || KW_DTI_FALLBACK; }
-
-function kwDtiBand(dti){
-  if(dti === null || dti === undefined || isNaN(dti)) return null;
-  const bands = kwDtiCfg().bands || [];
-  for(let i = 0; i < bands.length; i++){
-    const max = bands[i].max;
-    if(max === null || max === undefined || Number(dti) < Number(max)) return bands[i].key;
-  }
-  return null;
-}
+function kwDtiBand(dti){ return KWDsr.band(dti); }
 
 // The canonical "flagged for debt" test. Same answer as
 // kw_is_over_indebted() in SQL.
-function kwIsOverIndebted(dti){
-  return kwDtiBand(dti) === (kwDtiCfg().flag_band || 'over_indebted');
-}
+function kwIsOverIndebted(dti){ return KWDsr.isOver(dti); }
 
-function kwBandDef(key){
-  const bands = kwDtiCfg().bands || [];
-  for(let i = 0; i < bands.length; i++){ if(bands[i].key === key) return bands[i]; }
-  return {};
-}
+function kwBandLabel(key){ return KWDsr.label(key) || 'Unknown'; }
 
-// Config labels carry their range for HR-facing output ("Strained
-// (35–44.9%)"); the pill wants just the word.
-function kwBandLabel(key){
-  const raw = kwBandDef(key).label || key || '';
-  return String(raw).replace(/\s*\(.*\)\s*$/, '') || 'Unknown';
-}
+// The Key Wellness wellbeing benchmark: the figure advisors advise
+// towards, and the line borrowing capacity is measured against. It used to
+// be read from the top of the "manageable" band, which under the current
+// bands is 50, not the benchmark; it is named in the config instead.
+function kwLendingNorm(){ return KWDsr.benchmark; }
 
-// The ceiling of the "manageable" band is the lending norm quoted to
-// clients, so it follows the config rather than being written twice.
-function kwLendingNorm(){
-  const m = kwBandDef('manageable').max;
-  return (m === null || m === undefined) ? 35 : Number(m);
+// DSR as text: "45.00%", or "Not recorded" when there is no gross income.
+function dsrTxt(t, dp){
+  return (t.dti === null || t.dti === undefined) ? 'Not recorded' : t.dti.toFixed(dp===undefined?2:dp)+'%';
 }
 
 // Fetched every time the form opens, deliberately NOT cached. An advisor
@@ -2592,28 +2590,122 @@ function livePreview(){
 }
 
 /* ---------- LIABILITIES ---------- */
+/* Liabilities. Columns, decided 4 Oct 2026: Item · Institution · Loan amount
+   (the ORIGINAL principal) · Outstanding balance (what is still owed today;
+   the key is still `balance`, which every report and the Edge Functions
+   already read as the amount owed) · Loan term (months, new key
+   `termMonths`) · Interest · Monthly instalment.
+
+   "Not recorded" is not zero. A blank outstanding balance or term on a real
+   debt is stored as null and shows "Not recorded". A stored 0 balance reads
+   the same way: before this change the page saved 0 for every blank field,
+   so an old 0 cannot be told apart from "never entered", and the Advance
+   Recommendation and Debt Rehab already treat a 0 balance as not captured.
+   The four blank template rows (Mortgage, Credit Card, ...) are not debts, so
+   they keep a plain placeholder rather than shouting "Not recorded". */
+function liabIsLive(r){
+  return !!(pf(r.balance) || pf(r.monthlyInstalment) || pf(r.loanAmount) || String(r.institution||'').trim() || !r.fixed);
+}
+function liabMoney(v){
+  return (v===null || v===undefined || v==='') ? '' : Number(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+// "36 months (3 yrs)", "18 months (1.5 yrs)", "1 month", or "" for none.
+function fmtTerm(m){
+  m = Number(m);
+  if(!m || !isFinite(m)) return '';
+  const y = Math.round(m/12*10)/10;
+  return `${m} month${m===1?'':'s'}` + (m>=12 ? ` (${y} yr${y===1?'':'s'})` : '');
+}
+function liabWarnHtml(r){
+  const out = [];
+  if(r.balance!=null && r.balance!=='' && pf(r.loanAmount)>0 && pf(r.balance) > pf(r.loanAmount))
+    out.push('Above the loan amount. Interest or arrears can do this; check the statement.');
+  if(r._termError) out.push(r._termError);
+  return out.map(t=>`<div class="rt-warn">${esc(t)}</div>`).join('');
+}
+// Suggestions for Institution: the fixed lender list plus every institution
+// already recorded on a client this advisor can see, so spellings converge.
+// Nothing is fetched: only rows already loaded into this page are read.
+function syncInstitutionList(){
+  const dl = document.getElementById('bw-institutions-credit');
+  if(!dl) return;
+  const have = new Set(Array.from(dl.options).map(o=>o.value.trim().toLowerCase()));
+  (clients||[]).forEach(c=>(c.liabilities||[]).forEach(r=>{
+    const v = String(r.institution||'').trim();
+    if(v && !have.has(v.toLowerCase())){ have.add(v.toLowerCase()); const o=document.createElement('option'); o.value=v; dl.appendChild(o); }
+  }));
+}
+// clientId is bound when the row is drawn: a blur "change" can fire after
+// the advisor has already opened another client, and must not land there.
+function saveLiabField(i, key, value, clientId){
+  const c = clientId ? clients.find(x=>x.id===clientId) : getClient();
+  const r = c && c.liabilities[i];
+  if(!r) return;
+  const raw = String(value==null?'':value).trim();
+  if(key==='termMonths'){
+    if(raw===''){ r.termMonths = null; delete r._termError; }
+    else if(/^\d+$/.test(raw) && +raw>=1 && +raw<=600){ r.termMonths = +raw; delete r._termError; }
+    else { r._termError = 'Whole months, from 1 to 600. Not saved.'; refreshLiabRow(i); return; }
+  } else if(key==='balance'){
+    r.balance = raw==='' ? null : pf(raw);
+  } else if(key==='institution'){
+    r.institution = raw;
+  }
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  refreshLiabRow(i);
+}
+function liabTotalsHtml(c){
+  const live = c.liabilities.filter(liabIsLive);
+  const principal = live.reduce((s,r)=>s+pf(r.loanAmount),0);
+  const outstanding = live.reduce((s,r)=>s+pf(r.balance),0);
+  const missing = live.filter(r=>!pf(r.balance)).length;
+  const monthly = live.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
+  return `<tr class="rt-total">
+      <td colspan="2">Total</td>
+      <td class="rt-num">${fmt(principal)}</td>
+      <td class="rt-num">${fmt(outstanding)}${missing?`<div class="rt-muted">${missing} not recorded</div>`:''}</td>
+      <td></td><td></td>
+      <td class="rt-num">${fmt(monthly)}</td>
+      <td></td>
+    </tr>`;
+}
+function refreshLiabRow(i){
+  const c = getClient(); if(!c) return;
+  const r = c.liabilities[i]; if(!r) return;
+  const w = document.getElementById('liab-warn-'+i); if(w) w.innerHTML = liabWarnHtml(r);
+  const h = document.getElementById('liab-term-'+i); if(h) h.textContent = r._termError ? '' : fmtTerm(r.termMonths);
+  const f = document.getElementById('liab-total'); if(f) f.innerHTML = liabTotalsHtml(c);
+}
 function panelLiabilities(c){
-  const rows = c.liabilities.map((r,i)=>`
+  syncInstitutionList();
+  const rows = c.liabilities.map((r,i)=>{
+    const live = liabIsLive(r);
+    const nr = live ? 'Not recorded' : '';
+    return `
     <tr>
       <td>${r.fixed?`<span class="rt-fixed-name">${esc(r.item)}</span>`:`<input type="text" value="${esc(r.item)}" oninput="saveRow('liabilities',${i},'item',this.value)" placeholder="Item">`}</td>
-      <td><input type="text" list="bw-institutions-credit" value="${esc(r.institution)}" oninput="saveRow('liabilities',${i},'institution',this.value)" placeholder="Bank or microlender"></td>
-      <td><input type="text" inputmode="decimal" value="${r.loanAmount?Number(r.loanAmount).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'loanAmount',this.value,true)" placeholder="0"></td>
+      <td><input type="text" list="bw-institutions-credit" value="${esc(r.institution)}" oninput="saveRow('liabilities',${i},'institution',this.value)" onchange="saveLiabField(${i},'institution',this.value,'${c.id}')" placeholder="${live?'Not recorded':'Bank or microlender'}"></td>
+      <td class="rt-num"><input type="text" inputmode="decimal" value="${r.loanAmount?liabMoney(r.loanAmount):''}" oninput="saveRow('liabilities',${i},'loanAmount',this.value,true); refreshLiabRow(${i})" placeholder="0"></td>
+      <td class="rt-num"><input type="text" inputmode="decimal" value="${pf(r.balance)?liabMoney(r.balance):''}" oninput="saveLiabField(${i},'balance',this.value,'${c.id}')" placeholder="${nr||'0'}"><div id="liab-warn-${i}">${liabWarnHtml(r)}</div></td>
+      <td class="rt-num"><input type="text" inputmode="numeric" value="${r.termMonths||''}" oninput="saveLiabField(${i},'termMonths',this.value,'${c.id}')" placeholder="${nr||'months'}"><div class="rt-muted" id="liab-term-${i}">${fmtTerm(r.termMonths)}</div></td>
       <td><input type="text" value="${esc(r.interestRate)}" oninput="saveRow('liabilities',${i},'interestRate',this.value)" placeholder="e.g. 14%"></td>
-      <td><input type="text" inputmode="decimal" value="${r.balance?Number(r.balance).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'balance',this.value,true)" placeholder="0"></td>
-      <td><input type="text" inputmode="decimal" value="${r.monthlyInstalment?Number(r.monthlyInstalment).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" oninput="saveRow('liabilities',${i},'monthlyInstalment',this.value,true); refreshDebtStat()" placeholder="0"></td>
+      <td class="rt-num"><input type="text" inputmode="decimal" value="${r.monthlyInstalment?liabMoney(r.monthlyInstalment):''}" oninput="saveRow('liabilities',${i},'monthlyInstalment',this.value,true); refreshDebtStat(); refreshLiabRow(${i})" placeholder="0"></td>
       <td><button class="rt-del" ${r.fixed?'disabled':''} onclick="removeRow('liabilities',${i})">✕</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   return `
     <div class="card">
       <div class="card-title">Liabilities</div>
-      <div class="card-hint">You must know all unsecured loans, and how much interest you pay on each.</div>
+      <div class="card-hint">You must know all unsecured loans, and how much interest you pay on each. Loan amount is what was borrowed; outstanding balance is what is still owed today.</div>
       <div class="rt-wrap">
-        <table>
-          <thead><tr><th style="width:130px">Item</th><th>Institution</th><th style="width:110px">Loan Amount</th><th style="width:90px">Interest</th><th style="width:110px">Balance</th><th style="width:120px">Monthly Instalment</th><th style="width:36px"></th></tr></thead>
+        <table class="rt-liab">
+          <thead><tr><th style="width:120px">Item</th><th>Institution</th><th class="rt-num" style="width:110px">Loan amount</th><th class="rt-num" style="width:120px">Outstanding balance</th><th class="rt-num" style="width:96px">Loan term (months)</th><th style="width:80px">Interest</th><th class="rt-num" style="width:120px">Monthly instalment</th><th style="width:36px"></th></tr></thead>
           <tbody>${rows}</tbody>
+          <tfoot id="liab-total">${liabTotalsHtml(c)}</tfoot>
         </table>
       </div>
-      <button class="btn btn-outline btn-sm" onclick="addRow('liabilities',{item:'Other',institution:'',loanAmount:0,interestRate:'',balance:0,monthlyInstalment:0,fixed:false})">+ Add liability</button>
+      <button class="btn btn-outline btn-sm" onclick="addRow('liabilities',{item:'Other',institution:'',loanAmount:0,interestRate:'',balance:null,termMonths:null,monthlyInstalment:0,fixed:false})">+ Add liability</button>
     </div>
     <div class="card" id="debtStat">${debtStatHtml(c)}</div>`;
 }
@@ -2624,8 +2716,9 @@ function debtStatHtml(c){
     <div class="card-title">At a glance</div>
     <div class="stat-grid" style="margin-bottom:0">
       <div class="stat-box"><div class="stat-val">${fmt(t.totalDebtInstalment)}</div><div class="stat-lbl">Total Monthly Debt</div></div>
-      <div class="stat-box ${d.color}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income (DTI)</div></div>
-    </div>`;
+      <div class="stat-box ${d.color}"><div class="stat-val">${dsrTxt(t)}</div><div class="stat-lbl">Debt service ratio (DSR) · ${esc(d.label)}</div></div>
+    </div>
+    ${KWDsr.advisorExplainHtml()}`;
 }
 function refreshDebtStat(){ const el=document.getElementById('debtStat'); if(el) el.innerHTML = debtStatHtml(getClient()); }
 
@@ -2798,6 +2891,7 @@ function panelBudget(c){
     <div class="card">
       <div class="card-title">Personal Budget — 50/30/20</div>
       <div class="card-hint">Budgeted against total monthly income captured on the Income tab (${fmt(t.totalIncome)}/mo). Needs target ≤50%, Wants ≤30%, Savings ≥20%.</div>
+      <div id="budgetSummary">${budgetSummaryHtml(c)}</div>
       <div id="budgetBars">${budgetBarsHtml(c)}</div>
     </div>
     <div class="card">${groupsHtml}</div>`;
@@ -2826,6 +2920,22 @@ function removeBudgetOtherItem(id){
   persistClients();
   renderClientEditor();
 }
+// Total income · Total expenses (with its three-way breakdown) · Net income.
+// A negative net income reads "Shortfall" with the amount as a positive
+// figure, never a bare minus sign. Shared by the Budget tab and the PFA.
+function budgetSummaryHtml(c, opts){
+  opts = opts || {};
+  const t = calcTotals(c);
+  const short = t.surplus < 0;
+  const instTotal = t.totalDebtInstalment;
+  const mismatch = (t.budgetDebtMin > 0 || instTotal > 0) && Math.abs(t.budgetDebtMin - instTotal) >= 0.005;
+  return `<table class="bud-sum">
+      <tr><th>Total income</th><td class="rt-num">${fmt(t.totalIncome)}</td></tr>
+      <tr><th>Total expenses<div class="bud-sum-sub">Living expenses ${fmt(t.budgetLivingAmt)} · Debt repayments ${fmt(t.budgetDebtAmt)} · Savings contributions ${fmt(t.budgetSavingsAmt)}</div></th><td class="rt-num">${fmt(t.totalExpenses)}</td></tr>
+      <tr class="bud-sum-net ${short?'short':''}"><th>${short?'Shortfall':'Net income'}</th><td class="rt-num">${fmt(Math.abs(t.surplus))}${short?' <span class="bud-sum-word">shortfall</span>':''}</td></tr>
+    </table>
+    ${mismatch && !opts.forReport ? `<div class="bud-sum-note">Minimum debt payments in this budget are ${fmt(t.budgetDebtMin)}; the Liabilities tab instalments total ${fmt(instTotal)}. The budget figure is used here. Check which is right with the client.</div>` : ''}`;
+}
 function budgetBarsHtml(c){
   const t = calcTotals(c);
   const rows = [
@@ -2837,8 +2947,7 @@ function budgetBarsHtml(c){
     <div style="margin-bottom:14px">
       <div class="bud-row"><span>${r.label}</span><span class="bud-target">${r.pct.toFixed(2)}% <span style="color:var(--muted);font-weight:600">/ target ${r.target}%</span></span></div>
       <div class="bud-bar"><div class="bud-fill" style="width:${Math.min(100,r.pct)}%;background:${r.color}"></div></div>
-    </div>`).join('') +
-    `<div style="font-size:12.5px;font-weight:700;color:${t.surplus>=0?'var(--green)':'var(--red)'}">${t.surplus>=0?'Monthly surplus':'Monthly shortfall'}: ${fmt(Math.abs(t.surplus))}</div>`;
+    </div>`).join('');
 }
 function saveBudget(catId, value){
   const c = getClient();
@@ -2847,6 +2956,8 @@ function saveBudget(catId, value){
   persistClients();
   const bars = document.getElementById('budgetBars');
   if(bars) bars.innerHTML = budgetBarsHtml(c);
+  const sum = document.getElementById('budgetSummary');
+  if(sum) sum.innerHTML = budgetSummaryHtml(c);
   refreshBudgetGroupTotals(c);
 }
 
@@ -3408,8 +3519,11 @@ function panelRobo(c){
   debts.forEach(d=>{ const m=impliedMonths(d.balance,d.rate,d.minPayment); if(!isFinite(m)) anyInfeasible=true; else currentInterestEstimate += Math.max(0,d.minPayment*m-d.balance); });
   const consolidationHelps = anyInfeasible || (consNew.monthly < totalMin && consNew.interest < currentInterestEstimate);
 
-  const targetPayment = t.totalIncome*0.35;
-  const needsRestructuring = t.dti > 45 && targetPayment>0;
+  // Restructure towards the wellbeing benchmark on own gross income, and treat
+  // it as the priority once the client is at or past the
+  // over-indebtedness line, the same two numbers every surface uses.
+  const targetPayment = t.dsrIncome*(kwLendingNorm()/100);
+  const needsRestructuring = t.dti !== null && KWDsr.isOver(t.dti) && targetPayment>0;
   const restructMonths = needsRestructuring ? impliedMonths(totalBal, weightedRate, targetPayment) : null;
 
   const wantsOverBudget = Math.max(0, t.wantsAmt - t.totalIncome*0.3);
@@ -3430,12 +3544,12 @@ function panelRobo(c){
   }
 
   let overallPath;
-  if(needsRestructuring && (!isFinite(restructMonths) || t.dti>65)){
-    overallPath = `Debt-to-income is ${t.dti.toFixed(2)}% — restructuring or consolidation should come first, to bring the monthly obligation down to an affordable level before a ${stratPick.split(' ')[0].toLowerCase()} payoff plan is realistic.`;
+  if(needsRestructuring && !isFinite(restructMonths)){
+    overallPath = `DSR is ${dsrTxt(t)} — restructuring or consolidation should come first, to bring the monthly obligation down to an affordable level before a ${stratPick.split(' ')[0].toLowerCase()} payoff plan is realistic.`;
   } else if(consolidationHelps){
     overallPath = `Consolidation looks favourable at an estimated ${rs.consRate}% over ${rs.consTerm} months — pair it with the ${stratPick.split(' ')[0]} method on whatever stays outside the consolidation.`;
   } else if(needsRestructuring){
-    overallPath = `Consider restructuring to ease monthly pressure (DTI ${t.dti.toFixed(2)}%), then follow the ${stratPick.split(' ')[0]} method.`;
+    overallPath = `Consider restructuring to ease monthly pressure (DSR ${dsrTxt(t)}), then follow the ${stratPick.split(' ')[0]} method.`;
   } else {
     overallPath = `Current debt load is manageable at this income — proceed directly with the ${stratPick.split(' ')[0]} method.`;
   }
@@ -3456,7 +3570,7 @@ function panelRobo(c){
       <div class="stat-box red"><div class="stat-val">${fmt(totalBal)}</div><div class="stat-lbl">Total Debt Balance</div></div>
       <div class="stat-box"><div class="stat-val">${weightedRate.toFixed(2)}%</div><div class="stat-lbl">Weighted Avg. Rate</div></div>
       <div class="stat-box"><div class="stat-val">${fmt(totalMin)}</div><div class="stat-lbl">Current Min. Payments</div></div>
-      <div class="stat-box ${t.dti<=35?'green':t.dti<=50?'gold':'red'}"><div class="stat-val">${t.dti.toFixed(2)}%</div><div class="stat-lbl">Debt-to-Income</div></div>
+      <div class="stat-box ${diagDebt(t).color}"><div class="stat-val">${dsrTxt(t)}</div><div class="stat-lbl">Debt service ratio</div></div>
     </div>
     <div id="robo-stats"></div>
 
@@ -3492,8 +3606,8 @@ function panelRobo(c){
     <div class="card">
       <div class="card-title">Restructuring Check</div>
       <div id="robo-restruct">${needsRestructuring
-        ? `<div class="notice notice-orange" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is above the 45% affordability line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (35% of income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
-        : `<div class="notice notice-green" style="margin-bottom:0">DTI of ${t.dti.toFixed(2)}% is within an affordable range — restructuring isn't the priority here.</div>`}</div>
+        ? `<div class="notice notice-orange" style="margin-bottom:0">DSR of ${dsrTxt(t)} is at or past the ${KWDsr.line}% over-indebtedness line. Restructuring debt to a target payment of ${fmt(targetPayment)}/mo (${kwLendingNorm()}% of own gross income) would need roughly <strong>${fmtMonths(restructMonths)}</strong> at the current weighted rate.</div>`
+        : `<div class="notice notice-green" style="margin-bottom:0">DSR of ${dsrTxt(t)} is below the ${KWDsr.line}% over-indebtedness line — restructuring isn't the priority here.</div>`}</div>
     </div>
 
     <div class="card">
@@ -3579,7 +3693,7 @@ function panelReportPFA(c){
      an advisor can read out loud, auto-built from the diagnostics. ── */
   const summary = `As of ${fmtDate(new Date().toISOString())}, ${esc(fullName(c))} has a net worth of
     <strong>${fmtSigned(t.netWorth)}</strong> on total monthly household income of <strong>${fmt(t.totalIncome)}</strong>.
-    Debt-to-income sits at <strong>${t.dti.toFixed(2)}%</strong> (${debt.label}). Income is rated
+    Debt service ratio sits at <strong>${dsrTxt(t)}</strong> of own gross income (${debt.label}). Income is rated
     <strong>${inc.label}</strong>, spending against the 50/30/20 budget is <strong>${exp.label}</strong>, and lifestyle
     affordability is <strong>${life.label}</strong>. Full detail for each area is below, with the advisor's
     recommendations at the end of this report.`;
@@ -3598,8 +3712,31 @@ function panelReportPFA(c){
     ['<strong>Total monthly income</strong>', '<strong>'+fmt(t.totalIncome)+'</strong>'],
   ];
 
+  // Liabilities (4 Oct 2026): Institution, Principal, Outstanding balance,
+  // Loan term and repayment, with a totals row. A missing figure prints
+  // "Not recorded", never P 0.00. The repayment is the exception: a 0
+  // instalment on an informal debt is a real fact the client gave us.
+  const NR = '<span class="rp-nr">Not recorded</span>';
   const liabData = c.liabilities.filter(r=>pf(r.balance)||pf(r.monthlyInstalment)||r.institution||pf(r.loanAmount));
-  const liabRows = liabData.map(r=>[esc(r.item), esc(r.institution)||'—', fmt(pf(r.loanAmount)), esc(r.interestRate)||'—', fmt(pf(r.balance)), fmt(pf(r.monthlyInstalment))]);
+  const liabRows = liabData.map(r=>[esc(r.item), esc(r.institution)||NR,
+    pf(r.loanAmount)?fmt(pf(r.loanAmount)):NR, pf(r.balance)?fmt(pf(r.balance)):NR,
+    r.termMonths?esc(fmtTerm(r.termMonths)):NR, esc(r.interestRate)||NR, fmt(pf(r.monthlyInstalment))]);
+  if(liabRows.length){
+    const nrBal = liabData.filter(r=>!pf(r.balance)).length;
+    liabRows.push(['<strong>Total</strong>', '', '<strong>'+fmt(liabData.reduce((s,r)=>s+pf(r.loanAmount),0))+'</strong>',
+      '<strong>'+fmt(liabData.reduce((s,r)=>s+pf(r.balance),0))+'</strong>'+(nrBal?`<div class="rp-nr">${nrBal} not recorded</div>`:''),
+      '', '', '<strong>'+fmt(t.totalDebtInstalment)+'</strong>']);
+  }
+
+  // Debt service ratio, with the member explanation. Printed in full
+  // rather than behind a "Why two numbers?" toggle, because paper cannot
+  // expand. Member-facing: no em dashes, en dashes or double hyphens.
+  const dsrBand = kwDtiBand(t.dti);
+  const dsrHtml = t.dti === null
+    ? `<p>${NR}. Gross income is not captured, so the debt service ratio cannot be worked out.</p>`
+    : `<p class="rp-dsr-line">Your debt repayments take up <strong>${t.dti.toFixed(1)}%</strong> of your own gross income. This is <strong>${esc(kwBandLabel(dsrBand))}</strong>.</p>
+       <h4 class="rp-dsr-why">Why two numbers?</h4>
+       <p class="rp-dsr-text">${esc(KWDsr.whyTwoMember('your own gross income'))}</p>`;
 
   const assetData = c.assets.filter(r=>r.name||pf(r.value));
   const assetRows = assetData.map(r=>[esc(r.name)||'—', r.status, fmt(pf(r.value)), fmt(pf(r.monthlyIncome)), fmt(pf(r.potentialIncome))]);
@@ -3666,7 +3803,10 @@ function panelReportPFA(c){
       ${rpTable(['Item','Amount'], incomeRows)}
 
       <h3>Liabilities</h3>
-      ${rpTable(['Item','Institution','Loan Amount','Interest','Balance','Monthly Instalment'], liabRows, 'No liabilities captured')}
+      ${rpTable(['Item','Institution','Principal','Outstanding balance','Loan term','Interest','Monthly repayment'], liabRows, 'No liabilities captured')}
+
+      <h3>Debt Service Ratio</h3>
+      <div class="rp-dsr">${dsrHtml}</div>
 
       <h3>Assets</h3>
       ${rpTable(['Asset','Status','Value','Monthly Income','Potential Income'], assetRows, 'No assets captured')}
@@ -3681,6 +3821,7 @@ function panelReportPFA(c){
       ${rpTable(['Business','Industry','Status','Annual Turnover'], bizRows, 'No businesses captured')}
 
       <h3>Personal Budget — 50/30/20</h3>
+      ${budgetSummaryHtml(c, { forReport: true })}
       ${rpTable(['Category','Monthly Amount','% of Income','Target'], budgetRows)}
 
       <h3>Advisory Diagnostic</h3>
@@ -3727,7 +3868,7 @@ function panelReport(c){
   // only decides whether the advisor is shown a door they cannot open.
   const advance = !!(c._org && c._org.id && c._org.offersAdvances);
   // The Debt Rehab Plan is internal, so it has no organisation gate: it is
-  // offered to any client whose DSR band is strained or worse, or whose
+  // offered to any client whose DSR is at or above the 40% benchmark, or whose
   // latest Advance Recommendation has Debt Rehab on (see drpOffered()).
   const rehab = drpOffered(c);
   if(!advance && !rehab) return panelReportPFA(c);
@@ -4030,19 +4171,19 @@ function arRenderPrepare(){
     </tr>`;
   }).join('');
   const live = pv ? `<div class="ar-live">
-      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div></div>
+      <div><div class="l">DSR before</div><div class="v">${pv.before.dsr==null?'—':pv.before.dsr.toFixed(2)+'%'}</div><div class="ar-note">of own gross income${pv.before.dsr==null?'':' · '+esc(kwBandLabel(kwDtiBand(pv.before.dsr)))}</div></div>
       <div><div class="l">DSR after</div><div class="v">${pv.after?pv.after.dsr.toFixed(2)+'%':'—'} ${pv.dsr_change?`<small>${pv.dsr_change.direction} ${pv.dsr_change.delta_points>0?'+':''}${pv.dsr_change.delta_points.toFixed(2)}</small>`:''}</div></div>
-      <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div></div>
+      <div><div class="l">Advance</div><div class="v">${pv.advance?fmt(pv.advance.amount):'None'} ${pv.advance?`<small>${fmt(pv.advance.instalment)}/mo</small>`:''}</div>${pv.advance&&pv.advance.cap!=null?`<div class="ar-note">${pv.advance.capped?`Capped at 4 × gross salary (${fmt(pv.advance.cap)}); informal balances total ${fmt(pv.advance.debt_based_amount)}`:`Cap ${fmt(pv.advance.cap)} (4 × gross salary) not reached`}</div>`:''}</div>
       <div><div class="l">Risk tier</div><div class="v ${pv.tier}">${pv.tier}</div><div class="ar-note">${esc(pv.decision)}</div></div>
     </div>` : '';
   return `${arErr()}
   <div class="card ar-prep">
     <div class="card-title">Prepare the Advance Recommendation</div>
     <div class="card-hint">Confirm how each debt is treated. Only debts marked <strong>Informal / high-cost</strong> are consolidated into the advance; formal facilities are left unchanged. The rate period matters: a motshelo at 30% <em>per month</em> is a different case from 30% per year.</div>
-    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Treatment</th><th class="num">Balance</th><th class="num">Instalment</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Treatment</th><th class="num">Outstanding balance</th><th class="num">Instalment</th></tr></thead><tbody>${rows}</tbody></table></div>`
                    : `<div class="ar-note">No liabilities captured for this client. Add them on the Liabilities tab first.</div>`}
     <div class="ar-fields">
-      <div><label>Repayment term (months)</label><input type="number" min="1" max="60" value="${p.term_months}" onchange="arPrepField('term_months', this.value)"></div>
+      <div><label>Repayment term</label><input type="text" value="24 months, 0% interest" disabled title="Fixed by the advance programme (4 Oct 2026)"><div class="ar-note">Fixed by the programme. The advance is the lower of the informal balances and 4 × gross salary.</div></div>
       <div><label>Consultation date</label><input type="date" value="${esc(p.consultation_date)}" onchange="arPrepField('consultation_date', this.value)"></div>
       <div><label>Context for the narrative (optional, not printed)</label><textarea placeholder="e.g. forex loss on a side business; second motshelo taken in July" oninput="arPrepField('advisor_context', this.value)">${esc(p.advisor_context)}</textarea></div>
     </div>
@@ -4066,13 +4207,17 @@ function arRenderPrepare(){
 const DRP = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], levers:[],
               busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'', arFlag:{} };
 
-/* Offered when the client's DSR band is strained / over-indebted (the same
+/* Offered when the client's DSR is at or above the 40% benchmark (the same
    threshold_config bands the Diagnostics tab uses), or when the latest
    Advance Recommendation has the Debt Rehab entry on. No offers_advances
    gate: the document is internal and applies to any client in trouble. */
 function drpOffered(c){
+  // From the 40% wellbeing benchmark up (manageable, strained, overindebted):
+  // a client between 40% and 60% "should have a plan to bring DSR below 40%"
+  // (the agreed advisor copy, 4 Oct 2026). Under the old bands this read
+  // strained / over-indebted, which then began at 35%.
   const band = kwDtiBand(calcTotals(c).dti);
-  if(band==='strained' || band==='over_indebted') return true;
+  if(band && band!=='healthy') return true;
   if(!(c.id in DRP.arFlag)) drpFetchArFlag(c);
   return DRP.arFlag[c.id] === true;
 }
@@ -4373,7 +4518,7 @@ function drpRenderPrepare(){
   <div class="card ar-prep drp-prep">
     <div class="card-title">Prepare the Debt Rehab Plan</div>
     <div class="card-hint">Confirm the action on each debt. <strong>Consolidate</strong> is suggested for informal / high-cost debt, <strong>Renegotiate</strong> for a formal facility whose instalment alone is above the lending norm, <strong>Retain</strong> for the rest. The plan cross-references the client's latest Advance Recommendation for any consolidation amount; it never invents one.</div>
-    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Action</th><th class="num">Instalment</th><th class="num">Balance</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${liabs.length ? `<div class="table-wrap"><table class="ar-tbl" style="margin:0"><thead><tr><th>Debt</th><th class="num">Rate as captured</th><th>Rate period</th><th>Action</th><th class="num">Instalment</th><th class="num">Outstanding balance</th><th>Outcome</th></tr></thead><tbody>${rows}</tbody></table></div>`
                    : `<div class="ar-note">No liabilities captured for this client. Add them on the Liabilities tab first.</div>`}
     ${DRP.levers.length ? `<div style="margin-top:14px"><label class="ar-note" style="font-weight:800;text-transform:uppercase;letter-spacing:.06em">Asset levers</label><ul class="drp-levers">${levers}</ul></div>` : `<div class="ar-note" style="margin-top:12px">No personal-use asset without income is captured, so there is no asset lever to consider.</div>`}
     <div class="ar-fields" style="grid-template-columns:180px 180px 1fr">
@@ -4404,7 +4549,15 @@ function calcTotals(c){
 
   const totalDebtInstalment = c.liabilities.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
   const totalLiabilityBalance = c.liabilities.reduce((s,r)=>s+pf(r.balance),0);
-  const dti = totalIncome>0 ? (totalDebtInstalment/totalIncome*100) : 0;
+  // DSR is on the client's OWN gross income (decided 4 Oct 2026): gross
+  // salary plus their own business, rental and dividend income. Spouse
+  // income stays out. Salary alone read a business owner on P 4,000 salary
+  // and P 8,300 of their own trading income as 137% overindebted.
+  // No income means no DSR, never a 0% that reads as healthy. The advisor
+  // side has no take-home figure that does not come from gross, so there is
+  // no take-home fallback here.
+  const dsrIncome = grossSalary + passiveIncome;
+  const dti = dsrIncome>0 ? (totalDebtInstalment/dsrIncome*100) : null;
 
   const totalAssets = c.assets.reduce((s,r)=>s+pf(r.value),0);
   const incomeGenAssets = c.assets.filter(r=>r.status==='Income-Generating').reduce((s,r)=>s+pf(r.value),0);
@@ -4424,19 +4577,34 @@ function calcTotals(c){
   const totalExpenses = needsAmt+wantsAmt+savingsAmt+otherAmt;
   const surplus = totalIncome - totalExpenses;
 
+  // Budget totals (4 Oct 2026). Every expense line counts, in every group,
+  // Other and custom lines included, and nothing is added from Liabilities:
+  // the budget is what the client plans to pay, so its own debt lines are
+  // the debt figure here. The breakdown below splits the same total three
+  // ways; the three always add up to totalExpenses.
+  //   debt repayments        debt_min + debt_extra
+  //   savings contributions  emfund + retirement + invest + goals + motshelo
+  //                          (the one definition of saving; never debt_extra)
+  //   living expenses        everything else
+  // The PFA report and the Budget tab both read these, so they cannot differ.
+  const budgetDebtAmt = pf(c.budget.debt_min) + pf(c.budget.debt_extra);
+  const budgetSavingsAmt = ['emfund','retirement','invest','goals','motshelo'].reduce((s,k)=>s+pf(c.budget[k]),0);
+  const budgetLivingAmt = totalExpenses - budgetDebtAmt - budgetSavingsAmt;
+  const budgetDebtMin = pf(c.budget.debt_min);
+
   const needsPct = totalIncome>0 ? needsAmt/totalIncome*100 : 0;
   const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
   const savingsPct = totalIncome>0 ? savingsAmt/totalIncome*100 : 0;
 
-  // Headroom to the lending norm. Fixed at 35% before, while the wording
-  // around it quotes kwLendingNorm() from threshold_config -- so a change to
-  // the config produced "capacity at the 40% threshold" over a figure still
-  // worked out at 35%.
-  const debtCapacity = Math.max(0, totalIncome*(kwLendingNorm()/100) - totalDebtInstalment);
+  // Headroom to the wellbeing benchmark, on the same income the DSR uses,
+  // so "capacity at the 40% benchmark" is worked out at 40% of the figure
+  // the DSR is a percentage of.
+  const debtCapacity = Math.max(0, dsrIncome*(kwLendingNorm()/100) - totalDebtInstalment);
 
-  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, totalDebtInstalment, totalLiabilityBalance, dti,
+  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, dsrIncome, totalDebtInstalment, totalLiabilityBalance, dti,
     totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
-    needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, debtCapacity };
+    needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, debtCapacity,
+    budgetDebtAmt, budgetSavingsAmt, budgetLivingAmt, budgetDebtMin };
 }
 
 function diagIncome(t){
@@ -4465,34 +4633,36 @@ function diagExpense(t){
   return {title:'Expense Problem', color, label, points};
 }
 function diagDebt(t){
-  if(t.totalIncome<=0){
-    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture income and liabilities to run this diagnostic.']};
+  if(t.dti === null){
+    return {title:'Debt Problem', color:'grey', label:'Incomplete', points:['Capture gross salary (or the client\'s own business, rental or dividend income) and liabilities to run this diagnostic.']};
   }
-  const points = [`Debt-to-income (DTI) is <strong>${t.dti.toFixed(2)}%</strong> of gross monthly income.`];
+  const points = [`Debt service ratio (DSR) is <strong>${dsrTxt(t)}</strong> of own gross monthly income.`];
 
-  // Bands come from threshold_config (see kwDtiBand). Colour is the
-  // portal's own reading of them: healthy and manageable are both within
-  // the lending norm, so both stay green — which keeps the activity
-  // report's "not green" flag on the same 35% line it has always used.
+  // Bands come from threshold_config 'indicator.dsr' via js/dsr-bands.js.
+  // Only healthy is green: a client in manageable is not overindebted but
+  // is above the wellbeing benchmark and should have a plan, so it shows
+  // gold rather than passing as fine.
   const band  = kwDtiBand(t.dti);
   const label = kwBandLabel(band);
   const norm  = kwLendingNorm();
+  const line  = KWDsr.line;
   let color;
   switch(band){
-    case 'healthy':
-    case 'manageable':    color = 'green';  break;
+    case 'healthy':       color = 'green';  break;
+    case 'manageable':    color = 'gold';   break;
     case 'strained':      color = 'orange'; break;
     case 'over_indebted': color = 'red';    break;
     default:              color = 'grey';
   }
 
-  if(band === 'healthy' || band === 'manageable'){
-    points.push(`Within Botswana lending norms (≤${norm}%) — borrowing capacity intact.`);
-    points.push(`Remaining capacity at the ${norm}% threshold: ${fmt(t.debtCapacity)}/mo.`);
-  } else if(band === 'strained'){
-    points.push(`Above the ${norm}% lending norm — new credit will be difficult. Reduce before applying.`);
+  if(band === 'healthy'){
+    points.push(`Below the ${norm}% wellbeing benchmark: repayments leave room for needs, savings and the unexpected.`);
+    points.push(`Remaining capacity at the ${norm}% benchmark: ${fmt(t.debtCapacity)}/mo.`);
+  } else if(band === 'manageable' || band === 'strained'){
+    points.push(`Above the ${norm}% wellbeing benchmark but below the ${line}% over-indebtedness line. Not overindebted; agree a plan to bring DSR below ${norm}%.`);
+    if(band === 'strained') points.push('New credit will be difficult at this level. Reduce before applying.');
   } else if(band === 'over_indebted'){
-    points.push('Past the 45% affordability line — most lenders would decline, and restructuring is the realistic route.');
+    points.push(`At or past the ${line}% over-indebtedness line. Most lenders would decline, and restructuring is the realistic route.`);
   }
   return {title:'Debt Problem', color, label, points};
 }
@@ -4505,7 +4675,7 @@ function diagLifestyle(t){
   if(t.wantsPct>30 && t.savingsPct<20){ color='red'; label='At Risk'; points.push(`Wants spending (${t.wantsPct.toFixed(2)}%) is outpacing savings (${t.savingsPct.toFixed(2)}%) — classic lifestyle-inflation pattern.`); }
   else if(t.wantsPct>30 || t.savingsPct<20){ color='orange'; label='Caution'; points.push('Discretionary spending or savings rate is drifting away from a sustainable balance.'); }
   else { points.push('Discretionary spending and savings rate are in a healthy balance.'); }
-  points.push(`Can comfortably afford up to ${fmt(t.debtCapacity)}/mo of new debt before hitting the ${kwLendingNorm()}% DTI threshold.`);
+  points.push(`Can comfortably afford up to ${fmt(t.debtCapacity)}/mo of new debt before reaching the ${kwLendingNorm()}% DSR benchmark.`);
   if(t.totalAssets>0 && t.assetIncomePct<70){ if(color==='green') color='gold'; points.push(`Only ${t.assetIncomePct.toFixed(2)}% of assets are income-generating — target is 70%.`); }
   return {title:'Lifestyle Inflation & Affordability', color, label, points};
 }
@@ -4521,8 +4691,8 @@ function diagLifestyle(t){
 
    For each of the three areas it produces:
      • a severity score 0–100, from the same thresholds the Advisory
-       Framework already uses (50/30/20, DTI ≤35%, 30% passive income,
-       70% income-generating assets, the 45% restructuring line)
+       Framework already uses (50/30/20, the DSR bands in js/dsr-bands.js,
+       30% passive income, 70% income-generating assets)
      • named INDICATORS — the specific observable signs that fired, e.g.
        an expense problem shows "Budget deficit"
      • a PLAN OF ACTION, ordered, with the biggest lever first
@@ -4660,9 +4830,9 @@ function analyseDebt(t, c){
   const ind = [], act = [];
   let score = 0;
 
-  if(t.totalIncome <= 0){
+  if(t.dti === null){
     return { key:'debt', title:'Debt', score:null, incomplete:true,
-             indicators:[], actions:[], summary:'Capture income and liabilities to run this analysis.' };
+             indicators:[], actions:[], summary:'Capture gross income and liabilities to run this analysis.' };
   }
   const active = (c.liabilities || []).filter(l => pf(l.balance) > 0);
   const costly = active.filter(l => pf(String(l.interestRate || '').replace('%','')) >= 20);
@@ -4673,19 +4843,22 @@ function analyseDebt(t, c){
              summary:'No outstanding debt recorded' };
   }
 
-  if(t.dti > 65){
+  // One indicator per band, from js/dsr-bands.js. The old 65% "critical"
+  // tier is retired: the bands stop at the over-indebtedness line.
+  const dsrBand = kwDtiBand(t.dti);
+  if(dsrBand === 'over_indebted'){
     score += 55;
-    ind.push({ label:'Debt servicing unaffordable', detail:`DTI is ${t.dti.toFixed(1)}%. Most lenders would decline, and the client is likely rotating credit to meet instalments.` });
-  } else if(t.dti > 45){
+    ind.push({ label:'Overindebted', detail:`DSR is ${dsrTxt(t,1)}, at or past the ${KWDsr.line}% over-indebtedness line. Most lenders would decline, and restructuring is the realistic route.` });
+  } else if(dsrBand === 'strained'){
     score += 38;
-    ind.push({ label:'Past the restructuring line', detail:`DTI is ${t.dti.toFixed(1)}%, above the 45% affordability line where restructuring becomes the realistic route.` });
-  } else if(t.dti > 35){
+    ind.push({ label:'DSR strained', detail:`DSR is ${dsrTxt(t,1)}. Not overindebted, but well above the ${kwLendingNorm()}% wellbeing benchmark. New credit will be difficult.` });
+  } else if(dsrBand === 'manageable'){
     score += 22;
-    ind.push({ label:'DTI above lending threshold', detail:`DTI is ${t.dti.toFixed(1)}%, above the 35% Botswana lending norm. New credit will be difficult.` });
+    ind.push({ label:'DSR above the wellbeing benchmark', detail:`DSR is ${dsrTxt(t,1)}, above the ${kwLendingNorm()}% benchmark. Agree a plan to bring it below ${kwLendingNorm()}%.` });
   }
   if(t.debtCapacity <= 0 && t.dti > kwLendingNorm()){
     score += 8;
-    ind.push({ label:'No borrowing headroom', detail:`There is no room for further credit at the ${kwLendingNorm()}% threshold — any new obligation worsens the position.` });
+    ind.push({ label:'No borrowing headroom', detail:`There is no room for further credit at the ${kwLendingNorm()}% benchmark — any new obligation worsens the position.` });
   }
   if(t.netWorth < 0){
     score += 18;
@@ -4713,17 +4886,17 @@ function analyseDebt(t, c){
   } else {
     act.push('There is no surplus to accelerate with. Fix the budget deficit first — a payoff strategy on a deficit is theoretical.');
   }
-  if(active.length >= 3 || t.dti > 45){
+  if(active.length >= 3 || KWDsr.isOver(t.dti)){
     act.push('Run the Consolidation Check with a realistic rate and term. If it does not clearly reduce the monthly payment, do not recommend it.');
   }
-  if(t.dti > 45){
+  if(KWDsr.isOver(t.dti)){
     act.push('Begin restructuring conversations with creditors now rather than after a missed payment — terms are far better before default.');
   }
-  act.push('Agree a credit freeze until DTI is back under 35%, and record the target date.');
+  act.push(`Agree a credit freeze until DSR is back under the ${kwLendingNorm()}% benchmark, and record the target date.`);
 
   return { key:'debt', title:'Debt', score:Math.min(100, score), incomplete:false,
            indicators:ind, actions:act,
-           summary:`DTI ${t.dti.toFixed(1)}% · ${fmt(t.totalLiabilityBalance)} outstanding across ${active.length} facilit${active.length===1?'y':'ies'}` };
+           summary:`DSR ${dsrTxt(t,1)} · ${fmt(t.totalLiabilityBalance)} outstanding across ${active.length} facilit${active.length===1?'y':'ies'}` };
 }
 
 /* Ranks the three areas and names the primary problem.
@@ -4784,15 +4957,14 @@ function renderFrameworkView(){
       <div class="diag-card st-orange">
         <div class="diag-head"><h4>Debt Problem</h4></div>
         <ul class="diag-list">
-          <li>Debt-to-income ratio: total monthly instalments ÷ gross monthly income.</li>
-          <li>Healthy ≤35% · Acceptable ≤50% · High Risk ≤65% · Critical &gt;65% — matching the DTI Calculator thresholds used elsewhere on the portal.</li>
+          <li>${esc(KWDsr.advisorText())}</li>
         </ul>
       </div>
       <div class="diag-card st-red">
         <div class="diag-head"><h4>Lifestyle Inflation & Affordability</h4></div>
         <ul class="diag-list">
           <li>Compares Wants spending against the Savings rate to spot lifestyle creep.</li>
-          <li>Reports remaining borrowing capacity at the 35% DTI threshold.</li>
+          <li>Reports remaining borrowing capacity at the DSR wellbeing benchmark.</li>
           <li>Checks that ≥70% of assets are income-generating, per the Key Wealth assessment guideline.</li>
         </ul>
       </div>

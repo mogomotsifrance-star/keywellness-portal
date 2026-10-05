@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="css/kw-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/kw-reveal.js"></script>
+<script src="js/dsr-bands.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="kw-report-charts.js"></script>
 <style>
@@ -949,7 +950,8 @@ function renderDebtHealth(fin) {
 
   var html = '<div class="card">'
     + '<div class="card-title">Debt Health</div>'
-    + '<div class="card-subtitle">Debt-to-income ratio across ' + total + ' employee' + (total === 1 ? '' : 's') + ' who reported income and debt figures. Median DTI: <strong>' + (dti.median != null ? dti.median + '%' : '&mdash;') + '</strong>.</div>';
+    + '<div class="card-subtitle">Debt service ratio (monthly debt repayments as a share of gross salary, or of take-home pay where gross was not given) across ' + total + ' employee' + (total === 1 ? '' : 's') + ' who reported income and debt figures. Median: <strong>' + (dti.median != null ? dti.median + '%' : '&mdash;') + '</strong>. '
+    + KWDsr.line + '% is the over-indebtedness line; ' + KWDsr.benchmark + '% is the Key Wellness wellbeing benchmark. Bands changed on 4 Oct 2026 and are not comparable with earlier figures.</div>';
 
   if (total > 0) {
     html += '<div class="fin-bands">' + finBandsHtml(dti.bands, total, colors) + '</div>'
@@ -971,7 +973,7 @@ function renderDebtHealth(fin) {
     if (riskyPct >= 25) {
       html += '<div class="action-strip">'
         + '<h3>Recommended Next Step</h3>'
-        + '<p><strong>' + riskyPct + '% of reporting employees</strong> are in the strained or over-indebted DTI bands. A group debt-counselling initiative would directly support this group.</p>'
+        + '<p><strong>' + riskyPct + '% of reporting employees</strong> are in the strained or overindebted bands (debt repayments at ' + KWDsr.bands[1].max + '% or more of salary). A group debt-counselling initiative would directly support this group.</p>'
         + '<div class="action-btns">'
         + '<button class="btn-action primary" onclick="requestWorkshop(\'Debt Counselling\')">Arrange group debt-counselling sessions</button>'
         + '<button class="btn-action" onclick="contactSupport()">Talk to your Key Wellness advisor</button>'
@@ -1139,10 +1141,10 @@ function render(data) {
   var fin = window._finData;
   if (fin && fin.eligible !== false) {
     if (fin.dti && fin.dti.median != null) {
-      var dtiColor = fin.dti.median < 20 ? 'var(--green)' : fin.dti.median < 35 ? 'var(--gold)' : fin.dti.median < 45 ? 'var(--orange)' : 'var(--red)';
+      var dtiColor = KWDsr.color(KWDsr.band(fin.dti.median));
       html += '<div class="stat-box" style="border-left-color:' + dtiColor + '">'
             + '<div class="stat-val mono" style="color:' + dtiColor + '">' + fin.dti.median + '%</div>'
-            + '<div class="stat-lbl">Median Debt-to-Income</div></div>';
+            + '<div class="stat-lbl">Median Debt Service Ratio</div></div>';
     }
     if (fin.retirement && fin.retirement.median != null) {
       html += '<div class="stat-box" style="border-left-color:' + scoreBandColor(fin.retirement.median) + '">'

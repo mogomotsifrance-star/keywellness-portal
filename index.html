@@ -13,6 +13,7 @@
 <!-- Shared session, role probe and interface routing. After the CDN script:
      it reads window.supabase.createClient. -->
 <script src="js/kw-session.js"></script>
+<script src="js/dsr-bands.js"></script>
 <script src="kw-badges.js"></script>
 <script src="js/kw-reveal.js"></script>
 <script src="js/certificate-template.js"></script>
@@ -556,6 +557,12 @@ input[type=range]{width:100%;accent-color:var(--kw-green)}
 .ic-opt .ic-d{font-size:12px;color:var(--muted);margin-top:2px;line-height:1.5}
 /* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
 .kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
+/* DSR explanation under the Financial Hub (js/dsr-bands.js) */
+.kw-dsr-explain{border-top:1px solid var(--border);margin-top:14px;padding-top:12px;font-size:12.5px;line-height:1.6;color:var(--text)}
+.kw-dsr-explain p{margin:0 0 6px}
+.kw-dsr-basis{color:var(--muted)}
+.kw-dsr-why summary{cursor:pointer;font-weight:700;color:var(--navy)}
+.kw-dsr-why p{margin-top:6px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -3477,39 +3484,37 @@ VIEWS['dashboard'] = async function () {
     hubCards.push({ cls:'navy', lbl:'Financial Stress', val:'not yet', sub:'Log stress check-in', click:`openTool('financial_stress_tracker.html')` });
   }
 
-  // DTI — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
+  // DSR — computed from Supabase budget data (budgetDTI already set above, snap fallback applied)
+  let dsrExplain = '';
   if (budgetDTI !== null) {
-    // 35 / 50 / 65 are GROSS bank thresholds. On a take-home ratio they grade
-    // the member harsher than any lender would, against a benchmark no lender
-    // applies to that figure — so the bands follow the basis, exactly as
-    // dtiStatus() does in the tool. On take-home the yardstick that IS a net
-    // rule is NBFIRA's 30% cap on unsecured credit.
+    // Bands come from js/dsr-bands.js, the same bands on either basis
+    // (decided 4 Oct 2026). A take-home figure is not graded on softer
+    // bands; it is labelled instead, because it reads higher than the
+    // member's true figure, and the member is asked for their gross salary.
     const _onTH   = budgetDTIBasis === 'take_home';
-    const _good   = _onTH ? 30 : 35;
-    const _mid    = _onTH ? 45 : 50;
-    const _high   = _onTH ? 60 : 65;
-    const dtiCls  = budgetDTI <= _good ? 'green' : budgetDTI <= _mid ? 'gold' : budgetDTI <= _high ? 'orange' : 'red';
+    const _dsr    = KWDsr.describe(budgetDTI);
+    const dtiCls  = { good:'green', mid:'gold', warn:'orange', bad:'red' }[_dsr.tone] || 'navy';
     // Where the figure came from changes what the card may claim. A saved DTI
-    // run is a debt register: the member listed each obligation, so "Stretched"
-    // is a verdict about a total they gave us. The budget's `debt_min` is ONE
+    // run is a debt register: the member listed each obligation, so a band is
+    // a verdict about a total they gave us. The budget's `debt_min` is ONE
     // line typed while planning a month, and the checklist below still reads
-    // "Debts — not yet" for that member — correctly, because a single line is
-    // not a debt register. Saying "Stretched · on take-home" above a row that
-    // says we have not been told is the dashboard contradicting itself, and the
-    // member cannot tell which half to believe. So the subtitle names the
-    // source and the next step instead. The band colour still reflects the
-    // ratio we do have; it is the CLAIM that had to go, not the signal.
+    // "Debts, not yet" for that member, correctly, because a single line is
+    // not a debt register. So the subtitle names the source and the next step
+    // instead, and the explanation under the hub is not shown for it. The band
+    // colour still reflects the ratio we do have; it is the CLAIM that had to go.
     const _fromBudgetLine = budgetDTISrc === 'budget';
     const dtiSub  = _fromBudgetLine
-      ? 'from your budget — list each loan to confirm'
-      : _onTH
-        ? (budgetDTI <= _good ? 'Comfortable · on take-home' : budgetDTI <= _mid ? 'Stretched · on take-home' : 'Heavy · on take-home')
-        : (budgetDTI <= _good ? 'Healthy' : budgetDTI <= _mid ? 'Acceptable' : budgetDTI <= _high ? 'High Risk' : 'Critical');
-    hubCards.push({ cls:dtiCls, lbl:'Debt-to-Income', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
+      ? 'from your budget, list each loan to confirm'
+      : _dsr.label + (_onTH ? ' · on take-home' : '');
+    if (!_fromBudgetLine) dsrExplain = KWDsr.memberExplainHtml(budgetDTI, {
+      basis: budgetDTIBasis,
+      grossPrompt: `<a href="#" onclick="openTool('dti_calculator.html');return false">Add your gross salary</a> to see your true figure.`
+    });
+    hubCards.push({ cls:dtiCls, lbl:'Debt Service Ratio', val:`${budgetDTI}%`, sub:dtiSub, fresh:freshLabel(snapAge.budget), stale: budgetLabel && budgetLabel < curMonth, click:`openTool('dti_calculator.html')` });
   } else if (hasBudget) {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt Service Ratio', val:'not yet', sub:'Add debt payments to budget', click:`openTool('budget_planner.html')` });
   } else {
-    hubCards.push({ cls:'navy', lbl:'Debt-to-Income', val:'not yet', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
+    hubCards.push({ cls:'navy', lbl:'Debt Service Ratio', val:'not yet', sub:'Set up budget first', click:`openTool('budget_planner.html')` });
   }
 
   // Savings Rate — computed from Supabase budget data (budgetSavRate already set above, snap fallback applied)
@@ -3594,16 +3599,16 @@ VIEWS['dashboard'] = async function () {
   if (stressScore !== null && stressScore >= 7) actions.push({ src:'stress', color:'var(--orange)', title:'High financial stress detected', desc:'Log what is causing stress — naming it is the first step to addressing it.', click:`openTool('financial_stress_tracker.html')` });
   if (totalGoals === 0) actions.push({ src:'goals', ask:true, color:'var(--gold)', title:'Set your first financial goal', desc:'Where do you want to be in 12 months? Define it and start tracking.', click:`openTool('goal_planner.html')` });
   if (!hasNWTool) actions.push({ src:'networth', ask:true, color:'var(--gold)', title:'Calculate your net worth', desc:'Know what you own vs. what you owe — your true financial picture.', click:`openTool('net_worth_tracker.html')` });
-  // Same basis rule, and the copy must not quote the lender's threshold at a
-  // member whose figure is not on the lender's basis.
-  if (budgetDTI !== null && budgetDTI > (budgetDTIBasis === 'take_home' ? 45 : 50)) actions.push({
-    src:'debts', color:'var(--orange)',
-    title: budgetDTIBasis === 'take_home'
-      ? `Debt takes ${budgetDTI}% of your take-home pay`
-      : `Debt-to-income is ${budgetDTI}% — too high`,
-    desc: budgetDTIBasis === 'take_home'
-      ? 'NBFIRA caps unsecured credit at 30% of net pay. The Debt Management Planner shows what reducing it frees up.'
-      : 'Lenders look for under 35%. Use the Debt Management Planner to reduce obligations.',
+  // Strained or overindebted on js/dsr-bands.js, the same bands on either
+  // basis. Manageable gets no action: it is above the wellbeing benchmark but
+  // not a problem to put at the top of someone's list.
+  const _dsrKey = KWDsr.band(budgetDTI);
+  if (_dsrKey === 'strained' || _dsrKey === 'over_indebted') actions.push({
+    src:'debts', color: _dsrKey === 'over_indebted' ? 'var(--red)' : 'var(--orange)',
+    title: `Debt repayments take ${budgetDTI}% of your ${budgetDTIBasis === 'take_home' ? 'take-home pay' : 'gross salary'}`,
+    desc: _dsrKey === 'over_indebted'
+      ? `That is at or past the ${KWDsr.line}% overindebtedness line. The Debt Management Planner shows what reducing it frees up, and a coach can help you plan.`
+      : `Our wellbeing target is below ${KWDsr.benchmark}%. The Debt Management Planner shows what reducing it frees up.`,
     click:`openTool('debt_management_planner.html')` });
   // Never name a cover the member already holds. Being told to get medical aid
   // by a portal that is reading your medical aid deduction is the kind of thing
@@ -3819,6 +3824,7 @@ VIEWS['dashboard'] = async function () {
               ${c.fresh ? `<div class="hub-fresh${c.stale?' hub-fresh-stale':''}">${c.stale?'⚠ ':''}${c.fresh}</div>` : ''}
             </div>`).join('')}
         </div>
+        ${dsrExplain}
       </div>
     </div>
 

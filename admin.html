@@ -1986,7 +1986,7 @@ function acctWellbeingHtml(repErr, finErr) {
              Presenting issues computes over-indebtedness from the same shared threshold
              and has no floor, so that panel still answers the debt question.</p>`
         : `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px">
-             ${finBands('Debt-to-income', fin.dti, '%')}
+             ${finBands('Debt service ratio', fin.dti, '%')}
              ${finBands('Retirement readiness', fin.retirement, '')}
              ${finBands('Financial stress', fin.stress, ' out of 10')}
            </div>

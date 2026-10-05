@@ -107,6 +107,12 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 .kw-linkbtn{background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0;font-family:inherit;}
 #payslipSkip.kw-linkbtn{font-size:12px;}
 .iw input[readonly]{color:var(--navy);background:var(--kw-surface,#f7f5f0);cursor:default;}
+/* Row hooks for the phone layout. On desktop they change nothing: the label
+   wrapper is a block as before, and the Budgeted / Actual / Variance labels
+   are not rendered (the column header row names them). */
+.iw.lbl-wrap{display:block;}
+.bva-lbl{display:none;}
+#monthNotes{font-size:.85rem;}
 .col-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);}
 .del-btn{width:28px;height:28px;border-radius:6px;border:1.5px solid #fecaca;background:#fef2f2;color:var(--red);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;flex-shrink:0;}
 .del-btn:hover{background:var(--red);color:white;border-color:var(--red);}
@@ -217,6 +223,56 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
   .item-row.bva-row{grid-template-columns:1fr 70px 70px 60px 24px;gap:6px;}
   .item-row-header.bva-header{grid-template-columns:1fr 70px 70px 60px 24px;gap:6px;}
   .vt-btn{padding:8px 16px;}
+}
+
+/* ── Phone (560px and under): the budget fits the screen ──────────────────
+   Rows stack instead of squeezing four columns into 280px. The label wrapper
+   becomes display:contents so its children join the row grid, and `order`
+   places them: name first, always-visible state under it, then the labelled
+   amounts, then guidance and payslip warnings LAST. Guidance opens below the
+   field being typed in, so showing it never moves that field (the D.3 rule;
+   on desktop it still opens under the name).
+   Tap targets are 44px tall. Where a control has a visible shape (Delete,
+   the pill buttons) the extra area is transparent, so it looks the same size;
+   links grow only their line. Inputs are 16px so iPhones do not zoom. */
+@media(max-width:560px){
+  .item-row-header.bva-header,.item-row-header.income-header{display:none;}
+  .item-row.bva-row{grid-template-columns:1fr 1fr;gap:4px 8px;position:relative;margin-bottom:16px;align-items:start;}
+  .item-row.income-row{grid-template-columns:1fr;gap:6px;position:relative;margin-bottom:14px;}
+  .bva-row > .bva-name,.income-row > .inc-name{display:contents;}
+  .bva-row > .bva-name > *,.income-row > .inc-name > *{grid-column:1/-1;order:1;}
+  .bva-row > .bva-name > :first-child,.income-row > .inc-name > :first-child{order:0;}
+  .bva-row .kw-guide,.bva-row [id^="psw_"],.income-row .kw-guide{order:6;}
+  .bva-row > .bva-lbl{display:block;order:2;font-size:11px;font-weight:700;color:var(--muted);margin-top:4px;}
+  .bva-row > .iw{order:3;}
+  .item-row.bva-row > .bva-var{order:4;grid-column:2;min-height:0;justify-content:flex-start;gap:6px;padding:0;}
+  .bva-var > .bva-lbl{display:inline;font-size:11px;font-weight:700;color:var(--muted);}
+  .income-row > .iw{order:2;}
+  .income-row > .kw-state{order:3;}
+  .income-row > span:empty,.bva-row > div:empty{display:none;}
+  .row-lbl{padding-top:0;}
+  .kw-fs{flex-wrap:wrap;}
+
+  /* Fields: 44px tall, 16px text, and room for "P 12,500.00" in full at 360px. */
+  .iw-pre{padding:0 6px;}
+  .iw input,.iw select{padding:8px;min-height:44px;}
+  .iw input.mono,.iw input[type=text].label-input,.iw select,#monthNotes{font-size:16px;}
+  .bva-row .label-input,.income-row .label-input{width:calc(100% - 52px);min-height:44px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--kw-r);background:var(--white);}
+  .bva-row .label-input:focus,.income-row .label-input:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint);}
+
+  /* Delete: a 44px target around the same 28px tile. */
+  .bva-row > .del-btn,.income-row > .del-btn{position:absolute;top:0;right:0;margin:0;width:44px;height:44px;border-color:transparent;background:transparent;isolation:isolate;}
+  .bva-row > .del-btn::before,.income-row > .del-btn::before{content:"";position:absolute;inset:8px;border:1.5px solid #fecaca;background:#fef2f2;border-radius:6px;z-index:-1;}
+  .bva-row > .del-btn:hover,.income-row > .del-btn:hover{background:transparent;border-color:transparent;}
+
+  /* Pill buttons (Fixed / Varies, payslip Show/Hide): the pill keeps its size,
+     a transparent border carries the target to 44px. */
+  .kw-tapbtn{padding:6px 12px;border:11px solid transparent !important;background-clip:padding-box !important;box-shadow:inset 0 0 0 1px var(--border);}
+  .kw-fs > .kw-tapbtn:first-child{margin-left:-11px;}   /* keep the pill's left edge where it was */
+  #payslipRows{margin-top:12px;}
+  /* Links (Adjust, Use that figure, change / say what it is, No payslip?). */
+  .kw-linkbtn,.kw-tap{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;vertical-align:middle;}
+  #payslipSkip.kw-linkbtn{justify-content:flex-start;text-align:left;}
 }
 /* P0-6 (audit F5, §8): the "who sees this" line, at the field, when the question is asked. Same weight as .hint — a reassurance that shouts is not one. */
 .kw-trust{font-size:.68rem;color:var(--muted);margin-top:6px;line-height:1.45;max-width:62ch}
@@ -377,7 +433,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
         <div class="card" id="payslipCard">
           <div class="card-title-row">
             <div class="card-title">From your payslip <span style="font-weight:500;color:var(--muted);font-size:.8em">(optional)</span></div>
-            <button class="btn btn-ghost btn-xs" id="payslipToggle" onclick="togglePayslip()" aria-expanded="false" aria-controls="payslipBody">Show</button>
+            <button class="btn btn-ghost btn-xs kw-tapbtn" id="payslipToggle" onclick="togglePayslip()" aria-expanded="false" aria-controls="payslipBody">Show</button>
           </div>
           <div id="payslipLead" style="font-size:12px;color:var(--navy);line-height:1.6;margin-top:-4px">
             Start with your payslip. What is left after deductions becomes your income below.
@@ -431,7 +487,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
           <div class="card-title">Month Notes</div>
           <div class="iw">
             <textarea id="monthNotes" placeholder="Any notes, goals or reminders for this month…" maxlength="500"
-              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-size:.85rem;font-family:'Nunito',sans-serif;color:var(--navy);"
+              style="resize:vertical;min-height:70px;padding:10px 12px;width:100%;border:none;outline:none;background:transparent;font-family:'Nunito',sans-serif;color:var(--navy);"
               oninput="autoSave()"></textarea>
           </div>
         </div>
@@ -1186,7 +1242,7 @@ function renderIncomeRows(b){
     const canDel = many && !fromPs;
     return `
     <div class="item-row income-row" id="incrow_${r.id}">
-      <div class="iw" style="display:block"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()"${desc?` aria-describedby="${desc}"`:''}>${
+      <div class="iw lbl-wrap inc-name"><input type="text" class="label-input" id="inc_lbl_${r.id}" value="${esc(r.label)}" placeholder="Income source" oninput="autoSave()"${desc?` aria-describedby="${desc}"`:''}>${
         hint ? `<div class="kw-guide" id="g_inc_${r.id}">${esc(hint)}</div>` : ''
       }</div>
       <div class="iw">
@@ -1194,7 +1250,7 @@ function renderIncomeRows(b){
         <input class="mono" type="text" id="inc_amt_${r.id}" value="${r.amount>0?r.amount.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${desc?` aria-describedby="${desc}"`:''}${
           fromPs ? ' readonly aria-readonly="true"' : ` oninput="fmtInput(this);autoSave();" onblur="finalizeInput(this);autoSave();"`} onfocus="this.select()">
       </div>
-      <button class="del-btn" onclick="removeIncomeRow(${r.id})" ${canDel?'':'disabled style="opacity:.3;cursor:not-allowed;"'}>
+      <button class="del-btn" aria-label="Remove this income" onclick="removeIncomeRow(${r.id})" ${canDel?'':'disabled style="opacity:.3;cursor:not-allowed;"'}>
         <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
       ${isNet ? `<div class="kw-state" id="st_inc_${r.id}" style="grid-column:1/-1;margin-top:0">${netStateHtml(b, r)}</div>` : ''}
@@ -1347,7 +1403,7 @@ function renderPayslipRows(b){
       : Number(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
     return `
     <div class="item-row income-row" id="psrow_${f.id}">
-      <div class="row-lbl">
+      <div class="row-lbl inc-name">
         <div style="font-size:13px">${esc(f.name)}</div>
         ${f.hint ? `<div class="kw-guide" id="g_ps_${f.id}">${esc(f.hint)}</div>` : ''}
       </div>
@@ -1452,9 +1508,9 @@ function catMeta(b, c){
 
   if (c.id === 'family_support') {
     const mode = fsMode(b);
-    bits.push(`<div style="margin-top:5px;display:flex;gap:6px;align-items:center">
-      <button type="button" class="btn btn-ghost btn-xs" id="fs_fixed"  aria-pressed="${mode==='fixed'}"  style="${mode==='fixed' ?'background:var(--navy);color:#fff':''}" onclick="setFsMode('fixed')">Fixed</button>
-      <button type="button" class="btn btn-ghost btn-xs" id="fs_varies" aria-pressed="${mode==='varies'}" style="${mode==='varies'?'background:var(--navy);color:#fff':''}" onclick="setFsMode('varies')">Varies</button>
+    bits.push(`<div class="kw-fs" style="margin-top:5px;display:flex;gap:6px;align-items:center">
+      <button type="button" class="btn btn-ghost btn-xs kw-tapbtn" id="fs_fixed"  aria-pressed="${mode==='fixed'}"  style="${mode==='fixed' ?'background:var(--navy);color:#fff':''}" onclick="setFsMode('fixed')">Fixed</button>
+      <button type="button" class="btn btn-ghost btn-xs kw-tapbtn" id="fs_varies" aria-pressed="${mode==='varies'}" style="${mode==='varies'?'background:var(--navy);color:#fff':''}" onclick="setFsMode('varies')">Varies</button>
       <span style="font-size:11px;color:var(--muted)">${mode==='varies'?'what you set aside — log what you sent in Actual':'the same every month'}</span>
     </div>`);
   }
@@ -1468,9 +1524,9 @@ function catMeta(b, c){
     const t = bucketOf(b, c.id);
     const LBL = { need:'Need', want:'Want', save:'Saving' };
     bits.push(t
-      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Counted as <strong>${LBL[t]}</strong> · <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">change</button></div>`
+      ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Counted as <strong>${LBL[t]}</strong> · <button type="button" class="kw-tap" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">change</button></div>`
       : (pf(b.expenses[c.id]||0) > 0
-          ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Not counted in any of the three bars yet · <button type="button" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">say what it is</button></div>`
+          ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">Not counted in any of the three bars yet · <button type="button" class="kw-tap" style="background:none;border:none;color:var(--navy);font-size:11px;cursor:pointer;text-decoration:underline;padding:0" onclick="retagCat('${c.id}')">say what it is</button></div>`
           : ''));
   }
 
@@ -1594,8 +1650,10 @@ function renderExpenseCats(b){
           const dby=meta.ids.length?` aria-describedby="${meta.ids.join(' ')}"`:'';
           return `<div class="item-row bva-row${val>0?' has-fig':''}" id="exprow_${c.id}">
             ${isCustom
-              ?`<div class="iw" style="display:block"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"${dby}>${meta.html}</div>`
-              :`<div style="display:block" class="row-lbl"><span style="font-size:.82rem;font-weight:500;">${c.name}</span>${meta.html}</div>`}
+              ?`<div class="iw lbl-wrap bva-name"><input type="text" class="label-input" id="exp_lbl_${c.id}" value="${esc(c.name)}" placeholder="Expense name" oninput="autoSave()"${dby}>${meta.html}</div>`
+              :`<div class="row-lbl bva-name"><span class="bva-nm" style="font-size:.82rem;font-weight:500;">${c.name}</span>${meta.html}</div>`}
+            <label class="bva-lbl bva-lbl-b" for="exp_${c.id}">Budgeted</label>
+            <label class="bva-lbl bva-lbl-a" for="act_${c.id}">Actual</label>
             <div class="iw">
               <span class="iw-pre">P</span>
               <input class="mono" type="text" id="exp_${c.id}" value="${val>0?val.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${dby}
@@ -1606,9 +1664,9 @@ function renderExpenseCats(b){
               <input class="mono" type="text" id="act_${c.id}" value="${act>0?act.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" inputmode="decimal" placeholder="0.00"${dby}
                 oninput="fmtInput(this);updateRowVariance('${c.id}');autoSave();" onblur="finalizeInput(this);autoSave();" onfocus="this.select()">
             </div>
-            <div class="bva-var" id="var_${c.id}">${varianceHtml(val,act)}</div>
+            <div class="bva-var"><span class="bva-lbl">Variance</span><span id="var_${c.id}">${varianceHtml(val,act)}</span></div>
             ${isCustom
-              ?`<button class="del-btn" onclick="removeCustomExpense('${c.id}')"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`
+              ?`<button class="del-btn" aria-label="Remove this expense" onclick="removeCustomExpense('${c.id}')"><svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg></button>`
               :'<div></div>'}
           </div>`;
         }).join('')}

@@ -500,8 +500,10 @@ const dismissProfileModal = async (page) => {
       out.ratio === '20.0' && /gross income/.test(out.desc), out.ratio + ' | ' + out.desc);
     check('67 the strip still says Gross Monthly Income',
       /Gross Monthly Income/.test(out.strip) && !/on take-home pay/.test(out.strip), out.strip.slice(0, 120));
-    check('68 the bank DSR rows are kept on the basis banks actually use',
-      /35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 160));
+    // 4 Oct 2026: room is measured against the wellbeing benchmark and the
+    // over-indebtedness line from js/dsr-bands.js, not bank thresholds.
+    check('68 on gross, the room rows measure against the 40% target and the 60% line',
+      /40% wellbeing target/.test(out.cap) && /60% overindebtedness line/.test(out.cap), out.cap.slice(0, 160));
     check('69 and the basis records gross', out.snap && out.snap.basis === 'gross', JSON.stringify(out.snap));
     await page.close();
   }
@@ -518,10 +520,10 @@ const dismissProfileModal = async (page) => {
                advice: document.getElementById('adviceCard')?.textContent || '',
                rows: document.getElementById('breakdownRows')?.textContent || '' };
     });
-    check('70 no bank DSR capacity is quoted on a take-home ratio',
-      !/35% DSR \(bank\)/.test(out.cap), out.cap.slice(0, 200));
-    check('71 the NBFIRA 30%-of-net cap, which IS a net rule, is kept',
-      /NBFIRA/.test(out.cap), out.cap.slice(0, 200));
+    check('70 no room is quoted on a take-home ratio (it would understate it)',
+      !/wellbeing target/.test(out.cap), out.cap.slice(0, 200));
+    check('71 and the unverified NBFIRA claim is gone (removed 4 Oct 2026)',
+      !/NBFIRA/.test(out.cap), out.cap.slice(0, 200));
     check('72 the headline is not repeated as a separate "DTI on net" row',
       !/DTI on net/.test(out.rows), out.rows.slice(0, 200));
     check('73 and nothing promises what a lender will decide',
@@ -694,6 +696,32 @@ const dismissProfileModal = async (page) => {
       !out.updates.some(w => 'monthly_debt' in w), JSON.stringify(out.updates));
     check('94 while the tool record is still saved, which is not theirs to decline',
       out.writes >= 2, String(out.writes));
+    await page.close();
+  }
+  {
+    /* Batch 6b (4 Oct 2026). A member who repays a loan straight off the
+       salary: budget debt_min 1,800, payslip loans 3,000, and the budget
+       wrote monthly_debt = 4,800. Seeding debt_min alone made this page's
+       total 1,800, so Calculate offered to "update" monthly_debt DOWN to
+       1,800, and a yes erased the salary-deducted loan from every report. */
+    const { page, errors } = await open(browser, 'dti_calculator.html', {
+      profile: { id: UID, net_income: 11000, monthly_debt: 4800, payslip_loan_deductions: 3000 },
+      tools: { budget_planner: BUDGET },
+    });
+    const list = await page.evaluate(() => document.getElementById('debtList')?.textContent || '');
+    check('6b.1 the salary-deducted loan is seeded as its own row beside the budget line',
+      /1,800/.test(list) && /3,000/.test(list) && /deducted from your salary/.test(list), list.slice(0, 200));
+    await page.evaluate(() => window.calculate());
+    await page.waitForTimeout(400);
+    const out = await page.evaluate(() => ({
+      modal: !!document.getElementById('kw-profile-modal'),
+      modalText: document.getElementById('kw-profile-modal')?.textContent || '',
+      debts: (window.__toolWrites.find(w => w.tool === 'dti_calculator')?.data?.debts || []).map(d => Number(d.amount)),
+    }));
+    check('6b.2 the total matches monthly_debt (4,800), so no one is offered a lower figure',
+      out.debts.reduce((a, b) => a + b, 0) === 4800 && !/monthly debt|4,800|1,800/i.test(out.modalText),
+      JSON.stringify(out));
+    check('6b.3 no uncaught errors', errors.length === 0, errors.join(' | '));
     await page.close();
   }
 
@@ -1630,6 +1658,157 @@ const dismissProfileModal = async (page) => {
     const bad = strs.filter(x => /[—–]|--/.test(x));
     check('205 no new member-facing string contains an em dash, en dash or "--"',
       strs.length >= 15 && bad.length === 0, bad.join(' || ') || `only ${strs.length} strings`);
+    await page.close();
+  }
+
+  /* ── 12. The budget fits a phone (decided 4 Oct 2026) ──────────────────────
+
+     At 390px the page was 480px wide: the expense rows' fixed columns set a
+     minimum the whole column could not shrink below, and Budgeted / Actual
+     showed three characters. Under 560px rows now stack. Desktop is untouched,
+     and section 12 pins its geometry to what dev rendered. */
+  const PHONE = {
+    currentKey: thisMonth,
+    budgets: { [thisMonth]: {
+      income: [{ id: 1, label: NET, amount: 11250, src: 'payslip' },
+               { id: 2, label: 'Farm income', amount: 800, srcId: 'farm_income' }],
+      payslip: { gross: 16000, paye: 2800, pension: 900, medical: 750, loans: 300, other: 100 },
+      fs_mode: 'varies',
+      expenses: { housing: 12500, food: 1500, family_support: 700, contributions: 300, debt_min: 900,
+                  retirement: 500, health: 200, insurance: 150, dining: 400, custom_1: 250, gifts: 200 },
+      actuals: { housing: 12500, food: 1700 },
+      customCats: [{ id: 'custom_1', name: 'Burial society', tag: 'save' }], tags: { gifts: 'need' }, collapsed: {},
+    } },
+  };
+  const openVW = async (vw, fx = PHONE) => {
+    const page = await browser.newPage({ viewport: { width: vw, height: 800 } });
+    await page.route('**cdn.jsdelivr.net/npm/@supabase/**', r => r.abort());
+    await installStub(page, { profile: { id: UID }, tools: { budget_planner: fx } });
+    await page.goto(pageUrl('budget_planner.html'));
+    await page.waitForTimeout(1400);
+    return page;
+  };
+  for (const vw of [390, 360]) {
+    const page = await openVW(vw);
+    const r = await page.evaluate(() => ({
+      sw: document.documentElement.scrollWidth, vw: document.documentElement.clientWidth,
+      groups: [...document.querySelectorAll('.cat-group-body')].length,
+      warns: [...document.querySelectorAll('.kw-warn')].filter(e => e.checkVisibility()).length,
+    }));
+    check(`206 at ${vw}px the page does not scroll sideways, every group open and warnings showing`,
+      r.sw <= r.vw && r.groups === 4 && r.warns === 4, JSON.stringify(r));
+    await page.close();
+  }
+  {
+    const page = await openVW(390);
+    const small = await page.evaluate(() =>
+      [...document.querySelectorAll('#mainContent input, #mainContent textarea')].filter(e => e.checkVisibility())
+        .filter(e => e.getBoundingClientRect().height < 44 || parseFloat(getComputedStyle(e).fontSize) < 16)
+        .map(e => `${e.id} ${Math.round(e.getBoundingClientRect().height)}px/${getComputedStyle(e).fontSize}`));
+    check('207 at 390px every budget input is at least 44px tall with at least 16px text',
+      small.length === 0, small.slice(0, 6).join(', '));
+    const taps = await page.evaluate(() => {
+      const ids = ['fs_fixed', 'fs_varies', 'payslipToggle', 'payslipSkip', 'netAdjust'];
+      const els = ids.map(id => document.getElementById(id))
+        .concat([...document.querySelectorAll('.del-btn, .kw-tap')].filter(e => e.checkVisibility()));
+      return els.filter(e => !e || e.getBoundingClientRect().height < 44)
+        .map(e => e ? `${e.id || e.textContent.trim()} ${Math.round(e.getBoundingClientRect().height)}px` : 'missing');
+    });
+    check('208 Fixed/Varies, Adjust, the tag links, Delete, Show/Hide and "No payslip?" are 44px targets',
+      taps.length === 0, taps.join(', '));
+    const overlapsOf = pg => pg.evaluate(() => {
+      const I = [...document.querySelectorAll('#mainContent input, #mainContent textarea, #mainContent select, #mainContent button, #mainContent a[href], #mainContent [onclick]')]
+        .filter(e => e.checkVisibility() && !e.closest('#monthPills'));
+      const out = [];
+      for (let i = 0; i < I.length; i++) for (let j = i + 1; j < I.length; j++) {
+        const a = I[i], b = I[j];
+        if (a.contains(b) || b.contains(a)) continue;
+        const p = a.getBoundingClientRect(), q = b.getBoundingClientRect();
+        const w = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+        const h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+        if (w > 0.5 && h > 0.5) out.push(`${a.id || a.textContent.trim().slice(0, 14)} x ${b.id || b.textContent.trim().slice(0, 14)}`);
+      }
+      return { n: I.length, out };
+    });
+    /* Twice: once with Adjust on the net row, once with "Use that figure"
+       (a typed net that differs from the payslip). Both sit beside the tag
+       "change" links and the Delete targets, which is where overlaps would be. */
+    const typed = JSON.parse(JSON.stringify(PHONE));
+    typed.budgets[thisMonth].income[0] = { id: 1, label: NET, amount: 11000, src: 'typed' };
+    const page2 = await openVW(390, typed);
+    const useLink = await page2.evaluate(() => !!document.getElementById('netUsePayslip')?.checkVisibility());
+    const o1 = await overlapsOf(page), o2 = await overlapsOf(page2);
+    await page2.close();
+    check('209 at 390px the 44px tap targets are in place and no two interactive elements\' tap boxes intersect',
+      taps.length === 0 && useLink && o1.n > 60 && o1.out.length === 0 && o2.out.length === 0,
+      `targets: ${taps.join(', ') || 'ok'}; ${o1.n} elements; ${o1.out.concat(o2.out).slice(0, 5).join(' | ')}`);
+    /* Labels: Budgeted, Actual and Variance, the header's own words. */
+    const lbl = await page.evaluate(() => [...document.querySelectorAll('#exprow_housing .bva-lbl')]
+      .filter(e => e.checkVisibility()).map(e => e.textContent.trim()));
+    check('210 on a phone each amount is labelled Budgeted, Actual and Variance',
+      JSON.stringify(lbl) === JSON.stringify(['Budgeted', 'Actual', 'Variance']), JSON.stringify(lbl));
+    /* D.3 still holds on a phone: guidance opens BELOW the amounts, and the
+       field being typed in does not move. */
+    const g = await page.evaluate(async () => {
+      const inp = document.getElementById('exp_debt_min');
+      const y0 = inp.getBoundingClientRect().top + scrollY;
+      inp.focus();
+      await new Promise(r => setTimeout(r, 50));
+      const y1 = inp.getBoundingClientRect().top + scrollY;
+      const act = document.getElementById('act_debt_min').getBoundingClientRect().bottom + scrollY;
+      const tops = ['g_debt_min', 'gp_debt_min'].map(id => document.getElementById(id))
+        .concat([document.querySelector('#psw_debt_min .kw-warn')])
+        .map(e => e && e.checkVisibility() ? e.getBoundingClientRect().top + scrollY : null);
+      return { y0, y1, act, tops };
+    });
+    check('211 on a phone, hints, prompt and warning open under the amounts without moving the field',
+      Math.abs(g.y1 - g.y0) < 0.5 && g.tops.every(t => t !== null && t >= g.act), JSON.stringify(g));
+    await page.close();
+  }
+  {
+    const page = await openVW(360);
+    const fit = await page.evaluate(() => ['exp_housing', 'act_housing'].map(id => {
+      const e = document.getElementById(id), w = e.closest('.iw').getBoundingClientRect();
+      return { id, value: e.value, pre: e.closest('.iw').querySelector('.iw-pre').textContent.trim(),
+               clipped: e.scrollWidth > e.clientWidth, inView: w.left >= 0 && w.right <= document.documentElement.clientWidth };
+    }));
+    check('212 at 360px Budgeted and Actual each show "P 12,500.00" in full',
+      fit.every(f => f.pre === 'P' && f.value === '12,500.00' && !f.clipped && f.inView), JSON.stringify(fit));
+    await page.close();
+  }
+  {
+    /* Desktop: the geometry dev rendered at 1280px, pinned (captured from dev
+       at 6a947f6 with this fixture, before the phone work). */
+    const DEV = {"cols":"274px 108px 108px 96px 32px","incCols":"450px 160px 32px",
+      "housing":{"row":[0,0,650,36],"exp":[309,1,80,34],"act":[425,1,80,34],"v":[514,0,96,36]},
+      "family_support":{"row":[0,0,650,55],"exp":[309,1,80,34],"act":[425,1,80,34],"v":[514,0,96,36]},
+      "custom_1":{"row":[0,0,650,50],"exp":[309,1,80,34],"act":[425,1,80,34],"v":[514,0,96,36]},
+      "debt_min":{"row":[0,0,650,113],"exp":[309,1,80,34],"act":[425,1,80,34],"v":[514,0,96,36]},
+      "inc":{"row":[0,0,658,36],"lbl":[1,1,197,33],"amt":[485,1,132,34]},
+      "ps":{"row":[0,0,658,36],"amt":[485,1,132,34]}};
+    const fx = JSON.parse(JSON.stringify(PHONE));
+    fx.budgets[thisMonth].payslip.loans = 300;
+    fx.budgets[thisMonth].expenses.housing = 4000;
+    fx.budgets[thisMonth].actuals.housing = 4000;
+    const page = await openVW(1280, fx);
+    const got = await page.evaluate(() => {
+      const rel = (id, rowId) => { const e = document.getElementById(id)?.closest(id.startsWith('var_') ? '.bva-var' : '*'),
+        r = document.getElementById(rowId); if (!e || !r) return null;
+        const a = e.getBoundingClientRect(), b = r.getBoundingClientRect();
+        return [Math.round(a.left - b.left), Math.round(a.top - b.top), Math.round(a.width), Math.round(a.height)]; };
+      const out = { cols: getComputedStyle(document.querySelector('.bva-row')).gridTemplateColumns,
+                    incCols: getComputedStyle(document.querySelector('.income-row')).gridTemplateColumns };
+      for (const c of ['housing', 'family_support', 'custom_1', 'debt_min']) { const row = 'exprow_' + c;
+        out[c] = { row: rel(row, row), exp: rel('exp_' + c, row), act: rel('act_' + c, row), v: rel('var_' + c, row) }; }
+      out.inc = { row: rel('incrow_2', 'incrow_2'), lbl: rel('inc_lbl_2', 'incrow_2'), amt: rel('inc_amt_2', 'incrow_2') };
+      out.ps = { row: rel('psrow_gross', 'psrow_gross'), amt: rel('ps_gross', 'psrow_gross') };
+      return out; });
+    const lblHidden = await page.evaluate(() => { const l = [...document.querySelectorAll('#exprow_housing .bva-lbl')];
+      return l.length === 3 && l.every(e => !e.checkVisibility()); });
+    /* The geometry half passes on dev by construction (it is dev's own
+       geometry); the phone labels make the check as a whole fail there. */
+    check('213 at 1280px the row grids are unchanged from dev, and the phone labels are present but not shown',
+      JSON.stringify(got) === JSON.stringify(DEV) && lblHidden, `labels hidden: ${lblHidden}; ` + JSON.stringify(got).slice(0, 260));
     await page.close();
   }
 

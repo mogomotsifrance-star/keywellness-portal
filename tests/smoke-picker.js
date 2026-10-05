@@ -23,14 +23,15 @@ function check(name, ok, detail) {
 // Mirrors what advisor_org_options() returns: two orgs, one with sites,
 // one without. The closed company and orphan site are already excluded
 // server-side, which the SQL suite asserts separately.
-// The bands exactly as supabase_org_account_phase0.sql seeds them.
+// The bands exactly as supabase_dsr_bands_batch1.sql seeds indicator.dsr
+// (4 Oct 2026). advisor.html reads that row, not indicator.dti.
 const DTI_FIXTURE = {
-  flag_band: 'over_indebted',
+  flag_band: 'over_indebted', benchmark: 40, over_indebted_line: 60,
   bands: [
-    { key:'healthy',       max:20,   label:'Healthy (under 20%)'   },
-    { key:'manageable',    max:35,   label:'Manageable (20–34.9%)' },
-    { key:'strained',      max:45,   label:'Strained (35–44.9%)'   },
-    { key:'over_indebted', max:null, label:'Over-indebted (45%+)'  }
+    { key:'healthy',       max:40,   label:'Healthy (below 40%)'          },
+    { key:'manageable',    max:50,   label:'Manageable (40 to 49.99%)'    },
+    { key:'strained',      max:60,   label:'Strained (50 to 59.99%)'      },
+    { key:'over_indebted', max:null, label:'Overindebted (60% and above)' }
   ]
 };
 
@@ -269,54 +270,55 @@ const ORG_FIXTURE = [
   check('the options are re-fetched each time the form opens, not cached once',
     rpcCount > 1, 'advisor_org_options called ' + rpcCount + ' time(s)');
 
-  // ── DTI bands come from threshold_config ────────────────────
+  // ── DSR bands come from threshold_config 'indicator.dsr' ────
   const bands = await page.evaluate(() =>
-    [12, 19.9, 20, 34.9, 35, 44.9, 45, 50, 81.3].map(d => ({
+    [12, 39.99, 40, 45, 49.99, 50, 59.99, 60, 81.3].map(d => ({
       dti: d, band: window.kwDtiBand(d), flagged: window.kwIsOverIndebted(d)
     })));
   const bandOf = d => (bands.find(b => b.dti === d) || {}).band;
-  check('12% bands healthy',                 bandOf(12)   === 'healthy');
-  check('20% bands manageable',              bandOf(20)   === 'manageable');
-  check('34.9% is still manageable',         bandOf(34.9) === 'manageable');
-  check('35% bands strained',                bandOf(35)   === 'strained');
-  check('44.9% is still strained',           bandOf(44.9) === 'strained');
-  check('45% bands over-indebted (inclusive boundary, matches SQL)',
-    bandOf(45) === 'over_indebted');
-  check('81.3% bands over-indebted',         bandOf(81.3) === 'over_indebted');
+  check('12% and 39.99% band healthy',       bandOf(12) === 'healthy' && bandOf(39.99) === 'healthy');
+  check('exactly 40% is manageable, as is 45% and 49.99%', bandOf(40) === 'manageable' && bandOf(45) === 'manageable' && bandOf(49.99) === 'manageable');
+  check('exactly 50% is strained, as is 59.99%', bandOf(50) === 'strained' && bandOf(59.99) === 'strained');
+  check('exactly 60% is overindebted (exclusive max, matches SQL)', bandOf(60) === 'over_indebted');
+  check('81.3% bands overindebted',          bandOf(81.3) === 'over_indebted');
 
   const flags = d => (bands.find(b => b.dti === d) || {}).flagged;
-  check('44.9% is not flagged for debt', flags(44.9) === false);
-  check('45% is flagged for debt',       flags(45)   === true);
-  check('50% is flagged — the reading that changes for advisors',
-    flags(50) === true);
+  check('59.99% is not flagged for debt', flags(59.99) === false);
+  check('60% is flagged for debt',        flags(60)    === true);
+  check('45% is no longer flagged — the reading that changes for advisors',
+    flags(45) === false);
 
   // ── diagDebt renders from those bands ───────────────────────
   const diag = await page.evaluate(() =>
-    [25, 40, 50].map(dti => {
-      const d = window.diagDebt({ dti: dti, totalIncome: 30000, capacity35: 1000 });
+    [25, 45, 55, 62].map(dti => {
+      const d = window.diagDebt({ dti: dti, totalIncome: 30000, grossSalary: 30000, debtCapacity: 1000 });
       return { dti: dti, color: d.color, label: d.label };
     }));
-  check('25% shows green Manageable',
-    diag[0].color === 'green'  && diag[0].label === 'Manageable', JSON.stringify(diag[0]));
-  check('40% shows orange Strained',
-    diag[1].color === 'orange' && diag[1].label === 'Strained',   JSON.stringify(diag[1]));
-  check('50% shows red Over-indebted (was gold "Acceptable")',
-    diag[2].color === 'red'    && diag[2].label === 'Over-indebted', JSON.stringify(diag[2]));
+  check('25% shows green Healthy',
+    diag[0].color === 'green'  && diag[0].label === 'Healthy', JSON.stringify(diag[0]));
+  check('45% shows gold Manageable (above the benchmark, not overindebted)',
+    diag[1].color === 'gold'   && diag[1].label === 'Manageable', JSON.stringify(diag[1]));
+  check('55% shows orange Strained',
+    diag[2].color === 'orange' && diag[2].label === 'Strained', JSON.stringify(diag[2]));
+  check('62% shows red Overindebted',
+    diag[3].color === 'red'    && diag[3].label === 'Overindebted', JSON.stringify(diag[3]));
 
-  // The activity report flags anything not green; that line must stay at 35%.
-  check('the activity-report flag line stays at 35%',
-    diag[0].color === 'green' && diag[1].color !== 'green');
+  // The activity report flags anything not green; that line is now the 40% benchmark.
+  check('the activity-report flag line moves to the 40% benchmark',
+    await page.evaluate(() => window.diagDebt({ dti: 39.99, totalIncome: 1, grossSalary: 1, debtCapacity: 0 }).color === 'green'
+      && window.diagDebt({ dti: 40, totalIncome: 1, grossSalary: 1, debtCapacity: 0 }).color !== 'green'));
 
   // ── A failed threshold fetch must not blank the diagnostic ──
-  const fallback = await page.evaluate(() => {
-    const saved = window.KW_DTI;
-    window.KW_DTI = null;                       // simulate the fetch failing
-    const d = window.diagDebt({ dti: 50, totalIncome: 30000, capacity35: 1000 });
-    window.KW_DTI = saved;
+  const fallback = await page.evaluate(async () => {
+    const saved = window.__dtiConfig;
+    window.__dtiConfig = null;                  // simulate the fetch returning nothing
+    await window.loadThresholds();
+    const d = window.diagDebt({ dti: 62, totalIncome: 30000, grossSalary: 30000, debtCapacity: 0 });
+    window.__dtiConfig = saved;
     return { color: d.color, label: d.label };
   });
   check('a failed threshold fetch degrades to the same numbers, not a blank',
-    fallback.color === 'red' && fallback.label === 'Over-indebted', JSON.stringify(fallback));
+    fallback.color === 'red' && fallback.label === 'Overindebted', JSON.stringify(fallback));
 
   check('no uncaught JavaScript errors from the picker',
     errors.filter(e => /nc-|ncOrg|ncNoOrg|OrgPicker|createClientRecord|kwDti|diagDebt|loadThresholds/.test(e)).length === 0,
