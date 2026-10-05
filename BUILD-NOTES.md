@@ -1,3 +1,60 @@
+# Consent form before finalising an Advance Recommendation: LIVE (2026-10-05)
+
+A final Advance Recommendation goes to Hollard HR, one per employee, by design
+(see "Advance Recommendations go to Hollard HR" below). Finalising now needs
+the employee's signed paper consent form recorded, enforced in the database.
+
+| | |
+|---|---|
+| SQL | `supabase_advance_consent.sql`, applied from commit `8a99fac` after a rolled-back live trial |
+| Backup | `kw_fn_backup` tag `advance-consent-gate` (id 31), md5-identical to the pre-change finalise |
+| Rollback | `migrations/rollback-advance-consent.sql`: restores finalise, disables the trigger, revokes the record RPC. **Keeps** every recorded form (evidence). No DROP, so it runs through the Supabase MCP tool |
+| Full removal | `migrations/cleanup-advance-consent.sql`: SQL editor only, refuses while any consent row exists |
+| Page | `advisor.html`, on dev `5bf742c` and main `b1f0a48` |
+| Tests | `tests/run-advance-consent-db.sh` (31 checks + rollback + cleanup), `smoke-advance` 40/40 |
+
+How it works:
+- **The record:** `advance_consent_record(client, signed_on)`, callable by the
+  client's **assigned advisor or an admin** only, not a team lead. The signing
+  date cannot be in the future (Botswana date). The record keeps who recorded it
+  (name and email) and when, and writes a timeline note.
+- **Finalise:** refuses without an unused, unwithdrawn form for the client, and
+  stamps it on the report as `consent_id`.
+- **One form, one application:** the drafts of one application share a form; the
+  next application needs a new one. A partial unique index enforces it.
+- **A trigger** applies the same rule to any write that makes a report final,
+  and a final report's form cannot be swapped.
+- **Who can see it:** HR sees nothing (0 rows under RLS); anon cannot call
+  anything.
+- **The page:** Mark final is disabled with one sentence saying why. The confirm
+  step and the after-finalise notice say "Give the employee the same copy that
+  goes to HR." Drafts print with "Draft, not for sharing with the employer";
+  this line is print-only.
+
+Known limits, for the full consent build after HR Batch 1:
+- A form recorded with the wrong date cannot be corrected from the page.
+- There is no withdrawal yet. The `withdrawn_*` columns exist, but nothing sets
+  them.
+- `recorded_by` has no foreign key to `auth.users`, deliberately: one would make
+  `admin_user_delete()` refuse until classified. Name and email are kept.
+
+## The Supabase MCP tool cannot run a DROP statement
+
+Found 5 Oct 2026, the hard way. The tool holds any statement containing `DROP`
+(even of a temp table created a line earlier) for a user confirmation it cannot
+show in this environment. It times out at 60s, and the database never sees the
+query. Comments mentioning "drop" are fine. Write migrations and rollbacks meant
+for this tool with `CREATE OR REPLACE`, conditional creates, `DISABLE TRIGGER`
+and `REVOKE` instead, and put true removals in a separate SQL-editor file.
+
+## Edge Functions
+
+Still `advance-recommendation` v5 and `debt-rehab-plan` v4, as deployed on
+4 Oct. Tshenolo's two live checks are pending. Rollback: redeploy from commit
+`c6dd74f`.
+
+---
+
 # HR suppression leak (P0): stop-gap LIVE (2026-10-05)
 
 Findings: `docs/build/BATCH-0-P0-HR-SUPPRESSION-FINDINGS.md`.
