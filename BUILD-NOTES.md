@@ -62,6 +62,54 @@ aggregates (`admin_orgs_overview`, `tuesday_review_pack`, `ops_timeline`) are
 staff-only, and the last two already skip `is_test`. Nothing member-facing
 compares across organisations.
 
+## Advance Recommendations go to Hollard HR, by design (logged 5 Oct 2026, no change)
+
+Corrected by Tshenolo on 5 Oct 2026. The Advance Recommendation is MEANT to go to
+Hollard HR, one per employee. Hollard told employees an advance needs a Key
+Wellness assessment. The employee comes to a one-on-one, the advisor assesses
+them and sends the recommendation to Hollard HR, and HR then sits down with the
+employee to decide. Employees know a recommendation must be sent. A paper consent
+form is signed before the first session. Finalising is therefore gated on a
+recorded consent form, not blocked (see the consent section above this build's
+notes once applied).
+
+**a. Consent is paper-based for now.** The form's wording must cover sharing a
+recommendation with Hollard HR: salary, loans and lenders, repayments, and the
+advance and DSR before and after. Tshenolo is checking the current form. Until
+that is confirmed, a recorded form proves a signature exists, not that it
+covers what the report contains.
+
+**b. The privacy notice says data is used "exclusively for coaching".** It needs
+a line covering Advance Recommendations sent to Hollard HR. The 13 Hollard
+clients have no portal accounts, so they never see the portal notice, and the
+paper form is the only notice they get. Its wording carries the whole weight.
+
+**c. Later review: what the Advance Recommendation shows HR.** Options only, no
+change. Today HR receives the whole report:
+- the reasoning, including the count of informal and high-cost debts
+- the DSR table, including **own gross monthly income**
+- the ability-to-repay paragraph, which says whether the household budget fits
+  or is already short
+- every liability with lender, rate, balance and instalment
+- risk tier, decision, gaps and conditions
+
+| Option | HR receives | Trade-off |
+|---|---|---|
+| A. As now | The full report | Simplest. HR sees every loan and a budget verdict it does not need to approve an advance |
+| **B. HR summary (recommended)** | Amount, term, monthly instalment, DSR before and after as percentages, the debts being settled (lender and amount), decision and conditions | Needs a second rendering of the same report. The advisor keeps the full version on file |
+| C. Summary plus a debt count | B, plus "4 other debts, unchanged" with no lenders or balances | Shows HR the advance does not clear everything, without naming lenders |
+| D. Decision letter | Amount, term, decision, conditions | Least disclosure, but HR cannot see why, and Hollard asked for a recommendation, not a verdict |
+
+Two details for whichever option is chosen:
+- **Drop "Own gross monthly income".** HR already knows the salary. The figure
+  adds the member's own business, rental and dividend income, so to HR its only
+  new content is side income.
+- **Drop the household-budget sentence.** It tells HR whether the employee's home
+  budget is short.
+
+Under B, the HR copy button in the full consent build renders the summary. The
+employee gets the same summary, so "same copy as HR" stays true.
+
 ---
 
 # Advisor debt, budget, DSR and the Hollard advance cap (2026-10-04)

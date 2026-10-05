@@ -276,6 +276,15 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .ar-status.draft{border-color:var(--kw-yellow-ink);color:var(--kw-yellow-ink)}
 .ar-select{border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fff;font-family:inherit}
 .ar-note{font-size:11.5px;color:var(--muted);font-style:italic}
+/* Consent form record (5 Oct 2026) */
+.ar-consent{border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;font-size:12.5px;background:#fff}
+.ar-consent.ok{color:var(--kw-green);border-color:var(--kw-green)}
+.ar-consent-why{margin:0 0 8px;color:var(--text)}
+.ar-consent-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.ar-consent-row label{display:flex;align-items:center;gap:6px}
+.ar-remind{font-size:12px;font-weight:600;color:var(--navy)}
+.ar-draft-print{display:none}
+@media print{.ar-draft-print{display:block;text-align:center;font-weight:800;font-size:14px;letter-spacing:.04em;border:2px solid #000;padding:6px;margin-bottom:14px}}
 .ar-doc{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:40px 44px 32px;max-width:820px;color:var(--kw-ink);font-size:13px;line-height:1.55;position:relative}
 .ar-doc::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:var(--kw-green);border-radius:var(--radius) var(--radius) 0 0}
 .ar-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:26px}
@@ -3858,7 +3867,8 @@ function panelReportPFA(c){
    ================================================================ */
 let reportView = 'pfa';
 const AR = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null,
-             suggestions:[], busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'' };
+             suggestions:[], busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'',
+             consents:[], notice:'' };
 
 function panelReport(c){
   // The Advance Recommendation names an employer's advance programme and a
@@ -3894,7 +3904,7 @@ function setReportView(v){ reportView = v; renderClientEditor(); }
 /* ── data ── */
 async function arInit(c){
   if(AR.clientId !== c.id){
-    Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'' });
+    Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'', consents:[], notice:'' });
   }
   await arLoadList();
   if(!AR.list.length && AR.mode !== 'prepare'){ AR.mode = 'prepare'; }
@@ -3902,11 +3912,21 @@ async function arInit(c){
   arRender();
 }
 async function arLoadList(){
-  const { data, error } = await sb.from('advance_recommendations')
-    .select('id, version, status, generated_at, finalised_at, model, narrative_source, content, conditions, computed, input')
-    .eq('client_id', AR.clientId).order('version', { ascending:false });
+  // Consent forms (5 Oct 2026): a final report goes to the employer's HR, so
+  // finalising needs the employee's signed form on record. supabase_advance_consent.sql
+  // enforces it; the page only explains it.
+  const [{ data, error }, cons] = await Promise.all([
+    sb.from('advance_recommendations')
+      .select('id, version, status, generated_at, finalised_at, model, narrative_source, content, conditions, computed, input, consent_id')
+      .eq('client_id', AR.clientId).order('version', { ascending:false }),
+    sb.from('advance_consents')
+      .select('id, form_signed_on, recorded_by_name, recorded_at, withdrawn_at')
+      .eq('client_id', AR.clientId).order('recorded_at', { ascending:false })
+  ]);
   if(error){ AR.error = 'Could not load reports: ' + error.message; AR.list = []; return; }
   AR.error = ''; AR.list = data || [];
+  AR.consents = cons.error ? [] : (cons.data || []);
+  if(cons.error) AR.error = 'Could not load the consent form record: ' + cons.error.message;
   if(!AR.selectedId || !AR.list.some(r=>r.id===AR.selectedId)) AR.selectedId = AR.list.length ? AR.list[0].id : null;
 }
 function arSelected(){ return AR.list.find(r=>r.id===AR.selectedId) || null; }
@@ -4011,12 +4031,31 @@ async function arSaveNow(){
   flashSaved();
 }
 function arAsk(action){ AR.confirm = AR.confirm===action ? null : action; arRender(); }
+// The form a draft would be finalised on: recorded, not withdrawn, and not
+// already used by a final report (one form per application).
+function arOpenConsent(){
+  return AR.consents.find(k => !k.withdrawn_at && !AR.list.some(r => r.status==='final' && r.consent_id===k.id)) || null;
+}
+function arConsentLine(k){
+  return `Signed consent form on file · signed ${esc(arDate(k.form_signed_on))} · recorded by ${esc(k.recorded_by_name)} on ${esc(fmtDate(k.recorded_at))}`;
+}
+async function arRecordConsent(){
+  const onFile = document.getElementById('ar-consent-onfile');
+  const dt = document.getElementById('ar-consent-date');
+  if(!onFile || !onFile.checked){ AR.error = 'Tick "Signed consent form on file" once you have the signed form.'; arRender(); return; }
+  if(!dt || !dt.value){ AR.error = 'Enter the date the form was signed.'; arRender(); return; }
+  const { error } = await sb.rpc('advance_consent_record', { p_client_id: AR.clientId, p_form_signed_on: dt.value });
+  if(error){ AR.error = 'Could not record the consent form: ' + error.message; arRender(); return; }
+  AR.error = '';
+  await arLoadList(); loadNotes(AR.clientId); arRender();
+}
 async function arFinalise(){
   const rep = arSelected(); if(!rep) return;
   await arSaveNow();
   const { error } = await sb.rpc('advance_recommendation_finalise', { p_id: rep.id });
   AR.confirm = null;
   if(error){ AR.error = 'Could not mark final: ' + error.message; arRender(); return; }
+  AR.notice = 'Marked final. Give the employee the same copy that goes to HR.';
   await arLoadList(); loadNotes(AR.clientId); arRender();
 }
 async function arDiscard(){
@@ -4029,7 +4068,7 @@ async function arDiscard(){
   arRender();
 }
 async function arRegenerate(){ AR.mode='prepare'; AR.confirm=null; await arStartPrepare(arSelected()); arRender(); }
-function arPick(id){ AR.selectedId = id; AR.confirm=null; arRender(); }
+function arPick(id){ AR.selectedId = id; AR.confirm=null; AR.notice=''; arRender(); }
 
 /* ── render ── */
 function arRender(){
@@ -4040,20 +4079,25 @@ function arRender(){
   root.innerHTML = arErr() + arRenderBar(rep) + arRenderDoc(rep);
 }
 function arDate(v){ if(!v) return '—'; try { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v+'T12:00:00Z') : v; } catch(_){ return v; } }
-function arErr(){ return AR.error ? `<div class="notice notice-red no-print" style="margin-bottom:12px">${esc(AR.error)}</div>` : ''; }
+function arErr(){
+  return (AR.error ? `<div class="notice notice-red no-print" style="margin-bottom:12px">${esc(AR.error)}</div>` : '')
+       + (AR.notice ? `<div class="notice notice-green no-print" style="margin-bottom:12px">${esc(AR.notice)}</div>` : '');
+}
 
 function arRenderBar(rep){
   const opts = AR.list.map(r=>`<option value="${r.id}" ${r.id===rep.id?'selected':''}>v${r.version} · ${r.status==='final'?'Final':'Draft'} · ${fmtDate(r.generated_at)}</option>`).join('');
   const draft = rep.status==='draft';
   const ask = AR.confirm;
-  return `<div class="ar-bar no-print">
+  const consent = draft ? arOpenConsent() : (AR.consents.find(k=>k.id===rep.consent_id) || null);
+  const canFinal = draft && !!consent;
+  return arConsentPanel(rep, consent) + `<div class="ar-bar no-print">
     <select class="ar-select" onchange="arPick(this.value)">${opts}</select>
     <span class="ar-status ${rep.status}">${draft?'Draft — editable':'Final'}</span>
     ${rep.narrative_source==='fallback' ? `<span class="ar-note">Fallback prose (model unavailable) — review wording before finalising.</span>` : ''}
     <span class="sp"></span>
-    ${draft ? (ask==='final'
-        ? `<button class="btn btn-primary btn-sm" onclick="arFinalise()">Confirm — mark final</button><button class="btn btn-outline btn-sm" onclick="arAsk(null)">Keep editing</button>`
-        : `<button class="btn btn-primary btn-sm" onclick="arAsk('final')">Mark final</button>`) : ''}
+    ${draft ? (ask==='final' && canFinal
+        ? `<span class="ar-remind">Give the employee the same copy that goes to HR.</span><button class="btn btn-primary btn-sm" onclick="arFinalise()">Confirm — mark final</button><button class="btn btn-outline btn-sm" onclick="arAsk(null)">Keep editing</button>`
+        : `<button class="btn btn-primary btn-sm" onclick="arAsk('final')" ${canFinal?'':'disabled title="Record the signed consent form first"'}>Mark final</button>`) : ''}
     ${draft ? (ask==='discard'
         ? `<button class="btn btn-red btn-sm" onclick="arDiscard()">Confirm discard</button>`
         : `<button class="btn btn-outline btn-sm" onclick="arAsk('discard')">Discard draft</button>`) : ''}
@@ -4062,6 +4106,23 @@ function arRenderBar(rep){
   </div>`;
 }
 
+// Consent panel above the action bar (5 Oct 2026). The database refuses to
+// finalise without a recorded form; this explains why the button is disabled.
+function arConsentPanel(rep, consent){
+  if(rep.status!=='draft'){
+    return consent ? `<div class="ar-consent ok no-print">&#10003; ${arConsentLine(consent)}</div>` : '';
+  }
+  if(consent) return `<div class="ar-consent ok no-print">&#10003; ${arConsentLine(consent)}</div>`;
+  const today = new Date(); const iso = new Date(today.getTime() - today.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  return `<div class="ar-consent no-print">
+    <p class="ar-consent-why">Finalise is unavailable until the employee's signed consent form is recorded, because a final report goes to their employer's HR.</p>
+    <div class="ar-consent-row">
+      <label><input type="checkbox" id="ar-consent-onfile"> Signed consent form on file</label>
+      <label>Date the form was signed <input type="date" id="ar-consent-date" max="${iso}"></label>
+      <button class="btn btn-navy btn-sm" onclick="arRecordConsent()">Record consent form</button>
+    </div>
+  </div>`;
+}
 function arEd(rep, path, tag, cls){
   const v = arGet(rep.content, path);
   const ed = rep.status==='draft' ? ` contenteditable="true" data-ar="${path}" oninput="arOnInput(this)" spellcheck="true"` : '';
@@ -4089,6 +4150,7 @@ function arRenderDoc(rep){
   const gaps = (s.gaps||[]);
   const approving = rep.conditions.some(c=>c.group==='condition');
   return `<div class="ar-doc ${rep.status==='draft'?'editable':'final'}" id="ar-doc">
+    ${rep.status==='draft' ? `<div class="ar-draft-print">Draft, not for sharing with the employer</div>` : ''}
     <div class="ar-top"><span class="ar-conf">CONFIDENTIAL</span><span class="ar-brand"><b>Key</b> Wellness</span></div>
     <h1 class="ar-title">Advance Recommendation Report</h1>
     <div class="ar-sub">${esc(m.programme||'Hollard Employee Financial Wellness Program')}</div>

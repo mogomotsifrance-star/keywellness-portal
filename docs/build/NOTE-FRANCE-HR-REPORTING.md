@@ -1,6 +1,6 @@
-# Note for France: what HR will see differently (draft, 5 Oct 2026)
+# Note for France: what HR will see differently (approved 5 Oct 2026)
 
-For Tshenolo to send. Five lines, plain language.
+For Tshenolo to send. Approved by Tshenolo on 5 Oct 2026 with point 6 added.
 
 ---
 
@@ -9,6 +9,7 @@ For Tshenolo to send. Five lines, plain language.
 3. Medians and charts will only appear once at least five employees sit behind them; until then HR sees "not enough data yet".
 4. Detailed reports (sessions, sites, departments, period comparisons) stay as reports Key Wellness publishes each period, which is how HR receives them today; they will not be available as live, repeatable queries.
 5. The reason is our promise to employees that their employer only ever sees groups, never individuals, and with small teams a live figure that can be recalculated can break that promise.
+6. Until this is finished, please don't give any client HR person a portal login and don't publish any company report. Advance Recommendations can still go to Hollard once the employee's signed consent form is recorded.
 
 ---
 
