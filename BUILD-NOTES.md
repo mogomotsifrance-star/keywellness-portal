@@ -1,3 +1,64 @@
+# Budget page fits a phone (2026-10-04)
+
+Branch `claude/optimistic-babbage-r9uvnf`, cut from `origin/dev` at `6a947f6`
+(the branch carried nothing `dev` lacked, so no restore point was needed).
+`budget_planner.html` layout only: CSS and row markup hooks. No figure,
+calculation, stored field or wording changed; no other page; no SQL.
+
+## The cause
+
+At 390px and 360px the page was 480px wide. The phone grid for an expense row
+was `1fr 70px 70px 60px 24px`: 248px of fixed columns before the name, and the
+family support row's Fixed/Varies switch did not wrap (408px minimum). The page
+column cannot shrink below its widest child, so every card grew to 462px.
+Budgeted / Actual were 42px wide, showing about three characters. Month pills
+and the year grid scroll inside their own strips and were never the problem.
+
+## What a member sees on a phone (560px and under)
+
+- **Expense row:** name full width (Delete at its right for a custom line), the
+  always-visible state under it (Fixed/Varies, "Counted as"), then Budgeted and
+  Actual side by side, each labelled, with Variance labelled under Actual. The
+  column header row is hidden; its words label the fields instead.
+- **Income and payslip rows:** label on one line, amount full width below.
+- **Hints, first-budget prompts and payslip warnings open under the amounts**,
+  so showing one never moves the field being typed in (D.3's rule). On desktop
+  they still open under the name.
+- **Inputs:** at least 44px tall, 16px text (iPhones no longer zoom). At 360px
+  Budgeted and Actual show "P 12,500.00" in full.
+- **44px tap targets** for Fixed/Varies, Adjust, "Use that figure", the tag
+  links, Delete, payslip Show/Hide and "No payslip?". The visible shape keeps
+  its size: Delete draws its tile inside a transparent 44px box, the pills use
+  a transparent border, links grow only their line. No two tap boxes overlap.
+
+Desktop (above 560px) is pixel-identical to `dev`: test 213 pins the 1280px
+row geometry captured from `dev`.
+
+How it works: under 560px the row's label wrapper is `display: contents`, so
+its children join the row grid, and `order` places them (name 0, state 1,
+labels 2, fields 3, Variance 4, guidance and warnings 6). The `.bva-lbl`
+labels are `display: none` above 560px.
+
+## Tests
+
+`tests/smoke-prefill.js` section 12, checks 206-213 (206 runs at 390 and 360).
+Each was run against `dev`'s `budget_planner.html` and fails there; all pass
+here (222 passed). The geometry half of 213 passes on `dev` by construction,
+since it IS `dev`'s geometry; the check as a whole fails there because the
+phone labels it also requires do not exist. All other suites pass.
+
+## Rollback
+
+Revert the merge commit. CSS and markup only; no stored data touched.
+
+## By hand
+
+- Tshenolo: on a phone, open the budget, fill a payslip, open every group,
+  confirm nothing scrolls sideways.
+- Cloudflare: builds fire on `dev` only, so there is no preview for this
+  branch unless non-production branch builds are enabled on the Worker.
+
+---
 # Advisor debt, budget, DSR and the Hollard advance cap (2026-10-04)
 
 Branch `claude/advisor-portal-debt-budget-dsr-gs324o`, cut from `dev`. Not
