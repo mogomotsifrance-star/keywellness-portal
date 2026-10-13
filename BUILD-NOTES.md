@@ -141,6 +141,50 @@ Advisor (email-matched, as live) on a real Hollard client and draft:
 - owner session: override edit, delete, line delete, note edit all refused
 After: 0 rows in all three tables; security sweep = the ten expected rows.
 
+## Step 3 trial: a report generated on an advisor figure, end to end (13 Oct 2026, rolled back)
+
+Real record (Tumelo, Hollard), real advisor identity (France), deployed v7
+modules, real `advisor.html`. Portal figure P 36,850.00 (a sum of five informal
+balances, equal to none of them, so "appears nowhere" is a real test); advisor
+figure P 55,000.00 = Express Credit 25,000 + Close Friends Microlender 3,600 +
+Motshelo 2,300 + Other "School fees" 24,100.
+
+How it ran, and why not through the live function: generating needs a signed-in
+advisor JWT (not available to Claude) and an HTTP call cannot be rolled back.
+So: (1) the report was built by the deployed v7 `compute.ts`/`report.ts`
+(byte-identical to the repo, verified) on the record and confirmed
+classification of draft v1, deterministic prose (the model path is the one part
+not exercised; v7 discards model prose naming the portal figure); (2) in one
+transaction forced to roll back, as France: `advance_override_save()`, then
+`advance_override_effective()` (what v7 reads), then
+`advance_recommendation_create()`, then the finalise guard; (3) the stored
+report rendered by `arRenderDoc()` in the real page.
+
+| Check | Result |
+|---|---|
+| DB received the built report intact (md5 of jsonb text, computed locally and in the DB) | content, computed, conditions: all MATCH |
+| `advance_override_effective()` returns exactly the lines the report was built on | true |
+| stored content byte-identical to what was built; contains 36,850 / 36850 | true; no / no |
+| Header: Recommended Amount | P 55,000.00 |
+| Reasoning text | "The recommended advance is P 55,000.00, repaid at P 2,291.67 per month ..." |
+| DSR table before / after | debt service P 11,275.98 / P 11,367.65; DSR 25.18% / 25.38% (on the advisor figure) |
+| Ability to repay | instalment P 2,291.67, 5.12% of own gross income |
+| Debt table | New advance P 55,000.00, P 2,291.67 / month for 24 months; 3 settled, 2 "Not covered by the advance" |
+| Risk tier | GREEN, from DSR after 25.38% |
+| Decision | "Proceed on the Consultant's Recommendation", justification and use-of-funds table beside it, total P 55,000.00 |
+| Portal figure P 36,850.00 anywhere in the rendered report or stored content; the cap; "override"/"amended" | none |
+| Portal figure kept internally | `computed.override.system_amount` = 36850 only |
+| New version, finalise | passes the figure guard, stops at the consent gate |
+| Old portal-figure draft, finalise | refused: "not generated on the advance figure set now (P 55,000.00)" |
+| `advisor_clients.assessment` | unchanged |
+
+Afterwards: 0 overrides, 0 lines, 0 notes, 8 reports (unchanged), no new
+timeline note. A first attempt at the md5 receipt mismatched because the local
+script read the file without UTF-8 on Windows; with UTF-8 all three match. The
+scratch copies of the record were deleted after the run. Scripts:
+`build.mjs` (report from v7 modules) and `render.js` (section checks), kept in
+the session scratchpad, not the repo, because they take a member's record.
+
 ## Rollback (in this order)
 
 1. Redeploy `advance-recommendation` from commit `6002a45` (the v5 files). The
