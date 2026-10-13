@@ -183,6 +183,18 @@ tbody td{padding:10px 12px;vertical-align:middle}
 .rt-del{background:transparent;border:none;color:var(--muted);font-size:15px;padding:4px 6px;border-radius:6px}
 .rt-del:hover{color:var(--red);background:#fdf2f2}
 .rt-del:disabled{opacity:.25;cursor:not-allowed}
+/* Documents tab: View / Download, and the in-page viewer (13 Oct 2026) */
+.doc-acts{white-space:nowrap}
+.doc-acts .btn{margin-right:4px}
+.doc-nopreview{font-size:11px;color:var(--muted);margin-top:4px;white-space:normal}
+.doc-viewer{position:fixed;inset:0;z-index:10000;display:flex;flex-direction:column;background:var(--kw-white)}
+.doc-viewer-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--kw-white)}
+.doc-viewer-name{flex:1;min-width:0;font-weight:700;color:var(--kw-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.doc-viewer-body{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:var(--kw-surface);overflow:auto}
+.doc-viewer-body iframe{width:100%;height:100%;border:0;display:block}
+.doc-viewer-body img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+body.doc-viewer-open{overflow:hidden}
+@media print{.doc-viewer{display:none}}
 .rt-fixed-name{font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap}
 
 /* ── Diagnostic cards ── */
@@ -3642,9 +3654,11 @@ function panelDocuments(c){
       <td>📄 ${esc(d.name)}</td>
       <td class="mono">${fmtBytes(d.size)}</td>
       <td>${fmtDate(d.uploadedAt)}</td>
-      <td style="white-space:nowrap">
-        <a href="${d.dataUrl}" download="${esc(d.name)}" class="btn btn-outline btn-sm" style="text-decoration:none">Download</a>
-        <button class="rt-del" onclick="removeDocument(${i})">✕</button>
+      <td class="doc-acts">
+        ${docKind(d) ? `<button type="button" class="btn btn-outline btn-sm" id="docView_${i}" onclick="docView(${i})">View</button>` : ''}
+        <button type="button" class="btn btn-outline btn-sm" onclick="docDownload(${i})">Download</button>
+        <button class="rt-del" onclick="removeDocument(${i})" aria-label="Remove ${esc(d.name)}">✕</button>
+        ${docKind(d) ? '' : '<div class="doc-nopreview">Preview available for PDF and image files</div>'}
       </td>
     </tr>`).join('');
   return `
@@ -3660,7 +3674,7 @@ function panelDocuments(c){
           <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px">No documents uploaded yet</td></tr>'}</tbody>
         </table>
       </div>
-      <div class="notice notice-gold" style="margin-top:16px">Documents are stored as part of this browser's local data for now, which has limited capacity (a few MB total) — keep files under ~2MB each. Use "💾 Save Client File" to back everything (including documents) up to disk; a production version would move these into real file storage (e.g. Supabase Storage) instead.</div>
+      <div class="notice notice-gold" style="margin-top:16px">Documents are saved with this client's record. Keep each file under about 2 MB. Every View and Download is recorded against your name.</div>
     </div>`;
 }
 function handleDocUpload(fileList){
@@ -3680,6 +3694,94 @@ function handleDocUpload(fileList){
     reader.onerror = () => { remaining--; };
     reader.readAsDataURL(file);
   });
+}
+/* View / Download (13 Oct 2026).
+   The file is already on this page: documents are base64 inside the client
+   record. View renders that copy from a blob: URL in the browser's own PDF
+   or image viewer, so nothing goes to a third-party viewer and nothing is
+   fetched from anywhere. Every view and download is first recorded through
+   log_document_access() (supabase_document_access_log.sql); if that call
+   fails, the file is not opened. The log is page-reported: see BUILD-NOTES. */
+const DOC_IMAGE_MIMES = ['image/png','image/jpeg','image/gif','image/webp'];
+function docKind(d){
+  const mime = String(d && d.mime || '').toLowerCase();
+  const ext = (String(d && d.name || '').toLowerCase().match(/\.([a-z0-9]+)$/) || [])[1] || '';
+  if (mime === 'application/pdf' || (!mime && ext === 'pdf')) return 'pdf';
+  if (DOC_IMAGE_MIMES.includes(mime) || (!mime && ['png','jpg','jpeg','gif','webp'].includes(ext))) return 'image';
+  return null;
+}
+async function docBlob(d, kind){
+  // fetch() of a data: URL is decoded in the browser; no request leaves the page.
+  const b = await (await fetch(d.dataUrl)).blob();
+  const type = kind === 'pdf' ? 'application/pdf' : (kind === 'image' ? (d.mime || b.type) : (d.mime || 'application/octet-stream'));
+  return new Blob([b], { type: type });
+}
+async function docLog(c, d, action){
+  // A file uploaded seconds ago may still be in the save queue; the server
+  // can only log a document that is on the stored record.
+  if (_dirty.has(c.id)) await saveNow();
+  const { error } = await sb.rpc('log_document_access', { p_client_id: c.id, p_document_id: String(d.id || ''), p_action: action });
+  if (error) { showBanner('Could not record access to this document, so it was not opened: ' + error.message); return false; }
+  return true;
+}
+let _docViewer = null;   // { url, returnFocus }
+async function docView(idx){
+  const c = getClient(); const d = c && (c.documents||[])[idx]; if (!d) return;
+  const kind = docKind(d); if (!kind) return;
+  if (!(await docLog(c, d, 'view'))) return;
+  let url;
+  try { url = URL.createObjectURL(await docBlob(d, kind)); }
+  catch (e) { showBanner('This file could not be opened. Try Download.'); return; }
+  docCloseViewer(false);
+  const wrap = document.createElement('div');
+  wrap.id = 'docViewer'; wrap.className = 'doc-viewer';
+  wrap.setAttribute('role','dialog'); wrap.setAttribute('aria-modal','true'); wrap.setAttribute('aria-labelledby','docViewerName');
+  wrap.innerHTML = `
+    <div class="doc-viewer-bar">
+      <div class="doc-viewer-name" id="docViewerName">${esc(d.name)}</div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="docDownload(${idx})">Download</button>
+      <button type="button" class="btn btn-outline btn-sm" id="docViewerClose" onclick="docCloseViewer(true)">Close</button>
+    </div>
+    <div class="doc-viewer-body">${kind === 'pdf'
+      ? `<iframe src="${url}" title="${esc(d.name)}"></iframe>`
+      : `<img src="${url}" alt="${esc(d.name)}">`}</div>`;
+  document.body.appendChild(wrap);
+  document.body.classList.add('doc-viewer-open');
+  _docViewer = { url: url, returnFocus: 'docView_' + idx };
+  document.getElementById('docViewerClose').focus();
+}
+function docCloseViewer(restoreFocus){
+  const el = document.getElementById('docViewer');
+  if (el) el.remove();
+  document.body.classList.remove('doc-viewer-open');
+  if (_docViewer) {
+    URL.revokeObjectURL(_docViewer.url);
+    const back = restoreFocus && document.getElementById(_docViewer.returnFocus);
+    _docViewer = null;
+    if (back) back.focus();
+  }
+}
+document.addEventListener('keydown', function(e){
+  if (!_docViewer) return;
+  if (e.key === 'Escape') { e.preventDefault(); docCloseViewer(true); return; }
+  if (e.key === 'Tab') {   // keep focus inside the viewer's two buttons
+    const f = Array.from(document.querySelectorAll('#docViewer button'));
+    if (!f.length) return;
+    const i = f.indexOf(document.activeElement);
+    if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length-1].focus(); }
+    else if (!e.shiftKey && i === f.length-1) { e.preventDefault(); f[0].focus(); }
+  }
+});
+async function docDownload(idx){
+  const c = getClient(); const d = c && (c.documents||[])[idx]; if (!d) return;
+  if (!(await docLog(c, d, 'download'))) return;
+  let url;
+  try { url = URL.createObjectURL(await docBlob(d, null)); }
+  catch (e) { showBanner('This file could not be prepared for download.'); return; }
+  const a = document.createElement('a');
+  a.href = url; a.download = d.name || 'document'; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 60000);
 }
 function removeDocument(idx){
   const c = getClient();

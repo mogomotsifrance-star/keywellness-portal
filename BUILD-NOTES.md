@@ -1,3 +1,127 @@
+# Advisor documents: View + Download with an access log (E): LIVE (2026-10-13)
+
+Tshenolo chose **A + E** on 13 Oct after the NO-GO below: E ships first, then A
+(the advance override, recomputed report) follows as its own entry.
+
+| | |
+|---|---|
+| SQL | `supabase_document_access_log.sql`, applied 13 Oct 2026 (migration `document_access_log`) after a rolled-back live trial |
+| Rollback | `migrations/rollback-document-access-log.sql`: revokes the RPC, **keeps** the log. No DROP, runs through the MCP tool. Revert the page first, or View/Download fail closed |
+| Full removal | `migrations/cleanup-document-access-log.sql`: SQL editor only |
+| Page | `advisor.html`, Documents tab |
+| Tests | `tests/smoke-docs.js` (20 checks). advance 40/40, rehab 33/33, advisor-dsr 30/30, routing 19/19 still pass |
+
+What advisors see: **View** beside **Download** for PDFs and PNG/JPEG/GIF/WebP
+images. View opens a full-height in-page viewer (file name, Download, Close;
+Escape closes, focus returns to the View button). Other types (Word, Excel,
+.eml) show Download only, with "Preview available for PDF and image files".
+The stale notice under the table ("stored in this browser's local data") now
+says the truth: saved with the client's record, every View and Download is
+recorded.
+
+How it works:
+- **No third-party viewer, no network fetch.** The page already holds the file
+  (base64 in the client record). View turns it into a `blob:` URL and hands it
+  to the browser's own PDF viewer or an `<img>`. Blob URLs do not expire, so
+  the brief's "re-request on expiry" does not arise; the URL is revoked on close.
+- **Every view and download is logged first** through
+  `log_document_access(client, document_id, 'view'|'download')`, gated on
+  `can_manage_advisor()` (assigned advisor, team lead, admin). If the call
+  fails, the file is **not** opened or downloaded and the advisor is told why.
+- **`document_access_log`** keeps who (uid, email, advisor id), which client,
+  which document (id, name, type), view or download, and when. Readable under
+  the same caseload test; no insert/update/delete privilege for anyone; a
+  trigger refuses UPDATE, DELETE and TRUNCATE even for the owner. No FKs, on
+  purpose: deleting a client record keeps its trail, and `admin_user_delete()`
+  has nothing new to classify (the email is kept beside the uid).
+
+**THE LIMITATION. The log is page-reported, not enforced.** Documents live
+inside `advisor_clients.assessment`, so the whole file reaches the browser when
+the client list loads. Anyone holding the row (dev tools, the "Save Client
+File" JSON export, a direct API read) can open a document without a log row.
+The log records every View and Download clicked in the portal; it does not
+prove nobody else read the file.
+
+Verified:
+- Rolled-back live trial, as the real identities (17 checks, all as expected):
+  the email-matched advisor logs view and download and sees both rows; a bad
+  action or document id is refused; direct insert/update/delete refused; the
+  **linked member of that client** and an **HR user** get "not authorised for
+  that client" and see 0 rows; anon cannot call or select; owner-session
+  update/delete hit the append-only trigger. Afterwards: table and function
+  absent, i.e. nothing persisted.
+- After the real apply: RLS on, one SELECT policy, anon execute false,
+  authenticated insert false, 0 rows, both triggers present. The CLAUDE.md
+  ungated-`SECURITY DEFINER` sweep returns exactly the ten expected rows.
+- A PDF blob renders in a real Chromium PDF viewer (the in-app browser);
+  headless has no PDF viewer, so the smoke test checks the blob and its type.
+- **Not done:** a signed-in advisor click on dev. No test writes on the shared
+  project, and the trial above ran the RPC as that advisor's identity.
+
+## Follow-up project F: move documents to private Storage
+
+What makes the log binding, and stops every document travelling with every
+client-list load. Private bucket; copy the 16 existing files across once;
+uploads go to Storage; View and Download go through a gated RPC or Edge
+Function that logs and returns a short-lived signed URL; remove `dataUrl` from
+the JSON after the copy is verified. Needs Tshenolo's answer to the P1 below
+(does the linked member keep access?). The "Save Client File" export would
+stop carrying documents.
+
+## P1 for Tshenolo to decide: linked members can read the advisor's record
+
+`advisor_clients_member_read` (`member_user_id = auth.uid()`) lets a member
+whose portal account is linked to an advisor client row read **the whole
+row**: the advisor's consultation record in `assessment`, including the
+diagnostics and notes fields, and every uploaded document. 1 of the 7 clients
+with documents is linked today. Pre-existing, not changed by this build.
+Options: a member-safe view or RPC that returns only what the member should
+see, with the policy removed; or accept it and say so in the privacy notice.
+Until decided, the advance override and its internal notes (A) are kept out of
+`advisor_clients` entirely.
+
+## By hand (Tshenolo / Lone)
+
+- On the live site, as an advisor: open a client with a PDF, Documents, View,
+  then Download. Then `select action, document_name, actor_email, created_at
+  from document_access_log order by id desc limit 5;` shows two rows.
+- **DPA register:** add `document_access_log` as a processing record (access to
+  member documents is now tracked: who, which document, when).
+- Tell advisors: every View and Download is recorded against their name.
+
+---
+
+# Advisor document viewer + advance override: Batch 0 = NO-GO (2026-10-13)
+
+**Decision: NO-GO. Nothing was built or applied.** Read-only discovery only;
+full findings in `docs/build/BATCH-0-ADVANCE-OVERRIDE-FINDINGS.md`.
+
+Why:
+- **The report cannot take an override without changing how it is produced
+  (gate condition 4).** The portal's advance figure is written into the stored
+  report `content` at generation: the header, the model's reasoning prose, the
+  DSR-after table, the ability-to-repay prose, the debt table ("New advance",
+  "Settled by advance") and the tier and decision. Swapping the header figure
+  leaves the portal figure on the report and makes it contradict itself (D1).
+- **Documents are not in Supabase Storage.** They are base64 inside
+  `advisor_clients.assessment.documents` (16 files on 7 clients: 8 PDF, 1 PNG,
+  4 xlsx, 2 docx, 1 eml). There is no bucket to sign URLs from, and the bytes
+  already reach the browser with the client record, so D11's log cannot be
+  enforced in the database. The only bucket, `Videos`, is public by design (LMS).
+
+Other conflicts: no liabilities table or liability ids (D5); overrides would
+attach per version and drafts can be deleted (D9); no "sent" record, only
+`finalised_at`, and 0 finals exist (D12); no `stripAiDashes` utility, and the
+existing report copy already has dashes; D4 rounds to the pula, the report to
+the cent.
+
+Options for Tshenolo (A/B/C for the report, E/F for documents) are in the
+findings file. Recommended: **A** (recompute the report on the advisor's amount)
+and **E** now (in-page viewer from data the page already holds, page-reported
+log), then **F** (move documents to a private bucket) as its own build.
+
+---
+
 # Consent form before finalising an Advance Recommendation: LIVE (2026-10-05)
 
 A final Advance Recommendation goes to Hollard HR, one per employee, by design
