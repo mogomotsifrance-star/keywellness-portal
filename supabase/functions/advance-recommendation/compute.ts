@@ -49,6 +49,7 @@ export {
   DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT, LENDING_NORM_PCT, ADVANCE_SALARY_MULTIPLE,
   DSR_BENCHMARK_PCT, DSR_OVER_INDEBTED_PCT, dsrBand, dsrTier,
   pf, round2, fmtP, fmtPct, calcAnnualTax, calcMonthlyPAYE, parseRate, liveLiabilities, suggestClassification,
+  stripDashes,
 } from "../_shared/kw-finance.ts";
 export type { Assessment, Classification, RatePeriod, RawLiability, Tier } from "../_shared/kw-finance.ts";
 
@@ -65,6 +66,24 @@ export interface Prep {
   consultant_name?: string;
   liabilities?: PrepLiability[];
   advisor_context?: string;      // optional free text for the narrative only
+  override?: OverrideInput | null; // the advisor's figure, from advance_override_effective()
+}
+
+// The advisor's figure (supabase_advance_override.sql). Set in the database,
+// passed in by the Edge Function; never typed into Prep by the page.
+export interface OverrideAllocationInput {
+  kind: "liability" | "other";
+  liability_index: number | null;   // index into assessment.liabilities (RAW, not live)
+  lender: string | null;            // snapshot at save time
+  outstanding_balance: number | null; // snapshot at save time
+  purpose: string | null;
+  amount: number;
+}
+export interface OverrideInput {
+  id: string;
+  amount: number;
+  justification: string;
+  allocations: OverrideAllocationInput[];
 }
 
 export interface LiabilityView {
@@ -112,6 +131,40 @@ export interface Computed {
   conditions: { key: string; label: string; on: boolean }[];
   support_plan: { key: string; label: string; on: boolean }[];
   follow_up: { key: string; label: string; on: boolean }[];
+  // Present ONLY when the report is computed on the advisor's figure. Absent
+  // otherwise, so a report without an override is unchanged byte for byte.
+  override?: {
+    id: string;
+    amount: number;
+    justification: string;
+    system_amount: number;          // what the portal would recommend now (internal; never rendered)
+    allocations: {
+      kind: "liability" | "other";
+      label: string;                // lender, or the advisor's purpose text
+      outstanding_balance: number | null; // liability lines: the balance now on record, else the snapshot
+      amount: number;
+      settles_in_full: boolean;
+      live_index: number | null;    // the liability it applies to, when it still matches one
+    }[];
+  };
+}
+
+// The liability's display name, as the override stores it: institution,
+// else the item. No dash, unlike the debt table's "Item – Institution".
+const lenderOf = (raw: RawLiability) =>
+  String((raw.institution ?? "").toString().trim() || (raw.item ?? "").toString().trim() || "Liability");
+
+// Raw index into assessment.liabilities → the live view index, or null.
+function liveIndexOfRaw(a: Assessment, rawIndex: number): number | null {
+  let live = 0;
+  const rows = a.liabilities || [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const isLive = !!(pf(r.balance) || pf(r.monthlyInstalment) || !isBlank(r.institution) || pf(r.loanAmount));
+    if (i === rawIndex) return isLive ? live : null;
+    if (isLive) live++;
+  }
+  return null;
 }
 
 
@@ -228,6 +281,62 @@ export function compute(a: Assessment, prep: Prep): Computed {
     change = { direction: delta > 0.05 ? "worsened" : delta < -0.05 ? "improved" : "unchanged", delta_points: delta };
   }
 
+  // ── The advisor's figure (13 Oct 2026) ────────────────────────
+  // When an override is active the whole report is computed on it: the
+  // advance and its instalment, which debts it settles (from the use-of-funds
+  // lines), DSR after, disposable income after, and the tier, honestly, from
+  // those figures. The decision follows the advisor (see below). The portal's
+  // own figure is kept as override.system_amount for the internal record and
+  // appears nowhere a report reads from.
+  let ovr: Computed["override"] | undefined;
+  const oi = prep.override;
+  if (oi && Number(oi.amount) > 0) {
+    if (gross > 0 && totalIncome > 0) {
+      const systemAmount = advance ? advance.amount : 0;
+      views.forEach((v) => { v.settled_by_advance = false; });
+      // The cap note describes the portal's sizing, which no longer applies.
+      Array.from(gaps).filter((g) => g.startsWith("The confirmed informal balances (")).forEach((g) => gaps.delete(g));
+
+      const allocs = (oi.allocations || []).map((al) => {
+        const amt = round2(Number(al.amount) || 0);
+        if (al.kind === "liability" && al.liability_index != null) {
+          const rawIdx = Number(al.liability_index);
+          const raw = (a.liabilities || [])[rawIdx];
+          const li = liveIndexOfRaw(a, rawIdx);
+          const v = li != null ? views.find((x) => x.index === li) : undefined;
+          if (!v || !raw || lenderOf(raw) !== String(al.lender || "")) {
+            // The row moved or was deleted after the figure was saved: keep the
+            // money on the line, remove no instalment, and say so.
+            gaps.add(`The use-of-funds line for ${al.lender || "a liability"} no longer matches a liability on record, so no instalment is removed for it`);
+            return { kind: "liability" as const, label: String(al.lender || "Liability"), outstanding_balance: al.outstanding_balance ?? null, amount: amt, settles_in_full: false, live_index: null };
+          }
+          const full = v.balance != null && amt >= v.balance - 0.005;
+          return { kind: "liability" as const, label: lenderOf(raw), outstanding_balance: v.balance, amount: amt, settles_in_full: full, live_index: v.index };
+        }
+        return { kind: "other" as const, label: String(al.purpose || "Other").trim(), outstanding_balance: null, amount: amt, settles_in_full: false, live_index: null };
+      });
+
+      const amount = round2(Number(oi.amount));
+      const cap = round2(gross * ADVANCE_SALARY_MULTIPLE);
+      const settledViews = views.filter((v) => allocs.some((x) => x.settles_in_full && x.live_index === v.index));
+      settledViews.forEach((v) => { v.settled_by_advance = true; });
+      const partials = allocs.filter((x) => x.kind === "liability" && x.live_index != null && !x.settles_in_full);
+      const instalment = round2(amount / term);
+      const replaced = round2(settledViews.reduce((s, v) => s + v.instalment, 0));
+      const debtServiceAfter = round2(debtServiceBefore - replaced + instalment);
+      const dsrAfter = round2(debtServiceAfter / dsrBase * 100);
+      after = { debt_service: debtServiceAfter, dsr: dsrAfter, disposable: round2(totalIncome - debtServiceAfter) };
+      advance = { amount, instalment, instalment_pct_income: round2(instalment / dsrBase * 100), settles: settledViews.map((v) => v.index),
+                  debt_based_amount: informalBalance, cap, capped: false,
+                  partial: partials.length ? { index: partials[0].live_index as number, applied: partials[0].amount } : null };
+      const delta = round2(dsrAfter - (dsrBefore as number));
+      change = { direction: delta > 0.05 ? "worsened" : delta < -0.05 ? "improved" : "unchanged", delta_points: delta };
+      ovr = { id: String(oi.id), amount, justification: String(oi.justification || "").trim(), system_amount: systemAmount, allocations: allocs };
+    } else {
+      gaps.add("The advisor's advance figure cannot be applied until gross salary and income are captured");
+    }
+  }
+
   // Tier + decision
   let tier: Tier; let decision: string; const reasons: string[] = [];
   if (!advance || !after) {
@@ -261,8 +370,17 @@ export function compute(a: Assessment, prep: Prep): Computed {
       reasons.push(`DSR after the advance would be ${fmtPct(dsrA)}, below the ${DSR_GREEN_MAX}% wellbeing benchmark.`);
     }
     if (advance!.capped) reasons.push(`The advance is capped at ${ADVANCE_SALARY_MULTIPLE} × gross salary (${fmtP(advance!.cap)}), below the ${fmtP(advance!.debt_based_amount)} of informal balances.`);
+    if (ovr) {
+      // The tier above is computed honestly on the advisor's figure. The
+      // decision follows the advisor's recommendation, whose justification
+      // the report prints beside it.
+      decision = "Proceed on the Consultant's Recommendation";
+      if (change?.direction === "worsened") reasons.push(`DSR rises by ${change.delta_points.toFixed(2)} points: the advance instalment is more than the instalments of the debts it settles.`);
+      if (change?.direction === "improved") reasons.push(`DSR falls by ${Math.abs(change.delta_points).toFixed(2)} points: the advance instalment is less than the instalments of the debts it settles.`);
+    } else {
     if (change?.direction === "worsened") reasons.push(`DSR rises by ${change.delta_points.toFixed(2)} points because informal debts that carried no monthly instalment become a real cash obligation.`);
     if (change?.direction === "improved") reasons.push(`DSR falls by ${Math.abs(change.delta_points).toFixed(2)} points because a serviced high-cost instalment is replaced by a smaller one.`);
+    }
   }
 
   // Default conditions — DEFAULT SUGGESTIONS, every one removable in the UI.
@@ -271,7 +389,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
   // Both said "Hollard" literally, which is wrong the moment a second
   // employer is switched on in organizations.offers_advances.
   const employerName = String(personal.employer || "").trim() || "the employer";
-  const approving = tier !== "RED" || decision === "Proceed Only Under Prerequisites";
+  const approving = tier !== "RED" || decision === "Proceed Only Under Prerequisites" || !!ovr;
   const conditions = approving ? [
     { key: "proof_of_payment", on: true,
       label: `Advance is paid to the employee, not to creditors directly — ${employerName} does not settle third-party creditors on the employee's behalf. Employee must submit proof of payment for the informal debts being settled to Key Wellness before the funds are treated as settled.` },
@@ -316,5 +434,6 @@ export function compute(a: Assessment, prep: Prep): Computed {
     gaps: Array.from(gaps),
     tier, decision, decision_reasons: reasons,
     conditions, support_plan, follow_up,
+    ...(ovr ? { override: ovr } : {}),
   };
 }

@@ -1,3 +1,140 @@
+# Advisor override of the Advance Recommendation (A): LIVE (2026-10-13)
+
+Option A of the 13 Oct brief, with Tshenolo's ten amendments. The advisor can
+set the advance, say what it is for and why; the next report generated is
+computed on that figure.
+
+| | |
+|---|---|
+| SQL | `supabase_advance_override.sql`, applied 13 Oct 2026 (migration `advance_override`) after a rolled-back live trial |
+| Rollback | `migrations/rollback-advance-override.sql`: **order matters**, see below. Revokes the five RPCs, disables the finalise guard, keeps every row. No DROP (MCP-safe) |
+| Full removal | `migrations/cleanup-advance-override.sql`: SQL editor only; refuses while any override or note exists |
+| Edge Function | `advance-recommendation` **v5 → v7** (v6 was a broken deploy, see "Incident") |
+| Page | `advisor.html`: Report tab → Advance Recommendation, panel beside the report |
+| Tests | `tests/advance-override.test.mjs` 18/18, `tests/smoke-override.js` 35/35; advance 40/40, rehab 33/33, advisor-dsr 30/30, docs 20/20, unit 34/34 and 29/29 |
+
+## Edge Function versions
+
+| | Version | ezbr_sha256 | Source |
+|---|---|---|---|
+| Before (rollback target) | v5 | `24d26f2de5d5e8ac4841887fbba03333e5d2e033155823ce2b7ce05306fe6faf` | byte-identical to commit `6002a45` |
+| Broken, 3.5 min | v6 | `a5186399b30dd058eda38b1740949f4977f0e8ec573d739dc92f073a19d19038` | do not use |
+| After | **v7** | `2035b45469d64fd14fa86962614fdd47175ac036de4838ddbcb107907955e422` | byte-identical to commit `a75c52b` (read back and compared) |
+
+### Incident: v6 was broken for 3.5 minutes
+
+At 14:47:50 UTC the v6 deploy went up with placeholder text in place of
+`compute.ts` and `kw-finance.ts` (my error assembling the deploy payload).
+Every call to the function would have failed. v7, with the real files, went up
+at 14:51:24 UTC. The function logs show **no invocation of any Edge Function
+between 09:22 UTC and the fix**, so no advisor hit v6. Lesson for the next
+deploy through the MCP tool: read the deployed files back and compare them with
+the commit before calling it done (done here for v7).
+
+## What it does
+
+- **Data lives in three advisor-only tables**, keyed on the client, never in
+  `advisor_clients` (which a linked member can read): `advance_overrides`
+  (one active per client; replaced or removed rows stay, inactive),
+  `advance_override_allocations` (use-of-funds lines; liability lines keep a
+  snapshot of lender and outstanding balance, since liabilities have no ids),
+  `advance_internal_notes` (append-only).
+- **Rules in the database** (`advance_override_save`): gross salary read
+  server side, else `GROSS_SALARY_REQUIRED`; amount ≤ 4 × gross, else
+  `ABOVE_CAP` with the cap; justification ≥ 20 characters; lines add up
+  exactly; a liability line ≤ that liability's balance and used once. CHECK
+  constraints repeat the cap and justification rules on the row.
+- **Every save, change and removal writes a system note** ("Advance changed
+  from P x (portal calculation) to P y. Cap P z ..."). Removal needs a reason.
+- **Append-only, three ways:** no write policy, no INSERT/UPDATE/DELETE
+  privilege for anyone, and triggers that refuse UPDATE/DELETE/TRUNCATE on notes
+  and lines even for the owner. An override row can only go active → inactive,
+  once, with nothing else changed.
+- **The report** (`compute.ts`): on an override the advance, the debts it
+  settles (a liability line that covers the whole balance settles it; less is
+  part-paid, instalment unchanged; "Other" lines settle nothing), DSR after,
+  disposable income after and the tier are all recomputed. The tier is honest
+  (RED stays RED). The decision reads "Proceed on the Consultant's
+  Recommendation", and the advisor's justification sits beside it in an
+  "Advisor's recommendation" section with the advance, the repayment (cents,
+  per amendment 6) and the use-of-funds table with its total.
+- **What the report never shows:** the portal's figure, the cap, internal
+  notes, the words override/amended. The portal figure is kept only in
+  `computed.override.system_amount` (internal). The model is not given the cap
+  or the informal total on an overridden report, and its prose is discarded for
+  the deterministic text if it names the portal figure or the change.
+- **Finalise guard** (trigger on `advance_recommendations`): a report may be
+  marked final only if it was generated on the figure active now. Tested:
+  stale and removed-figure reports refused; matching and no-override reports
+  pass to the existing consent gate.
+- **The advisor screen:** figures strip (portal calculation, cap, current),
+  form with live cap/headroom/sum checks, repayment preview, remove with
+  reason, internal notes (newest first, system entries lighter and labelled),
+  a "generate a new version" prompt when the report on screen is stale (Mark
+  final disabled with the reason), and "Amended after marking final on [date]"
+  when the figure changed after the latest final (amendment 5).
+- **No override: unchanged.** compute/report output byte-identical on five
+  fixtures; the rendered report byte-identical to git HEAD (smoke check 0).
+- **Dash rule** (amendment 7): `stripDashes()` in `_shared/kw-finance.ts`,
+  applied to the override's report strings only. Existing report copy keeps its
+  dashes (the DSR heading "Debt Service Ratio — Before vs After" still appears
+  on an overridden report).
+
+## Verified live (rolled back, real identities)
+
+Advisor (email-matched, as live) on a real Hollard client and draft:
+- above cap → "ABOVE_CAP: the advance cannot exceed P 62,331.32 (4 x gross monthly salary)"
+- mismatched lines → "the use-of-funds lines add up to P 20,000.00, not the P 30,000.00 advance"
+- 19-character justification refused, a line over its balance refused, no report → refused
+- save → system note; change → one active, two rows kept; remove → reverts, note with reason
+- `advisor_clients.assessment` md5 unchanged by all of it
+- **linked member** of a client: every RPC "not authorised for that client", 0 rows
+  visible in all three tables, their own client row carries nothing of it
+- HR user: refused, 0 rows. anon: no execute, no select
+- owner session: override edit, delete, line delete, note edit all refused
+After: 0 rows in all three tables; security sweep = the ten expected rows.
+
+## Rollback (in this order)
+
+1. Redeploy `advance-recommendation` from commit `6002a45` (the v5 files). The
+   v7 code calls `advance_override_effective()` and will not generate without
+   it, so revoking first would stop all report generation.
+2. Revert the `advisor.html` commits `320a7fa` (panel) on `dev`, then merge.
+3. Run `migrations/rollback-advance-override.sql`.
+Override data and notes stay; reports already generated on an advisor figure
+stay as they were generated.
+
+## Flags for Tshenolo
+
+- **Re-sending after an amendment needs a fresh consent record.** The consent
+  gate allows one form per application: once v1 is final on form K, an amended
+  v2 cannot be finalised on K. The advisor must record the form again. Decide
+  whether an amended report is the same application (then the consent rule
+  needs a change) or a new one (then this is right).
+- **Liability lines follow the row position.** If an advisor deletes or
+  reorders liabilities after saving a figure, a line may no longer match; the
+  report then removes no instalment for it and says so under Data gaps. Saving
+  the figure again fixes it.
+- **Team leads can set and remove figures** (same `can_manage_advisor()` test
+  as every advance RPC). The consent record is narrower (assigned advisor or
+  admin). Say if overrides should be narrower too.
+- **"Sent" is "marked final".** Nothing records an actual handover to HR.
+
+## By hand (Tshenolo / Lone)
+
+- Tell advisors: the advisor figure is what the employer sees, a new version
+  must be generated after setting it, and internal notes are permanent (cannot
+  be edited or deleted by anyone).
+- Members without a recorded gross salary cannot be given an advisor figure
+  until it is recorded on the Income tab.
+- Any report already marked final that later gets a new figure must be
+  regenerated, marked final and handed to HR again (not automatic).
+- First live check: an advisor opens a Hollard client → Report → Advance
+  Recommendation, sets a figure, generates, and confirms the new version shows
+  the advisor's amount and section. Then `select count(*) from advance_overrides`.
+
+---
+
 # Advisor documents: View + Download with an access log (E): LIVE (2026-10-13)
 
 Tshenolo chose **A + E** on 13 Oct after the NO-GO below: E ships first, then A
