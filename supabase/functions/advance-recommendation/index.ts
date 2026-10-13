@@ -291,7 +291,7 @@ serve(async (req) => {
       const text = JSON.stringify(cleaned);
       const portal = [computed.override.system_amount, systemAmountAtSave]
         .filter((v) => v > 0 && Math.abs(v - computed.override!.amount) > 0.005).map((v) => fmtP(v));
-      if (portal.some((p) => text.includes(p)) || /overrid|amended/i.test(text)) {
+      if (portal.some((p) => text.includes(p)) || /overrid|amended/i.test(text)) {
         console.error("model narrative named the portal figure or the change; using fallback");
         narrative = fallbackNarrative(computed); source = "fallback"; modelErr = "override: portal figure or change mentioned";
       } else narrative = cleaned;

@@ -252,5 +252,5 @@ export const EXPENSE_GROUP_IDS: { id: "needs" | "wants" | "savings" | "other"; n
   { id: "needs",   name: "Needs",                 cats: ["housing", "utilities", "food", "transport", "health", "childcare", "insurance", "debt_min"] },
   { id: "wants",   name: "Wants",                 cats: ["entertain", "dining", "shopping", "personal", "subscript", "travel"] },
   { id: "savings", name: "Savings & Investments", cats: ["emfund", "retirement", "invest", "goals", "motshelo", "debt_extra"] },
-  { id: "other",   name: "Other",                 cats: ["misc"] },
+  { id: "other",   name: "Other", cats: ["misc"] },
 ];
