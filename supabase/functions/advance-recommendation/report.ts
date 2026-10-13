@@ -6,7 +6,7 @@
 // Edge Function and tests/smoke-advance.js so the browser test renders
 // exactly what production would.
 // ============================================================
-import { fmtP, fmtPct, DSR_BENCHMARK_PCT } from "./compute.ts";
+import { fmtP, fmtPct, DSR_BENCHMARK_PCT, stripDashes } from "./compute.ts";
 import type { Computed } from "./compute.ts";
 
 export const MAX_BULLETS = 6;
@@ -43,7 +43,52 @@ export interface Narrative {
 const liabLabel = (l: { item: string; institution: string }) =>
   l.item === "Other" && l.institution ? l.institution : `${l.item}${l.institution ? " – " + l.institution : ""}`;
 
+// ── The advisor's figure (13 Oct 2026) ─────────────────────────
+// Prose for a report computed on an override. Every string goes through
+// stripDashes (the copy rule for new report strings). None of it mentions
+// the portal's own figure, the cap, or that the figure was changed.
+export const ADVISOR_SECTION_TITLE = "Advisor's recommendation";
+
+export function overrideNarrative(c: Computed): Narrative {
+  const o = c.override!, adv = c.advance!, aft = c.after!;
+  const full = o.allocations.filter((x) => x.settles_in_full).length;
+  const bullets = o.allocations.slice(0, MAX_BULLETS).map((x) =>
+    x.kind === "liability"
+      ? `${x.label}: ${fmtP(x.amount)}${x.settles_in_full ? ", settling the balance in full" : x.outstanding_balance != null ? ` towards a balance of ${fmtP(x.outstanding_balance)}` : ""}.`
+      : `${x.label}: ${fmtP(x.amount)}.`);
+  const dsr_paragraph = c.dsr_change
+    ? (c.dsr_change.direction === "worsened"
+        ? `DSR rises from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)}: the advance instalment of ${fmtP(adv.instalment)} is more than the instalments of the debts it settles.`
+        : c.dsr_change.direction === "improved"
+          ? `DSR falls from ${fmtPct(c.before.dsr)} to ${fmtPct(aft.dsr)} because the advance instalment is less than the instalments of the debts it settles. It remains ${aft.dsr! >= DSR_BENCHMARK_PCT ? "above" : "below"} the ${DSR_BENCHMARK_PCT}% wellbeing benchmark.`
+          : `DSR is effectively unchanged at ${fmtPct(aft.dsr)}.`)
+    : `DSR after the advance is ${fmtPct(aft.dsr)}.`;
+  const n: Narrative = {
+    reasoning_intro: `The consultant has set the advance to cover the uses listed in the advisor's recommendation${full ? `, settling ${full} debt${full === 1 ? "" : "s"} in full` : ""}.`,
+    reasoning_bullets: bullets,
+    reasoning_close: `The recommended advance is ${fmtP(adv.amount)}, repaid at ${fmtP(adv.instalment)} per month over ${c.term_months} months with no interest.`,
+    dsr_paragraph,
+    ability_paragraph: `The advance instalment of ${fmtP(adv.instalment)} is ${fmtPct(adv.instalment_pct_income)} of own gross income, leaving ${fmtP(aft.disposable)} after all debt service. ${c.budget.captured ? (c.budget.shortfall ? "The captured household budget already exceeds income, which is the binding constraint." : "The captured household budget fits within that amount.") : "No household budget is on file, so living costs cannot be confirmed against that figure."}`,
+    risk_sentences: c.decision_reasons.join(" "),
+    recommendation_intro: `The conditions below apply to the advance recommended above.`,
+    closing_sentence: `Re-assess within 30 days of disbursement, once proof of payment for the uses above has been received.`,
+  };
+  return cleanNarrative(n);
+}
+
+// Applies the copy rule to a narrative (model or deterministic) for an
+// overridden report.
+export function cleanNarrative(n: Narrative): Narrative {
+  return {
+    reasoning_intro: stripDashes(n.reasoning_intro), reasoning_bullets: n.reasoning_bullets.map(stripDashes),
+    reasoning_close: stripDashes(n.reasoning_close), dsr_paragraph: stripDashes(n.dsr_paragraph),
+    ability_paragraph: stripDashes(n.ability_paragraph), risk_sentences: stripDashes(n.risk_sentences),
+    recommendation_intro: stripDashes(n.recommendation_intro), closing_sentence: stripDashes(n.closing_sentence),
+  };
+}
+
 export function fallbackNarrative(c: Computed): Narrative {
+  if (c.override && c.advance && c.after) return overrideNarrative(c);
   const inf = c.liabilities.filter((l) => l.classification === "informal");
   const bullets = (inf.length ? inf : c.liabilities).slice(0, MAX_BULLETS).map((l) =>
     `${liabLabel(l)}: ${l.rate_text === "Not captured" ? "rate not captured" : l.rate_text}, ${l.instalment > 0 ? "serviced at " + fmtP(l.instalment) + " per month" : "not currently serviced"}${l.balance == null ? ", balance not captured" : ""}.`);
@@ -81,10 +126,17 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
   const adv = c.advance, aft = c.after;
   const employerName = (c.employee.employer || "").trim() || EMPLOYER_UNKNOWN;
   const settled = new Set(adv ? adv.settles : []);
+  const o = c.override;
+  // On the advisor's figure, every partly-paid liability is named, and an
+  // informal debt the advance does not touch is "not covered", not "beyond
+  // the cap" (the cap is not what sized it).
+  const partOf = (idx: number) => o ? o.allocations.find((x) => x.live_index === idx && !x.settles_in_full) : undefined;
   const debtRows = c.liabilities.map((l) => ({
     debt: l.item, institution: l.institution || "—", interest: l.rate_text,
     balance: fmtP(l.balance), instalment: fmtP(l.instalment),
     status: settled.has(l.index) ? "Settled by advance"
+      : o ? (partOf(l.index) ? `Part-paid by advance (${fmtP(partOf(l.index)!.amount)}); instalment unchanged`
+            : l.classification === "informal" ? "Not covered by the advance" : "Unchanged")
       : (adv && adv.partial && adv.partial.index === l.index) ? `Part-paid by advance (${fmtP(adv.partial.applied)}); instalment unchanged`
       : l.classification === "informal" ? (l.balance == null ? "Informal – balance not captured" : "Informal – beyond the advance cap")
       : "Unchanged",
@@ -118,8 +170,33 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
       debt_position: { title: adv ? "Debt Position — Before vs After" : "Debt Position (as captured)", rows: debtRows },
       risk: { tier: c.tier, text: n.risk_sentences },
       recommendation: { decision: c.decision, intro: n.recommendation_intro, closing: n.closing_sentence },
-      gaps: c.gaps,
+      gaps: o ? c.gaps.map(stripDashes) : c.gaps,
       confidentiality: confidentialityFor(employerName),
+      ...(o && adv ? { advisor_recommendation: advisorSection(c) } : {}),
+    },
+  };
+}
+
+// The section printed beside the decision when the advisor set the figure.
+// What it does NOT carry: the portal's figure, the cap, the internal notes,
+// and the words "override" or "amended".
+function advisorSection(c: Computed) {
+  const o = c.override!, adv = c.advance!;
+  const total = o.allocations.reduce((s, x) => s + x.amount, 0);
+  return {
+    title: ADVISOR_SECTION_TITLE,
+    justification: stripDashes(o.justification),
+    recommended_advance: fmtP(adv.amount),
+    repayment: stripDashes(`${fmtP(adv.instalment)} per month over ${c.term_months} months, no interest`),
+    use_of_funds: {
+      headers: ["Lender or purpose", "Outstanding balance", "Allocated amount"],
+      rows: o.allocations.map((x) => ({
+        label: stripDashes(x.label),
+        balance: x.kind === "liability" && x.outstanding_balance != null ? fmtP(x.outstanding_balance) : "",
+        amount: fmtP(x.amount),
+      })),
+      total_label: "Total",
+      total: fmtP(Math.round(total * 100) / 100),
     },
   };
 }

@@ -324,6 +324,62 @@ body.doc-viewer-open{overflow:hidden}
 .ar-tbl tr.tot td{font-weight:800;border-bottom:2px solid var(--kw-ink)}
 .ar-tbl td.settled{color:var(--kw-green);font-weight:700}
 .ar-tbl td.muted{color:var(--kw-grey);font-style:italic}
+/* Advisor's figure (13 Oct 2026): the report's own section, set like the rest
+   of the document, and the advisor panel beside it (operational: dense,
+   table-first, no cards). */
+.ar-adv{margin:12px 0 14px;padding-top:10px;border-top:1px solid var(--kw-line)}
+.ar-adv-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--kw-ink);margin-bottom:6px}
+.ar-adv-kv{margin:4px 0 8px}
+.ar-split{display:grid;grid-template-columns:minmax(0,820px) minmax(300px,380px);gap:24px;align-items:start}
+.ar-split-doc{min-width:0}
+@media (max-width:1200px){.ar-split{grid-template-columns:minmax(0,1fr)}}
+@media print{.ar-split{display:block}}
+.ovr{font-size:12.5px;color:var(--kw-ink);border-left:1px solid var(--kw-line);padding-left:20px}
+@media (max-width:1200px){.ovr{border-left:0;padding-left:0;border-top:1px solid var(--kw-line);padding-top:16px}}
+.ovr-h{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--kw-grey);margin:0 0 6px}
+.ovr-h2{font-size:13px;font-weight:800;margin:18px 0 6px}
+.ovr-figs{width:100%;border-collapse:collapse}
+.ovr-figs th{text-align:left;font-weight:500;color:var(--kw-grey);padding:5px 0;border-bottom:1px solid var(--kw-line);background:transparent;text-transform:none;letter-spacing:0;font-size:12.5px}
+.ovr-figs td{text-align:right;padding:5px 0;border-bottom:1px solid var(--kw-line);font-family:'DM Mono',monospace;white-space:nowrap}
+.ovr-figs tr.cur th,.ovr-figs tr.cur td{font-weight:800;color:var(--kw-ink);border-bottom:2px solid var(--kw-ink)}
+.ovr-tag{font-family:Nunito,sans-serif;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--kw-green-deep);margin-left:6px}
+.ovr-lbl{display:block;font-size:11px;font-weight:700;color:var(--kw-grey);margin:10px 0 3px}
+.ovr-in{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;background:#fff}
+.ovr-in:focus,.ovr-tbl input:focus,.ovr-tbl select:focus{outline:2px solid var(--kw-green);outline-offset:0;border-color:var(--kw-green)}
+.ovr-hint{font-size:11.5px;color:var(--kw-grey);margin-top:3px;min-height:1px}
+.ovr-tbl{width:100%;border-collapse:collapse;margin-top:2px}
+.ovr-tbl th{text-align:left;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--kw-grey);padding:4px 4px 4px 0;border-bottom:1px solid var(--kw-ink);background:transparent}
+.ovr-tbl td{padding:4px 4px 4px 0;border-bottom:1px solid var(--kw-line);vertical-align:top}
+.ovr-tbl .num{text-align:right;font-family:'DM Mono',monospace;white-space:nowrap}
+.ovr-tbl tfoot td{border-bottom:2px solid var(--kw-ink);font-weight:800}
+.ovr-tbl select,.ovr-tbl input{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font:inherit;font-size:12px;background:#fff}
+.ovr-tbl .ovr-amt{width:84px;text-align:right;font-family:'DM Mono',monospace}
+.ovr-tbl td:first-child{width:100%}
+.ovr-tbl td.num:nth-child(2){font-size:11.5px;color:var(--kw-grey)}
+.ovr-tbl .ovr-purpose{margin-top:4px}
+.ovr-link{background:none;border:0;padding:0;color:var(--kw-green-deep);font:inherit;font-weight:700;cursor:pointer}
+.ovr-repay{display:flex;flex-direction:column;gap:2px;margin-top:10px;padding:6px 0;border-top:1px solid var(--kw-line);border-bottom:1px solid var(--kw-line)}
+.ovr-repay b{font-weight:700}
+.ovr-repay span{color:var(--kw-grey)}
+.ovr-problems{margin:8px 0 0;padding-left:16px;color:var(--kw-red);font-size:11.5px}
+.ovr-problems:empty{display:none}
+.ovr-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ovr-bad{color:var(--kw-red);font-weight:700}
+.ovr-err{color:var(--kw-red);font-weight:700;margin:8px 0;border-left:3px solid var(--kw-red);padding:4px 0 4px 10px}
+.ovr-ok{color:var(--kw-green-deep);font-weight:700;margin:8px 0;border-left:3px solid var(--kw-green);padding:4px 0 4px 10px}
+.ovr-stale,.ovr-amended{margin:10px 0;border-left:3px solid var(--kw-orange);padding:4px 0 4px 10px;font-weight:700}
+.ovr-stale .btn{margin-top:6px}
+.ovr-remove{margin-top:10px;padding-top:6px;border-top:1px dotted var(--kw-line)}
+.ovr-int{margin-top:24px;padding-top:14px;border-top:1px solid var(--kw-ink)}
+.ovr-intnote{color:var(--kw-ink);font-weight:700;margin-bottom:6px}
+.ovr-notes{list-style:none;margin:12px 0 0;padding:0}
+.ovr-notes li{padding:8px 0;border-bottom:1px solid var(--kw-line)}
+.ovr-notes li.sys{color:var(--kw-grey);font-weight:400}
+.ovr-notes li.sys .ovr-note-body{font-size:12px}
+.ovr-note-meta{font-size:11px;color:var(--kw-grey);margin-bottom:2px}
+.ovr-note-meta b{font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
+.ovr-note-body{white-space:pre-wrap;word-break:break-word}
+.ovr-muted{color:var(--kw-grey);font-style:italic}
 .ar-p{margin:0 0 10px;font-size:13px;line-height:1.6}
 .ar-ul{margin:0 0 10px 0;padding-left:18px}
 .ar-ul li{margin-bottom:4px}
@@ -3970,7 +4026,10 @@ function panelReportPFA(c){
 let reportView = 'pfa';
 const AR = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, preview:null,
              suggestions:[], busy:false, saveTimer:null, previewTimer:null, confirm:null, error:'',
-             consents:[], notice:'' };
+             consents:[], notice:'',
+             // The advisor's figure (13 Oct 2026): advance_override_get() payload,
+             // the form being edited, and the panel's own messages.
+             ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false };
 
 function panelReport(c){
   // The Advance Recommendation names an employer's advance programme and a
@@ -4006,7 +4065,8 @@ function setReportView(v){ reportView = v; renderClientEditor(); }
 /* ── data ── */
 async function arInit(c){
   if(AR.clientId !== c.id){
-    Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'', consents:[], notice:'' });
+    Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'', consents:[], notice:'',
+                        ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false });
   }
   await arLoadList();
   if(!AR.list.length && AR.mode !== 'prepare'){ AR.mode = 'prepare'; }
@@ -4030,6 +4090,7 @@ async function arLoadList(){
   AR.consents = cons.error ? [] : (cons.data || []);
   if(cons.error) AR.error = 'Could not load the consent form record: ' + cons.error.message;
   if(!AR.selectedId || !AR.list.some(r=>r.id===AR.selectedId)) AR.selectedId = AR.list.length ? AR.list[0].id : null;
+  await arLoadOverride();
 }
 function arSelected(){ return AR.list.find(r=>r.id===AR.selectedId) || null; }
 
@@ -4172,13 +4233,253 @@ async function arDiscard(){
 async function arRegenerate(){ AR.mode='prepare'; AR.confirm=null; await arStartPrepare(arSelected()); arRender(); }
 function arPick(id){ AR.selectedId = id; AR.confirm=null; AR.notice=''; arRender(); }
 
+/* ── The advisor's figure (13 Oct 2026) ─────────────────────────────────
+   supabase_advance_override.sql. The advisor may set the advance, say what
+   it is for and why. Nothing here is written to advisor_clients (a linked
+   member can read that row); everything goes through the advance_override_*
+   RPCs, which check the cap, the sum and who is asking. The next report
+   generated is computed on the advisor's figure (Edge Function), and the
+   database refuses to finalise a report generated on any other figure.
+   Internal notes are advisor-only and permanent. */
+async function arLoadOverride(){
+  const { data, error } = await sb.rpc('advance_override_get', { p_client_id: AR.clientId });
+  if(error){ AR.ovr = null; AR.ovrErr = 'Could not load the advance figure and internal notes: ' + error.message; AR.ovrErrCode=''; return; }
+  AR.ovr = data || null;
+  if(!AR.ovrForm || AR.ovrForm.clientId !== AR.clientId) AR.ovrForm = arOvrFormFrom(AR.ovr && AR.ovr.active);
+}
+function arOvrFormFrom(active){
+  const f = { clientId: AR.clientId, amount: '', justification: '', lines: [], note: '', removeReason: '' };
+  if(active){
+    f.amount = String(active.advisor_amount);
+    f.justification = active.justification || '';
+    f.lines = (active.allocations||[]).map(a => a.kind === 'liability'
+      ? { kind:'liability', liability_index: a.liability_index, purpose:'', amount: String(a.amount) }
+      : { kind:'other', liability_index: null, purpose: a.other_purpose || '', amount: String(a.amount) });
+  }
+  if(!f.lines.length) f.lines.push({ kind:'', liability_index:null, purpose:'', amount:'' });
+  return f;
+}
+const arNum = v => { const n = parseFloat(String(v==null?'':v).replace(/[,P\s]/g,'')); return isFinite(n) ? Math.round(n*100)/100 : 0; };
+// The portal's own figure for the report on screen (a report generated on an
+// advisor figure carries the portal figure it replaced).
+function arPortalFigure(rep){
+  const c = rep && rep.computed || {};
+  if(c.override) return Number(c.override.system_amount) || 0;
+  return c.advance ? Number(c.advance.amount) || 0 : 0;
+}
+// Why this draft may not be finalised as it stands, or ''.
+function arOvrStale(rep){
+  const active = AR.ovr && AR.ovr.active;
+  const on = rep && rep.computed && rep.computed.override;
+  if(active && (!on || on.id !== active.id)) return 'This version was generated before the current advance figure of ' + fmt(active.advisor_amount) + ' was set. Generate a new version to put that figure on the report.';
+  if(!active && on) return 'This version was generated on an advisor figure that has since been removed. Generate a new version to return to the portal calculation.';
+  return '';
+}
+// "Sent" = marked final (Tshenolo, 13 Oct 2026). Any change to the figure
+// after the latest final is an amendment the employer has not seen.
+function arOvrAmended(){
+  const o = AR.ovr; if(!o || !o.latest_final || !o.latest_final.finalised_at) return null;
+  const t = new Date(o.latest_final.finalised_at).getTime();
+  const changed = (o.history||[]).some(h => new Date(h.created_at).getTime() > t || (h.deactivated_at && new Date(h.deactivated_at).getTime() > t));
+  return changed ? o.latest_final.finalised_at : null;
+}
+function arOvrTotals(){
+  const f = AR.ovrForm, cap = AR.ovr && AR.ovr.cap;
+  const amount = arNum(f.amount);
+  const total = Math.round(f.lines.reduce((s,l)=>s+arNum(l.amount),0)*100)/100;
+  const problems = [];
+  if(!(AR.ovr && AR.ovr.gross_monthly_salary)) problems.push('Record the gross monthly salary on the Income tab first.');
+  if(!(amount > 0)) problems.push('Enter the recommended amount.');
+  else if(cap && amount > cap) problems.push('Cannot exceed ' + fmt(cap) + ' (4 × gross monthly salary).');
+  if(f.justification.trim().length < 20) problems.push('Justification: at least 20 characters (' + f.justification.trim().length + ' so far).');
+  f.lines.forEach((l,i)=>{
+    if(!l.kind) problems.push('Line ' + (i+1) + ': choose a liability or Other.');
+    else if(l.kind==='other' && l.purpose.trim().length < 3) problems.push('Line ' + (i+1) + ': say what the money is for.');
+    if(!(arNum(l.amount) > 0)) problems.push('Line ' + (i+1) + ': enter an amount.');
+    if(l.kind==='liability'){
+      const li = (AR.ovr && AR.ovr.liabilities || []).find(x=>x.liability_index===l.liability_index);
+      if(li && arNum(l.amount) > li.balance) problems.push('Line ' + (i+1) + ': more than the outstanding balance of ' + fmt(li.balance) + '.');
+    }
+  });
+  const used = f.lines.filter(l=>l.kind==='liability').map(l=>l.liability_index);
+  if(new Set(used).size !== used.length) problems.push('Each liability can only be on one line.');
+  if(amount > 0 && total !== amount) problems.push('Use of funds adds up to ' + fmt(total) + ', not ' + fmt(amount) + '.');
+  return { amount, total, cap, headroom: cap ? Math.round((cap - amount)*100)/100 : null, repayment: amount > 0 ? Math.round(amount/24*100)/100 : 0, problems };
+}
+function arOvrSet(key, val){ AR.ovrForm[key] = val; AR.ovrMsg=''; arOvrRefresh(); }
+function arOvrLine(i, key, val){
+  const l = AR.ovrForm.lines[i]; if(!l) return;
+  if(key==='pick'){
+    if(val==='other'){ l.kind='other'; l.liability_index=null; }
+    else if(val===''){ l.kind=''; l.liability_index=null; }
+    else { l.kind='liability'; l.liability_index=parseInt(val,10); l.purpose=''; }
+    AR.ovrMsg=''; arRender(); return;
+  }
+  l[key] = val; AR.ovrMsg=''; arOvrRefresh();
+}
+function arOvrAddLine(){ AR.ovrForm.lines.push({ kind:'', liability_index:null, purpose:'', amount:'' }); arRender(); }
+function arOvrDelLine(i){ AR.ovrForm.lines.splice(i,1); if(!AR.ovrForm.lines.length) arOvrAddLine(); else arRender(); }
+function arOvrReset(){ AR.ovrForm = arOvrFormFrom(AR.ovr && AR.ovr.active); AR.ovrErr=''; AR.ovrErrCode=''; AR.ovrMsg=''; arRender(); }
+// Typing updates only the live figures, so the field keeps its focus.
+function arOvrRefresh(){
+  const t = arOvrTotals();
+  const set = (id, html) => { const el = document.getElementById(id); if(el) el.innerHTML = html; };
+  set('ovr-headroom', t.cap == null ? '' : (t.amount > t.cap
+      ? `<span class="ovr-bad">Cannot exceed ${fmt(t.cap)} (4 × gross monthly salary)</span>`
+      : `Headroom ${fmt(t.headroom)} below the cap`));
+  set('ovr-total', fmt(t.total));
+  set('ovr-diff', t.amount > 0 && t.total !== t.amount ? `<span class="ovr-bad">${t.total < t.amount ? fmt(t.amount - t.total) + ' still to allocate' : fmt(t.total - t.amount) + ' over the amount'}</span>` : (t.amount > 0 ? 'Matches the recommended amount' : ''));
+  set('ovr-repay', t.repayment ? fmt(t.repayment) + ' per month over 24 months, no interest' : '');
+  set('ovr-problems', t.problems.length ? t.problems.map(p=>`<li>${esc(p)}</li>`).join('') : '');
+  const b = document.getElementById('ovr-save'); if(b) b.disabled = !!t.problems.length || AR.ovrBusy;
+}
+async function arOvrSave(){
+  const rep = arSelected(); const f = AR.ovrForm; const t = arOvrTotals();
+  if(t.problems.length || AR.ovrBusy || !rep) return;
+  AR.ovrBusy = true; AR.ovrErr=''; AR.ovrErrCode=''; arRender();
+  const { error } = await sb.rpc('advance_override_save', {
+    p_client_id: AR.clientId, p_source_recommendation_id: rep.id, p_amount: t.amount,
+    p_justification: f.justification.trim(),
+    p_allocations: f.lines.map(l => l.kind==='liability'
+      ? { kind:'liability', liability_index: l.liability_index, amount: arNum(l.amount) }
+      : { kind:'other', purpose: l.purpose.trim(), amount: arNum(l.amount) })
+  });
+  AR.ovrBusy = false;
+  if(error){ arOvrError(error.message); arRender(); return; }
+  AR.ovrForm = null; await arLoadOverride();
+  AR.ovrMsg = 'Saved. Generate a new version to put ' + fmt(t.amount) + ' on the report.';
+  arRender();
+}
+function arOvrError(msg){
+  const m = String(msg||'');
+  if(/GROSS_SALARY_REQUIRED/.test(m)){ AR.ovrErrCode='gross'; AR.ovrErr='Record the gross monthly salary on the Income tab before setting an advance.'; return; }
+  if(/ABOVE_CAP/.test(m)){ AR.ovrErrCode='cap'; AR.ovrErr = m.replace(/^.*ABOVE_CAP:\s*/,'').replace(/^the/,'The') + '.'; return; }
+  AR.ovrErrCode=''; AR.ovrErr = 'Not saved: ' + m;
+}
+async function arOvrRemove(){
+  const reason = (AR.ovrForm.removeReason||'').trim();
+  if(reason.length < 5){ AR.ovrErr = 'Give a short reason for removing the advisor figure.'; AR.ovrErrCode=''; arRender(); return; }
+  AR.ovrBusy = true; arRender();
+  const { error } = await sb.rpc('advance_override_remove', { p_client_id: AR.clientId, p_reason: reason });
+  AR.ovrBusy = false; AR.ovrRemoving = false;
+  if(error){ AR.ovrErr = 'Not removed: ' + error.message; AR.ovrErrCode=''; arRender(); return; }
+  AR.ovrForm = null; await arLoadOverride();
+  AR.ovrMsg = 'Removed. Generate a new version to return the report to the portal calculation.';
+  arRender();
+}
+async function arOvrAddNote(){
+  const body = (AR.ovrForm.note||'').trim(); if(!body) return;
+  AR.ovrBusy = true; arRender();
+  const rep = arSelected();
+  const { error } = await sb.rpc('advance_internal_note_add', { p_client_id: AR.clientId, p_body: body, p_recommendation_id: rep ? rep.id : null });
+  AR.ovrBusy = false;
+  if(error){ AR.ovrErr = 'Note not saved: ' + error.message; AR.ovrErrCode=''; arRender(); return; }
+  AR.ovrForm.note = '';
+  const keep = AR.ovrForm; await arLoadOverride(); AR.ovrForm = keep;
+  arRender();
+}
+function arOvrStamp(iso){ try { return fmtDate(iso) + ' ' + new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); } catch(_){ return iso || ''; } }
+
+function arRenderOverride(rep){
+  const o = AR.ovr;
+  if(!o) return `<aside class="ovr no-print"><div class="ovr-h">Advance figure</div>${AR.ovrErr ? `<div class="ovr-err">${esc(AR.ovrErr)}</div>` : '<div class="ovr-muted">Loading…</div>'}</aside>`;
+  const f = AR.ovrForm || (AR.ovrForm = arOvrFormFrom(o.active));
+  const active = o.active;
+  const portal = arPortalFigure(rep);
+  const t = arOvrTotals();
+  const stale = arOvrStale(rep);
+  const amended = arOvrAmended();
+  const liabs = o.liabilities || [];
+  const lineRows = f.lines.map((l,i)=>{
+    const li = l.kind==='liability' ? liabs.find(x=>x.liability_index===l.liability_index) : null;
+    const opts = `<option value="" ${!l.kind?'selected':''}>Choose…</option>`
+      + liabs.map(x=>`<option value="${x.liability_index}" ${l.kind==='liability'&&l.liability_index===x.liability_index?'selected':''}>${esc(x.lender)} (${fmt(x.balance)})</option>`).join('')
+      + `<option value="other" ${l.kind==='other'?'selected':''}>Other (type the purpose)</option>`;
+    return `<tr>
+      <td><select onchange="arOvrLine(${i},'pick',this.value)" aria-label="Use of funds line ${i+1}">${opts}</select>
+        ${l.kind==='other' ? `<input type="text" class="ovr-purpose" maxlength="200" placeholder="What it is for" value="${esc(l.purpose)}" oninput="arOvrLine(${i},'purpose',this.value)" aria-label="Purpose, line ${i+1}">` : ''}</td>
+      <td class="num">${li ? fmt(li.balance) : ''}</td>
+      <td class="num"><input type="text" inputmode="decimal" class="ovr-amt" value="${esc(l.amount)}" oninput="arOvrLine(${i},'amount',this.value)" aria-label="Amount, line ${i+1}"></td>
+      <td><button type="button" class="rt-del" onclick="arOvrDelLine(${i})" aria-label="Remove line ${i+1}">✕</button></td>
+    </tr>`;
+  }).join('');
+  const notes = (o.notes||[]).map(n=>`<li class="${n.kind==='system'?'sys':''}">
+      <div class="ovr-note-meta">${n.kind==='system' ? '<b>System</b> · ' : ''}${esc(n.author||'')} · ${esc(arOvrStamp(n.created_at))}</div>
+      <div class="ovr-note-body">${esc(n.body)}</div></li>`).join('');
+  return `<aside class="ovr no-print" aria-label="Advance figure and internal notes">
+    ${amended ? `<div class="ovr-amended">Amended after marking final on ${esc(fmtDate(amended))}. Generate a new version, mark it final and send it to the employer again.</div>` : ''}
+    <div class="ovr-h">Advance figure</div>
+    <table class="ovr-figs"><tbody>
+      <tr><th>Portal calculation</th><td class="num">${portal > 0 ? fmt(portal) : 'None recommended'}</td></tr>
+      <tr><th>Cap (4 × gross)</th><td class="num">${o.cap ? fmt(o.cap) : '<span class="ovr-bad">Gross salary not recorded</span>'}</td></tr>
+      <tr class="cur"><th>Current recommended advance</th><td class="num">${active ? fmt(active.advisor_amount) + ' <span class="ovr-tag">Advisor set</span>' : (portal > 0 ? fmt(portal) : 'None')}</td></tr>
+    </tbody></table>
+    ${stale ? `<div class="ovr-stale">${esc(stale)} <button type="button" class="btn btn-outline btn-sm" onclick="arRegenerate()">Generate new version</button></div>` : ''}
+    ${AR.ovrMsg ? `<div class="ovr-ok">${esc(AR.ovrMsg)}</div>` : ''}
+    ${AR.ovrErr ? `<div class="ovr-err">${esc(AR.ovrErr)}${AR.ovrErrCode==='gross' ? ` <button type="button" class="btn btn-outline btn-sm" onclick="switchTab('income')">Go to Income</button>` : ''}</div>` : ''}
+
+    <div class="ovr-h2">${active ? 'Change the advisor figure' : 'Set an advisor figure'}</div>
+    ${!o.gross_monthly_salary ? `<div class="ovr-err">The gross monthly salary is not recorded, so no advisor figure can be saved. <button type="button" class="btn btn-outline btn-sm" onclick="switchTab('income')">Go to Income</button></div>` : ''}
+    <label class="ovr-lbl" for="ovr-amount">Recommended amount (P)</label>
+    <input id="ovr-amount" type="text" inputmode="decimal" class="ovr-in mono" value="${esc(f.amount)}" oninput="arOvrSet('amount',this.value)">
+    <div class="ovr-hint" id="ovr-headroom"></div>
+    <label class="ovr-lbl" for="ovr-just">Justification</label>
+    <textarea id="ovr-just" class="ovr-in" rows="4" maxlength="2000" oninput="arOvrSet('justification',this.value)">${esc(f.justification)}</textarea>
+    <div class="ovr-hint">This appears on the report sent to the employer.</div>
+
+    <div class="ovr-lbl">Use of funds</div>
+    <table class="ovr-tbl"><thead><tr><th>Lender or purpose</th><th class="num">Balance</th><th class="num">Amount</th><th></th></tr></thead>
+      <tbody>${lineRows}</tbody>
+      <tfoot><tr><td><button type="button" class="ovr-link" onclick="arOvrAddLine()">+ Add line</button></td><td class="num">Total</td><td class="num" id="ovr-total"></td><td></td></tr></tfoot>
+    </table>
+    <div class="ovr-hint" id="ovr-diff"></div>
+    <div class="ovr-repay"><span>Monthly repayment</span><b id="ovr-repay"></b></div>
+    <ul class="ovr-problems" id="ovr-problems"></ul>
+    <div class="ovr-actions">
+      <button type="button" id="ovr-save" class="btn btn-primary btn-sm" onclick="arOvrSave()">${AR.ovrBusy ? 'Saving…' : 'Save advisor figure'}</button>
+      ${active ? `<button type="button" class="btn btn-outline btn-sm" onclick="arOvrReset()">Undo edits</button>` : ''}
+      ${active && !AR.ovrRemoving ? `<button type="button" class="btn btn-outline btn-sm" onclick="AR.ovrRemoving=true;arRender()">Remove advisor figure</button>` : ''}
+    </div>
+    ${active && AR.ovrRemoving ? `<div class="ovr-remove">
+      <label class="ovr-lbl" for="ovr-reason">Reason for removing (kept in the internal notes)</label>
+      <input id="ovr-reason" type="text" class="ovr-in" maxlength="500" value="${esc(f.removeReason)}" oninput="AR.ovrForm.removeReason=this.value">
+      <div class="ovr-actions"><button type="button" class="btn btn-red btn-sm" onclick="arOvrRemove()">Confirm remove</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="AR.ovrRemoving=false;arRender()">Keep it</button></div></div>` : ''}
+
+    <div class="ovr-h2 ovr-int">Internal notes</div>
+    <div class="ovr-hint ovr-intnote">Internal. Not shown on the report or to the employer. Notes are permanent: they cannot be edited or deleted.</div>
+    <textarea class="ovr-in" rows="3" maxlength="4000" placeholder="Add a note" oninput="AR.ovrForm.note=this.value">${esc(f.note)}</textarea>
+    <div class="ovr-actions"><button type="button" class="btn btn-outline btn-sm" onclick="arOvrAddNote()">Add note</button></div>
+    <ul class="ovr-notes">${notes || '<li class="ovr-muted">No notes yet.</li>'}</ul>
+  </aside>`;
+}
+
+// The report's own section when the advisor set the figure. Strings arrive
+// already dash-stripped from the Edge Function; this only lays them out.
+function arAdvisorSection(a){
+  const u = a.use_of_funds || { rows:[] };
+  const rows = (u.rows||[]).map(r=>`<tr><td>${esc(r.label)}</td><td class="num">${esc(r.balance)}</td><td class="num">${esc(r.amount)}</td></tr>`).join('');
+  return `
+      <div class="ar-adv">
+        <div class="ar-adv-h">${esc(a.title)}</div>
+        <p class="ar-p">${esc(a.justification)}</p>
+        <div class="ar-kv ar-adv-kv">
+          <div><span>Recommended advance</span><strong class="num">${esc(a.recommended_advance)}</strong></div>
+          <div><span>Repayment</span><strong>${esc(a.repayment)}</strong></div>
+        </div>
+        <table class="ar-tbl"><thead><tr><th>${esc((u.headers||[])[0]||'')}</th><th class="num">${esc((u.headers||[])[1]||'')}</th><th class="num">${esc((u.headers||[])[2]||'')}</th></tr></thead>
+          <tbody>${rows}<tr class="tot"><td>${esc(u.total_label||'Total')}</td><td></td><td class="num">${esc(u.total)}</td></tr></tbody></table>
+      </div>`;
+}
+
 /* ── render ── */
 function arRender(){
   const root = document.getElementById('ar-root'); if(!root) return;
   if(AR.mode === 'prepare') { root.innerHTML = arRenderPrepare(); return; }
   const rep = arSelected();
   if(!rep){ root.innerHTML = arErr() + `<div class="ar-note">No advance recommendation yet.</div>`; return; }
-  root.innerHTML = arErr() + arRenderBar(rep) + arRenderDoc(rep);
+  root.innerHTML = arErr() + arRenderBar(rep) + `<div class="ar-split"><div class="ar-split-doc">` + arRenderDoc(rep) + `</div>` + arRenderOverride(rep) + `</div>`;
+  arOvrRefresh();
 }
 function arDate(v){ if(!v) return '—'; try { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v+'T12:00:00Z') : v; } catch(_){ return v; } }
 function arErr(){
@@ -4191,7 +4492,8 @@ function arRenderBar(rep){
   const draft = rep.status==='draft';
   const ask = AR.confirm;
   const consent = draft ? arOpenConsent() : (AR.consents.find(k=>k.id===rep.consent_id) || null);
-  const canFinal = draft && !!consent;
+  const stale = draft ? arOvrStale(rep) : '';
+  const canFinal = draft && !!consent && !stale;
   return arConsentPanel(rep, consent) + `<div class="ar-bar no-print">
     <select class="ar-select" onchange="arPick(this.value)">${opts}</select>
     <span class="ar-status ${rep.status}">${draft?'Draft — editable':'Final'}</span>
@@ -4199,7 +4501,7 @@ function arRenderBar(rep){
     <span class="sp"></span>
     ${draft ? (ask==='final' && canFinal
         ? `<span class="ar-remind">Give the employee the same copy that goes to HR.</span><button class="btn btn-primary btn-sm" onclick="arFinalise()">Confirm — mark final</button><button class="btn btn-outline btn-sm" onclick="arAsk(null)">Keep editing</button>`
-        : `<button class="btn btn-primary btn-sm" onclick="arAsk('final')" ${canFinal?'':'disabled title="Record the signed consent form first"'}>Mark final</button>`) : ''}
+        : `<button class="btn btn-primary btn-sm" onclick="arAsk('final')" ${canFinal?'':`disabled title="${stale ? 'Generate a new version on the current advance figure first' : 'Record the signed consent form first'}"`}>Mark final</button>`) : ''}
     ${draft ? (ask==='discard'
         ? `<button class="btn btn-red btn-sm" onclick="arDiscard()">Confirm discard</button>`
         : `<button class="btn btn-outline btn-sm" onclick="arAsk('discard')">Discard draft</button>`) : ''}
@@ -4294,7 +4596,7 @@ function arRenderDoc(rep){
     </section>
 
     <section class="ar-sec"><div class="ar-h"><span class="t">Consultant Recommendation</span></div>
-      <div class="ar-dec">${esc(s.recommendation&&s.recommendation.decision||'')}</div>
+      <div class="ar-dec">${esc(s.recommendation&&s.recommendation.decision||'')}</div>${s.advisor_recommendation ? arAdvisorSection(s.advisor_recommendation) : ''}
       ${arEd(rep,'sections.recommendation.intro','p','ar-p')}
       ${approving ? arCondList(rep,'condition') : ''}
       ${arEd(rep,'sections.recommendation.closing','p','ar-p ar-close')}

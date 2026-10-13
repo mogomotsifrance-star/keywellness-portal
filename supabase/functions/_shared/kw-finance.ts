@@ -119,6 +119,20 @@ export function pf(v: unknown): number {
   return isFinite(n) ? n : 0;
 }
 export const isBlank = (v: unknown) => v == null || String(v).trim() === "";
+
+// Report copy rule (13 Oct 2026): no em dash, en dash or double hyphen in
+// NEW report strings. A dash between two numbers becomes "to"; any other
+// becomes a comma. Applied to the override's report strings only; existing
+// report copy is deliberately left as it is.
+export function stripDashes(s: unknown): string {
+  return String(s == null ? "" : s)
+    .replace(/(\d)\s*(?:—|–|--+)\s*(\d)/g, "$1 to $2")
+    .replace(/\s*(?:—|–|--+)\s*/g, ", ")
+    .replace(/,\s*,/g, ",")
+    .replace(/^,\s*/, "")
+    .replace(/,\s*([.;:!?])/g, "$1")
+    .trim();
+}
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 export function fmtP(n: number | null | undefined): string {
   if (n == null || !isFinite(Number(n))) return "Not captured";
