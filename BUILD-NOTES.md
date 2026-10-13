@@ -1,3 +1,34 @@
+# Advisor document viewer + advance override: Batch 0 = NO-GO (2026-10-13)
+
+**Decision: NO-GO. Nothing was built or applied.** Read-only discovery only;
+full findings in `docs/build/BATCH-0-ADVANCE-OVERRIDE-FINDINGS.md`.
+
+Why:
+- **The report cannot take an override without changing how it is produced
+  (gate condition 4).** The portal's advance figure is written into the stored
+  report `content` at generation: the header, the model's reasoning prose, the
+  DSR-after table, the ability-to-repay prose, the debt table ("New advance",
+  "Settled by advance") and the tier and decision. Swapping the header figure
+  leaves the portal figure on the report and makes it contradict itself (D1).
+- **Documents are not in Supabase Storage.** They are base64 inside
+  `advisor_clients.assessment.documents` (16 files on 7 clients: 8 PDF, 1 PNG,
+  4 xlsx, 2 docx, 1 eml). There is no bucket to sign URLs from, and the bytes
+  already reach the browser with the client record, so D11's log cannot be
+  enforced in the database. The only bucket, `Videos`, is public by design (LMS).
+
+Other conflicts: no liabilities table or liability ids (D5); overrides would
+attach per version and drafts can be deleted (D9); no "sent" record, only
+`finalised_at`, and 0 finals exist (D12); no `stripAiDashes` utility, and the
+existing report copy already has dashes; D4 rounds to the pula, the report to
+the cent.
+
+Options for Tshenolo (A/B/C for the report, E/F for documents) are in the
+findings file. Recommended: **A** (recompute the report on the advisor's amount)
+and **E** now (in-page viewer from data the page already holds, page-reported
+log), then **F** (move documents to a private bucket) as its own build.
+
+---
+
 # Consent form before finalising an Advance Recommendation: LIVE (2026-10-05)
 
 A final Advance Recommendation goes to Hollard HR, one per employee, by design
