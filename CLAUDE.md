@@ -105,6 +105,23 @@ worked, which looks identical to a site that deployed fine. So after pushing to
 `dev`, open **Deployments → Build history** and confirm the top row is green
 before you test anything, and before you believe a test result.
 
+### Edge Functions — deploy from the repo, then prove it
+
+Edge Functions are not branched: a deploy is live for both sites at once.
+On 13 Oct 2026 a hand-assembled deploy payload shipped placeholder text
+(`advance-recommendation` v6, broken for 3.5 minutes), and a scripted edit put
+backspace bytes into the repo copy. See BUILD-NOTES "Incident". The rule:
+
+1. Deploy with the CLI from committed files:
+   `supabase functions deploy <name> --project-ref tarmpqxsabbehgjaonfz`
+   (Tshenolo or Lone logs in with their own token). The MCP deploy tool is a
+   fallback only.
+2. Before: `node tests/verify-edge-deploy.mjs --scan` (no control characters).
+3. After: read the function back and run
+   `node tests/verify-edge-deploy.mjs <readback.json> <commit>`. Every file must
+   be IDENTICAL. Any DIFF: redeploy the last good version immediately.
+4. Record version, ezbr hash and the result in BUILD-NOTES.
+
 ### Live site — GitHub Pages from `main`
 
 There is no `.github/workflows` directory in this repo. GitHub Pages serves the

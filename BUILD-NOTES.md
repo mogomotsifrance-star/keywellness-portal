@@ -31,6 +31,53 @@ between 09:22 UTC and the fix**, so no advisor hit v6. Lesson for the next
 deploy through the MCP tool: read the deployed files back and compare them with
 the commit before calling it done (done here for v7).
 
+**Second fault, same incident: backspace bytes in the repo copy of index.ts.**
+The read-back of v7 differed from the repo on line 294 of
+`supabase/functions/advance-recommendation/index.ts`. The fault was in the
+**repo**, not in production: a Python edit had turned the regex `\b` (word
+boundary) into literal backspace bytes, 0x08, three of them. Shown with
+`cat -A` (`^H` = 0x08):
+
+| Copy | Line 294 | 0x08 bytes |
+|---|---|---|
+| Repo, commit `320a7fa` | ``... \|\| /^Hoverrid\|^Hamended^H/i.test(text)) {`` | 3 |
+| Repo, commit `a75c52b` (fix) | ``... \|\| /overrid\|amended/i.test(text)) {`` | 0 |
+| Deployed v7 (read back) | ``... \|\| /overrid\|amended/i.test(text)) {`` | 0 in all four files |
+
+v7 was deployed from a hand-typed payload, which happened not to carry the
+bytes, so the live check was never broken; re-confirmed afterwards that v7 is
+still active with ezbr `2035b454...e422`, and no redeploy was needed. Had v7 been
+deployed from the repo file, the check that stops the model naming the portal
+figure would have silently never matched. The repo was corrected to match v7
+(`a75c52b`). `kw-finance.ts` also differed by whitespace on one line, corrected
+the same way.
+
+### How Edge Functions are deployed from now on
+
+Both faults came from content passing through hand-assembled text. So:
+
+1. **Deploy from the repo files, not from pasted contents.** Use the Supabase
+   CLI, which reads `supabase/functions/<name>/` and its relative imports
+   straight from disk:
+   `supabase functions deploy <name> --project-ref tarmpqxsabbehgjaonfz`
+   The CLI is installed on Tshenolo's machine; it needs `supabase login` with
+   Tshenolo's or Lone's own access token (Claude does not handle tokens), and
+   keeps `verify_jwt` on by default. Commit first, deploy from the committed tree.
+2. **If the MCP deploy tool has to be used** (no token available), it is a
+   fallback, and step 3 is mandatory, not optional.
+3. **Verify every deploy before calling it done**, with
+   `tests/verify-edge-deploy.mjs` (added 13 Oct):
+   - before: `node tests/verify-edge-deploy.mjs --scan`: fails on any control
+     character under `supabase/functions/` (it catches the 0x08 above);
+   - after: read the deployed function back (MCP `get_edge_function`, saved
+     to a file) and run `node tests/verify-edge-deploy.mjs <file> <commit>`:
+     every deployed file must be IDENTICAL to the commit. Any DIFF means the
+     deploy failed: redeploy the last good version at once, then investigate.
+   - Record the version, ezbr hash and the IDENTICAL output here.
+   Proven both ways on 13 Oct: passes for v7 against `a75c52b`; fails for v7
+   against `320a7fa` (names line 294) and fails `--scan` with the bad file
+   checked out.
+
 ## What it does
 
 - **Data lives in three advisor-only tables**, keyed on the client, never in
