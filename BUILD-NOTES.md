@@ -1,3 +1,54 @@
+# Advance override follow-up, Batches 1 to 4 (2026-10-14)
+
+Brief: `docs/build/advance-override-followup.md`. Decisions are Tshenolo's,
+dated 13 Oct 2026. Batch 0 is recorded under the override entry below
+(backspace fault, deploy method, step 3 trial).
+
+## Batch 1: advisor records are advisor-only: LIVE
+
+Decision: advisor notes are visible to advisors, team leads and admins only.
+
+| | |
+|---|---|
+| Findings | `docs/build/BATCH-1-ADVISOR-NOTES-PRIVACY-FINDINGS.md` |
+| SQL | `supabase_advisor_clients_member_read_off.sql`, applied 14 Oct (migration `advisor_clients_member_read_off`) after a rolled-back live trial |
+| Rollback | `migrations/rollback-advisor-clients-member-read-off.sql`: restores the exact old text `(member_user_id = auth.uid())` and the empty comment. MCP-safe |
+
+- **What changed:** policy `advisor_clients_member_read` is now `USING (false)`.
+  It was the only way a linked member could read the `advisor_clients` row,
+  and it gave them the whole row: the advisor's notes, the consultation
+  figures, the uploaded documents. Altered rather than dropped, so the MCP tool
+  could run it and the rollback restores the same name and text. This is the
+  approved exception to additive-only, for this one policy.
+- **No member-safe RPC was built.** Discovery found no member page that reads
+  the row and no member-authored field in it (all 26 records are
+  `advisor_added`; members have no upload path; their own answers live in
+  `profiles`, `assessments`, `tool_data`). An RPC would have had nothing to
+  return and nobody to call it. If a member page ever needs something from the
+  advisor's record, build the RPC then, returning named fields only.
+- **Side effect, wanted:** a linked member could call the `debt-rehab-plan`
+  Edge Function's preview on their own client id, because it reads the row as
+  the caller. It now gets "Client not found or not in your caseload."
+
+Verified (rolled back, then live):
+
+| Identity | Rows before | Rows after |
+|---|---|---|
+| Linked member smakhiwa | 1 (with documents) | 0 |
+| Linked member lebo882 | 1 | 0 |
+| Owning advisor | 17 | 17 |
+| Team lead + admin (france) | 26 | 26 |
+| Admin only (lone) | 26 | 26 |
+| HR | 0 | 0 |
+| anon | 0 | 0 |
+
+After the real apply: linked member 0, owning advisor 17. Member-page suites
+unchanged: dashboard 99, account 95, routing 19, onboarding 53, habits 56.
+Not testable separately: a team lead who is not also an admin (both live team
+leads are admins); the lead and admin policies were not touched.
+
+---
+
 # Advisor override of the Advance Recommendation (A): LIVE (2026-10-13)
 
 Option A of the 13 Oct brief, with Tshenolo's ten amendments. The advisor can
