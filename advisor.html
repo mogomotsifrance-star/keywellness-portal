@@ -4029,7 +4029,9 @@ const AR = { clientId:null, list:[], selectedId:null, mode:'view', prep:null, pr
              consents:[], notice:'',
              // The advisor's figure (13 Oct 2026): advance_override_get() payload,
              // the form being edited, and the panel's own messages.
-             ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false };
+             ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false,
+             // What a report finalises on (14 Oct 2026): advance_finalise_basis(), per report id.
+             basis:{} };
 
 function panelReport(c){
   // The Advance Recommendation names an employer's advance programme and a
@@ -4066,7 +4068,7 @@ function setReportView(v){ reportView = v; renderClientEditor(); }
 async function arInit(c){
   if(AR.clientId !== c.id){
     Object.assign(AR, { clientId:c.id, list:[], selectedId:null, mode:'view', prep:null, preview:null, suggestions:[], confirm:null, error:'', consents:[], notice:'',
-                        ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false });
+                        ovr:null, ovrForm:null, ovrErr:'', ovrErrCode:'', ovrMsg:'', ovrBusy:false, ovrRemoving:false, basis:{} });
   }
   await arLoadList();
   if(!AR.list.length && AR.mode !== 'prepare'){ AR.mode = 'prepare'; }
@@ -4090,7 +4092,16 @@ async function arLoadList(){
   AR.consents = cons.error ? [] : (cons.data || []);
   if(cons.error) AR.error = 'Could not load the consent form record: ' + cons.error.message;
   if(!AR.selectedId || !AR.list.some(r=>r.id===AR.selectedId)) AR.selectedId = AR.list.length ? AR.list[0].id : null;
-  await arLoadOverride();
+  await Promise.all([arLoadOverride(), arLoadBasis(AR.selectedId)]);
+}
+// 14 Oct 2026: an amended report for the same application finalises on the
+// consent its original rests on (supabase_advance_amendment_consent.sql). The
+// database decides; this only asks it, so the button and the panel say the
+// same thing the finalise call will do.
+async function arLoadBasis(id){
+  if(!id) return;
+  const { data, error } = await sb.rpc('advance_finalise_basis', { p_id: id });
+  AR.basis[id] = error ? null : (data || null);
 }
 function arSelected(){ return AR.list.find(r=>r.id===AR.selectedId) || null; }
 
@@ -4218,7 +4229,10 @@ async function arFinalise(){
   const { error } = await sb.rpc('advance_recommendation_finalise', { p_id: rep.id });
   AR.confirm = null;
   if(error){ AR.error = 'Could not mark final: ' + error.message; arRender(); return; }
-  AR.notice = 'Marked final. Give the employee the same copy that goes to HR.';
+  const wasAmend = !!(AR.basis[rep.id] && AR.basis[rep.id].mode === 'amendment');
+  AR.notice = wasAmend
+    ? 'Marked final as an amendment; the existing consent applies. Give the employee the same copy that goes to HR, and send it to HR again.'
+    : 'Marked final. Give the employee the same copy that goes to HR.';
   await arLoadList(); loadNotes(AR.clientId); arRender();
 }
 async function arDiscard(){
@@ -4231,7 +4245,7 @@ async function arDiscard(){
   arRender();
 }
 async function arRegenerate(){ AR.mode='prepare'; AR.confirm=null; await arStartPrepare(arSelected()); arRender(); }
-function arPick(id){ AR.selectedId = id; AR.confirm=null; AR.notice=''; arRender(); }
+async function arPick(id){ AR.selectedId = id; AR.confirm=null; AR.notice=''; arRender(); await arLoadBasis(id); arRender(); }
 
 /* ── The advisor's figure (13 Oct 2026) ─────────────────────────────────
    supabase_advance_override.sql. The advisor may set the advance, say what
@@ -4492,9 +4506,11 @@ function arRenderBar(rep){
   const draft = rep.status==='draft';
   const ask = AR.confirm;
   const consent = draft ? arOpenConsent() : (AR.consents.find(k=>k.id===rep.consent_id) || null);
+  const basis = AR.basis[rep.id] || null;
+  const amend = !!(basis && basis.mode === 'amendment');
   const stale = draft ? arOvrStale(rep) : '';
-  const canFinal = draft && !!consent && !stale;
-  return arConsentPanel(rep, consent) + `<div class="ar-bar no-print">
+  const canFinal = draft && (!!consent || amend) && !stale;
+  return arConsentPanel(rep, consent, basis) + `<div class="ar-bar no-print">
     <select class="ar-select" onchange="arPick(this.value)">${opts}</select>
     <span class="ar-status ${rep.status}">${draft?'Draft — editable':'Final'}</span>
     ${rep.narrative_source==='fallback' ? `<span class="ar-note">Fallback prose (model unavailable) — review wording before finalising.</span>` : ''}
@@ -4512,7 +4528,12 @@ function arRenderBar(rep){
 
 // Consent panel above the action bar (5 Oct 2026). The database refuses to
 // finalise without a recorded form; this explains why the button is disabled.
-function arConsentPanel(rep, consent){
+function arConsentPanel(rep, consent, basis){
+  // An amendment rests on the consent of the report it amends; say which.
+  if(basis && basis.mode === 'amendment' && basis.amends && basis.consent){
+    const a = basis.amends, k = basis.consent;
+    return `<div class="ar-consent ok no-print">&#10003; ${rep.status==='draft' ? 'Amends' : 'Final as an amendment of'} final v${esc(a.version)} (marked final ${esc(fmtDate(a.finalised_at))}). The consent form recorded on ${esc(fmtDate(k.recorded_at))} (signed ${esc(arDate(k.form_signed_on))}) applies${rep.status==='draft' ? '; no new form is needed' : ''}.</div>`;
+  }
   if(rep.status!=='draft'){
     return consent ? `<div class="ar-consent ok no-print">&#10003; ${arConsentLine(consent)}</div>` : '';
   }

@@ -47,6 +47,62 @@ unchanged: dashboard 99, account 95, routing 19, onboarding 53, habits 56.
 Not testable separately: a team lead who is not also an admin (both live team
 leads are admins); the lead and admin policies were not touched.
 
+## Batch 2: no new consent form when a report is amended: LIVE
+
+Decision: an amended report for the same application finalises on the original
+consent; a new application still needs its own form; the figure guard stays.
+
+| | |
+|---|---|
+| SQL | `supabase_advance_amendment_consent.sql`, applied 14 Oct (migration `advance_amendment_consent`) after two rolled-back live trials |
+| Backup | `kw_fn_backup` tag `advance-amendment-consent`: the 5 Oct bodies of `advance_recommendation_finalise` and `kw_advance_final_needs_consent` |
+| Rollback | `migrations/rollback-advance-amendment-consent.sql`: restores both bodies from that tag, revokes `advance_finalise_basis`. Keeps `amends_id` and any amended final (they record what went to HR). MCP-safe. Revert the page commit too |
+| Page | `advisor.html`: consent panel and Mark final ask `advance_finalise_basis()` |
+| Live = repo | all five function bodies' md5 on the live project match the committed file |
+
+**Why the shape:** there is no application id; since 5 Oct one form backs
+exactly one final (unique index on `consent_id` among finals). So an amended
+final records `amends_id` (the final it amends) and leaves `consent_id` null;
+the consent check follows `amends_id` back to the form. The index and the
+one-form-one-application rule are untouched.
+
+**What counts as an amendment** (`_advance_amendment_of`, all four):
+1. the client's latest final rests on a recorded, unwithdrawn form (directly or
+   through its own amendment chain);
+2. the draft was generated after that final;
+3. **same consultation date** as that final. Regenerating from a report
+   carries its date forward; a new date is a new application;
+4. **the advisor figure changed after that final** (saved or removed). The
+   decision was about the amount changing.
+The amendment path is tried first, so an amendment never uses up a fresh form
+recorded for the next application.
+
+On finalising an amendment: internal note "Report amended after consent
+recorded on [date]. Existing consent applied. (vN amends final vM; marked
+final by [name].)", plus the usual timeline note.
+
+Verified (rolled back, real client and advisor):
+
+| Case | Result |
+|---|---|
+| first final on a recorded form | consent_id set, as before |
+| same date, figure NOT changed after the final | basis none; refused, needs a form |
+| amendment | basis amendment (amends v1, form signed 1 Oct); finalised with consent_id null, amends_id = v1; still one form on record; system note written |
+| new consultation date | basis none; refused, needs a form |
+| stale figure on an amendment-eligible draft | refused by the figure guard ("not generated on the advance figure set now (P 60,000.00)"), stays draft |
+| second amendment while a fresh form waits | amends the first amendment; the fresh form stays unused |
+| changing an amended final's `amends_id` | refused |
+| member, HR | "not authorised for that client"; anon: no execute |
+
+Page (`tests/smoke-override.js` 38/38): no form and no amendment → Mark final
+disabled, record-consent panel; amendment → enabled, panel names the final and
+the consent that applies; after finalising, the notice says the existing
+consent applies and to send it to HR again. smoke-advance 40/40.
+
+**Flag for Tshenolo:** an amendment that changes only wording (same figure)
+still needs a recorded form under rule 4. Say if wording-only amendments
+should also reuse the consent.
+
 ---
 
 # Advisor override of the Advance Recommendation (A): LIVE (2026-10-13)

@@ -135,6 +135,13 @@ function stub(page) {
             body: `Advisor figure of P ${P(prev.advisor_amount)} removed by France Mogomotsi. The report reverts to the portal calculation. Reason: ${args.p_reason}` });
           return { data: null, error: null };
         }
+        if (fn === 'advance_finalise_basis') return { data: (window.__basis || {})[args.p_id] || { mode: 'none', amends: null, consent: null }, error: null };
+        if (fn === 'advance_recommendation_finalise') {
+          const b = (window.__basis || {})[args.p_id];
+          if (!b || b.mode === 'none') return err("The employee's signed consent form must be recorded before this report can be finalised.");
+          const r = window.__reports.find(x => x.id === args.p_id); r.status = 'final'; r.finalised_at = '2026-10-14T10:00:00Z';
+          return { data: null, error: null };
+        }
         if (fn === 'advance_internal_note_add') {
           const n = { id: 'n' + window.__notes.length, kind: 'advisor', author: 'France Mogomotsi', created_at: now(), body: args.p_body };
           window.__notes.push(n); return { data: n, error: null };
@@ -291,6 +298,29 @@ async function openAR(page, url) {
     /Express Credit[^\n]*Settled by advance/.test(d2) && d2.includes('25.38%'), '');
   check('22 v2 matches the active figure: no stale warning', !(await panelText()).includes('was generated before'));
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'override-report.png'), fullPage: true });
+
+  /* ── 6b. Batch 2: an amendment finalises on the existing consent ── */
+  const markFinal = () => page.evaluate(() => { const b = Array.from(document.querySelectorAll('.ar-bar button')).find(x => x.textContent.trim() === 'Mark final'); return b ? { disabled: b.disabled, title: b.title } : null; });
+  await page.evaluate(async () => { await arLoadBasis('rep-2'); arRender(); });
+  const mf0 = await markFinal();
+  check('22a no recorded form and not an amendment: Mark final disabled, the record-consent panel shows',
+    mf0 && mf0.disabled && /Record the signed consent form first/.test(mf0.title) && (await page.evaluate(() => !!document.getElementById('ar-consent-onfile'))), JSON.stringify(mf0));
+  await page.evaluate(async () => {
+    window.__basis = { 'rep-2': { mode: 'amendment', amends: { version: 1, finalised_at: '2026-10-12T10:00:00Z' },
+      consent: { form_signed_on: '2026-10-01', recorded_at: '2026-10-02T08:00:00Z', recorded_by_name: 'France Mogomotsi' } } };
+    await arLoadBasis('rep-2'); arRender(); });
+  const mf1 = await markFinal();
+  const cp = await page.evaluate(() => (document.querySelector('.ar-consent') || {}).innerText || '');
+  check('22b amendment: Mark final enabled with no new form, and the panel names the final and the consent that applies',
+    mf1 && !mf1.disabled && /Amends final v1 \(marked final 12 Oct 2026\)\. The consent form recorded on 2 Oct 2026 \(signed 1 Oct 2026\) applies; no new form is needed\./.test(cp)
+      && !(await page.evaluate(() => !!document.getElementById('ar-consent-onfile'))), JSON.stringify(mf1) + ' | ' + cp);
+  await page.evaluate(() => { arAsk('final'); });
+  await page.click('.ar-bar button:has-text("Confirm")');
+  await page.waitForTimeout(300);
+  const fin = await page.evaluate(() => ({ status: arSelected().status, notice: AR.notice }));
+  check('22c finalised as an amendment: the notice says the existing consent applies and to send it to HR again',
+    fin.status === 'final' && /Marked final as an amendment; the existing consent applies\./.test(fin.notice) && /send it to HR again/.test(fin.notice), JSON.stringify(fin));
+  await page.evaluate(() => { const r = window.__reports.find(x => x.id === 'rep-2'); r.status = 'draft'; r.finalised_at = null; window.__basis = {}; AR.notice = ''; AR.basis = {}; arRender(); });
 
   /* ── 7. Print ── */
   await page.emulateMedia({ media: 'print' });
