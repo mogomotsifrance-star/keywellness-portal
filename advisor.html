@@ -4496,7 +4496,7 @@ function arRender(){
   root.innerHTML = arErr() + arRenderBar(rep) + `<div class="ar-split"><div class="ar-split-doc">` + arRenderDoc(rep) + `</div>` + arRenderOverride(rep) + `</div>`;
   arOvrRefresh();
 }
-function arDate(v){ if(!v) return '—'; try { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v+'T12:00:00Z') : v; } catch(_){ return v; } }
+function arDate(v){ if(!v) return 'Not captured'; try { return /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmtDate(v+'T12:00:00Z') : v; } catch(_){ return v; } }
 function arErr(){
   return (AR.error ? `<div class="notice notice-red no-print" style="margin-bottom:12px">${esc(AR.error)}</div>` : '')
        + (AR.notice ? `<div class="notice notice-green no-print" style="margin-bottom:12px">${esc(AR.notice)}</div>` : '');
@@ -4610,7 +4610,7 @@ function arRenderDoc(rep){
 
     <section class="ar-sec"><div class="ar-h"><span class="n">05</span><span class="t">${esc(s.debt_position&&s.debt_position.title||'Debt Position')}</span></div>
       <table class="ar-tbl"><thead><tr><th>Debt</th><th>Institution</th><th>Interest</th><th class="num">Balance</th><th class="num">Instalment (Before)</th><th>Status After Advance</th></tr></thead><tbody>${dpRows}</tbody></table>
-      ${gaps.length ? `<div class="ar-gaps"><b>DATA GAPS</b> — ${gaps.map(esc).join('; ')}.</div>` : ''}
+      ${gaps.length ? `<div class="ar-gaps"><b>DATA GAPS:</b> ${gaps.map(esc).join('; ')}.</div>` : ''}
     </section>
 
     <section class="ar-sec"><div class="ar-h"><span class="n">06</span><span class="t">Financial Risk Assessment</span></div>

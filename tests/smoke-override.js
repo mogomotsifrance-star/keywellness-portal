@@ -202,7 +202,12 @@ async function openAR(page, url) {
     old.on('pageerror', e => errors.push('old: ' + String(e)));
     await openAR(old, OLD_ADVISOR);
     const docOld = await old.evaluate(() => arRenderDoc(arSelected()));
-    check('0  report without an override: arRenderDoc output byte-identical to git HEAD', docOld === docV1, `old ${docOld.length} vs new ${docV1.length}`);
+    // Batch 4 (14 Oct 2026) changed exactly one page-drawn label; any other
+    // difference from the page at OLD_ADVISOR fails.
+    const B4_PAGE = [['<b>DATA GAPS</b> —', '<b>DATA GAPS:</b>']];
+    const docOldB4 = B4_PAGE.reduce((s, [a, b]) => s.split(a).join(b), docOld);
+    check('0  report without an override: arRenderDoc output identical to OLD_ADVISOR apart from the Batch 4 label',
+      docOldB4 === docV1, `old ${docOldB4.length} vs new ${docV1.length}`);
     await old.close();
   } else console.log('SKIP  0  (set OLD_ADVISOR to compare against git HEAD)');
 
@@ -299,6 +304,20 @@ async function openAR(page, url) {
   check('21 debt table: Express Credit settled by the advance; DSR after recomputed (25.38%)',
     /Express Credit[^\n]*Settled by advance/.test(d2) && d2.includes('25.38%'), '');
   check('22 v2 matches the active figure: no stale warning', !(await panelText()).includes('was generated before'));
+
+  /* Batch 4: no dash in any heading or fixed label, on either kind of report */
+  const labelDashes = (html) => page.evaluate((h) => {
+    const host = document.createElement('div'); host.innerHTML = h;
+    const sel = '.ar-title, .ar-sub, .ar-h .t, .ar-dec, .ar-kv span, .ar-kv strong, .ar-tbl th, .ar-gaps b, .ar-adv-h, .ar-risk .tier, '
+              + '.ar-tbl td:not(:last-child), .ar-tbl td:last-child';
+    return Array.from(host.querySelectorAll(sel)).map(e => e.innerText || e.textContent).filter(t => /[–—]|--/.test(t));
+  }, html);
+  const d1Labels = await labelDashes(docV1);
+  const d2Labels = await labelDashes(await page.evaluate(() => arRenderDoc(arSelected())));
+  check('22d no-override report: no em dash, en dash or double hyphen in headings and labels', d1Labels.length === 0, JSON.stringify(d1Labels));
+  check('22e advisor-figure report: the same', d2Labels.length === 0, JSON.stringify(d2Labels));
+  check('22f the new headings read "Debt Service Ratio: Before and After" and "Debt Position: Before and After"',
+    /Debt Service Ratio: Before and After/i.test(d2) && /Debt Position: Before and After/i.test(d2));
   if (SHOT) await page.screenshot({ path: path.join(SHOT, 'override-report.png'), fullPage: true });
 
   /* ── 6b. Batch 2: an amendment finalises on the existing consent ── */

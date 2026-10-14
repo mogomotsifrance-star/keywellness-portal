@@ -135,6 +135,45 @@ smoke-override 39/39.
 Small thing: an admin with no advisors row (Lone) appears by email, because
 only `advisors` carries a full name.
 
+## Batch 4: no dash in report headings and fixed labels: LIVE
+
+Report prose is out of scope and unchanged. The headings and labels:
+
+| Where | Was | Now |
+|---|---|---|
+| DSR heading | "Debt Service Ratio — Before vs After" / "— Current Position" | "Debt Service Ratio: Before and After" / ": Current Position" |
+| Debt heading | "Debt Position — Before vs After" | "Debt Position: Before and After" |
+| Decision line | "Decline – Insufficient Data" (and two more) | "Decline: Insufficient Data" etc. |
+| Debt status | "Informal – balance not captured" / "– beyond the advance cap" | "Informal, ..." |
+| Blank institution cell | "—" | "Not captured" |
+| New advance, instalment before | "—" | "None" |
+| Gaps label (page) | "DATA GAPS —" | "DATA GAPS:" |
+| Follow-up item label | "Updated creditor statements required first — ..." | "...first: ..." |
+| Missing date (page) | "—" | "Not captured" |
+
+New strings go through `stripDashes`. Left alone, by the brief's scope: the
+proof-of-payment condition sentence (prose), gap sentences, model prose, and
+the Debt Rehab Plan's own "DATA GAPS —" (a different, internal report).
+`debt-rehab-plan` only tests `^proceed`, so "Decline:" changes nothing there;
+reports already stored keep their old wording.
+
+| | |
+|---|---|
+| Code | `report.ts`, `compute.ts`, `advisor.html`, commit `bbf6531` |
+| Edge Function | `advance-recommendation` **v7 → v8**, ezbr `ff8b53737c3998c29fb2b43c6ef251dae04b9646b769ecb25a0597b93a7d5927`, **deployed with the Supabase CLI from the committed files** (`supabase functions deploy advance-recommendation --project-ref tarmpqxsabbehgjaonfz --use-api`; CLI 2.108.0 was already logged in here), nothing pasted |
+| Read-back | `tests/verify-edge-deploy.mjs` vs `bbf6531`: all four files IDENTICAL in content; **the CLI on Windows uploaded CRLF line endings** (v7 had LF). Harmless to Deno; the only multi-line text is the model's system prompt, which now carries `\r\n`. The verifier now reports this instead of calling it byte-identical |
+| Live check | POST with the public anon key → the function's own "Your session has expired" 401, so v8 boots and runs. Nothing written |
+| Rollback | redeploy v7 from commit `15c275d` (the CLI command above, from that checkout), revert `bbf6531` on `dev`. Reports generated meanwhile keep their dash-free labels |
+
+Verified: no-override output identical apart from exactly these labels
+(5 fixtures, old vs new modules, with the replacements as the only allowed
+difference; and the rendered report vs git HEAD apart from "DATA GAPS:").
+No dash in decision, headings or debt-table labels for an advance, a decline,
+a capped/part-paid case and an advisor figure (unit), nor in headings and
+labels of either rendered report (browser). Suites: advance-override 23,
+advance-recommendation 34, debt-rehab-plan 29, smoke-override 42,
+smoke-advance 40, rehab 33, advisor-dsr 30, docs 20.
+
 ### Repo vs live, the override functions (checked 14 Oct)
 
 The 13 Oct override migration was applied from a copy with comment lines

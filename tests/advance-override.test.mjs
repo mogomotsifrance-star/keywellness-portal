@@ -132,6 +132,29 @@ ok("no gross salary: the override is not applied and the gap says why", () => {
   assert.equal(noGross.gaps.some(g => g.startsWith("The advisor's advance figure cannot be applied")), true);
 });
 
+console.log("Batch 4: headings and fixed labels carry no dash");
+const labelsOf = (cnt) => [cnt.meta.decision, cnt.sections.dsr.title, cnt.sections.debt_position.title, cnt.sections.recommendation.decision,
+  ...cnt.sections.debt_position.rows.flatMap((r) => [r.debt, r.institution, r.interest, r.balance, r.instalment, r.status])];
+const BLANK_INST = { ...TUMELO, liabilities: [...TUMELO.liabilities, { item:"Car Loan", institution:"", loanAmount:"0", interestRate:"", balance:"80000", monthlyInstalment:"1500" }] };
+const decl = compute({ ...TUMELO, income: {} }, {});
+const capped = compute({ ...TUMELO, income: { monthlySalary: 2000 } }, {});
+for (const [name, cc] of [["advance (no override)", compute(BLANK_INST, {})], ["decline: insufficient data", decl], ["capped, part-paid", capped], ["advisor figure", c]]) {
+  ok(`${name}: decision, headings and debt-table labels are dash-free`, () => {
+    const bad = labelsOf(buildContent(cc, META, fallbackNarrative(cc))).filter((t) => DASH.test(String(t)));
+    assert.deepEqual(bad, []);
+  });
+}
+ok("the new wording", () => {
+  assert.equal(decl.decision, "Decline: Insufficient Data");
+  const cd = buildContent(decl, META, fallbackNarrative(decl));
+  assert.equal(cd.sections.dsr.title, "Debt Service Ratio: Current Position");
+  const ca = buildContent(compute(BLANK_INST, {}), META, fallbackNarrative(compute(BLANK_INST, {})));
+  assert.equal(ca.sections.dsr.title, "Debt Service Ratio: Before and After");
+  assert.equal(ca.sections.debt_position.title, "Debt Position: Before and After");
+  assert.equal(ca.sections.debt_position.rows.find((r) => r.debt === "Car Loan").institution, "Not captured");
+  assert.equal(ca.sections.debt_position.rows.find((r) => r.debt === "New advance").instalment, "None");
+});
+
 console.log("stripDashes");
 ok("em dash, en dash and double hyphen become commas; between numbers, 'to'", () => {
   assert.equal(stripDashes("Fees — due now"), "Fees, due now");

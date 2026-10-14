@@ -341,13 +341,13 @@ export function compute(a: Assessment, prep: Prep): Computed {
   let tier: Tier; let decision: string; const reasons: string[] = [];
   if (!advance || !after) {
     tier = "RED";
-    if (gross <= 0) { decision = "Decline – Insufficient Data"; reasons.push(dsrBase > 0
+    if (gross <= 0) { decision = "Decline: Insufficient Data"; reasons.push(dsrBase > 0
       ? "Gross salary is not captured, so the advance cap (4 × gross salary) cannot be worked out."
       : "Gross salary is not captured, so the DSR and the advance cap cannot be worked out."); }
-    else if (totalIncome <= 0) { decision = "Decline – Insufficient Data"; reasons.push("Income is not captured, so affordability cannot be assessed."); }
-    else if (informal.length && settleable.length === 0) { decision = "Decline – Insufficient Data"; reasons.push("Informal debts are listed but no balances are captured, so the advance cannot be sized."); }
-    else if (dsrBefore != null && dsrBefore >= DSR_AMBER_MAX) { decision = "Decline – Refer to Debt Restructuring"; reasons.push(`No informal or high-cost debt to consolidate, and the current DSR of ${fmtPct(dsrBefore)} is already at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`); }
-    else { decision = "Decline – No Consolidation Opportunity"; reasons.push("No informal or high-cost debt is captured, so an advance would add a repayment without removing one."); }
+    else if (totalIncome <= 0) { decision = "Decline: Insufficient Data"; reasons.push("Income is not captured, so affordability cannot be assessed."); }
+    else if (informal.length && settleable.length === 0) { decision = "Decline: Insufficient Data"; reasons.push("Informal debts are listed but no balances are captured, so the advance cannot be sized."); }
+    else if (dsrBefore != null && dsrBefore >= DSR_AMBER_MAX) { decision = "Decline: Refer to Debt Restructuring"; reasons.push(`No informal or high-cost debt to consolidate, and the current DSR of ${fmtPct(dsrBefore)} is already at or above the ${DSR_AMBER_MAX}% over-indebtedness line.`); }
+    else { decision = "Decline: No Consolidation Opportunity"; reasons.push("No informal or high-cost debt is captured, so an advance would add a repayment without removing one."); }
   } else {
     const dsrA = after.dsr as number, dispA = after.disposable as number;
     const lowDisp = dispA < totalIncome * DISPOSABLE_FLOOR_PCT / 100;
@@ -360,7 +360,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
       if (lowDisp) reasons.push(`Disposable income after the advance would be ${fmtP(dispA)}, below ${DISPOSABLE_FLOOR_PCT}% of monthly income.`);
       if (shortfall === true) reasons.push(`The captured household budget (${fmtP(expenses)}) already exceeds monthly income.`);
       decision = (overLine && change && change.direction !== "improved")
-        ? "Decline – Refer to Debt Restructuring"
+        ? "Decline: Refer to Debt Restructuring"
         : "Proceed Only Under Prerequisites";
     } else if (dsrA >= DSR_GREEN_MAX) {
       tier = "AMBER"; decision = "Proceed with Conditional Approval";
@@ -407,7 +407,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
   const follow_up = [
     { key: "follow_up_30", label: "A follow-up within 30 days", on: true },
     ...Array.from(gaps).filter((g) => /Balance not captured|Gross salary/.test(g))
-      .map((g, i) => ({ key: "gap_" + i, label: "Updated creditor statements required first — " + g.replace(/ — .*$/, ""), on: true })),
+      .map((g, i) => ({ key: "gap_" + i, label: "Updated creditor statements required first: " + g.replace(/ — .*$/, ""), on: true })),
   ];
   if (!budgetCaptured) follow_up.push({ key: "budget", label: "Capture a household budget to confirm there is no monthly shortfall", on: true });
 

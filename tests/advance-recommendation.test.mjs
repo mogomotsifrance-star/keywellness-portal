@@ -60,7 +60,7 @@ console.log("Rising DSR that crosses the 60% line → RED");
 // so not capped) at 3,333.33 → after 12,409.31 = 62.05%.
 const X = { ...TUMELO, income:{...TUMELO.income, monthlySalary:20000}, liabilities:[ TUMELO.liabilities[0], {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"80000",monthlyInstalment:"0"} ] };
 const xc = compute(X, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"},{index:1,classification:"informal",rate_period:"annual"}] });
-ok("45.38% → 62.05% · RED · Decline – Refer to Debt Restructuring", () => { assert.equal(xc.before.dsr, 45.38); assert.equal(xc.after.dsr, 62.05); assert.equal(xc.advance.capped, false); assert.equal(xc.tier, "RED"); assert.equal(xc.decision, "Decline – Refer to Debt Restructuring"); });
+ok("45.38% → 62.05% · RED · Decline: Refer to Debt Restructuring", () => { assert.equal(xc.before.dsr, 45.38); assert.equal(xc.after.dsr, 62.05); assert.equal(xc.advance.capped, false); assert.equal(xc.tier, "RED"); assert.equal(xc.decision, "Decline: Refer to Debt Restructuring"); });
 
 console.log("Monthly rate text");
 const M = { ...TUMELO, liabilities:[ {item:"Other",institution:"Mashonisa",loanAmount:"2000",interestRate:"30% per month",balance:"2600",monthlyInstalment:"0"} ] };
@@ -79,7 +79,7 @@ ok("Tumelo's bare-rate motshelo and microlender now read per month", () => { ass
 console.log("Nothing to consolidate → decline");
 const D = { ...TUMELO, liabilities:[ TUMELO.liabilities[0] ] };
 const dc = compute(D, { term_months:24, liabilities:[{index:0,classification:"formal",rate_period:"annual"}] });
-ok("RED · no advance · Decline – No Consolidation Opportunity (DSR 20.27 < 60)", () => { assert.equal(dc.advance, null); assert.equal(dc.tier, "RED"); assert.equal(dc.decision, "Decline – No Consolidation Opportunity"); assert.equal(dc.conditions.length, 0); });
+ok("RED · no advance · Decline: No Consolidation Opportunity (DSR 20.27 < 60)", () => { assert.equal(dc.advance, null); assert.equal(dc.tier, "RED"); assert.equal(dc.decision, "Decline: No Consolidation Opportunity"); assert.equal(dc.conditions.length, 0); });
 
 console.log("Budget shortfall on file → RED even when DSR is fine");
 const B = { ...TUMELO, budget:{ rent:20000, food:6000 }, liabilities:[ {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"6000",monthlyInstalment:"0"} ] };
@@ -89,7 +89,7 @@ ok("RED · Proceed Only Under Prerequisites · shortfall true", () => { assert.e
 console.log("Informal debt with no balance → cannot size");
 const N = { ...TUMELO, liabilities:[ {item:"Other",institution:"Motshelo",loanAmount:"5000",interestRate:"30",balance:"0",monthlyInstalment:"0"} ] };
 const nc = compute(N, { term_months:24 });
-ok("Decline – Insufficient Data, balance gap flagged", () => { assert.equal(nc.decision, "Decline – Insufficient Data"); assert.ok(nc.gaps.some(g=>/Balance not captured/.test(g))); });
+ok("Decline: Insufficient Data, balance gap flagged", () => { assert.equal(nc.decision, "Decline: Insufficient Data"); assert.ok(nc.gaps.some(g=>/Balance not captured/.test(g))); });
 
 console.log("DSR tiers and bands — exact boundaries (4 Oct 2026)");
 ok("tier: 39.99 GREEN · 40 AMBER · 59.99 AMBER · 60 RED · null null", () => {
@@ -124,9 +124,9 @@ ok("capped at 60,000: the dearest debt (360% p.a.) is settled first, 10,000 goes
   assert.equal(g3.after.debt_service, 1800 - 1000 + 2500);
 });
 ok("term is fixed at 24 whatever the prep says", () => { const t = compute(G([ formal3750, {item:"Other",institution:"Motshelo",balance:"12000",monthlyInstalment:"0"} ]), { term_months:36 }); assert.equal(t.term_months, 24); assert.equal(t.advance.instalment, 500); });
-ok("no gross salary → Decline – Insufficient Data, no advance", () => {
+ok("no gross salary → Decline: Insufficient Data, no advance", () => {
   const z = compute({ ...G([ {item:"Other",institution:"Motshelo",balance:"5000",monthlyInstalment:"0"} ]), income:{ monthlySalary:0, spouseIncome:20000 } }, {});
-  assert.equal(z.advance, null); assert.equal(z.decision, "Decline – Insufficient Data"); assert.equal(z.before.dsr, null);
+  assert.equal(z.advance, null); assert.equal(z.decision, "Decline: Insufficient Data"); assert.equal(z.before.dsr, null);
 });
 
 console.log("DSR on own gross income — salary plus the client's own business / rental / dividend income (4 Oct 2026)");
@@ -146,7 +146,7 @@ ok("the cap stays on gross SALARY: 4 × 4,000 = 16,000, so the 16,000 motshelo f
 });
 const ob = compute({ ...O, income:{ ...O.income, monthlySalary:0 } }, {});
 ok("business income but no salary: a DSR exists, the advance cannot be sized, and the reason says it is the cap", () => {
-  assert.equal(ob.before.dsr, round2pct(5500, 8300)); assert.equal(ob.advance, null); assert.equal(ob.decision, "Decline – Insufficient Data");
+  assert.equal(ob.before.dsr, round2pct(5500, 8300)); assert.equal(ob.advance, null); assert.equal(ob.decision, "Decline: Insufficient Data");
   assert.ok(ob.decision_reasons.some(r => /advance cap \(4 × gross salary\)/.test(r)));
 });
 function round2pct(a, b) { return Math.round(a / b * 10000) / 100; }
