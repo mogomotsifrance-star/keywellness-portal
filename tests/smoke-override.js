@@ -123,7 +123,7 @@ function stub(page) {
               ? { kind: 'liability', liability_index: a.liability_index, lender: (A.liabilities[a.liability_index].institution || '').trim() || A.liabilities[a.liability_index].item, outstanding_balance: pf(A.liabilities[a.liability_index].balance), purpose: null, amount: a.amount }
               : { kind: 'other', liability_index: null, lender: null, outstanding_balance: null, purpose: a.purpose, amount: a.amount }) };
           window.__overrides.push(o);
-          window.__notes.push({ id: 'n' + window.__notes.length, kind: 'system', author: 'France Mogomotsi', created_at: now(),
+          window.__notes.push({ id: 'n' + window.__notes.length, kind: 'system', author: 'France Mogomotsi', role: 'assigned advisor', created_at: now(),
             body: `Advance changed from P ${P(prev ? prev.advisor_amount : system)}${prev ? ' (previous advisor figure)' : ' (portal calculation)'} to P ${P(args.p_amount)}. Cap P ${P(g.cap)} (4 x gross monthly salary of P ${P(g.gross_monthly_salary)}). Saved by France Mogomotsi.` });
           return { data: o, error: null };
         }
@@ -143,7 +143,7 @@ function stub(page) {
           return { data: null, error: null };
         }
         if (fn === 'advance_internal_note_add') {
-          const n = { id: 'n' + window.__notes.length, kind: 'advisor', author: 'France Mogomotsi', created_at: now(), body: args.p_body };
+          const n = { id: 'n' + window.__notes.length, kind: 'advisor', author: 'France Mogomotsi', role: 'assigned advisor', created_at: now(), body: args.p_body };
           window.__notes.push(n); return { data: n, error: null };
         }
         return { data: [], error: null };
@@ -269,7 +269,9 @@ async function openAR(page, url) {
   await page.click('.ovr button:has-text("Add note")');
   await page.waitForTimeout(300);
   check('13 an advisor note is added, newest first, with author and time, not marked System',
-    await page.evaluate((t) => { const li = document.querySelector('.ovr-notes li'); return li && !li.classList.contains('sys') && li.innerText.includes(t) && /France Mogomotsi · \d/.test(li.innerText); }, INTERNAL_NOTE));
+    await page.evaluate((t) => { const li = document.querySelector('.ovr-notes li'); return li && !li.classList.contains('sys') && li.innerText.includes(t) && /France Mogomotsi \(assigned advisor\) · \d/.test(li.innerText); }, INTERNAL_NOTE));
+  check('13b every note shows the role of its author (Batch 3)',
+    await page.evaluate(() => Array.from(document.querySelectorAll('.ovr-notes li .ovr-note-meta')).every(m => /\((assigned advisor|team lead|admin)\)/.test(m.innerText))));
 
   /* ── 6. Generate on the advisor's figure ── */
   await page.click('.ovr-stale button');

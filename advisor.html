@@ -378,6 +378,7 @@ body.doc-viewer-open{overflow:hidden}
 .ovr-notes li.sys .ovr-note-body{font-size:12px}
 .ovr-note-meta{font-size:11px;color:var(--kw-grey);margin-bottom:2px}
 .ovr-note-meta b{font-weight:800;letter-spacing:.04em;text-transform:uppercase;font-size:10px}
+.ovr-note-role{color:var(--kw-ink)}
 .ovr-note-body{white-space:pre-wrap;word-break:break-word}
 .ovr-muted{color:var(--kw-grey);font-style:italic}
 .ar-p{margin:0 0 10px;font-size:13px;line-height:1.6}
@@ -4418,7 +4419,7 @@ function arRenderOverride(rep){
     </tr>`;
   }).join('');
   const notes = (o.notes||[]).map(n=>`<li class="${n.kind==='system'?'sys':''}">
-      <div class="ovr-note-meta">${n.kind==='system' ? '<b>System</b> · ' : ''}${esc(n.author||'')} · ${esc(arOvrStamp(n.created_at))}</div>
+      <div class="ovr-note-meta">${n.kind==='system' ? '<b>System</b> · ' : ''}${esc(n.author||'')}${n.role ? ` <span class="ovr-note-role">(${esc(n.role)})</span>` : ''} · ${esc(arOvrStamp(n.created_at))}</div>
       <div class="ovr-note-body">${esc(n.body)}</div></li>`).join('');
   return `<aside class="ovr no-print" aria-label="Advance figure and internal notes">
     ${amended ? `<div class="ovr-amended">Amended after marking final on ${esc(fmtDate(amended))}. Generate a new version, mark it final and send it to the employer again.</div>` : ''}
