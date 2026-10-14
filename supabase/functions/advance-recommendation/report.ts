@@ -132,18 +132,18 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
   // the cap" (the cap is not what sized it).
   const partOf = (idx: number) => o ? o.allocations.find((x) => x.live_index === idx && !x.settles_in_full) : undefined;
   const debtRows = c.liabilities.map((l) => ({
-    debt: l.item, institution: l.institution || "—", interest: l.rate_text,
+    debt: l.item, institution: l.institution || "Not captured", interest: l.rate_text,
     balance: fmtP(l.balance), instalment: fmtP(l.instalment),
     status: settled.has(l.index) ? "Settled by advance"
       : o ? (partOf(l.index) ? `Part-paid by advance (${fmtP(partOf(l.index)!.amount)}); instalment unchanged`
             : l.classification === "informal" ? "Not covered by the advance" : "Unchanged")
       : (adv && adv.partial && adv.partial.index === l.index) ? `Part-paid by advance (${fmtP(adv.partial.applied)}); instalment unchanged`
-      : l.classification === "informal" ? (l.balance == null ? "Informal – balance not captured" : "Informal – beyond the advance cap")
+      : l.classification === "informal" ? (l.balance == null ? "Informal, balance not captured" : "Informal, beyond the advance cap")
       : "Unchanged",
   }));
   if (adv) debtRows.push({
     debt: "New advance", institution: payrollLineFor(employerName), interest: "0%", balance: fmtP(adv.amount),
-    instalment: "—", status: `${fmtP(adv.instalment)} / month for ${c.term_months} months`,
+    instalment: "None", status: `${fmtP(adv.instalment)} / month for ${c.term_months} months`,
   });
   return {
     meta: {
@@ -158,7 +158,8 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
     sections: {
       reasoning: { intro: n.reasoning_intro, bullets: n.reasoning_bullets, close: n.reasoning_close },
       dsr: {
-        title: adv ? "Debt Service Ratio — Before vs After" : "Debt Service Ratio — Current Position",
+        // Headings and fixed labels carry no dash (Batch 4, 14 Oct 2026).
+        title: stripDashes(adv ? "Debt Service Ratio: Before and After" : "Debt Service Ratio: Current Position"),
         rows: [
           { label: "Monthly debt service", before: fmtP(c.before.debt_service), after: aft ? fmtP(aft.debt_service) : null },
           { label: "Own gross monthly income", before: fmtP(c.income.dsr_income ?? c.income.gross_salary), after: aft ? fmtP(c.income.dsr_income ?? c.income.gross_salary) : null },
@@ -167,7 +168,7 @@ export function buildContent(c: Computed, meta: { consultant: string; consultati
         paragraph: n.dsr_paragraph,
       },
       ability: { title: adv ? `Ability to Repay Over ${c.term_months} Months` : "Ability to Repay", paragraph: n.ability_paragraph },
-      debt_position: { title: adv ? "Debt Position — Before vs After" : "Debt Position (as captured)", rows: debtRows },
+      debt_position: { title: stripDashes(adv ? "Debt Position: Before and After" : "Debt Position (as captured)"), rows: debtRows },
       risk: { tier: c.tier, text: n.risk_sentences },
       recommendation: { decision: c.decision, intro: n.recommendation_intro, closing: n.closing_sentence },
       gaps: o ? c.gaps.map(stripDashes) : c.gaps,
