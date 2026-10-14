@@ -103,6 +103,49 @@ consent applies and to send it to HR again. smoke-advance 40/40.
 still needs a recorded form under rule 4. Say if wording-only amendments
 should also reuse the consent.
 
+## Batch 3: team leads keep override rights; every note records the role: LIVE
+
+Decision: team leads keep the right to set and remove advisor figures (no
+change made to who may). What was missing: the notes named the person
+("Saved by France Mogomotsi.") but not the role, and staff can hold several
+roles, so it was not always clear whether an advisor or a team lead acted.
+
+| | |
+|---|---|
+| SQL | `supabase_advance_notes_role.sql`, applied 14 Oct (migration `advance_notes_role`) after a rolled-back live trial |
+| Method | read each live body, replace exact text, assert each replacement happened exactly once, re-create. Nothing retyped |
+| Backup | `kw_fn_backup` tag `advance-notes-role`: the five bodies just before |
+| Rollback | `migrations/rollback-advance-notes-role.sql`: restores the five bodies. Keeps `actor_role` and notes already written (append-only). MCP-safe |
+| Page | `advisor.html`: each note shows "(role)" after the name |
+
+- New column `advance_internal_notes.actor_role`: `assigned advisor`,
+  `team lead`, `admin` (or `staff`). The client's assigned advisor is always
+  "assigned advisor", even if also a lead.
+- The role is in the note text too: "Saved by NAME (ROLE).", "removed by NAME
+  (ROLE).", and Batch 2's "marked final by NAME (ROLE)". Advisors' own notes
+  carry it in the column and on screen.
+
+Verified (rolled back, real client): France as Tumelo's advisor →
+"assigned advisor"; Tshenolo (team lead, not assigned) → "team lead" on a save,
+a note and an amendment finalise; Lone (admin only) → "admin" on a note and a
+removal. After the apply: all four writers wired, `advance_override_get`
+returns the role, grants unchanged, helper revoked, sweep 10, no rows written.
+smoke-override 39/39.
+
+Small thing: an admin with no advisors row (Lone) appears by email, because
+only `advisors` carries a full name.
+
+### Repo vs live, the override functions (checked 14 Oct)
+
+The 13 Oct override migration was applied from a copy with comment lines
+stripped and declarations condensed. Compared with all whitespace and comment
+lines removed, every live body equals `supabase_advance_override.sql`
+(9 of 9). The five bodies Batch 3 changed are now that file plus the
+substitutions in `supabase_advance_notes_role.sql`; the Batch 2 bodies match
+`supabase_advance_amendment_consent.sql` byte for byte before Batch 3 patched
+`advance_recommendation_finalise`. Patch these functions the same way (read
+live, substitute, assert), not by re-running an older file.
+
 ---
 
 # Advisor override of the Advance Recommendation (A): LIVE (2026-10-13)
