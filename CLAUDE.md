@@ -115,7 +115,9 @@ backspace bytes into the repo copy. See BUILD-NOTES "Incident". The rule:
 1. Deploy with the CLI from committed files:
    `supabase functions deploy <name> --project-ref tarmpqxsabbehgjaonfz`
    (Tshenolo or Lone logs in with their own token). The MCP deploy tool is a
-   fallback only.
+   fallback only. On Tshenolo's Windows machine add `--use-api` (no Docker);
+   the CLI there uploads CRLF line endings, which is harmless and which the
+   verifier reports rather than hides. First used for v8, 14 Oct 2026.
 2. Before: `node tests/verify-edge-deploy.mjs --scan` (no control characters).
 3. After: read the function back and run
    `node tests/verify-edge-deploy.mjs <readback.json> <commit>`. Every file must

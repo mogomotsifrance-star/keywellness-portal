@@ -54,8 +54,12 @@ for (const f of d.files) {
   let repo;
   try { repo = execFileSync("git", ["show", `${ref}:${rel}`], { encoding: "utf8" }).replace(/\r\n/g, "\n"); }
   catch { console.log(`MISSING IN REPO  ${rel}`); failed = true; continue; }
-  const dep = String(f.content).replace(/\r\n/g, "\n");
-  if (dep === repo) console.log(`IDENTICAL  ${rel}`);
+  const raw = String(f.content);
+  const dep = raw.replace(/\r\n/g, "\n");
+  // The Supabase CLI on Windows uploads CRLF (seen on v8, 14 Oct 2026). The
+  // code is the same; say so rather than claim byte-identity.
+  const eol = raw.includes("\r\n") ? "  (deployed copy has CRLF line endings; content identical)" : "";
+  if (dep === repo) console.log(`IDENTICAL  ${rel}${eol}`);
   else {
     failed = true;
     const a = repo.split("\n"), b = dep.split("\n");
@@ -66,5 +70,6 @@ for (const f of d.files) {
   }
   if (BAD.test(dep)) { failed = true; console.log(`CONTROL CHAR in deployed ${rel}`); }
 }
-console.log(failed ? "\nFAIL: the deployed function is not the repo" : "\nOK: deployed function is byte-identical to the repo");
+console.log(failed ? "\nFAIL: the deployed function is not the repo"
+  : "\nOK: deployed function is identical to the repo (line endings aside, where noted above)");
 process.exit(failed ? 1 : 0);
