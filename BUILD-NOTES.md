@@ -1,3 +1,51 @@
+# Follow-ups, 16 Oct 2026: amendments by consultation date; admin names: LIVE
+
+Two decisions from Tshenolo, 16 Oct 2026. Both applied after a rolled-back
+live trial, both by asserted substitution on the live function bodies (nothing
+retyped), both with the pre-change bodies in `kw_fn_backup`.
+
+## 1. Amendments: same consultation date is enough
+
+An amendment is now any new version with the **same consultation date** as the
+client's last final report, generated after it, where that report's consent is
+on record and not withdrawn. The 14 Oct requirement that the advisor figure had
+changed after the final is gone, so wording-only amendments reuse the consent
+and get the same automatic note. A new consultation date still needs its own
+form. The stale-figure guard is unchanged.
+
+| | |
+|---|---|
+| SQL | `supabase_advance_amendment_same_date.sql` (migration `advance_amendment_same_date`): removes rule 4 from `_advance_amendment_of`, asserts rules 1 to 3 remain |
+| Backup / rollback | tag `advance-amendment-same-date`; `migrations/rollback-advance-amendment-same-date.sql` restores the 14 Oct body |
+| Page | no change: the consent panel and Mark final already follow `advance_finalise_basis()` |
+
+## 2. Admins have a display name
+
+Notes named an admin with no advisors row by email
+("removed by lone@keywellness.co.bw (admin)"). Now "Lone Male (admin)".
+
+| | |
+|---|---|
+| SQL | `supabase_admin_display_name.sql` (migration `admin_display_name`): new nullable `admins.full_name`; Lone Male set for lone@keywellness.co.bw; the four note writers fall back to it after `advisors.full_name` |
+| Backup / rollback | tag `admin-display-name`; `migrations/rollback-admin-display-name.sql` restores the four bodies and clears the names (keeps the column) |
+
+An advisor's own name still wins (France, Tshenolo). Michelle has no name yet
+and would still show by email; there is no page to edit admin names, so set
+one with `update admins set full_name = '...' where lower(email) = '...'` until
+the Roles & Access tab gets a field.
+
+Verified (rolled back, real client): a wording-only version (no advisor figure
+at all) with the same date → basis amendment, finalised with `amends_id`, still
+one form on record, note "Report amended after consent recorded on 16 Oct 2026.
+Existing consent applied. (v2 amends final v1; marked final by France Mogomotsi
+(assigned advisor).)"; new consultation date → refused, needs a form; stale
+figure on an amendment-eligible version → refused by the figure guard; Lone's
+note and removal → "Lone Male (admin)"; France's note → "France Mogomotsi
+(assigned advisor)". After the apply: rule 4 gone, helper still revoked, four
+writers patched, no rows written, sweep 10.
+
+---
+
 # Advance override follow-up, Batches 1 to 4 (2026-10-14)
 
 Brief: `docs/build/advance-override-followup.md`. Decisions are Tshenolo's,
@@ -72,8 +120,9 @@ one-form-one-application rule are untouched.
 2. the draft was generated after that final;
 3. **same consultation date** as that final. Regenerating from a report
    carries its date forward; a new date is a new application;
-4. **the advisor figure changed after that final** (saved or removed). The
-   decision was about the amount changing.
+4. ~~**the advisor figure changed after that final** (saved or removed).~~
+   **Removed 16 Oct 2026** (see "Follow-ups, 16 Oct" at the top): any new
+   version for the same consultation date now reuses the consent.
 The amendment path is tried first, so an amendment never uses up a fresh form
 recorded for the next application.
 
@@ -99,9 +148,9 @@ disabled, record-consent panel; amendment → enabled, panel names the final and
 the consent that applies; after finalising, the notice says the existing
 consent applies and to send it to HR again. smoke-advance 40/40.
 
-**Flag for Tshenolo:** an amendment that changes only wording (same figure)
-still needs a recorded form under rule 4. Say if wording-only amendments
-should also reuse the consent.
+~~**Flag for Tshenolo:** an amendment that changes only wording still needs a
+recorded form under rule 4.~~ Answered 16 Oct: wording-only amendments reuse
+the consent too; rule 4 removed.
 
 ## Batch 3: team leads keep override rights; every note records the role: LIVE
 
