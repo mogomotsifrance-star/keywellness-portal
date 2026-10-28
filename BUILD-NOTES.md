@@ -1,3 +1,25 @@
+# 28 Oct 2026: admins who are members can complete Learn: LIVE; tool figures as P8,200
+
+## 1. Admin preview guard narrowed
+
+`complete_video`, `record_video_progress` and `submit_quiz` refused every
+`is_admin()` caller, so an admin who also uses the member portal could not
+finish the welcome video or any lesson. The guard now applies only to an admin
+with no onboarded `profiles` row. Applied 28 Oct 2026 after a rolled-back live
+trial, by asserted substitution on the live bodies.
+
+| | |
+|---|---|
+| SQL | `supabase_admin_member_learning.sql`: `if is_admin() then` becomes `if is_admin() and not exists (select 1 from profiles where id = auth.uid() and onboarded) then` in all three |
+| Backup / rollback | tag `admin-member-learning`; `migrations/rollback-admin-member-learning.sql` restores all three |
+| Verified | all three narrowed, old guard gone, one backup each, ACL and SECURITY DEFINER unchanged |
+| Effect | onboarded admins now earn Learning points and count in learning figures like any member |
+
+## 2. Tool figures as P8,200
+
+Every tool/calculator formatter shows whole Pula, no space, en-BW grouping.
+Inputs keep cents. Advisor, admin and HR screens unchanged. Commit 6033dc4.
+
 # Follow-ups, 16 Oct 2026: amendments by consultation date; admin names: LIVE
 
 Two decisions from Tshenolo, 16 Oct 2026. Both applied after a rolled-back
