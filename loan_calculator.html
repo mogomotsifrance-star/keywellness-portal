@@ -151,7 +151,7 @@ tr.extra-row td{background:var(--kw-green-tint)}
       <div class="field">
         <label>Loan Amount</label>
         <div class="iw">
-          <div class="iw-prefix">BWP</div>
+          <div class="iw-prefix">P</div>
           <input type="number" id="loanAmount" value="50000" min="1000" step="1000" placeholder="50 000">
         </div>
       </div>
@@ -204,7 +204,7 @@ tr.extra-row td{background:var(--kw-green-tint)}
           <div class="field">
             <label>Extra Amount per Payment</label>
             <div class="iw">
-              <div class="iw-prefix">BWP</div>
+              <div class="iw-prefix">P</div>
               <input type="number" id="extraMonthly" value="500" min="0" step="100" placeholder="500">
             </div>
             <div class="hint">Added on top of your regular repayment each period</div>
@@ -217,7 +217,7 @@ tr.extra-row td{background:var(--kw-green-tint)}
             <div class="field">
               <label>Lump Sum Amount</label>
               <div class="iw">
-                <div class="iw-prefix">BWP</div>
+                <div class="iw-prefix">P</div>
                 <input type="number" id="extraLump" value="10000" min="0" step="1000" placeholder="10 000">
               </div>
             </div>
@@ -385,8 +385,8 @@ function setExtraType(type) {
 }
 
 // ── Formatting ──
-function fmt(n){ return 'BWP ' + n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function fmtShort(n){ return n.toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmt(n){ return (n < 0 ? '-' : '') + 'P' + fmtShort(Math.abs(n)); }
+function fmtShort(n){ return Math.round(n).toLocaleString('en-BW'); }
 function periodsToLabel(periods, freq) {
   const months = Math.round(periods * 12 / freq);
   const yrs = Math.floor(months/12);
@@ -466,7 +466,7 @@ function calculate() {
 
   // Hero — show standard payment
   document.getElementById('heroLabel').textContent = freqLabel + ' Repayment';
-  KW.countUp(document.getElementById('heroVal'), PMT, { format: v => 'BWP ' + fmtShort(v) });
+  KW.countUp(document.getElementById('heroVal'), PMT, { format: v => fmt(v) });
   document.getElementById('heroSub').textContent   = n + ' payments over ' + years + ' year' + (years>1?'s':'');
 
   // Stats (standard)
@@ -500,8 +500,8 @@ function calculate() {
     document.getElementById('savingsBanner').classList.add('show');
 
     // Compare table
-    document.getElementById('cmpPayment').textContent      = 'BWP '+fmtShort(PMT);
-    document.getElementById('cmpExtraPayment').textContent = extraMo>0 ? 'BWP '+fmtShort(PMT+extraPerPeriod) : 'BWP '+fmtShort(PMT)+' + lump';
+    document.getElementById('cmpPayment').textContent      = fmt(PMT);
+    document.getElementById('cmpExtraPayment').textContent = extraMo>0 ? fmt(PMT+extraPerPeriod) : fmt(PMT)+' + lump';
     document.getElementById('cmpTerm').textContent         = periodsToLabel(base.periods, freq);
     document.getElementById('cmpExtraTerm').textContent    = periodsToLabel(extra.periods, freq);
     document.getElementById('cmpInterest').textContent     = fmt(base.totalInterest);

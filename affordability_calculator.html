@@ -235,8 +235,8 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
 </div>
 
 <script>
-const fmt  = v => 'BWP ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:0,maximumFractionDigits:0});
-const fmtK = v => { const a=Math.abs(v); const s=a>=1e6?(a/1e6).toFixed(2)+'M':a>=1e3?(a/1e3).toFixed(0)+'K':a.toFixed(0); return (v<0?'-':'')+'BWP '+s; };
+const fmt  = v => 'P' + Math.round(Math.abs(v)).toLocaleString('en-BW');
+const fmtK = v => (v<0?'-':'') + fmt(v);
 const pf   = id => parseFloat(document.getElementById(id).value)||0;
 
 let debts = [], nextId = 1;

@@ -385,8 +385,8 @@ tfoot td:first-child{text-align:left;font-family:'Nunito',sans-serif;}
 // ─────────────────────────────────────────────
 // Formatters
 // ─────────────────────────────────────────────
-const fmt  = v => 'P ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtK = v => { const a=Math.abs(v); if(a>=1e6) return 'P '+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return 'P '+(a/1e3).toFixed(1)+'K'; return fmt(v); };
+const fmt  = v => 'P' + Math.round(Math.abs(v)).toLocaleString('en-BW');
+const fmtK = v => fmt(v);
 const fmtM = m => { const y=Math.floor(m/12), mo=m%12; return (y?y+'y ':'')+(mo?mo+'m':''); };
 const fmtDate = m => { const d=new Date(); d.setMonth(d.getMonth()+m); return d.toLocaleDateString('en-BW',{month:'short',year:'numeric'}); };
 

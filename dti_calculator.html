@@ -443,12 +443,8 @@ tfoot td:first-child { text-align: left; font-family: 'Nunito', sans-serif; }
 // ──────────────────────────────────────────────
 // Formatters
 // ──────────────────────────────────────────────
-const fmt  = v => 'P ' + v.toLocaleString('en-BW', {minimumFractionDigits:2, maximumFractionDigits:2});
-const fmtK = v => {
-  if (v >= 1e6) return 'P ' + (v/1e6).toFixed(2) + 'M';
-  if (v >= 1e3) return 'P ' + (v/1e3).toFixed(1) + 'K';
-  return fmt(v);
-};
+const fmt  = v => (v < 0 ? '-' : '') + 'P' + Math.round(Math.abs(v)).toLocaleString('en-BW');
+const fmtK = v => fmt(v);
 function fmtInput(el) {
   let raw = el.value.replace(/[^0-9.]/g, '');
   const parts = raw.split('.');

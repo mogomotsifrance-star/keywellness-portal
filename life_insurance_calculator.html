@@ -421,8 +421,8 @@ function removeDebt(i) {
 
 // ── Helpers ──
 function getNum(id) { return parseFloat(document.getElementById(id)?.value)||0; }
-function fmt(n)  { return 'P ' + Math.round(Math.max(0,n)).toLocaleString(); }
-function fmtM(n) { return 'P ' + (Math.round(Math.max(0,n)/1000)).toLocaleString()+'k'; }
+function fmt(n)  { return 'P' + Math.round(Math.max(0,n)).toLocaleString('en-BW'); }
+function fmtM(n) { return fmt(n); }
 function pvAnnuity(pmt, r, n) {
   if (r <= 0) return pmt * n;
   return pmt * (1 - Math.pow(1+r, -n)) / r;
@@ -542,7 +542,7 @@ function renderResults(d) {
     { letter:'D', color:'#c0392b', label:'Debt',              sub:'Mortgages, loans, credit cards', amt: totalDebt },
     { letter:'I', color:'#808185', label:'Income Replacement', sub:`${Math.round(getNum('replaceRate'))}% × ${d.yrsToRetire} yrs (PV)`, amt: d.incomeReplacement },
     { letter:'M', color:'#d97706', label:'Mortgage (in D)',    sub:'Already counted in Debt above',  amt: 0, note:true },
-    { letter:'E', color:'#397e2b', label:'Education',          sub:`${getNum('numChildren')} child${getNum('numChildren')!==1?'ren':''} × P${Math.round(getNum('eduPerChild')).toLocaleString()}`, amt: d.eduNeed },
+    { letter:'E', color:'#397e2b', label:'Education',          sub:`${getNum('numChildren')} child${getNum('numChildren')!==1?'ren':''} × ${fmt(getNum('eduPerChild'))}`, amt: d.eduNeed },
     { letter:'+', color:'#93790a', label:'Final Expenses',     sub:'Funeral, estate, medical',       amt: d.finalExpenses },
     { letter:'+', color:'#23261f', label:'Emergency Buffer',   sub:'6 months income',                amt: d.emergencyBuffer },
   ];
@@ -729,10 +729,10 @@ function renderChart(d) {
       responsive:true,maintainAspectRatio:false,
       plugins:{
         legend:{labels:{font:{size:11},boxWidth:12,padding:12}},
-        tooltip:{callbacks:{label:ctx=>'P '+(ctx.raw||0).toLocaleString()}}
+        tooltip:{callbacks:{label:ctx=>fmt(ctx.raw||0)}}
       },
       scales:{
-        y:{ticks:{callback:v=>'P '+(v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v)},grid:{color:'rgba(0,0,0,.05)'}},
+        y:{ticks:{callback:v=>fmt(v)},grid:{color:'rgba(0,0,0,.05)'}},
         x:{ticks:{font:{size:9}}}
       }
     }

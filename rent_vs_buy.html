@@ -133,7 +133,7 @@ canvas{display:block;max-width:100%}
       <div class="field">
         <label>Down Payment (%)</label>
         <input type="number" id="downPct" value="10" min="0" max="100">
-        <span class="field-hint" id="downAmtHint">= BWP 120,000</span>
+        <span class="field-hint" id="downAmtHint">= P120,000</span>
       </div>
       <div class="field">
         <label>Bond Interest Rate (% p.a.)</label>
@@ -255,8 +255,8 @@ canvas{display:block;max-width:100%}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 // ── Formatters ──────────────────────────────────────────────
-const fmt  = v => 'BWP ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:0,maximumFractionDigits:0});
-const fmtK = v => { const a=Math.abs(v); const s=a>=1e6?(a/1e6).toFixed(2)+'M':a>=1e3?(a/1e3).toFixed(1)+'K':a.toFixed(0); return (v<0?'-':'')+'BWP '+s; };
+const fmt  = v => 'P' + Math.round(Math.abs(v)).toLocaleString('en-BW');
+const fmtK = v => (v<0?'-':'') + fmt(v);
 const pf   = id => parseFloat(document.getElementById(id).value)||0;
 
 let schedRows = [], showFullSched = false, chartMode = 'cost', chartInst = null;
@@ -510,7 +510,7 @@ function drawChart() {
       responsive:true, interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{labels:{font:{family:'Nunito',size:11},boxWidth:14}},
-        tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': BWP '+ctx.parsed.y.toLocaleString('en-BW')}}
+        tooltip:{callbacks:{label:ctx=>' '+ctx.dataset.label+': '+(ctx.parsed.y<0?'-':'')+fmt(ctx.parsed.y)}}
       },
       scales:{
         x:{grid:{display:false},ticks:{font:{family:'Nunito',size:11}}},

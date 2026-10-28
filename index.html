@@ -3416,8 +3416,7 @@ VIEWS['dashboard'] = async function () {
   const fmtP = v => {
     const n = Math.round(v);
     const abs = Math.abs(n);
-    if (abs >= 1e6) return (n < 0 ? '-' : '') + 'P' + (abs/1e6).toFixed(1) + 'M';
-    return (n < 0 ? '-' : '') + 'P' + abs.toLocaleString();
+    return (n < 0 ? '-' : '') + 'P' + abs.toLocaleString('en-BW');
   };
 
   // ── Build summary hub cards ──
@@ -3460,9 +3459,9 @@ VIEWS['dashboard'] = async function () {
   // Emergency fund
   if (efMonths !== null) {
     const cls = efMonths >= 6 ? 'green' : efMonths >= 3 ? 'gold' : 'orange';
-    hubCards.push({ cls, lbl:'Emergency Fund', val:`${efMonths.toFixed(1)} mo`, sub:`P${Math.round(efCurrent).toLocaleString()} saved`, click:`go('emergency')` });
+    hubCards.push({ cls, lbl:'Emergency Fund', val:`${efMonths.toFixed(1)} mo`, sub:`P${Math.round(efCurrent).toLocaleString('en-BW')} saved`, click:`go('emergency')` });
   } else if (hasEF) {
-    hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString()}`, sub:'Saved — add your monthly expenses to see months of cover', click:`go('emergency')` });
+    hubCards.push({ cls:'gold', lbl:'Emergency Fund', val:`P${Math.round(efCurrent).toLocaleString('en-BW')}`, sub:'Saved — add your monthly expenses to see months of cover', click:`go('emergency')` });
   } else {
     hubCards.push({ cls:'navy', lbl:'Emergency Fund', val:'not yet', sub:'Set up your fund', click:`go('emergency')` });
   }
@@ -6257,16 +6256,16 @@ VIEWS['emergency'] = async function () {
       ${_efMonthlyExp > 0 ? `
       <div class="card" style="margin-bottom:18px">
         <div class="card-title">💡 Recommended Targets (${_efSrc})</div>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString()}</strong> ${_efSrc}:</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Based on your essential monthly expenses of <strong>P${Math.round(_efMonthlyExp).toLocaleString('en-BW')}</strong> ${_efSrc}:</p>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--orange);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(3);efCalc()">
             <div style="font-size:11px;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:4px">Minimum (3 months)</div>
-            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef3mo).toLocaleString()}</div>
+            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef3mo).toLocaleString('en-BW')}</div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px">Click to use this target</div>
           </div>
           <div style="background:var(--cream);border-radius:var(--radius-sm);padding:16px;border-left:4px solid var(--green);cursor:pointer" onclick="document.getElementById('ef-m').value=${_efMonthlyExp};efTarget(6);efCalc()">
             <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:4px">Recommended (6 months)</div>
-            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef6mo).toLocaleString()}</div>
+            <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--navy)">P${Math.round(_ef6mo).toLocaleString('en-BW')}</div>
             <div style="font-size:11px;color:var(--muted);margin-top:3px">Click to use this target</div>
           </div>
         </div>
@@ -6342,7 +6341,7 @@ VIEWS['emergency'] = async function () {
     const needed  = Math.max(0, target - current);
     const pct     = target>0 ? Math.min(100, Math.round((current/target)*100)) : 0;
     const mToGo   = contrib>0 && pct<100 ? Math.ceil(needed/contrib) : null;
-    const fmt = n => 'P'+Math.round(n).toLocaleString();
+    const fmt = n => 'P'+Math.round(n).toLocaleString('en-BW');
 
     document.getElementById('ef-boxes').innerHTML = `
       <div class="ef-box"><div class="ef-val">${fmt(target)}</div><div class="ef-lbl">Target (${tgt} mo)</div></div>

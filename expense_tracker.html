@@ -304,7 +304,7 @@ body{font-family:'Nunito',sans-serif;background:var(--cream);color:var(--navy);m
           <div class="donut-wrap">
             <svg class="donut-svg" viewBox="0 0 180 180" id="donutSvg"></svg>
             <div class="donut-center">
-              <div class="donut-total" id="donutTotal">P 0</div>
+              <div class="donut-total" id="donutTotal">P0</div>
               <div class="donut-sub">Spent</div>
             </div>
           </div>
@@ -389,8 +389,8 @@ function catName(catId){
 function isUnknownCat(catId){ return !CAT_MAP[catId] && !INCOME_CATS.some(x=>x.id===catId); }
 
 const LS_KEY = 'expense_tracker_v2';
-const fmt  = v => 'P ' + Math.abs(v).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2});
-const fmtK = v => { const a=Math.abs(v); if(a>=1e6) return 'P '+(a/1e6).toFixed(2)+'M'; if(a>=1e3) return 'P '+(a/1e3).toFixed(1)+'K'; return fmt(v); };
+const fmt  = v => 'P' + Math.round(Math.abs(v)).toLocaleString('en-BW');
+const fmtK = v => fmt(v);
 function fmtInput(el){
   let raw=el.value.replace(/[^0-9.]/g,'');
   const parts=raw.split('.');
@@ -730,7 +730,7 @@ function renderAll(){
 function renderDonut(txArr){
   const totals=catTotals(txArr);
   const total=Object.values(totals).reduce((s,v)=>s+v,0);
-  document.getElementById('donutTotal').textContent=total>0?fmtK(total):'P 0';
+  document.getElementById('donutTotal').textContent=total>0?fmtK(total):'P0';
 
   const svg=document.getElementById('donutSvg');
   const R=76,cx=90,cy=90,strokeW=22;

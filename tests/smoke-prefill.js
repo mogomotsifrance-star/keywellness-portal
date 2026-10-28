@@ -828,7 +828,7 @@ const dismissProfileModal = async (page) => {
     });
     /* gross 16000 - (2800+900+750+3000+100 = 7550) = 8450, vs a typed 11000 */
     check('104 with the block complete the typed net row shows what the payslip works out to',
-      /Your payslip works out to P 8,450\.00\./.test(rec.text) && /11,000/.test(rec.net),
+      /Your payslip works out to P8,450\./.test(rec.text) && /11,000/.test(rec.net),
       `${rec.text.slice(0, 160)} | net ${rec.net}`);
     check('105 and offers it as a choice, never calls the typed figure a mistake',
       rec.link && /Use that figure/.test(rec.text) && !/mistake|wrong|error|incorrect/i.test(rec.text),
@@ -1208,9 +1208,9 @@ const dismissProfileModal = async (page) => {
     const adv = await page.evaluate(() =>
       document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
     check('152 the deficit states the shortfall in Pula',
-      /1,200\.00 short this month/.test(adv), adv.slice(0, 220));
+      /P1,200 short this month/.test(adv), adv.slice(0, 220));
     check('153 and names the one Want line that could close it',
-      /Travel & holidays/.test(adv) && /3,000\.00/.test(adv), adv.slice(0, 260));
+      /Travel & holidays/.test(adv) && /P3,000\b/.test(adv), adv.slice(0, 260));
     check('154 it never tells them to cut a Need, Giving or family support',
       !/(cut|reduce|trim)[^.]{0,60}(Housing|Family support|Giving|Contributions)/i.test(adv),
       adv.slice(0, 300));
@@ -1322,7 +1322,7 @@ const dismissProfileModal = async (page) => {
     });
     check('165 livestock computes the target from head x price',
       /30,000/.test(out.target), out.target);
-    check('166 and shows the working', /5 × P 6,000\.00/.test(out.calc), out.calc);
+    check('166 and shows the working', /5 × P6,000/.test(out.calc), out.calc);
     check('167 with the approved copy',
       out.copy.includes('Once bought, the animals move to your assets, and their upkeep moves to Farm costs.'),
       out.copy.slice(0, 200));
@@ -1340,7 +1340,7 @@ const dismissProfileModal = async (page) => {
     const adv = await page.evaluate(() =>
       document.getElementById('adviceList')?.textContent.replace(/\s+/g,' ') || '');
     check('169 an unused provision is reported as money still theirs',
-      /300\.00 is still yours/.test(adv), adv.slice(0, 260));
+      /P300 is still yours/.test(adv), adv.slice(0, 260));
     check('170 and never as overspending',
       !/over budget|overspen/i.test(adv.split('still yours')[0] || ''), adv.slice(0, 260));
     await page.close();
@@ -1417,7 +1417,7 @@ const dismissProfileModal = async (page) => {
     check('176 marked as from the payslip, and read-only', n.src === 'payslip' && n.readOnly, JSON.stringify(n));
     check('177 totalIncome reads it, because it is the same one home', n.total === 8300, String(n.total));
     check('178 and the net row says where it came from, with a way to adjust',
-      n.state.includes('Worked out from your payslip: P 10,000.00 less P 1,700.00 in deductions.')
+      n.state.includes('Worked out from your payslip: P10,000 less P1,700 in deductions.')
         && n.state.includes('Check it matches the net pay on your payslip. Adjust'), n.state);
     const modalWhileTyping = await page.evaluate(() => !!document.getElementById('kw-profile-modal'));
     check('179 typing gross then PAYE without leaving the card never opens the profile prompt',
@@ -1454,7 +1454,7 @@ const dismissProfileModal = async (page) => {
     check('184 a later payslip change leaves the typed figure alone',
       n.amount === 8000 && n.src === 'typed', JSON.stringify(n));
     check('185 and says what the payslip works out to, as a choice',
-      n.state === 'Your payslip works out to P 8,200.00. Use that figure', n.state);
+      n.state === 'Your payslip works out to P8,200. Use that figure', n.state);
     await typeInto(page, 'ps_paye', '1200');
     await page.waitForTimeout(700);
     await page.evaluate(() => document.getElementById('netUsePayslip')?.click());
@@ -1478,13 +1478,13 @@ const dismissProfileModal = async (page) => {
     let n = await netState(page);
     check('188 an existing budget loads with its typed net untouched, offered the payslip figure, not given it',
       n.amount === 11000 && n.value === '11,000.00' && !n.readOnly && n.src === null
-        && n.state === 'Your payslip works out to P 8,450.00. Use that figure', JSON.stringify(n));
+        && n.state === 'Your payslip works out to P8,450. Use that figure', JSON.stringify(n));
     await typeInto(page, 'ps_other', '150');
     await page.waitForTimeout(100);
     n = await netState(page);
     /* other 100 -> 150: 16000 - 7600 = 8400 */
     check('189 and a payslip edit still never overwrites it, only updates the offer',
-      n.amount === 11000 && n.state === 'Your payslip works out to P 8,400.00. Use that figure', JSON.stringify(n));
+      n.amount === 11000 && n.state === 'Your payslip works out to P8,400. Use that figure', JSON.stringify(n));
     await page.close();
   }
   {
@@ -1592,16 +1592,16 @@ const dismissProfileModal = async (page) => {
   {
     /* The four double-counting warnings. */
     const WARN = {
-      debt_min:   { ps: 'loans',   amt: 'P 3,000.00', lines: [
-        'Your payslip already takes P 3,000.00 in loan repayments.',
+      debt_min:   { ps: 'loans',   amt: 'P3,000', lines: [
+        'Your payslip already takes P3,000 in loan repayments.',
         'Only add loans here that you pay from your bank account.',
         'Adding a payslip loan again would count it twice.'] },
-      retirement: { ps: 'pension', amt: 'P 900.00', lines: [
-        'P 900.00 already goes to your pension through your payslip.',
+      retirement: { ps: 'pension', amt: 'P900', lines: [
+        'P900 already goes to your pension through your payslip.',
         'Add only what you pay on top by choice, such as a retirement annuity.',
         'Adding the payslip amount here would count it twice.'] },
-      health:     { ps: 'medical', amt: 'P 750.00', lines: [
-        'Your medical aid of P 750.00 comes off your payslip.',
+      health:     { ps: 'medical', amt: 'P750', lines: [
+        'Your medical aid of P750 comes off your payslip.',
         'Add only medical costs you pay yourself, like gap payments or pharmacy.'] },
       insurance:  { ps: 'other',   amt: '', lines: [
         'Some cover, like funeral policies, may already come off your payslip.',
@@ -1648,8 +1648,8 @@ const dismissProfileModal = async (page) => {
     const strs = await page.evaluate(() => {
       const out = [];
       if (typeof KW_D3_COPY === 'undefined') return out;
-      Object.values(KW_D3_COPY).forEach(v => out.push(typeof v === 'function' ? v('P 1.00', 'P 2.00') : v));
-      Object.values(KW_PAYSLIP_WARN).forEach(w => out.push(...w.lines('P 1.00')));
+      Object.values(KW_D3_COPY).forEach(v => out.push(typeof v === 'function' ? v('P1', 'P2') : v));
+      Object.values(KW_PAYSLIP_WARN).forEach(w => out.push(...w.lines('P1')));
       if (typeof KW_D3_COPY === 'undefined') return out;
       out.push(document.getElementById('payslipLead').textContent.trim(),
                document.getElementById('payslipSkip').textContent.trim());
@@ -1772,7 +1772,7 @@ const dismissProfileModal = async (page) => {
       return { id, value: e.value, pre: e.closest('.iw').querySelector('.iw-pre').textContent.trim(),
                clipped: e.scrollWidth > e.clientWidth, inView: w.left >= 0 && w.right <= document.documentElement.clientWidth };
     }));
-    check('212 at 360px Budgeted and Actual each show "P 12,500.00" in full',
+    check('212 at 360px Budgeted and Actual each show "P12,500" in full',
       fit.every(f => f.pre === 'P' && f.value === '12,500.00' && !f.clipped && f.inView), JSON.stringify(fit));
     await page.close();
   }

@@ -201,7 +201,7 @@ function save(){
     }
   })();
 }
-function fmt(n){ return (n<0?'-':'')+'P'+Math.abs(Math.round(n)).toLocaleString(); }
+function fmt(n){ return (n<0?'-':'')+'P'+Math.abs(Math.round(n)).toLocaleString('en-BW'); }
 
 function addAsset(){
   const cat  = document.getElementById('asset-cat').value;
