@@ -12,7 +12,7 @@
 //
 // Mirrors advisor.html exactly where the two overlap:
 //   - PAYE: calcAnnualTax() / calcMonthlyPAYE() (annualised-earnings method)
-//   - Total monthly income: net salary + spouse + rentals + business + dividends
+//   - Total monthly income: net salary + rentals + business + dividends, all own
 //     (disposable income and the budget check use this: it is the cash)
 //   - DSR: debt repayments ÷ the client's OWN gross income (4 Oct 2026):
 //     gross salary + their own business, rental and dividend income, never spouse
@@ -41,7 +41,7 @@
 import {
   DSR_GREEN_MAX, DSR_AMBER_MAX, DISPOSABLE_FLOOR_PCT, HIGH_COST_RATE_PA,
   DEFAULT_TERM_MONTHS, REPEATED_BORROWING_COUNT, ADVANCE_SALARY_MULTIPLE,
-  pf, isBlank, round2, fmtPct, fmtP, calcMonthlyPAYE, parseRate, liveLiabilities, suggestClassification,
+  pf, isBlank, round2, fmtPct, fmtP, calcMonthlyPAYE, parseRate, liveLiabilities, suggestClassification, clientOnly,
 } from "../_shared/kw-finance.ts";
 import type { Assessment, Classification, RatePeriod, RawLiability, Tier } from "../_shared/kw-finance.ts";
 export {
@@ -106,7 +106,7 @@ export interface Computed {
   employee: { name: string; employer: string; age: string; marital_status: string; dependants: number };
   income: {
     gross_salary: number; paye: number; other_deductions: number; net_salary: number; dsr_income: number;
-    spouse_income: number; rental_income: number; business_income: number; dividends: number;
+    rental_income: number; business_income: number; dividends: number;
     total_monthly_income: number;
   };
   liabilities: LiabilityView[];
@@ -160,6 +160,7 @@ function liveIndexOfRaw(a: Assessment, rawIndex: number): number | null {
   const rows = a.liabilities || [];
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
+    if (r.excluded) { if (i === rawIndex) return null; live++; continue; }
     const isLive = !!(pf(r.balance) || pf(r.monthlyInstalment) || !isBlank(r.institution) || pf(r.loanAmount));
     if (i === rawIndex) return isLive ? live : null;
     if (isLive) live++;
@@ -169,7 +170,8 @@ function liveIndexOfRaw(a: Assessment, rawIndex: number): number | null {
 
 
 // ── main ─────────────────────────────────────────────────────────
-export function compute(a: Assessment, prep: Prep): Computed {
+export function compute(full: Assessment, prep: Prep): Computed {
+  const a = clientOnly(full);
   const personal = a.personal || {};
   const income = a.income || {};
   // The programme fixes the term at 24 months. prep.term_months is ignored
@@ -182,9 +184,9 @@ export function compute(a: Assessment, prep: Prep): Computed {
   const paye = calcMonthlyPAYE(gross);
   const other = pf(income.otherDeductions);
   const net = Math.max(0, gross - paye - other);
-  const spouse = pf(income.spouseIncome), rentals = pf(income.rentals),
+  const rentals = pf(income.rentals),
         business = pf(income.businessIncome), dividends = pf(income.dividends);
-  const totalIncome = net + spouse + rentals + business + dividends;
+  const totalIncome = net + rentals + business + dividends;
 
   // The DSR denominator: own gross income (see the header).
   const dsrBase = gross + rentals + business + dividends;
@@ -236,7 +238,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
 
   // Budget
   const budgetVals = Object.values(a.budget || {}).map(pf);
-  const budgetCaptured = budgetVals.some((v) => v > 0);
+  const budgetCaptured = !!a.budgetOnRecord;
   const expenses = budgetCaptured ? round2(budgetVals.reduce((s, v) => s + v, 0)) : null;
   const shortfall = budgetCaptured && totalIncome > 0 ? (expenses as number) > totalIncome : null;
   if (!budgetCaptured) gaps.add("Household budget not captured — a monthly shortfall cannot be ruled out");
@@ -423,7 +425,7 @@ export function compute(a: Assessment, prep: Prep): Computed {
       dependants: kids,
     },
     income: { gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net), dsr_income: round2(dsrBase),
-              spouse_income: spouse, rental_income: rentals, business_income: business, dividends, total_monthly_income: round2(totalIncome) },
+              rental_income: rentals, business_income: business, dividends, total_monthly_income: round2(totalIncome) },
     liabilities: views,
     term_months: term,
     before: { debt_service: debtServiceBefore, dsr: dsrBefore, disposable: dispBefore },

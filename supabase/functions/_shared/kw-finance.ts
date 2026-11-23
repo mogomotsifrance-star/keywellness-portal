@@ -13,7 +13,9 @@
 //
 // Mirrors advisor.html exactly where the two overlap:
 //   - PAYE: calcAnnualTax() / calcMonthlyPAYE() (annualised-earnings method)
-//   - Total monthly income: net salary + spouse + rentals + business + dividends
+//   - Total monthly income: net salary + rentals + business + dividends, all
+//     the client's own (23 Nov 2026; a spouse's income is never read)
+//   - Who pays and who is liable: js/kw-household.js
 //   - "Live" liability filter: panelReport()'s liabData test
 //   - Wellbeing benchmark: kwLendingNorm() (js/dsr-bands.js benchmark)
 //   - DSR: monthly debt repayments ÷ the client's OWN gross income (gross
@@ -89,6 +91,10 @@ export interface RawLiability {
   interestRate?: unknown;
   balance?: unknown;
   monthlyInstalment?: unknown;
+  liable?: unknown;
+  paidBy?: unknown;
+  paidSplit?: unknown;
+  excluded?: boolean;              // set by clientOnly(): another person's loan
 }
 
 export interface Assessment {
@@ -97,6 +103,8 @@ export interface Assessment {
   income?: Record<string, unknown>;
   liabilities?: RawLiability[];
   budget?: Record<string, unknown>;
+  budgetPaidBy?: Record<string, { by?: unknown; split?: unknown }>;
+  budgetOnRecord?: boolean;        // set by clientOnly(): any budget figure at all
   notes?: Record<string, unknown>;
   assets?: RawAsset[];
   savings?: RawSaving[];
@@ -183,13 +191,54 @@ export function ratePeriodFor(rate: { value: number | null; says_monthly: boolea
   return informalLender ? "monthly" : "annual";
 }
 
+// The client's own side of a record: each budget line at the client's share,
+// loans they are not liable for blanked, and nothing else about the other
+// person. compute(), computeRehab() and the stored snapshots all start here.
+// Twin of js/kw-household.js paidBy() / clientAmount() / isSpouseOnly();
+// tests/household.test.mjs holds the two equal. A loan is blanked in place,
+// not removed, so raw and live indexes still point at the same rows.
+// Applying it twice changes nothing.
+const isOthersLoan = (r: RawLiability) => !!(r && (r.excluded || r.liable === "spouse"));
+export function clientShare(a: Assessment, cat: string): number {
+  const amt = pf((a.budget || {})[cat]);
+  const p = (a.budgetPaidBy || {})[cat] || {};
+  if (p.by === "spouse") return 0;
+  if (p.by !== "shared") return amt;
+  const raw = p.split == null || p.split === "" ? 50 : Number(p.split);
+  const split = isFinite(raw) ? Math.min(100, Math.max(0, raw)) : 50;
+  return split === 100 ? amt : amt * split / 100;
+}
+export function clientOnly(a: Assessment): Assessment {
+  const src = { ...a } as Assessment & Record<string, unknown>;
+  const income = { ...(a.income || {}) };
+  delete income.spouseIncome;
+  const budget: Record<string, unknown> = {};
+  Object.keys(a.budget || {}).forEach((k) => {
+    budget[k] = (a.budgetPaidBy || {})[k] ? clientShare(a, k) : (a.budget as Record<string, unknown>)[k];
+  });
+  const liabilities = (a.liabilities || []).map((r) => {
+    if (isOthersLoan(r)) return { excluded: true } as RawLiability;
+    const own = { ...r };
+    delete own.liable; delete own.paidBy; delete own.paidSplit;
+    return own;
+  });
+  delete src.household;
+  delete src.budgetPaidBy;
+  return { ...src, income, budget, liabilities,
+    budgetOnRecord: a.budgetOnRecord ?? Object.values(a.budget || {}).some((v) => pf(v) > 0) };
+}
+
 // The same test panelReport() uses to decide a liability row is real and
 // not one of the four blank template rows every record carries.
 export function liveLiabilities(a: Assessment): { index: number; raw: RawLiability }[] {
   const out: { index: number; raw: RawLiability }[] = [];
+  let index = 0;
   (a.liabilities || []).forEach((r) => {
+    // A row the client is not liable for keeps its index and is not returned,
+    // so a classification the advisor confirmed stays on its own row.
+    if (isOthersLoan(r)) { index++; return; }
     if (pf(r.balance) || pf(r.monthlyInstalment) || !isBlank(r.institution) || pf(r.loanAmount)) {
-      out.push({ index: out.length, raw: r });
+      out.push({ index: index++, raw: r });
     }
   });
   return out;
@@ -220,10 +269,10 @@ export function suggestClassification(raw: RawLiability): { classification: Clas
 }
 
 // Income — identical to advisor.html calcTotals(): net salary after PAYE
-// and other deductions, plus spouse and passive income.
+// and other deductions, plus the client's own passive income.
 export interface IncomeView {
   gross_salary: number; paye: number; other_deductions: number; net_salary: number;
-  spouse_income: number; rental_income: number; business_income: number; dividends: number;
+  rental_income: number; business_income: number; dividends: number;
   total_monthly_income: number;
   // The DSR denominator (decided 4 Oct 2026): the client's own gross income,
   // gross salary + their own business, rental and dividend income. Spouse
@@ -236,12 +285,12 @@ export function totalIncome(a: Assessment): IncomeView {
   const paye = calcMonthlyPAYE(gross);
   const other = pf(income.otherDeductions);
   const net = Math.max(0, gross - paye - other);
-  const spouse = pf(income.spouseIncome), rentals = pf(income.rentals),
+  const rentals = pf(income.rentals),
         business = pf(income.businessIncome), dividends = pf(income.dividends);
   return {
     gross_salary: round2(gross), paye: round2(paye), other_deductions: round2(other), net_salary: round2(net),
-    spouse_income: spouse, rental_income: rentals, business_income: business, dividends,
-    total_monthly_income: round2(net + spouse + rentals + business + dividends),
+    rental_income: rentals, business_income: business, dividends,
+    total_monthly_income: round2(net + rentals + business + dividends),
     dsr_income: round2(gross + rentals + business + dividends),
   };
 }

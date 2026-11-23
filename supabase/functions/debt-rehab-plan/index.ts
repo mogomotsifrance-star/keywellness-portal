@@ -29,7 +29,7 @@
 // ============================================================
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
-import { fmtP, fmtPct, liveLiabilities, LENDING_NORM_PCT } from "../_shared/kw-finance.ts";
+import { fmtP, fmtPct, liveLiabilities, clientOnly, LENDING_NORM_PCT } from "../_shared/kw-finance.ts";
 import type { Assessment } from "../_shared/kw-finance.ts";
 import { computeRehab, suggestAction, DEFAULT_EXTENSION_MONTHS } from "./compute-rehab.ts";
 import type { RehabComputed, RehabContext, RehabPrep } from "./compute-rehab.ts";
@@ -100,7 +100,7 @@ async function askModel(apiKey: string, c: RehabComputed, notes: string[]): Prom
       // DSR and every instalment share are of this figure (4 Oct 2026): gross
       // salary + the client's own business, rental and dividend income.
       dsr_income_own_gross: fmtP(c.income.dsr_income),
-      income_sources: { net_salary: fmtP(c.income.net_salary), spouse: fmtP(c.income.spouse_income), business: fmtP(c.income.business_income), rentals: fmtP(c.income.rental_income), dividends: fmtP(c.income.dividends) },
+      income_sources: { net_salary: fmtP(c.income.net_salary), business: fmtP(c.income.business_income), rentals: fmtP(c.income.rental_income), dividends: fmtP(c.income.dividends) },
       debt_service: fmtP(c.debt_service), dsr: fmtPct(c.dsr), dsr_status: c.dsr_status, tier: c.tier, lending_norm: `${c.lending_norm_pct}%`,
       net_worth: { assets: fmtP(c.net_worth.assets), savings: c.net_worth.savings_captured ? fmtP(c.net_worth.savings) : "not captured", liabilities: fmtP(c.net_worth.liabilities), net: fmtP(c.net_worth.net) },
       liabilities: c.liabilities.map((l) => ({
@@ -233,7 +233,7 @@ serve(async (req) => {
     .eq("id", clientId).maybeSingle();
   if (cErr) { console.error("client read failed:", cErr.message); return json(req, { ok: false, message: "Could not read the client record." }, 500); }
   if (!client) return json(req, { ok: false, message: "Client not found or not in your caseload." }, 403);
-  const assessment = (client.assessment || {}) as Assessment;
+  const assessment = clientOnly((client.assessment || {}) as Assessment);
 
   // 3a. The norm: the wellbeing benchmark, from the same config row the
   //     portal reads (indicator.dsr ->> benchmark). It used to be read from the
@@ -324,7 +324,7 @@ serve(async (req) => {
   const input = {
     client_id: client.id,
     snapshot: { personal: assessment.personal, kids: assessment.kids, income: assessment.income, liabilities: assessment.liabilities,
-                assets: assessment.assets, savings: assessment.savings, budget: assessment.budget, budgetOtherCustom: assessment.budgetOtherCustom, notes: assessment.notes },
+                assets: assessment.assets, savings: assessment.savings, budget: assessment.budget, budgetOnRecord: assessment.budgetOnRecord, budgetOtherCustom: assessment.budgetOtherCustom, notes: assessment.notes },
     prep: { ...prep, consultant },
     rehab_context: rehabContext,
     timeline_notes: timeline,

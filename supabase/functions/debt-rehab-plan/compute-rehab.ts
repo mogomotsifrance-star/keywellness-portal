@@ -29,7 +29,7 @@
 import {
   DSR_GREEN_MAX, DSR_AMBER_MAX, HIGH_COST_RATE_PA, REPEATED_BORROWING_COUNT, DEFAULT_TERM_MONTHS,
   LENDING_NORM_PCT, EXPENSE_GROUP_IDS,
-  pf, isBlank, round2, fmtP, fmtPct, totalIncome, parseRate, liveLiabilities, suggestClassification, dsrTier,
+  pf, isBlank, round2, fmtP, fmtPct, totalIncome, parseRate, liveLiabilities, suggestClassification, dsrTier, clientOnly,
 } from "../_shared/kw-finance.ts";
 import type { Assessment, Classification, RatePeriod, RawLiability, Tier, IncomeView } from "../_shared/kw-finance.ts";
 
@@ -210,10 +210,11 @@ export function suggestAction(raw: RawLiability, income: number, norm: number, c
 }
 
 // ── main ────────────────────────────────────────────────────────
-export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs = {}): RehabComputed {
+export function computeRehab(full: Assessment, prep: RehabPrep, inputs: RehabInputs = {}): RehabComputed {
+  const a = clientOnly(full);
   const personal = a.personal || {};
   const income = totalIncome(a);
-  // inc is household take-home: what the budget, surplus and cuts are
+  // inc is the client's own take-home: what the budget, surplus and cuts are
   // measured against, because that is the cash there is. DSR is measured
   // against the client's own GROSS income (decided 4 Oct 2026): gross salary
   // plus their own business, rental and dividend income, never spouse
@@ -406,8 +407,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
   // ── Budget correction ────────────────────────────────────────
   const budget = a.budget || {};
   const customIds = (Array.isArray(a.budgetOtherCustom) ? a.budgetOtherCustom : []).map((c) => String(c.id || "")).filter(Boolean);
-  const budgetVals = Object.values(budget).map(pf);
-  const captured = budgetVals.some((v) => v > 0);
+  const captured = !!a.budgetOnRecord;
   const groups: BudgetGroupView[] = [];
   let totalSpend: number | null = null, shortfall: number | null = null, cashGap: number | null = null, budgetedDebt: number | null = null;
   const TARGETS: Record<string, { pct: number; kind: "max" | "min" } | null> = { needs: { pct: 50, kind: "max" }, wants: { pct: 30, kind: "max" }, savings: { pct: 20, kind: "min" }, other: null };
@@ -437,7 +437,7 @@ export function computeRehab(a: Assessment, prep: RehabPrep, inputs: RehabInputs
 
   // ── Levers: income concentration (facts only) ────────────────
   const concentration: string[] = [];
-  if (inc > 0 && income.spouse_income === 0) concentration.push("Single-earner household — no spouse income captured");
+  if (inc > 0 && income.rental_income + income.business_income + income.dividends === 0) concentration.push("Single income stream: no rental, business or dividend income captured");
   if (income.business_income > 0 && /declin|dropp|drop |fall|fell|down|slow/.test(notesText)) concentration.push("Business income reported as declining in the advisor's notes");
   if (inc > 0 && income.net_salary > 0 && income.net_salary / inc < 0.5 && income.business_income > 0) concentration.push("More than half of income is business income, not salary");
 

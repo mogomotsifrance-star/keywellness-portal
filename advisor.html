@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="js/dsr-bands.js"></script>
+<script src="js/kw-household.js"></script>
 <style>
 /* ============================================================
    kw-theme.css — inlined so this file renders correctly no matter
@@ -2658,7 +2659,7 @@ function incomeLiveHtml(c){
     </div>
     <div class="card-title">At a glance</div>
     <div class="stat-grid" style="margin-bottom:0">
-      <div class="stat-box"><div class="stat-val">${fmt(t.totalIncome)}</div><div class="stat-lbl">Total Monthly Household Income</div></div>
+      <div class="stat-box"><div class="stat-val">${fmt(t.totalIncome)}</div><div class="stat-lbl">Total Monthly Income</div></div>
       <div class="stat-box ${passivePct<10?'orange':'green'}"><div class="stat-val">${passivePct}%</div><div class="stat-lbl">From Passive Sources</div></div>
     </div>`;
 }
@@ -2734,7 +2735,7 @@ function saveLiabField(i, key, value, clientId){
   refreshLiabRow(i);
 }
 function liabTotalsHtml(c){
-  const live = c.liabilities.filter(liabIsLive);
+  const live = KWHousehold.clientLoans(c).filter(liabIsLive);
   const principal = live.reduce((s,r)=>s+pf(r.loanAmount),0);
   const outstanding = live.reduce((s,r)=>s+pf(r.balance),0);
   const missing = live.filter(r=>!pf(r.balance)).length;
@@ -3577,7 +3578,7 @@ function formatMoneyField(el){
 }
 function panelRobo(c){
   const t = calcTotals(c);
-  const debts = c.liabilities.filter(l=>pf(l.balance)>0).map(l=>({
+  const debts = KWHousehold.clientLoans(c).filter(l=>pf(l.balance)>0).map(l=>({
     name: l.item, balance: pf(l.balance), rate: pf(String(l.interestRate||'').replace('%','')), minPayment: pf(l.monthlyInstalment)
   }));
   if(!debts.length){
@@ -3860,7 +3861,7 @@ function panelReportPFA(c){
   /* ── Executive summary (notes ABOVE the tables) — a short narrative
      an advisor can read out loud, auto-built from the diagnostics. ── */
   const summary = `As of ${fmtDate(new Date().toISOString())}, ${esc(fullName(c))} has a net worth of
-    <strong>${fmtSigned(t.netWorth)}</strong> on total monthly household income of <strong>${fmt(t.totalIncome)}</strong>.
+    <strong>${fmtSigned(t.netWorth)}</strong> on total monthly income of <strong>${fmt(t.totalIncome)}</strong>.
     Debt service ratio sits at <strong>${dsrTxt(t)}</strong> of own gross income (${debt.label}). Income is rated
     <strong>${inc.label}</strong>, spending against the 50/30/20 budget is <strong>${exp.label}</strong>, and lifestyle
     affordability is <strong>${life.label}</strong>. Full detail for each area is below, with the advisor's
@@ -3873,7 +3874,6 @@ function panelReportPFA(c){
     ['PAYE (tax table)', '-'+fmt(t.paye)],
     ['Other deductions', '-'+fmt(pf(c.income.otherDeductions))],
     ['Net salary', fmt(t.netSalary)],
-    ['Spouse income', fmt(t.spouseIncome)],
     ['Rental income', fmt(pf(c.income.rentals))],
     ['Business income', fmt(pf(c.income.businessIncome))],
     ['Dividends', fmt(pf(c.income.dividends))],
@@ -3885,7 +3885,7 @@ function panelReportPFA(c){
   // "Not recorded", never P 0.00. The repayment is the exception: a 0
   // instalment on an informal debt is a real fact the client gave us.
   const NR = '<span class="rp-nr">Not recorded</span>';
-  const liabData = c.liabilities.filter(r=>pf(r.balance)||pf(r.monthlyInstalment)||r.institution||pf(r.loanAmount));
+  const liabData = KWHousehold.clientLoans(c).filter(r=>pf(r.balance)||pf(r.monthlyInstalment)||r.institution||pf(r.loanAmount));
   const liabRows = liabData.map(r=>[esc(r.item), esc(r.institution)||NR,
     pf(r.loanAmount)?fmt(pf(r.loanAmount)):NR, pf(r.balance)?fmt(pf(r.balance)):NR,
     r.termMonths?esc(fmtTerm(r.termMonths)):NR, esc(r.interestRate)||NR, fmt(pf(r.monthlyInstalment))]);
@@ -5028,15 +5028,22 @@ function drpRenderPrepare(){
    Thresholds mirror dti_calculator.html / lifestyle_inflation_calculator.html
    so a client reads the same way here as on their own tool pages.
    ================================================================ */
+// The two views (js/kw-household.js), with net salary from this page's PAYE table.
+function kwViews(c){ return KWHousehold.householdViews(c, calcNetSalary(c.income).net); }
 function calcTotals(c){
   const netCalc = calcNetSalary(c.income);
   const grossSalary = netCalc.gross, paye = netCalc.paye, netSalary = netCalc.net;
-  const spouseIncome = pf(c.income.spouseIncome);
   const passiveIncome = pf(c.income.rentals) + pf(c.income.businessIncome) + pf(c.income.dividends);
-  const totalIncome = netSalary + spouseIncome + passiveIncome;
+  // Every figure here is the INDIVIDUAL view (23 Nov 2026): the client's own
+  // income, their share of each budget line, and every loan they are liable
+  // for whoever pays it. Nothing about the spouse's income is read. The
+  // Household column comes from kwViews() and feeds nothing.
+  const totalIncome = netSalary + passiveIncome;
 
-  const totalDebtInstalment = c.liabilities.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
-  const totalLiabilityBalance = c.liabilities.reduce((s,r)=>s+pf(r.balance),0);
+  const ownLoans = KWHousehold.clientLoans(c);
+  const share = id => KWHousehold.clientAmount(c, id);
+  const totalDebtInstalment = ownLoans.reduce((s,r)=>s+pf(r.monthlyInstalment),0);
+  const totalLiabilityBalance = ownLoans.reduce((s,r)=>s+pf(r.balance),0);
   // DSR is on the client's OWN gross income (decided 4 Oct 2026): gross
   // salary plus their own business, rental and dividend income. Spouse
   // income stays out. Salary alone read a business owner on P 4,000 salary
@@ -5057,11 +5064,11 @@ function calcTotals(c){
   const savingsMonthly = c.savings.reduce((s,r)=>s+pf(r.monthlyContribution),0);
   const savingsRateFromSavingsTab = totalIncome>0 ? (savingsMonthly/totalIncome*100) : 0;
 
-  const needsAmt = EXPENSE_GROUPS.find(g=>g.id==='needs').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
-  const wantsAmt = EXPENSE_GROUPS.find(g=>g.id==='wants').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
-  const savingsAmt = EXPENSE_GROUPS.find(g=>g.id==='savings').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
-  const otherAmt = EXPENSE_GROUPS.find(g=>g.id==='other').cats.reduce((s,cat)=>s+pf(c.budget[cat.id]),0)
-    + (c.budgetOtherCustom||[]).reduce((s,cat)=>s+pf(c.budget[cat.id]),0);
+  const needsAmt = EXPENSE_GROUPS.find(g=>g.id==='needs').cats.reduce((s,cat)=>s+share(cat.id),0);
+  const wantsAmt = EXPENSE_GROUPS.find(g=>g.id==='wants').cats.reduce((s,cat)=>s+share(cat.id),0);
+  const savingsAmt = EXPENSE_GROUPS.find(g=>g.id==='savings').cats.reduce((s,cat)=>s+share(cat.id),0);
+  const otherAmt = EXPENSE_GROUPS.find(g=>g.id==='other').cats.reduce((s,cat)=>s+share(cat.id),0)
+    + (c.budgetOtherCustom||[]).reduce((s,cat)=>s+share(cat.id),0);
   const totalExpenses = needsAmt+wantsAmt+savingsAmt+otherAmt;
   const surplus = totalIncome - totalExpenses;
 
@@ -5075,10 +5082,10 @@ function calcTotals(c){
   //                          (the one definition of saving; never debt_extra)
   //   living expenses        everything else
   // The PFA report and the Budget tab both read these, so they cannot differ.
-  const budgetDebtAmt = pf(c.budget.debt_min) + pf(c.budget.debt_extra);
-  const budgetSavingsAmt = ['emfund','retirement','invest','goals','motshelo'].reduce((s,k)=>s+pf(c.budget[k]),0);
+  const budgetDebtAmt = share('debt_min') + share('debt_extra');
+  const budgetSavingsAmt = ['emfund','retirement','invest','goals','motshelo'].reduce((s,k)=>s+share(k),0);
   const budgetLivingAmt = totalExpenses - budgetDebtAmt - budgetSavingsAmt;
-  const budgetDebtMin = pf(c.budget.debt_min);
+  const budgetDebtMin = share('debt_min');
 
   const needsPct = totalIncome>0 ? needsAmt/totalIncome*100 : 0;
   const wantsPct = totalIncome>0 ? wantsAmt/totalIncome*100 : 0;
@@ -5089,7 +5096,7 @@ function calcTotals(c){
   // the DSR is a percentage of.
   const debtCapacity = Math.max(0, dsrIncome*(kwLendingNorm()/100) - totalDebtInstalment);
 
-  return { totalIncome, grossSalary, paye, netSalary, spouseIncome, passiveIncome, dsrIncome, totalDebtInstalment, totalLiabilityBalance, dti,
+  return { totalIncome, grossSalary, paye, netSalary, passiveIncome, dsrIncome, totalDebtInstalment, totalLiabilityBalance, dti,
     totalAssets, incomeGenAssets, assetIncomePct, totalSavingsBalance, netWorth, savingsMonthly, savingsRateFromSavingsTab,
     needsAmt, wantsAmt, savingsAmt, otherAmt, totalExpenses, surplus, needsPct, wantsPct, savingsPct, debtCapacity,
     budgetDebtAmt, budgetSavingsAmt, budgetLivingAmt, budgetDebtMin };
@@ -5223,9 +5230,9 @@ function analyseIncome(t, c){
     score += 12;
     ind.push({ label:'Passive income below target', detail:`Passive income is ${passivePct.toFixed(1)}% against a 30% target.` });
   }
-  if(t.spouseIncome <= 0 && t.passiveIncome <= 0){
+  if(t.passiveIncome <= 0){
     score += 15;
-    ind.push({ label:'Single income stream', detail:'The household depends on one salary with no second earner and no passive income.' });
+    ind.push({ label:'Single income stream', detail:'The client\'s own income is one salary, with no rental, business or dividend income.' });
   }
   if(t.totalAssets > 0 && t.assetIncomePct < 70){
     score += 10;
@@ -5237,7 +5244,7 @@ function analyseIncome(t, c){
   }
 
   // Plan of action
-  act.push('Verify the income figures are complete — allowances, overtime, 13th cheque and any spouse income. Under-captured income is the most common cause of a false income problem.');
+  act.push('Verify the income figures are complete — allowances, overtime, 13th cheque and any other income of their own. Under-captured income is the most common cause of a false income problem.');
   if(ind.some(i=>i.label==='Income below essentials')){
     act.push('Treat this as an income problem first: budgeting cannot close a gap where essentials alone exceed income. Agree one concrete income action before adjusting the budget.');
     act.push('Review whether any essential is actually a restructurable commitment (housing, transport, insurance) rather than a fixed cost.');
@@ -5322,7 +5329,7 @@ function analyseDebt(t, c){
     return { key:'debt', title:'Debt', score:null, incomplete:true,
              indicators:[], actions:[], summary:'Capture gross income and liabilities to run this analysis.' };
   }
-  const active = (c.liabilities || []).filter(l => pf(l.balance) > 0);
+  const active = KWHousehold.clientLoans(c).filter(l => pf(l.balance) > 0);
   const costly = active.filter(l => pf(String(l.interestRate || '').replace('%','')) >= 20);
 
   if(t.totalLiabilityBalance <= 0){
@@ -5778,7 +5785,7 @@ function loadClientDebtsIntoTool(section, clientId){
   toolState[section].clientId = clientId;
   const cl = clients.find(x=>x.id===clientId);
   if(cl){
-    const debts = cl.liabilities.filter(l=>pf(l.balance)>0).map(l=>({ name:l.item, balance:pf(l.balance), rate:pf(String(l.interestRate).replace('%','')), payment:pf(l.monthlyInstalment) }));
+    const debts = KWHousehold.clientLoans(cl).filter(l=>pf(l.balance)>0).map(l=>({ name:l.item, balance:pf(l.balance), rate:pf(String(l.interestRate).replace('%','')), payment:pf(l.monthlyInstalment) }));
     if(section==='consolidation') toolState.consolidation.debts = debts.length? debts : [{name:'Debt 1', balance:0, rate:0, payment:0}];
     if(section==='restructuring' && debts.length){
       toolState.restructuring.balance = debts.reduce((s,d)=>s+d.balance,0);

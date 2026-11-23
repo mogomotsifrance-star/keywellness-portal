@@ -113,7 +113,6 @@ export function buildContent(c: RehabComputed, meta: RehabMeta, n: RehabNarrativ
           { label: "Gross salary", value: fmtP(c.income.gross_salary) },
           { label: "PAYE", value: fmtP(c.income.paye) },
           { label: "Net salary", value: fmtP(c.income.net_salary) },
-          { label: "Spouse income", value: fmtP(c.income.spouse_income) },
           { label: "Business / rental / dividends", value: fmtP(c.income.business_income + c.income.rental_income + c.income.dividends) },
           { label: "Total monthly income", value: fmtP(c.income.total_monthly_income) },
         ],

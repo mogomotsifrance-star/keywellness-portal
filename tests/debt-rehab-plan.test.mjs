@@ -76,7 +76,8 @@ ok("all-in cash gap P 9,050.00 (budget carries no debt line)", () => { assert.eq
 ok("levers: AUDI on, covers the informal balance 4.35×; savings not captured is a gap; single earner + declining business", () => {
   assert.equal(c.levers.assets.length, 1); assert.equal(c.levers.assets[0].on, true); assert.equal(c.levers.assets[0].cover_multiple, 4.35);
   assert.ok(c.gaps.some(g => /Savings and investments not captured/.test(g)));
-  assert.equal(c.levers.income_concentration.length, 3);
+  // 23 Nov 2026: 2, not 3. "No spouse income captured" is gone; the plan reads nothing about a spouse.
+  assert.equal(c.levers.income_concentration.length, 2);
 });
 ok("net worth −P 133,000.00 (assets 100,000 − liabilities 233,000, savings 0)", () => assert.equal(c.net_worth.net, -133000));
 ok("Phase 1 band 44.72% – 52.51% · Phase 2 band 40.00% – 47.79% · Phase 3 target 40%", () => {

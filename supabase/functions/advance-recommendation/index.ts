@@ -47,6 +47,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { compute, fmtP, fmtPct, liveLiabilities, suggestClassification } from "./compute.ts";
+import { clientOnly } from "../_shared/kw-finance.ts";
 import type { Assessment, Computed, OverrideInput, Prep } from "./compute.ts";
 import { buildContent, fallbackNarrative, cleanNarrative, MAX_BULLETS, programmeFor, EMPLOYER_UNKNOWN } from "./report.ts";
 import type { Narrative } from "./report.ts";
@@ -228,7 +229,7 @@ serve(async (req) => {
     .eq("id", clientId).maybeSingle();
   if (cErr) { console.error("client read failed:", cErr.message); return json(req, { ok: false, message: "Could not read the client record." }, 500); }
   if (!client) return json(req, { ok: false, message: "Client not found or not in your caseload." }, 403);
-  const assessment = (client.assessment || {}) as Assessment;
+  const assessment = clientOnly((client.assessment || {}) as Assessment);
 
   // The advisor's figure, if one is active (supabase_advance_override.sql).
   // Read AS THE CALLER through a gated RPC. If it cannot be read, nothing is
@@ -309,7 +310,7 @@ serve(async (req) => {
   ];
   const input = {
     client_id: client.id,
-    snapshot: { personal: assessment.personal, kids: assessment.kids, income: assessment.income, liabilities: assessment.liabilities, budget: assessment.budget, notes: assessment.notes },
+    snapshot: { personal: assessment.personal, kids: assessment.kids, income: assessment.income, liabilities: assessment.liabilities, budget: assessment.budget, budgetOnRecord: assessment.budgetOnRecord, notes: assessment.notes },
     prep: { ...prep, recommendation_date: today, consultant },
     generated_by: user.id,
   };
