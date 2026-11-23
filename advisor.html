@@ -618,7 +618,7 @@ body.doc-viewer-open{overflow:hidden}
 .kw-dsr-why p{margin-top:6px}
 /* Liabilities table (4 Oct 2026): numbers right-aligned in tabular figures */
 .rt-num, .rt-num input{text-align:right;font-variant-numeric:tabular-nums}
-.rt-liab{min-width:860px}
+.rt-liab{min-width:1030px}
 .rt-muted{font-size:10.5px;color:var(--muted);margin-top:2px}
 .rt-warn{font-size:10.5px;color:var(--orange);margin-top:2px;text-align:left;line-height:1.35}
 .rt-total td{font-weight:700;border-top:2px solid var(--border);background:var(--kw-surface);font-variant-numeric:tabular-nums;font-size:12.5px}
@@ -632,6 +632,19 @@ body.doc-viewer-open{overflow:hidden}
 .bud-sum-net.short th,.bud-sum-net.short td{color:var(--red)}
 .bud-sum-word{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .bud-sum-note{font-size:11.5px;color:var(--orange);margin:-8px 0 14px;line-height:1.5}
+/* Household layer (23 Nov 2026): rules, not boxes */
+.hh-sw{display:flex;gap:10px;align-items:flex-start;border-top:1px solid var(--border);margin-top:18px;padding-top:14px;font-size:13px;font-weight:600;cursor:pointer}
+.hh-sw input{width:16px;height:16px;margin-top:1px;flex-shrink:0;accent-color:var(--kw-green)}
+.hh-field{max-width:340px;margin-top:12px}
+.hh-hint{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:6px}
+.hh-pb{grid-column:1 / -1;display:flex;gap:8px;align-items:center;justify-content:flex-end;font-size:11.5px;color:var(--muted)}
+.hh-pb select,.hh-pb input,.rt-wrap input.hh-split{padding:4px 6px;border:1px solid var(--border);border-radius:2px;font-size:12px;background:var(--white);color:var(--text)}
+.hh-pb input,.rt-wrap input.hh-split{width:58px}
+.hh-split-row{display:flex;gap:4px;align-items:center;margin-top:4px;font-size:10.5px;color:var(--muted)}
+.hh-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.hh-tbl th,.hh-tbl td{text-align:right;padding:7px 0 7px 12px;border-bottom:1px solid var(--border)}
+.hh-tbl th:first-child{text-align:left;padding-left:0;font-weight:600}
+.hh-tbl tbody td{font-weight:700;white-space:nowrap}
 /* PFA additions (4 Oct 2026) */
 .rp-nr{color:var(--muted);font-style:italic;font-weight:400;font-size:11px}
 .rp-dsr{font-size:13px;line-height:1.65;color:var(--text)}
@@ -2638,13 +2651,100 @@ function panelIncome(c){
       <div class="form-grid cols-3">
         ${field('monthlySalary','Monthly Salary (gross)')}
         ${field('otherDeductions','Other Deductions','Pension, medical aid, garnishee, union fees, etc.')}
-        ${field('spouseIncome','Spouse Income')}
         ${field('rentals','Rental Income')}
         ${field('businessIncome','Business Income')}
         ${field('dividends','Dividends')}
       </div>
+      ${householdSwitchHtml(c)}
     </div>
     <div class="card" id="incomeLive">${incomeLiveHtml(c)}</div>`;
+}
+/* ---------- HOUSEHOLD ---------- */
+// The switch shows or hides the Household column and the report tick. It
+// never changes a figure and turning it off deletes nothing.
+function householdSwitchHtml(c){
+  const h = KWHousehold.household(c);
+  const old = pf(c.income.spouseIncome);
+  const prompt = old > 0 && h.spouseContribution === null
+    ? `<div class="hh-hint" id="hh-legacy">This record has an earlier spouse income of ${fmt(old)}. It is no longer counted in your client's figures. If they share a household budget, switch this on and enter the monthly contribution.</div>` : '';
+  return `<label class="hh-sw"><input type="checkbox" id="hh-on" ${h.enabled?'checked':''} onchange="setHousehold('enabled', this.checked)"><span>This client shares a household budget with a spouse</span></label>${prompt}
+    ${h.enabled ? `<div class="field hh-field"><label for="hh-amt">Spouse's monthly contribution to the household (P)</label>
+      <div class="money-wrap"><span class="pre">P</span><input type="text" inputmode="decimal" id="hh-amt" value="${h.spouseContribution===null?'':liabMoney(h.spouseContribution)}" placeholder="0" oninput="setHousehold('spouseContribution', this.value)"></div>
+      <div class="hh-hint">One figure. We do not record anything else about your client's spouse.</div></div>` : ''}`;
+}
+function setHousehold(key, value){
+  const c = getClient();
+  c.household = Object.assign({ enabled:false, spouseContribution:null }, c.household);
+  if(key === 'enabled') c.household.enabled = !!value;
+  else c.household.spouseContribution = String(value).trim()==='' ? null : pf(value);
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  if(key === 'enabled'){ renderClientEditor(); const el = document.getElementById('hh-on'); if(el) el.focus(); }
+  else { const p = document.getElementById('hh-legacy'); if(p) p.remove(); }
+}
+const HH_PAYERS = [['client','Client'],['spouse','Spouse'],['shared','Shared']];
+const HH_LIABLE = [['client','Client'],['spouse','Spouse'],['joint','Joint']];
+function hhOptions(list, v){ return list.map(o=>`<option value="${o[0]}" ${o[0]===v?'selected':''}>${o[1]}</option>`).join(''); }
+// Paid by, under one budget line. Editable while the switch is on. While it is
+// off, an attribution that still applies is shown read-only with its date.
+function paidByHtml(c, cat){
+  const p = KWHousehold.paidBy(c, cat);
+  if(!KWHousehold.household(c).enabled){
+    if(p.by === 'client') return '';
+    return `<div class="hh-pb" id="pb-${cat}">Paid by ${p.by==='spouse'?'spouse':`both, client ${p.split}%`}${p.setAt?`, set ${fmtDate(p.setAt)}`:''}. Still counted this way.</div>`;
+  }
+  return `<div class="hh-pb" id="pb-${cat}"><label for="pbs-${cat}">Paid by</label>
+    <select id="pbs-${cat}" onchange="savePaidBy('${cat}','by',this.value)">${hhOptions(HH_PAYERS, p.by)}</select>
+    ${p.by==='shared' ? `<label for="pbx-${cat}">client's share %</label><input type="number" id="pbx-${cat}" min="0" max="100" value="${p.split}" onchange="savePaidBy('${cat}','split',this.value)">` : ''}</div>`;
+}
+function savePaidBy(cat, key, value){
+  const c = getClient();
+  c.budgetPaidBy = c.budgetPaidBy || {};
+  const was = KWHousehold.paidBy(c, cat);
+  const by = key==='by' ? value : was.by;
+  if(by === 'client') delete c.budgetPaidBy[cat];
+  else {
+    const split = key==='split' ? Math.min(100, Math.max(0, pf(value))) : 50;
+    c.budgetPaidBy[cat] = { by, setAt: new Date().toISOString() };
+    if(by === 'shared') c.budgetPaidBy[cat].split = split;
+  }
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  const el = document.getElementById('pb-'+cat);
+  if(el) el.outerHTML = paidByHtml(c, cat);
+  const back = document.getElementById((key==='split'?'pbx-':'pbs-')+cat); if(back) back.focus();
+  const bars = document.getElementById('budgetBars'); if(bars) bars.innerHTML = budgetBarsHtml(c);
+  const sum = document.getElementById('budgetSummary'); if(sum) sum.innerHTML = budgetSummaryHtml(c);
+}
+function saveLoanParty(i, key, value, clientId){
+  const c = clients.find(x=>x.id===clientId); const r = c && c.liabilities[i]; if(!r) return;
+  if(key==='liable' && value==='spouse'){
+    const kept = String(r.institution||'').trim() || pf(r.loanAmount) || pf(r.balance) || String(r.interestRate||'').trim() || r.termMonths;
+    if(kept && !confirm("We do not keep a lender, balance, rate, term or loan amount for a loan only the spouse is liable for. Continue, and remove them from this record? The instalment stays.")){ renderClientEditor(); return; }
+    KWHousehold.stripSpouseLoan(r);
+  }
+  if(key==='paidSplit') r.paidSplit = Math.min(100, Math.max(0, pf(value)));
+  else r[key] = value;
+  if(key==='paidBy'){ if(value==='shared') r.paidSplit = 50; else delete r.paidSplit; }
+  c.updatedAt = new Date().toISOString();
+  persistClients();
+  renderClientEditor();
+  const el = document.getElementById(`ln-${key}-${i}`); if(el) el.focus();
+}
+// The two columns on Diagnostics. No ratio is ever shown in the second.
+function householdTableHtml(c){
+  const v = kwViews(c); if(!v.household) return '';
+  const h = KWHousehold.household(c), m = v.individual, hh = v.household, t = calcTotals(c);
+  const row = (l, a, b)=>`<tr><th scope="row">${l}</th><td>${a}</td><td>${b}</td></tr>`;
+  const left = n => n < 0 ? fmt(Math.abs(n))+' short' : fmt(n);
+  return `<div class="card" id="hhView"><div class="card-title">Individual and household</div>
+    <table class="hh-tbl"><thead><tr><th></th><th scope="col">Individual</th><th scope="col">Household</th></tr></thead><tbody>
+      ${row('Income', fmt(m.income), fmt(hh.income))}${row('Expenses, loans apart', fmt(m.expenses), fmt(hh.expenses))}
+      ${row('Debt service', fmt(m.debtService), fmt(hh.debtService))}${row('Surplus', left(m.surplus), left(hh.surplus))}
+    </tbody></table>
+    <div class="hh-hint">Not used for the DSR, the bands or any recommendation.</div>
+    <div class="hh-hint">Loans are counted once, from the Liabilities tab, so the budget's Minimum Debt Payments line is left out here.${Math.abs(t.budgetDebtMin - t.totalDebtInstalment) >= 0.005 ? ` That line is ${fmt(t.budgetDebtMin)} and your client's instalments are ${fmt(t.totalDebtInstalment)}: check which is right.` : ''}</div>
+    ${h.spouseContribution===null ? `<div class="hh-hint">The spouse's monthly contribution is not recorded, so the Household column counts none. Enter it on the Income tab.</div>` : ''}</div>`;
 }
 function incomeLiveHtml(c){
   const t = calcTotals(c);
@@ -2746,8 +2846,8 @@ function liabTotalsHtml(c){
       <td class="rt-num">${fmt(outstanding)}${missing?`<div class="rt-muted">${missing} not recorded</div>`:''}</td>
       <td></td><td></td>
       <td class="rt-num">${fmt(monthly)}</td>
-      <td></td>
-    </tr>`;
+      <td></td><td></td><td></td>
+    </tr>${c.liabilities.length!==KWHousehold.clientLoans(c).length?'<tr><td colspan="10" class="rt-muted">Totals leave out loans only the spouse is liable for.</td></tr>':''}`;
 }
 function refreshLiabRow(i){
   const c = getClient(); if(!c) return;
@@ -2760,16 +2860,19 @@ function panelLiabilities(c){
   syncInstitutionList();
   const rows = c.liabilities.map((r,i)=>{
     const live = liabIsLive(r);
-    const nr = live ? 'Not recorded' : '';
+    const ln = KWHousehold.loan(r), sp = ln.liable === 'spouse';
+    const nr = sp ? 'Not kept' : live ? 'Not recorded' : '', off = sp ? ' disabled' : '';
     return `
     <tr>
       <td>${r.fixed?`<span class="rt-fixed-name">${esc(r.item)}</span>`:`<input type="text" value="${esc(r.item)}" oninput="saveRow('liabilities',${i},'item',this.value)" placeholder="Item">`}</td>
-      <td><input type="text" list="bw-institutions-credit" value="${esc(r.institution)}" oninput="saveRow('liabilities',${i},'institution',this.value)" onchange="saveLiabField(${i},'institution',this.value,'${c.id}')" placeholder="${live?'Not recorded':'Bank or microlender'}"></td>
-      <td class="rt-num"><input type="text" inputmode="decimal" value="${r.loanAmount?liabMoney(r.loanAmount):''}" oninput="saveRow('liabilities',${i},'loanAmount',this.value,true); refreshLiabRow(${i})" placeholder="0"></td>
-      <td class="rt-num"><input type="text" inputmode="decimal" value="${pf(r.balance)?liabMoney(r.balance):''}" oninput="saveLiabField(${i},'balance',this.value,'${c.id}')" placeholder="${nr||'0'}"><div id="liab-warn-${i}">${liabWarnHtml(r)}</div></td>
-      <td class="rt-num"><input type="text" inputmode="numeric" value="${r.termMonths||''}" oninput="saveLiabField(${i},'termMonths',this.value,'${c.id}')" placeholder="${nr||'months'}"><div class="rt-muted" id="liab-term-${i}">${fmtTerm(r.termMonths)}</div></td>
-      <td><input type="text" value="${esc(r.interestRate)}" oninput="saveRow('liabilities',${i},'interestRate',this.value)" placeholder="e.g. 14%"></td>
+      <td><input type="text" list="bw-institutions-credit" value="${esc(r.institution)}" oninput="saveRow('liabilities',${i},'institution',this.value)" onchange="saveLiabField(${i},'institution',this.value,'${c.id}')" placeholder="${sp?'Not kept':live?'Not recorded':'Bank or microlender'}"${off}></td>
+      <td class="rt-num"><input type="text" inputmode="decimal" value="${r.loanAmount?liabMoney(r.loanAmount):''}" oninput="saveRow('liabilities',${i},'loanAmount',this.value,true); refreshLiabRow(${i})" placeholder="${sp?nr:'0'}"${off}></td>
+      <td class="rt-num"><input type="text" inputmode="decimal" value="${pf(r.balance)?liabMoney(r.balance):''}" oninput="saveLiabField(${i},'balance',this.value,'${c.id}')" placeholder="${nr||'0'}"${off}><div id="liab-warn-${i}">${liabWarnHtml(r)}</div></td>
+      <td class="rt-num"><input type="text" inputmode="numeric" value="${r.termMonths||''}" oninput="saveLiabField(${i},'termMonths',this.value,'${c.id}')" placeholder="${nr||'months'}"${off}><div class="rt-muted" id="liab-term-${i}">${fmtTerm(r.termMonths)}</div></td>
+      <td><input type="text" value="${esc(r.interestRate)}" oninput="saveRow('liabilities',${i},'interestRate',this.value)" placeholder="${sp?nr:'e.g. 14%'}"${off}></td>
       <td class="rt-num"><input type="text" inputmode="decimal" value="${r.monthlyInstalment?liabMoney(r.monthlyInstalment):''}" oninput="saveRow('liabilities',${i},'monthlyInstalment',this.value,true); refreshDebtStat(); refreshLiabRow(${i})" placeholder="0"></td>
+      <td><select id="ln-liable-${i}" aria-label="Liable" onchange="saveLoanParty(${i},'liable',this.value,'${c.id}')">${hhOptions(HH_LIABLE, ln.liable)}</select></td>
+      <td><select id="ln-paidBy-${i}" aria-label="Paid by" onchange="saveLoanParty(${i},'paidBy',this.value,'${c.id}')">${hhOptions(HH_PAYERS, ln.paidBy)}</select>${ln.paidBy==='shared'?`<div class="hh-split-row"><input type="number" class="hh-split" id="ln-paidSplit-${i}" aria-label="Client's share %" min="0" max="100" value="${ln.paidSplit}" onchange="saveLoanParty(${i},'paidSplit',this.value,'${c.id}')">% client</div>`:''}</td>
       <td><button class="rt-del" ${r.fixed?'disabled':''} onclick="removeRow('liabilities',${i})">✕</button></td>
     </tr>`;
   }).join('');
@@ -2779,11 +2882,12 @@ function panelLiabilities(c){
       <div class="card-hint">You must know all unsecured loans, and how much interest you pay on each. Loan amount is what was borrowed; outstanding balance is what is still owed today.</div>
       <div class="rt-wrap">
         <table class="rt-liab">
-          <thead><tr><th style="width:120px">Item</th><th>Institution</th><th class="rt-num" style="width:110px">Loan amount</th><th class="rt-num" style="width:120px">Outstanding balance</th><th class="rt-num" style="width:96px">Loan term (months)</th><th style="width:80px">Interest</th><th class="rt-num" style="width:120px">Monthly instalment</th><th style="width:36px"></th></tr></thead>
+          <thead><tr><th style="width:120px">Item</th><th>Institution</th><th class="rt-num" style="width:110px">Loan amount</th><th class="rt-num" style="width:120px">Outstanding balance</th><th class="rt-num" style="width:96px">Loan term (months)</th><th style="width:80px">Interest</th><th class="rt-num" style="width:120px">Monthly instalment</th><th style="width:84px">Liable</th><th style="width:92px">Paid by</th><th style="width:36px"></th></tr></thead>
           <tbody>${rows}</tbody>
           <tfoot id="liab-total">${liabTotalsHtml(c)}</tfoot>
         </table>
       </div>
+      <div class="hh-hint" style="margin:0 0 12px">Loans your client is liable for count in their debt service ratio even when someone else pays them.</div>
       <button class="btn btn-outline btn-sm" onclick="addRow('liabilities',{item:'Other',institution:'',loanAmount:0,interestRate:'',balance:null,termMonths:null,monthlyInstalment:0,fixed:false})">+ Add liability</button>
     </div>
     <div class="card" id="debtStat">${debtStatHtml(c)}</div>`;
@@ -2951,7 +3055,7 @@ function panelBudget(c){
             <span>${cat.name}</span>
             <div class="money-wrap"><span class="pre">P</span>
             <input type="text" inputmode="decimal" value="${c.budget[cat.id]?Number(c.budget[cat.id]).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0"
-              oninput="saveBudget('${cat.id}', this.value)"></div>
+              oninput="saveBudget('${cat.id}', this.value)"></div>${paidByHtml(c, cat.id)}
           </div>`).join('')}
         ${customItems.map(cat=>`
           <div class="cat-row" style="grid-template-columns:1fr 140px 28px">
@@ -2959,7 +3063,7 @@ function panelBudget(c){
             <div class="money-wrap"><span class="pre">P</span>
             <input type="text" inputmode="decimal" value="${c.budget[cat.id]?Number(c.budget[cat.id]).toLocaleString('en-BW',{minimumFractionDigits:2,maximumFractionDigits:2}):''}" placeholder="0"
               oninput="saveBudget('${cat.id}', this.value)"></div>
-            <button class="rt-del" onclick="removeBudgetOtherItem('${cat.id}')">✕</button>
+            <button class="rt-del" onclick="removeBudgetOtherItem('${cat.id}')">✕</button>${paidByHtml(c, cat.id)}
           </div>`).join('')}
         ${g.id==='other' ? `<button class="btn btn-outline btn-sm" style="margin-top:8px" onclick="addBudgetOtherItem()">+ Add item</button>` : ''}
       </div>
@@ -2995,6 +3099,7 @@ function removeBudgetOtherItem(id){
   const c = getClient();
   c.budgetOtherCustom = (c.budgetOtherCustom||[]).filter(x=>x.id!==id);
   delete c.budget[id];
+  if(c.budgetPaidBy) delete c.budgetPaidBy[id];
   c.updatedAt = new Date().toISOString();
   persistClients();
   renderClientEditor();
@@ -3013,7 +3118,7 @@ function budgetSummaryHtml(c, opts){
       <tr><th>Total expenses<div class="bud-sum-sub">Living expenses ${fmt(t.budgetLivingAmt)} · Debt repayments ${fmt(t.budgetDebtAmt)} · Savings contributions ${fmt(t.budgetSavingsAmt)}</div></th><td class="rt-num">${fmt(t.totalExpenses)}</td></tr>
       <tr class="bud-sum-net ${short?'short':''}"><th>${short?'Shortfall':'Net income'}</th><td class="rt-num">${fmt(Math.abs(t.surplus))}${short?' <span class="bud-sum-word">shortfall</span>':''}</td></tr>
     </table>
-    ${mismatch && !opts.forReport ? `<div class="bud-sum-note">Minimum debt payments in this budget are ${fmt(t.budgetDebtMin)}; the Liabilities tab instalments total ${fmt(instTotal)}. The budget figure is used here. Check which is right with the client.</div>` : ''}`;
+    ${mismatch && !opts.forReport ? `<div class="bud-sum-note">Minimum debt payments in this budget are ${fmt(t.budgetDebtMin)}; the Liabilities tab instalments total ${fmt(instTotal)}. The budget figure is used here. Check which is right with the client.</div>` : ''}${!opts.forReport && Object.keys(c.budget||{}).some(k=>KWHousehold.paidBy(c,k).by!=='client') ? '<div class="hh-hint" style="margin:-8px 0 14px">Your client\'s share only. The line amounts below are what the household spends.</div>' : ''}`;
 }
 function budgetBarsHtml(c){
   const t = calcTotals(c);
@@ -3158,6 +3263,7 @@ function panelDiagnostics(c){
     </div>
     <div style="font-size:11.5px;color:var(--muted);font-style:italic;margin:-16px 0 20px">Net Worth = (Assets + Savings & Investments) − Liabilities.</div>
 
+    ${householdTableHtml(c)}
     ${verdict}
 
     <div class="diag-grid">

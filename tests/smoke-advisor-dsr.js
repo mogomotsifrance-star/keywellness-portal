@@ -55,6 +55,19 @@ const B = base('c-bbbb', 'Boitumelo', {
   budget:{ housing:5000, food:2500, misc:1000, transport:500, debt_min:4000, debt_extra:2000, emfund:1500, motshelo:500 },
 });
 
+/* Household worked example (23 Nov 2026): take-home 12,000 from a gross of
+   14,000; HO is a record with the legacy spouse figure and nothing else. */
+const HC = base('c-hhhh', 'Hana', {
+  income:{ monthlySalary:14000, otherDeductions:0, spouseIncome:0, rentals:0, businessIncome:0, dividends:0 },
+  liabilities:[ {item:'Car Loan', institution:'First National Bank', loanAmount:90000, interestRate:'12%', balance:60000, monthlyInstalment:2800, fixed:true},
+                {item:'Personal Loan', institution:'Absa', loanAmount:30000, interestRate:'18%', balance:20000, monthlyInstalment:1400, fixed:true},
+                {item:'Other', institution:'Letshego', loanAmount:7777, interestRate:'25%', balance:6666, monthlyInstalment:999, termMonths:12, fixed:false} ],
+  budget:{ housing:5500, food:3200, custom_fam:1500 }, budgetOtherCustom:[{ id:'custom_fam', name:'Family support' }],
+});
+const HO = base('c-hold', 'Oteng', {
+  income:{ monthlySalary:15000, otherDeductions:0, spouseIncome:8000, rentals:0, businessIncome:0, dividends:0 }, liabilities:[], budget:{ housing:4000 },
+});
+
 function stub(page) {
   return page.addInitScript(({ CLIENTS, ME }) => {
     window.__updates = [];
@@ -85,7 +98,7 @@ function stub(page) {
       }
     };
     window.supabase = { createClient: () => fake };
-  }, { CLIENTS: [A, B], ME });
+  }, { CLIENTS: [A, B, HC, HO], ME });
 }
 
 (async () => {
@@ -222,6 +235,63 @@ function stub(page) {
   const budSec = doc.slice(doc.indexOf('Personal Budget'), doc.indexOf('Advisory Diagnostic'));
   check('B6.7 budget totals appear in the report, without the advisor-only mismatch note',
     /Total income/.test(budSec) && /Total expenses/.test(budSec) && /Net income|Shortfall/.test(budSec) && !/Check which is right/.test(budSec), budSec.slice(0, 300));
+
+  /* ── Household (23 Nov 2026) ───────────────────────────────── */
+  const tab = async (id, t) => { await page.evaluate(([i, x]) => { openClient(i); switchTab(x); }, [id, t]); await page.waitForTimeout(250); };
+  const oneline = (sel) => page.evaluate((s) => { const e = document.querySelector(s); return e ? e.innerText.replace(/\s+/g, ' ') : ''; }, sel);
+  await page.evaluate((id) => { const c = clients.find(x => x.id === id); c.income.otherDeductions = calcNetSalary(c.income).net - 12000; }, HC.id);
+
+  let seen = [];
+  for (const t of ['personal', 'budget', 'diagnostics', 'report', 'liabilities']) { await tab(A.id, t); seen.push(await page.evaluate(() => document.getElementById('page-content').innerText)); }
+  check('H.1 switch off: no household wording on Personal, Budget, Diagnostics or Report', seen.slice(0, 4).every(s => !/household|spouse/i.test(s)));
+  check('H.2 switch off: Liabilities has only the Liable and Paid by columns and the note', /Liable/i.test(seen[4]) && /Paid by/i.test(seen[4])
+    && /Loans your client is liable for count in their debt service ratio even when someone else pays them\./.test(seen[4]) && !/household/i.test(seen[4])
+    && !(await page.evaluate(() => document.querySelector('.hh-pb'))));
+  await tab(HO.id, 'income');
+  check('H.3 a legacy spouse figure prompts, is not counted, and has no field', /earlier spouse income of P 8,000\.00/.test(await oneline('#hh-legacy'))
+    && !(await page.evaluate(() => document.querySelector('[oninput*="spouseIncome"]')))
+    && await page.evaluate((id) => { const t = calcTotals(clients.find(x => x.id === id)); return t.totalIncome === t.netSalary; }, HO.id));
+
+  await tab(HC.id, 'income');
+  check('H.4 the contribution field is hidden until the switch is on', !(await page.$('#hh-amt')));
+  await page.check('#hh-on'); await page.waitForTimeout(150);
+  await page.fill('#hh-amt', '9,000');
+  check('H.5 one field, with the agreed label and hint', /Spouse's monthly contribution to the household \(P\).*One figure\. We do not record anything else about your client's spouse\./i.test(await oneline('.hh-field')));
+  await tab(HC.id, 'budget');
+  await page.selectOption('#pbs-housing', 'shared');
+  check('H.6 the split appears only for Shared and defaults to 50', await page.inputValue('#pbx-housing') === '50' && !(await page.$('#pbx-food')));
+  await page.selectOption('#pbs-food', 'spouse');
+  check('H.7 the budget summary is the client share: 2,750 + 1,500', /Total expenses.*P 4,250\.00/.test(await oneline('#budgetSummary')), await oneline('#budgetSummary'));
+  await tab(HC.id, 'liabilities');
+  await page.selectOption('#ln-paidBy-0', 'spouse'); await page.waitForTimeout(150);
+  page.once('dialog', d => d.dismiss());
+  await page.selectOption('#ln-liable-2', 'spouse'); await page.waitForTimeout(150);
+  check('H.8 saying no to the confirmation keeps the loan as it was', await page.evaluate(() => { const r = getClient().liabilities[2]; return r.balance === 6666 && !r.liable; }) && await page.inputValue('#ln-liable-2') === 'client');
+  page.once('dialog', d => d.accept());
+  await page.selectOption('#ln-liable-2', 'spouse'); await page.waitForTimeout(150);
+  check('H.9 a spouse-only loan keeps name and instalment only, and leaves the DSR', await page.evaluate(() => {
+    const r = getClient().liabilities[2], t = calcTotals(getClient());
+    return r.institution === '' && r.balance === null && r.loanAmount === 0 && r.interestRate === '' && r.termMonths === null && r.monthlyInstalment === 999 && t.totalDebtInstalment === 4200 && t.dti === 30; }));
+  await page.evaluate(() => { getClient().liabilities.pop(); });
+  await tab(HC.id, 'diagnostics');
+  const hv = await oneline('#hhView');
+  check('H.10 both columns read true: 12,000 / 21,000, 4,250 / 10,200, 4,200 / 4,200, 3,550 / 6,600',
+    /Income P 12,000\.00 P 21,000\.00 Expenses, loans apart P 4,250\.00 P 10,200\.00 Debt service P 4,200\.00 P 4,200\.00 Surplus P 3,550\.00 P 6,600\.00/.test(hv), hv);
+  check('H.11 the household block says it is not used, and shows no percentage', /Not used for the DSR, the bands or any recommendation\./.test(hv) && !/%/.test(hv));
+  await page.waitForTimeout(900);
+  const sv = await page.evaluate(() => window.__updates.filter(x => x.table === 'advisor_clients').pop().payload.assessment);
+  check('H.12 saved keys: household, budgetPaidBy with a date, paidBy; nothing else about the spouse', sv.household.enabled === true && sv.household.spouseContribution === 9000
+    && Object.keys(sv.household).length === 2 && sv.budgetPaidBy.housing.split === 50 && !!sv.budgetPaidBy.housing.setAt && sv.liabilities[0].paidBy === 'spouse', JSON.stringify(sv.household));
+  await tab(HC.id, 'income');
+  const before = await page.evaluate(() => JSON.stringify([calcTotals(getClient()), getClient().budgetPaidBy]));
+  await page.uncheck('#hh-on'); await page.waitForTimeout(150);
+  check('H.13 switching off deletes nothing and moves no figure', before === await page.evaluate(() => JSON.stringify([calcTotals(getClient()), getClient().budgetPaidBy]))
+    && await page.evaluate(() => getClient().household.spouseContribution === 9000));
+  await tab(HC.id, 'budget');
+  check('H.14 off: attributions are read-only with the date set, and default lines show nothing', /Paid by both, client 50%, set \d{1,2} \w{3,4} \d{4}/.test(await oneline('#pb-housing'))
+    && /Paid by spouse, set/.test(await oneline('#pb-food')) && !(await page.$('.hh-pb select')) && !(await page.$('#pb-transport')), await oneline('#pb-housing'));
+  await tab(HC.id, 'diagnostics');
+  check('H.15 off: the Household column is gone', !(await page.$('#hhView')));
 
   check('Z  no JavaScript errors during the whole run', errors.length === 0, errors.join(' | '));
   await browser.close();
