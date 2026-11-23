@@ -293,6 +293,33 @@ function stub(page) {
   await tab(HC.id, 'diagnostics');
   check('H.15 off: the Household column is gone', !(await page.$('#hhView')));
 
+  /* ── Household on the report ───────────────────────────────── */
+  // The renderer as committed before the report batch, for byte comparison.
+  const oldSrc = require('child_process').execSync('git show ' + 'a179bc5' + ':advisor.html', { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', maxBuffer: 1e8 }).replace(/\r/g, '');
+  const oldFn = oldSrc.slice(oldSrc.indexOf('function panelReportPFA(c){'), oldSrc.indexOf('/* ====', oldSrc.indexOf('function panelReportPFA(c){')));
+  await tab(A.id, 'report');
+  check('H.16 a record with no household keys prints byte for byte what it printed before', await page.evaluate((src) => {
+    const old = new Function(src + '; return panelReportPFA;')(); return old(getClient()) === panelReportPFA(getClient()); }, oldFn));
+  await tab(HC.id, 'income'); await page.check('#hh-on'); await tab(HC.id, 'report');
+  const docOff = await page.evaluate(() => document.querySelector('.report-doc').innerHTML);
+  check('H.17 the tick shows, defaults off, and the section is absent', !(await page.isChecked('#pfa-hh')) && !/household/i.test(docOff));
+  check('H.18 "serviced by spouse" prints against the loan the spouse pays', /Car Loan<div class="rp-nr">serviced by spouse/.test(docOff));
+  await page.check('#pfa-hh'); await page.waitForTimeout(150);
+  const docOn = await page.evaluate(() => document.querySelector('.report-doc').innerHTML);
+  const sec = await page.evaluate(() => document.querySelector('.rp-household').outerHTML);
+  check('H.19 the tick adds exactly one section and changes nothing else', docOn.replace(sec, '') === docOff && (docOn.match(/rp-household/g) || []).length === 1);
+  const st = await oneline('.rp-household');
+  check('H.20 the section carries both incomes, expenses, loans, surplus and the fixed sentence, with no ratio and no dashes',
+    /Your income P 12,000\.00 Your spouse's contribution P 9,000\.00 Household income P 21,000\.00 Household expenses P 10,200\.00 .*Loans serviced from the household P 4,200\.00 Surplus P 6,600\.00 This shows what flows in and out of your home each month\. Your own financial indicators on the previous page are calculated on your income and the loans you are responsible for, because that is how a lender will assess you\./.test(st)
+    && !/[%—–]|--|DSR|ratio/i.test(st), st);
+  await page.evaluate(() => { getClient().liabilities.push({ item:'Solar', institution:'', monthlyInstalment:777, liable:'spouse', fixed:false }); renderClientEditor(); });
+  const doc3 = await page.evaluate(() => { const d = document.querySelector('.report-doc').cloneNode(true); const s = d.querySelector('.rp-household'); const t = s.textContent; s.remove(); return [d.textContent, t]; });
+  check('H.21 a loan only the spouse is liable for is in the household section and nowhere else', !/Solar|777/.test(doc3[0]) && /Solar \(your spouse's\)/.test(doc3[1]));
+  await page.evaluate((id) => { openClient(id); switchTab('report'); }, A.id);
+  check('H.22 no tick for a client without the switch', !(await page.$('#pfa-hh')));
+  await tab(HC.id, 'report');
+  check('H.23 reopening a client starts with the tick off', !(await page.isChecked('#pfa-hh')));
+
   check('Z  no JavaScript errors during the whole run', errors.length === 0, errors.join(' | '));
   await browser.close();
   console.log(`${pass} passed, ${fail} failed`);

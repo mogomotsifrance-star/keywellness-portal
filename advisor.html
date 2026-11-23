@@ -645,6 +645,8 @@ body.doc-viewer-open{overflow:hidden}
 .hh-tbl th,.hh-tbl td{text-align:right;padding:7px 0 7px 12px;border-bottom:1px solid var(--border)}
 .hh-tbl th:first-child{text-align:left;padding-left:0;font-weight:600}
 .hh-tbl tbody td{font-weight:700;white-space:nowrap}
+/* "On the previous page" in the fixed copy needs the section to start a page */
+@media print{.rp-household{break-before:page}}
 /* PFA additions (4 Oct 2026) */
 .rp-nr{color:var(--muted);font-style:italic;font-weight:400;font-size:11px}
 .rp-dsr{font-size:13px;line-height:1.65;color:var(--text)}
@@ -2307,6 +2309,7 @@ function openClient(id){
   _portalCache = {};
   _notesCache = {};
   currentClientId = id;
+  pfaHousehold = false;   // the report tick starts off every time a client is opened
   loadNotes(id);
   currentTab = 'personal';
   document.getElementById('newClientBtn').style.display = 'none';
@@ -3960,6 +3963,34 @@ function rpTable(headers, rows, emptyMsg){
   if(!rows.length) return `<div class="rp-empty">${emptyMsg||'None captured'}</div>`;
   return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(cell=>`<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
+// "Include household view": for this print only. Nothing is stored, because the
+// Personal Financial Assessment itself is never stored (gate, conflict 7).
+let pfaHousehold = false;
+function setPfaHousehold(on){ pfaHousehold = !!on; renderClientEditor(); const el = document.getElementById('pfa-hh'); if(el) el.focus(); }
+function pfaHouseholdTick(c){
+  const h = KWHousehold.household(c); if(!h.enabled) return '';
+  const ready = h.spouseContribution !== null;
+  return `<label class="hh-sw no-print" style="border-top:none;margin:0 0 14px;padding-top:0"><input type="checkbox" id="pfa-hh" ${pfaHousehold&&ready?'checked':''} ${ready?'':'disabled'} onchange="setPfaHousehold(this.checked)"><span>Include household view${ready?'':' (enter the spouse\'s monthly contribution on the Income tab first)'}</span></label>`;
+}
+// Member-facing: no em dashes, en dashes or double hyphens, and no ratio.
+function pfaHouseholdHtml(c){
+  const h = KWHousehold.household(c);
+  if(!pfaHousehold || !h.enabled || h.spouseContribution === null) return '';
+  const v = kwViews(c), hh = v.household;
+  const loans = c.liabilities.filter(r=>KWHousehold.isLive(r) && pf(r.monthlyInstalment));
+  const short = hh.surplus < 0;
+  return `<section class="rp-household"><h3>Your household picture</h3>
+      ${rpTable(['Item','Amount each month'], [
+        ['Your income', fmt(v.individual.income)],
+        ["Your spouse's contribution", fmt(h.spouseContribution)],
+        ['<strong>Household income</strong>', '<strong>'+fmt(hh.income)+'</strong>'],
+        ['Household expenses', fmt(hh.expenses)],
+        ...loans.map(r=>['Loan: '+esc(r.item)+(KWHousehold.isSpouseOnly(r)?" (your spouse's)":''), fmt(pf(r.monthlyInstalment))]),
+        ['<strong>Loans serviced from the household</strong>', '<strong>'+fmt(hh.debtService)+'</strong>'],
+        ['<strong>'+(short?'Gap':'Surplus')+'</strong>', '<strong>'+fmt(Math.abs(hh.surplus))+'</strong>'],
+      ])}
+      <p class="rp-dsr">This shows what flows in and out of your home each month. Your own financial indicators on the previous page are calculated on your income and the loans you are responsible for, because that is how a lender will assess you.</p></section>`;
+}
 function panelReportPFA(c){
   const t = calcTotals(c);
   const inc = diagIncome(t), exp = diagExpense(t), debt = diagDebt(t), life = diagLifestyle(t);
@@ -3992,7 +4023,7 @@ function panelReportPFA(c){
   // instalment on an informal debt is a real fact the client gave us.
   const NR = '<span class="rp-nr">Not recorded</span>';
   const liabData = KWHousehold.clientLoans(c).filter(r=>pf(r.balance)||pf(r.monthlyInstalment)||r.institution||pf(r.loanAmount));
-  const liabRows = liabData.map(r=>[esc(r.item), esc(r.institution)||NR,
+  const liabRows = liabData.map(r=>[esc(r.item)+(KWHousehold.loan(r).paidBy==='spouse'?'<div class="rp-nr">serviced by spouse</div>':''), esc(r.institution)||NR,
     pf(r.loanAmount)?fmt(pf(r.loanAmount)):NR, pf(r.balance)?fmt(pf(r.balance)):NR,
     r.termMonths?esc(fmtTerm(r.termMonths)):NR, esc(r.interestRate)||NR, fmt(pf(r.monthlyInstalment))]);
   if(liabRows.length){
@@ -4058,7 +4089,7 @@ function panelReportPFA(c){
     `<h4>${fmtDateTime(n.created_at)} — ${esc(n.author||'Advisor')}</h4><p>${esc(n.body)}</p>`).join('');
 
   return `
-    <div style="margin-bottom:14px" class="no-print"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+    <div style="margin-bottom:14px" class="no-print"><button class="btn btn-primary btn-sm" onclick="window.print()">🖨️ Print / Save as PDF</button></div>${pfaHouseholdTick(c)}
     <div class="report-doc">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
         <div>
@@ -4102,7 +4133,7 @@ function panelReportPFA(c){
       ${rpTable(['Area','Status','Key Insight'], diagRows)}
 
       <h3>Net Worth</h3>
-      ${rpTable(['Total Assets','Savings & Investments','Total Liabilities','Net Worth'], [[fmt(t.totalAssets), fmt(t.totalSavingsBalance), fmt(t.totalLiabilityBalance), '<strong>'+fmtSigned(t.netWorth)+'</strong>']])}
+      ${rpTable(['Total Assets','Savings & Investments','Total Liabilities','Net Worth'], [[fmt(t.totalAssets), fmt(t.totalSavingsBalance), fmt(t.totalLiabilityBalance), '<strong>'+fmtSigned(t.netWorth)+'</strong>']])}${pfaHouseholdHtml(c)}
 
       <h3>Create a Picture of Your Life</h3>
       ${rpTable(['When','Months Left','Passive Income Target','Which Car','Living Where','Other'], visionRows)}
