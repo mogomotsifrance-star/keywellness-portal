@@ -1,3 +1,42 @@
+# 23 Nov 2026: household view in the advisor portal: ON DEV, SQL AND EDGE NOT LIVE
+
+Record: `docs/build/household-view.md`. Awaiting Tshenolo's review.
+
+**Flags**
+
+1. **Two clients to re-read.** Two records hold an old spouse figure. Neither
+   DSR moves; their total income, surplus and diagnostics do. Their advisors
+   see the old figure as a prompt and re-enter it. To find them:
+   `select id from advisor_clients where coalesce(assessment->'income'->>'spouseIncome','') not in ('','0');`
+2. **DSR basis confirmed**: gross salary plus own business, rental and dividend
+   income. Household never feeds it. Retirement inherits this.
+3. **Not live**: `supabase_household_override_guard.sql` and both Edge
+   functions. Until they are, no AR or rehab plan for a record that uses Paid
+   by or Liable.
+4. **Rollback**: table at the top of the record. SQL:
+   `migrations/rollback-household-override-guard.sql`.
+5. **Consent wording, PROPOSED, not applied.** Existing consent covers the
+   member's own information only.
+
+   My Profile, after the sentence on what the advisory team can see:
+
+   > If you and your advisor choose to look at your household's money, your
+   > advisor may record one monthly figure for what your spouse contributes,
+   > who pays which expense, and the name and instalment of any loan that is
+   > your spouse's alone. No name, ID, employer or other detail about your
+   > spouse is recorded, and none of it is shared with your employer.
+
+   Paper consent form:
+
+   > I understand that my advisor may record one monthly figure for my spouse's
+   > contribution to our household, who pays each household expense, and the
+   > name and instalment of any loan that is my spouse's alone. No name, ID,
+   > employer or other detail about my spouse will be recorded. I confirm that
+   > my spouse knows I am sharing this. It will be used only for my household
+   > picture and will not be shared with my employer.
+
+   "My spouse knows I am sharing this" is a suggestion for the MD and counsel.
+
 # 28 Oct 2026: admins who are members can complete Learn: LIVE; tool figures as P8,200
 
 ## 1. Admin preview guard narrowed
