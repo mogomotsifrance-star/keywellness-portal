@@ -1,0 +1,113 @@
+{
+ "record": {
+  "personal": {
+   "name": "Old",
+   "surname": "Record",
+   "employer": "",
+   "maritalStatus": "Married",
+   "age": "40"
+  },
+  "kids": [],
+  "assets": [
+   {
+    "name": "Plot",
+    "value": 50000.5,
+    "status": "Personal Use"
+   }
+  ],
+  "savings": [
+   {
+    "institution": "FNB",
+    "currentBalance": 1234.56,
+    "monthlyContribution": 100
+   }
+  ],
+  "risk": [],
+  "businesses": [],
+  "income": {
+   "monthlySalary": 15000,
+   "otherDeductions": 500.55,
+   "spouseIncome": 0,
+   "rentals": 1200.1,
+   "businessIncome": 0,
+   "dividends": 0
+  },
+  "liabilities": [
+   {
+    "item": "Personal Loan",
+    "institution": "Stanbic",
+    "loanAmount": 100000,
+    "interestRate": "14%",
+    "balance": 80000,
+    "monthlyInstalment": 3750.33,
+    "fixed": true
+   },
+   {
+    "item": "Car Loan",
+    "institution": "",
+    "loanAmount": 0,
+    "interestRate": "",
+    "balance": 0,
+    "monthlyInstalment": 0,
+    "fixed": true
+   }
+  ],
+  "budget": {
+   "housing": 4000.1,
+   "food": 3000.2,
+   "entertain": 333.33,
+   "debt_min": 3750.33,
+   "emfund": 900,
+   "custom_a": 77.7
+  },
+  "budgetOtherCustom": [
+   {
+    "id": "custom_a",
+    "name": "x"
+   }
+  ],
+  "lifeVision": {},
+  "notes": {
+   "income": "",
+   "expense": "",
+   "debt": "",
+   "lifestyle": "",
+   "general": ""
+  },
+  "consultationNotes": [],
+  "documents": []
+ },
+ "calcTotals": {
+  "totalIncome": 14112.050000000001,
+  "grossSalary": 15000,
+  "paye": 1587.5,
+  "netSalary": 12911.95,
+  "spouseIncome": 0,
+  "passiveIncome": 1200.1,
+  "dsrIncome": 16200.1,
+  "totalDebtInstalment": 3750.33,
+  "totalLiabilityBalance": 80000,
+  "dti": 23.150042283689608,
+  "totalAssets": 50000.5,
+  "incomeGenAssets": 0,
+  "assetIncomePct": 0,
+  "totalSavingsBalance": 1234.56,
+  "netWorth": -28764.940000000002,
+  "savingsMonthly": 100,
+  "savingsRateFromSavingsTab": 0.7086142693655422,
+  "needsAmt": 10750.63,
+  "wantsAmt": 333.33,
+  "savingsAmt": 900,
+  "otherAmt": 77.7,
+  "totalExpenses": 12061.66,
+  "surplus": 2050.3900000000012,
+  "needsPct": 76.18049822669278,
+  "wantsPct": 2.3620239440761615,
+  "savingsPct": 6.3775284242898795,
+  "debtCapacity": 2729.710000000001,
+  "budgetDebtAmt": 3750.33,
+  "budgetSavingsAmt": 900,
+  "budgetLivingAmt": 7411.33,
+  "budgetDebtMin": 3750.33
+ }
+}
