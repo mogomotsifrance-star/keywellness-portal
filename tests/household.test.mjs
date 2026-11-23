@@ -128,4 +128,28 @@ ok("10 a budget paid wholly by the spouse is captured, not missing", () => {
   assert.equal(computeRehab(c, {}).budget.captured, true);
 });
 
+console.log("Batch 5: leaks");
+ok("11 the Advance Recommendation and the rehab plan come out the same with the household stripped", () => {
+  const c = clone(EX), bare = clone(EX); delete bare.household;
+  c.income.spouseIncome = 8000; c.household.spouseContribution = 123456;
+  assert.deepEqual(compute(c, {}), compute(bare, {})); assert.deepEqual(computeRehab(c, {}), computeRehab(bare, {}));
+});
+ok("12 leak gate: no household data on the advance, rehab or employer path", () => {
+  // "household budget" is existing copy in the report files, so the gate bans
+  // the data and the new wording there, and the bare word on the HR path.
+  const BAN = /spouseContribution|budgetPaidBy|assessment\.household|\.household\b|\[["']household["']\]|spouse_?income|householdViews|household picture|serviced by spouse/i;
+  const root = new URL("../", import.meta.url), dir = (d) => fs.readdirSync(new URL(d, root)).filter((f) => f.endsWith(".ts")).map((f) => d + f);
+  [...dir("supabase/functions/advance-recommendation/"), ...dir("supabase/functions/debt-rehab-plan/")].forEach((f) => assert.ok(!BAN.test(read(f)), f));
+  const hr = ["employer.html", "kw-report-charts.js", ...fs.readdirSync(root).filter((f) => /^supabase_.*(org_report|publish_org|org_overview|employer|indicators).*\.sql$/.test(f))];
+  assert.ok(hr.length > 8);
+  hr.forEach((f) => assert.ok(!/household|spouseContribution|budgetPaidBy/i.test(read(f)), f));
+});
+ok("13 the stored snapshots are built from clientOnly()", () => {
+  ["advance-recommendation", "debt-rehab-plan"].forEach((d) => {
+    const s = read(`supabase/functions/${d}/index.ts`);
+    assert.ok(s.includes("const assessment = clientOnly((client.assessment || {}) as Assessment);"), d);
+    assert.equal(s.split("client.assessment").length, 2, d);
+  });
+});
+
 console.log(`\n${n} checks passed`);

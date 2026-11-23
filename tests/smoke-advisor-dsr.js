@@ -295,10 +295,12 @@ function stub(page) {
 
   /* ── Household on the report ───────────────────────────────── */
   // The renderer as committed before the report batch, for byte comparison.
-  const oldSrc = require('child_process').execSync('git show ' + 'a179bc5' + ':advisor.html', { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', maxBuffer: 1e8 }).replace(/\r/g, '');
+  let oldSrc = '';
+  try { oldSrc = require('child_process').execSync('git show a179bc5:advisor.html', { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', maxBuffer: 1e8 }).replace(/\r/g, ''); }
+  catch (e) { console.log('SKIP  H.16 commit a179bc5 is not in this clone'); }
   const oldFn = oldSrc.slice(oldSrc.indexOf('function panelReportPFA(c){'), oldSrc.indexOf('/* ====', oldSrc.indexOf('function panelReportPFA(c){')));
   await tab(A.id, 'report');
-  check('H.16 a record with no household keys prints byte for byte what it printed before', await page.evaluate((src) => {
+  if (oldSrc) check('H.16 a record with no household keys prints byte for byte what it printed before', await page.evaluate((src) => {
     const old = new Function(src + '; return panelReportPFA;')(); return old(getClient()) === panelReportPFA(getClient()); }, oldFn));
   await tab(HC.id, 'income'); await page.check('#hh-on'); await tab(HC.id, 'report');
   const docOff = await page.evaluate(() => document.querySelector('.report-doc').innerHTML);

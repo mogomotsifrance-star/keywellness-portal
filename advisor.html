@@ -618,7 +618,8 @@ body.doc-viewer-open{overflow:hidden}
 .kw-dsr-why p{margin-top:6px}
 /* Liabilities table (4 Oct 2026): numbers right-aligned in tabular figures */
 .rt-num, .rt-num input{text-align:right;font-variant-numeric:tabular-nums}
-.rt-liab{min-width:1030px}
+.rt-liab{min-width:1190px}
+.rt-liab select{min-width:88px}
 .rt-muted{font-size:10.5px;color:var(--muted);margin-top:2px}
 .rt-warn{font-size:10.5px;color:var(--orange);margin-top:2px;text-align:left;line-height:1.35}
 .rt-total td{font-weight:700;border-top:2px solid var(--border);background:var(--kw-surface);font-variant-numeric:tabular-nums;font-size:12.5px}
@@ -645,6 +646,9 @@ body.doc-viewer-open{overflow:hidden}
 .hh-tbl th,.hh-tbl td{text-align:right;padding:7px 0 7px 12px;border-bottom:1px solid var(--border)}
 .hh-tbl th:first-child{text-align:left;padding-left:0;font-weight:600}
 .hh-tbl tbody td{font-weight:700;white-space:nowrap}
+.hh-tbl thead th{background:none;color:var(--muted);font-size:11px;padding-right:0}
+.hh-tbl tbody tr{background:none}
+.hh-sec{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:16px 0;margin-bottom:20px}
 /* "On the previous page" in the fixed copy needs the section to start a page */
 @media print{.rp-household{break-before:page}}
 /* PFA additions (4 Oct 2026) */
@@ -2740,7 +2744,7 @@ function householdTableHtml(c){
   const h = KWHousehold.household(c), m = v.individual, hh = v.household, t = calcTotals(c);
   const row = (l, a, b)=>`<tr><th scope="row">${l}</th><td>${a}</td><td>${b}</td></tr>`;
   const left = n => n < 0 ? fmt(Math.abs(n))+' short' : fmt(n);
-  return `<div class="card" id="hhView"><div class="card-title">Individual and household</div>
+  return `<div class="hh-sec" id="hhView"><div class="card-title">Individual and household</div>
     <table class="hh-tbl"><thead><tr><th></th><th scope="col">Individual</th><th scope="col">Household</th></tr></thead><tbody>
       ${row('Income', fmt(m.income), fmt(hh.income))}${row('Expenses, loans apart', fmt(m.expenses), fmt(hh.expenses))}
       ${row('Debt service', fmt(m.debtService), fmt(hh.debtService))}${row('Surplus', left(m.surplus), left(hh.surplus))}
