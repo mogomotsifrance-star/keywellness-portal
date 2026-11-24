@@ -11,7 +11,8 @@ Record: `docs/build/household-view.md`. Awaiting Tshenolo's review.
 2. **DSR basis confirmed**: gross salary plus own business, rental and dividend
    income. Household never feeds it. Retirement inherits this.
 3. **Not live**: `supabase_household_override_guard.sql` and both Edge
-   functions. Until they are, no AR or rehab plan for a record that uses Paid
+   functions. They go with the `main` merge (Tshenolo, 24 Nov 2026), which is not
+   yet scheduled. Until they are, no AR or rehab plan for a record that uses Paid
    by or Liable.
 4. **Rollback**: table at the top of the record. SQL:
    `migrations/rollback-household-override-guard.sql`.

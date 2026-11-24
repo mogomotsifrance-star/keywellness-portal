@@ -101,7 +101,7 @@ now go through `kwViews`; "household" labels; loan lists that now read
 minimum width; the Net Worth and Print lines the report section attaches to.
 No other feature lost a line. `origin/main` held nothing `origin/dev` lacked.
 
-## Deploy order, not yet authorised
+## Deploy order: with the `main` merge (Tshenolo, 24 Nov 2026)
 
 SQL and Edge serve both sites. The pages on `main` ignore the new keys and go
 on counting the old spouse figure until the merge, so deploy with that merge:
