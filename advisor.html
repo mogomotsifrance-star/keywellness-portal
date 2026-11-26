@@ -134,6 +134,15 @@ input,select,textarea{font-family:'Nunito',sans-serif}
 .search-row{display:flex;gap:12px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
 .search-input{flex:1;min-width:200px;padding:10px 15px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;background:var(--white);outline:none;transition:border-color .2s var(--kw-ease),box-shadow .2s var(--kw-ease)}
 .search-input:focus{border-color:var(--kw-green);box-shadow:0 0 0 3px var(--kw-green-tint)}
+.client-search .search-box{position:relative;flex:1;min-width:220px;max-width:520px;display:flex}
+.client-search .search-input{padding-left:36px;padding-right:34px;font-size:14px;-webkit-appearance:none;appearance:none}
+.client-search .search-input::-webkit-search-cancel-button{display:none}
+.client-search .search-ic{position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:13px;opacity:.55;pointer-events:none}
+.client-search .search-clear{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--muted);font-size:13px;width:26px;height:26px;border-radius:50%;cursor:pointer;visibility:hidden}
+.client-search .search-clear:hover{background:var(--cream-dark);color:var(--text)}
+.search-count{font-size:12px;color:var(--muted)}
+.search-empty{padding:28px 20px;text-align:center;color:var(--muted);font-size:14px}
+.search-empty p{margin:0 0 10px}
 
 /* ── Table ── */
 .table-wrap{overflow-x:auto;border-radius:var(--radius-sm);border:1px solid var(--border)}
@@ -1714,7 +1723,7 @@ function renderClientsList(){
     const t = calcTotals(c);
     const dti = diagDebt(t);
     const own = c._owner || {};
-    return `<tr>
+    return `<tr data-search="${esc(clientSearchKey(c))}">
       <td><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--muted)">${c.personal.age?c.personal.age+' yrs · ':''}Updated ${fmtDate(c.updatedAt)}</div></td>
       ${showOwner ? `<td>${own.isMine
           ? '<span class="owner-me">You</span>'
@@ -1740,14 +1749,19 @@ function renderClientsList(){
 
   wrap.innerHTML = `
     ${scopeBar()}
+    <div class="search-row client-search">
+      <div class="search-box">
+        <span class="search-ic" aria-hidden="true">🔍</span>
+        <input type="search" class="search-input" id="clientSearch" placeholder="Search by name, employer or organisation…" aria-label="Search clients" autocomplete="off" value="${esc(clientQuery)}" oninput="filterClientsList(this.value)" onkeydown="if(event.key==='Escape'){clearClientSearch()}">
+        <button type="button" class="search-clear" id="clientSearchClear" aria-label="Clear search" onclick="clearClientSearch()">✕</button>
+      </div>
+      <span class="search-count" id="clientSearchCount" aria-live="polite"></span>
+    </div>
     ${pendingBanner()}
     <div class="stat-grid">
       <div class="stat-box"><div class="stat-val">${totalClients}</div><div class="stat-lbl">${(VIEW.mode==='mine' && !orgFilter)?'Clients':'Clients in view'}</div></div>
       <div class="stat-box ${flagged>0?'red':'green'}"><div class="stat-val">${flagged}</div><div class="stat-lbl">Flagged Debt Risk</div></div>
       <div class="stat-box gold"><div class="stat-val">${fmt(avgNetWorth)}</div><div class="stat-lbl">Avg. Net Worth</div></div>
-    </div>
-    <div class="search-row">
-      <input type="text" class="search-input" id="clientSearch" placeholder="Search clients by name…" value="${esc(clientQuery)}" oninput="filterClientsList(this.value)">
     </div>
     <div class="card" style="padding:0">
       <div class="table-wrap">
@@ -1755,6 +1769,10 @@ function renderClientsList(){
           <thead><tr><th>Client</th>${showOwner?'<th style="width:150px">Advisor</th>':''}${showOrg?'<th style="width:170px">Organisation</th>':''}<th>Monthly Income</th><th>Net Worth</th><th>Debt Status</th><th style="width:150px"></th></tr></thead>
           <tbody id="clientsTableBody">${rows}</tbody>
         </table>
+      </div>
+      <div class="search-empty" id="clientSearchEmpty" style="display:none">
+        <p>No clients in this view match “<strong id="clientSearchEmptyQ"></strong>”.</p>
+        <button class="btn btn-outline btn-sm" onclick="clearClientSearch()">Clear search</button>
       </div>
     </div>`;
 
@@ -1775,13 +1793,51 @@ function filterClientsList(q){
   applyClientFilter();
 }
 
+/* Rows are matched on who the client is — name, employer, organisation,
+   site, advisor — not on the row's whole text, which also held the button
+   labels and the Pula figures: "open" matched every client and "4" matched
+   most of them. Each word must match somewhere, in any order, so
+   "mo kabo" finds Kabo Molefe. Accents are folded so a plain keyboard
+   still finds a name typed with one. */
+function kwFold(s){
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function clientSearchKey(c){
+  const p = c.personal || {}, o = c._org || {}, own = c._owner || {};
+  return kwFold([fullName(c), p.employer, o.id ? o.name : 'private', o.unitLabel,
+                 own.isMine ? '' : own.advisorName].filter(Boolean).join(' '));
+}
+
+function clearClientSearch(){
+  clientQuery = '';
+  const el = document.getElementById('clientSearch');
+  if(el){ el.value = ''; el.focus(); }
+  applyClientFilter();
+}
+
 function applyClientFilter(){
-  const q = clientQuery.trim().toLowerCase();
+  const raw = clientQuery.trim();
+  const terms = kwFold(raw).split(/\s+/).filter(Boolean);
   const body = document.getElementById('clientsTableBody');
   if(!body) return;
-  body.querySelectorAll('tr').forEach(function(tr){
-    tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  const rows = body.querySelectorAll('tr');
+  let shown = 0;
+  rows.forEach(function(tr){
+    const key = tr.dataset.search || '';
+    const hit = terms.every(t => key.includes(t));
+    tr.style.display = hit ? '' : 'none';
+    if(hit) shown++;
   });
+  const count = document.getElementById('clientSearchCount');
+  if(count) count.textContent = terms.length ? `${shown} of ${rows.length} client${rows.length===1?'':'s'}` : '';
+  const clear = document.getElementById('clientSearchClear');
+  if(clear) clear.style.visibility = raw ? 'visible' : 'hidden';
+  const empty = document.getElementById('clientSearchEmpty');
+  if(empty){
+    empty.style.display = (terms.length && !shown) ? '' : 'none';
+    const q = document.getElementById('clientSearchEmptyQ');
+    if(q) q.textContent = raw;
+  }
 }
 function fmtDate(iso){
   const d = new Date(iso);
